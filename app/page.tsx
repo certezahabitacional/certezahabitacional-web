@@ -1,111 +1,86 @@
 const services = [
-  ["Compra de vivienda", "Revisión independiente antes de firmar o entregar recursos."],
-  ["Entrega de vivienda nueva", "Detección documentada de detalles, faltantes y condiciones críticas."],
-  ["Garantía y postventa", "Seguimiento técnico para sustentar solicitudes de corrección."],
-  ["Inversionistas", "Evaluación objetiva del estado físico para decidir con mejores datos."],
-  ["Supervisión de calidad", "Control preventivo durante procesos constructivos y de cierre."],
-  ["Dictamen técnico", "Informe estructurado con evidencia, prioridades y recomendaciones."],
-] as const;
+  ["Compra de vivienda", "Conoce el estado visible del inmueble antes de tomar una decisión patrimonial."],
+  ["Entrega de vivienda nueva", "Documentamos defectos, pendientes y condiciones que requieren atención del desarrollador."],
+  ["Garantía y postventa", "Integramos evidencia técnica para dar seguimiento a fallas dentro del periodo de garantía."],
+  ["Supervisión de calidad", "Apoyamos a propietarios, inversionistas y empresas con revisiones objetivas y trazables."]
+];
 
-const steps = [
-  ["01", "Inspeccionamos", "Recorremos sistemas, espacios y componentes con una guía técnica estandarizada."],
-  ["02", "Clasificamos", "Cada hallazgo se registra como Conforme, Observación, No Conforme o Condición Crítica."],
-  ["03", "Priorizamos", "Asignamos prioridad P1–P5 para indicar qué atender primero."],
-  ["04", "Entregamos certeza", "Recibes evidencia, conclusiones y un Índice de Salud Habitacional fácil de interpretar."],
-] as const;
-
-function Logo() {
-  return (
-    <a className="brand" href="#inicio" aria-label="Certeza Habitacional, inicio">
-      <span className="brand-mark" aria-hidden="true">⌂</span>
-      <span><strong>CERTEZA</strong><small>HABITACIONAL</small></span>
-    </a>
-  );
-}
+const method = [
+  ["1", "Inspección", "Revisión ordenada por sistemas y componentes de la vivienda."],
+  ["2", "Clasificación", "Cada condición se registra como C, O, NC, CR o NA."],
+  ["3", "Priorización", "Los hallazgos se ordenan de P1 a P5 según atención requerida."],
+  ["4", "Reporte", "Entrega de evidencia, conclusiones y recomendaciones claras."]
+];
 
 export default function Home() {
   return (
     <main>
-      <header className="site-header">
-        <div className="wrap header-inner">
-          <Logo />
-          <nav aria-label="Navegación principal">
-            <a href="#servicios">Servicios</a>
-            <a href="#metodo">Método Certeza®</a>
-            <a href="#nosotros">Nosotros</a>
-            <a href="#contacto">Contacto</a>
-          </nav>
-          <a className="button button-primary header-cta" href="#contacto">Solicitar inspección</a>
-        </div>
+      <header className="nav shell">
+        <a className="brand" href="#inicio" aria-label="Certeza Habitacional, inicio">
+          <span className="mark">CH</span>
+          <span><strong>Certeza</strong> Habitacional</span>
+        </a>
+        <nav aria-label="Navegación principal">
+          <a href="#servicios">Servicios</a>
+          <a href="#metodo">Método Certeza®</a>
+          <a href="#nosotros">Nosotros</a>
+          <a className="navCta" href="#contacto">Solicitar inspección</a>
+        </nav>
       </header>
 
-      <section id="inicio" className="hero">
-        <div className="wrap hero-grid">
+      <section className="hero" id="inicio">
+        <div className="shell heroGrid">
           <div>
-            <p className="eyebrow">Inspección técnica de vivienda</p>
-            <h1>Decide sobre tu vivienda con información, evidencia y certeza.</h1>
-            <p className="lead">Evaluamos el estado físico del inmueble y convertimos los hallazgos en un reporte claro, priorizado y respaldado con evidencia fotográfica.</p>
+            <p className="eyebrow">INSPECCIÓN TÉCNICA DE VIVIENDAS</p>
+            <h1>Decisiones patrimoniales con evidencia, método y certeza.</h1>
+            <p className="lead">Revisamos la vivienda, documentamos hallazgos y entregamos información clara para comprar, recibir o conservar un inmueble con mayor confianza.</p>
             <div className="actions">
-              <a className="button button-primary" href="#contacto">Solicitar inspección</a>
-              <a className="button button-secondary" href="#metodo">Conocer el método</a>
+              <a className="button primary" href="#contacto">Solicitar inspección</a>
+              <a className="button secondary" href="#metodo">Conocer el método</a>
             </div>
-            <div className="metrics">
-              <div><strong>C–CR</strong><span>Clasificación clara</span></div>
-              <div><strong>P1–P5</strong><span>Prioridad técnica</span></div>
-              <div><strong>ISH</strong><span>Índice de salud</span></div>
+            <div className="trust">
+              <span>✓ Evidencia fotográfica</span><span>✓ Reporte profesional</span><span>✓ Priorización de hallazgos</span>
             </div>
           </div>
-          <div className="report-shell">
-            <div className="report-card">
-              <div className="report-top"><span>REPORTE EJECUTIVO</span><b>EVALUACIÓN COMPLETA</b></div>
-              <p>Índice de Salud Habitacional</p>
-              <div className="score"><strong>87</strong><span>/100</span></div>
-              <div className="progress"><span /></div>
-              <div className="report-stats"><div><b>24</b><span>Puntos conformes</span></div><div><b>6</b><span>Hallazgos priorizados</span></div></div>
-            </div>
-          </div>
+          <aside className="inspectionCard" aria-label="Resumen del Método Certeza">
+            <div className="cardTop"><span>Índice de Salud Habitacional</span><strong>ISH</strong></div>
+            <div className="gauge"><span>Evaluación integral</span><b>Método Certeza®</b></div>
+            <div className="legend"><span className="ok">C</span><span className="obs">O</span><span className="nc">NC</span><span className="critical">CR</span><span className="na">NA</span></div>
+            <p>Resultados estructurados para facilitar decisiones, correcciones y seguimiento.</p>
+          </aside>
         </div>
       </section>
 
-      <section id="servicios" className="section">
-        <div className="wrap">
-          <p className="eyebrow">Servicios</p>
-          <div className="section-heading"><h2>Inspecciones diseñadas para decisiones importantes.</h2><p className="lead">Acompañamos a compradores, propietarios, desarrolladores e inversionistas con una evaluación independiente y ordenada.</p></div>
-          <div className="card-grid">{services.map(([title, text], i) => <article className="card" key={title}><span>0{i + 1}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
+      <section className="section shell" id="servicios">
+        <p className="eyebrow">SERVICIOS</p>
+        <div className="sectionHeading"><h2>Inspección para cada momento de la vivienda</h2><p>Un servicio técnico independiente orientado a reducir incertidumbre y mejorar la toma de decisiones.</p></div>
+        <div className="cards">{services.map(([title, text]) => <article className="service" key={title}><span className="serviceIcon">⌂</span><h3>{title}</h3><p>{text}</p></article>)}</div>
+      </section>
+
+      <section className="method" id="metodo">
+        <div className="shell">
+          <p className="eyebrow light">MÉTODO CERTEZA®</p>
+          <div className="sectionHeading light"><h2>Un proceso claro, documentado y repetible</h2><p>La inspección no depende de impresiones aisladas: sigue una metodología y criterios definidos.</p></div>
+          <div className="steps">{method.map(([number, title, text]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
         </div>
       </section>
 
-      <section id="metodo" className="section method">
-        <div className="wrap">
-          <p className="eyebrow">Método Certeza®</p>
-          <div className="section-heading"><h2>Un proceso técnico que se entiende.</h2><p className="lead">La inspección no termina al encontrar un defecto. Lo documentamos, clasificamos y explicamos su prioridad.</p></div>
-          <div className="steps">{steps.map(([number, title, text]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
+      <section className="section shell about" id="nosotros">
+        <div>
+          <p className="eyebrow">CERTEZA HABITACIONAL</p>
+          <h2>Información técnica comprensible para proteger tu patrimonio.</h2>
+        </div>
+        <div><p>Certeza Habitacional nace para brindar una revisión independiente de la vivienda y transformar observaciones técnicas en información útil para propietarios, compradores, desarrolladores e inversionistas.</p><p>Integramos experiencia en construcción, evidencia y criterios homogéneos para presentar resultados con claridad y responsabilidad.</p></div>
+      </section>
+
+      <section className="contact" id="contacto">
+        <div className="shell contactGrid">
+          <div><p className="eyebrow light">SOLICITA INFORMACIÓN</p><h2>Da el siguiente paso con certeza.</h2><p>Cuéntanos qué tipo de vivienda deseas inspeccionar y en qué ciudad se encuentra.</p></div>
+          <a className="button white" href="mailto:contacto@certezahabitacional.com?subject=Solicitud%20de%20inspección">contacto@certezahabitacional.com</a>
         </div>
       </section>
 
-      <section id="nosotros" className="section">
-        <div className="wrap about-grid">
-          <div className="about-visual"><div><span className="large-mark">⌂</span><strong>CERTEZA HABITACIONAL</strong><small>INSPECCIÓN · EVIDENCIA · CONFIANZA</small></div></div>
-          <div><p className="eyebrow">Nosotros</p><h2>Protegemos decisiones que impactan tu patrimonio.</h2><p className="lead">Certeza Habitacional nace para elevar la calidad de la inspección de vivienda en México mediante criterios técnicos, documentación estandarizada y comunicación clara.</p>
-            <ul className="checks"><li>Independencia y objetividad técnica</li><li>Evidencia fotográfica organizada</li><li>Reportes claros para clientes no especialistas</li><li>Seguimiento con trazabilidad documental</li></ul>
-          </div>
-        </div>
-      </section>
-
-      <section id="contacto" className="section contact-section">
-        <div className="wrap contact-card">
-          <div className="contact-copy"><p className="eyebrow">Contacto</p><h2>Solicita una inspección.</h2><p>Cuéntanos qué tipo de vivienda deseas revisar y te contactaremos para definir alcance, fecha y cotización.</p><div className="contact-data"><p><b>Correo</b>contacto@certezahabitacional.com</p><p><b>Cobertura inicial</b>Hermosillo, Sonora y proyectos programados</p></div></div>
-          <form action="mailto:contacto@certezahabitacional.com" method="post" encType="text/plain">
-            <label>Nombre<input name="nombre" required /></label>
-            <label>Teléfono o WhatsApp<input name="telefono" required /></label>
-            <label>Correo electrónico<input type="email" name="correo" required /></label>
-            <label>¿Qué necesitas inspeccionar?<textarea name="mensaje" required /></label>
-            <button className="button button-primary" type="submit">Enviar solicitud</button>
-          </form>
-        </div>
-      </section>
-
-      <footer><div className="wrap footer-inner"><Logo /><p>© 2026 Certeza Habitacional. Todos los derechos reservados.</p></div></footer>
+      <footer><div className="shell footer"><span>© 2026 Certeza Habitacional</span><span>Método Certeza® · Inspección técnica de viviendas</span></div></footer>
     </main>
   );
 }

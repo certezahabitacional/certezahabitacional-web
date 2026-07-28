@@ -1,6 +1,6 @@
 # Certeza Habitacional Web
 
-Sitio institucional de Certeza Habitacional, preparado para desplegarse en Vercel.
+Sitio institucional de Certeza Habitacional construido con Next.js App Router y TypeScript.
 
 ## Desarrollo local
 
@@ -9,9 +9,12 @@ npm install
 npm run dev
 ```
 
-## Produccion
+## Compilación
 
 ```bash
 npm run build
-npm start
 ```
+
+## Despliegue
+
+Importar este repositorio en Vercel. El preset debe detectarse como Next.js y el directorio raíz debe ser `./`.
