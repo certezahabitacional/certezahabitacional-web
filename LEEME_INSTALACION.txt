@@ -1,0 +1,37 @@
+CERTEZA HABITACIONAL - BRANDING FASE 1
+
+Contenido implementado:
+- Logotipo dorado institucional optimizado.
+- Encabezado corporativo reutilizable para Administración, Portal del Cliente y Portal del Inspector.
+- Login con logotipo completo.
+- Encabezado corporativo para el reporte técnico.
+- Encabezado y sello institucional para el certificado.
+
+INSTALACION
+1. Haz una copia de seguridad del proyecto.
+2. Copia todas las carpetas de este ZIP dentro de la raíz de:
+   C:\Users\GILSAR\GitHub\certezahabitacional-web
+3. Cuando Windows pregunte, selecciona "Reemplazar los archivos en el destino".
+4. No borres ni reemplaces .env.local.
+5. En PowerShell, dentro del proyecto, ejecuta:
+   npm run build
+6. Si termina correctamente, realiza Commit y Push desde GitHub Desktop.
+
+Resumen sugerido para el commit:
+Implementar branding corporativo fase 1
+
+Archivos nuevos:
+- components/branding/LogoCerteza.tsx
+- components/branding/PlatformHeader.tsx
+- components/branding/ReportBrandHeader.tsx
+- public/branding/logo-gold.png
+- public/branding/logo-white.png
+- public/branding/logo-badge.png
+
+Archivos actualizados:
+- app/panel/layout.tsx
+- app/portal/layout.tsx
+- app/inspector/layout.tsx
+- app/login/LoginForm.tsx
+- app/panel/inspecciones/[id]/reporte/page.tsx
+- app/panel/inspecciones/[id]/certificado/page.tsx
