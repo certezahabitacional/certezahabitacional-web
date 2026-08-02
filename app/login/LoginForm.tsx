@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
+import LogoCerteza from "@/components/branding/LogoCerteza";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -39,16 +40,20 @@ export default function LoginForm() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl">
-        <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300">
-          Certeza Habitacional
+      <section className="w-full max-w-md rounded-3xl border border-amber-300/20 bg-white/[0.04] p-8 shadow-2xl shadow-black/40">
+        <div className="mb-6 flex justify-center">
+          <LogoCerteza variant="gold" width={230} priority className="max-h-40" />
+        </div>
+
+        <p className="text-center text-xs font-black uppercase tracking-[0.3em] text-amber-300">
+          Plataforma autorizada
         </p>
 
-        <h1 className="mt-3 text-3xl font-black">
+        <h1 className="mt-3 text-center text-3xl font-black">
           Acceso al sistema
         </h1>
 
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-center text-sm text-slate-400">
           Ingresa con tu cuenta autorizada.
         </p>
 

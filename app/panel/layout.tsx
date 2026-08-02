@@ -1,29 +1,36 @@
 import type { ReactNode } from "react";
 import { signOut } from "@/auth";
+import PlatformHeader from "@/components/branding/PlatformHeader";
 
 export default function PanelLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  return (
-    <>
-      {children}
-
-      <form
-        action={async () => {
-          "use server";
-          await signOut({ redirectTo: "/login" });
-        }}
-        className="fixed bottom-6 right-6 z-50"
+  const logout = (
+    <form
+      action={async () => {
+        "use server";
+        await signOut({ redirectTo: "/login" });
+      }}
+    >
+      <button
+        type="submit"
+        className="rounded-full border border-amber-300/40 bg-amber-300/10 px-5 py-3 text-sm font-black text-amber-200 transition hover:bg-amber-300 hover:text-slate-950"
       >
-        <button
-          type="submit"
-          className="rounded-full border border-white/20 bg-slate-900 px-5 py-3 font-bold text-white shadow-xl transition hover:border-cyan-300 hover:text-cyan-300"
-        >
-          Cerrar sesión
-        </button>
-      </form>
-    </>
+        Cerrar sesión
+      </button>
+    </form>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white">
+      <PlatformHeader
+        area="Administración"
+        subtitle="Control, operación y trazabilidad"
+        actions={logout}
+      />
+      {children}
+    </div>
   );
 }

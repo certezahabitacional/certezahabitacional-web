@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "./PrintButton";
+import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 
 const etiquetaClasificacion: Record<string, string> = {
   C: "Conforme",
@@ -241,15 +242,12 @@ export default async function ReportePage({
         <section className="relative flex min-h-[950px] flex-col overflow-hidden bg-slate-950 px-12 py-12 text-white print:min-h-[250mm]">
           <div className="absolute right-0 top-0 h-72 w-72 rounded-bl-full bg-cyan-400/10" />
 
-          <header className="relative z-10">
-            <p className="text-sm font-black uppercase tracking-[0.35em] text-cyan-300">
-              Certeza Habitacional
-            </p>
-
-            <p className="mt-2 text-sm uppercase tracking-widest text-slate-400">
-              Inspección • Diagnóstico • Evidencia
-            </p>
-          </header>
+          <ReportBrandHeader
+            title="Reporte técnico de inspección"
+            folio={inspeccion.folio}
+            eyebrow="Inspección • Diagnóstico • Evidencia"
+            dark
+          />
 
           <div className="relative z-10 mt-20">
             <p className="text-sm font-black uppercase tracking-[0.28em] text-cyan-300">

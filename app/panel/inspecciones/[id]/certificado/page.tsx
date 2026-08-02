@@ -4,6 +4,8 @@ import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import { emitirCertificado } from "../actions";
 import PrintButton from "./PrintButton";
+import LogoCerteza from "@/components/branding/LogoCerteza";
+import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import {
   reactivarCertificado,
   revocarCertificado,
@@ -39,9 +41,9 @@ export default async function CertificadoPage({
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
         <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-slate-900 p-8 text-center">
-          <p className="text-sm font-black uppercase tracking-[0.25em] text-cyan-300">
-            Certeza Habitacional
-          </p>
+          <div className="mb-6 flex justify-center">
+            <LogoCerteza variant="gold" width={220} priority className="max-h-40" />
+          </div>
           <h1 className="mt-4 text-3xl font-black">Emitir certificado</h1>
           <p className="mt-3 leading-7 text-slate-400">
             El certificado cerrará la inspección y conservará el índice actual del expediente.
@@ -107,11 +109,15 @@ const qrDataUrl = await QRCode.toDataURL(urlValidacion, {
   </div>
 )}
       <article className="mx-auto min-h-[900px] max-w-5xl border-[12px] border-slate-950 bg-white p-12 shadow-2xl print:min-h-screen print:max-w-none print:shadow-none">
-        <div className="border-2 border-cyan-400 p-10 text-center">
-          <p className="text-sm font-black uppercase tracking-[0.35em] text-cyan-600">
-            Certeza Habitacional
-          </p>
-          <h1 className="mt-6 text-5xl font-black">Certificado de Estado Habitacional</h1>
+        <div className="border-2 border-amber-500 p-10 text-center">
+          <ReportBrandHeader
+            title="Certificado de Estado Habitacional"
+            folio={certificado.folio}
+            eyebrow="Documento oficial de inspección"
+          />
+          <div className="mt-8 flex justify-end">
+            <LogoCerteza variant="badge" width={135} className="max-h-32" />
+          </div>
           <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-600">
             Se hace constar que el inmueble descrito fue objeto de una inspección visual y documental,
             conforme al expediente técnico identificado en este certificado.
