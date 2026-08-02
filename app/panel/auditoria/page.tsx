@@ -33,7 +33,7 @@ export default async function AuditoriaPage({
 
   const tipo =
     query.tipo &&
-    Object.values(TipoEvento).includes(query.tipo as TipoEvento)
+      Object.values(TipoEvento).includes(query.tipo as TipoEvento)
       ? (query.tipo as TipoEvento)
       : undefined;
 
@@ -51,41 +51,41 @@ export default async function AuditoriaPage({
       creadoEn:
         desde || hasta
           ? {
-              gte: desde,
-              lte: hasta,
-            }
+            gte: desde,
+            lte: hasta,
+          }
           : undefined,
       OR: texto
         ? [
-            {
-              descripcion: {
+          {
+            descripcion: {
+              contains: texto,
+              mode: "insensitive",
+            },
+          },
+          {
+            entidad: {
+              contains: texto,
+              mode: "insensitive",
+            },
+          },
+          {
+            usuario: {
+              nombre: {
                 contains: texto,
                 mode: "insensitive",
               },
             },
-            {
-              entidad: {
+          },
+          {
+            usuario: {
+              email: {
                 contains: texto,
                 mode: "insensitive",
               },
             },
-            {
-              usuario: {
-                nombre: {
-                  contains: texto,
-                  mode: "insensitive",
-                },
-              },
-            },
-            {
-              usuario: {
-                email: {
-                  contains: texto,
-                  mode: "insensitive",
-                },
-              },
-            },
-          ]
+          },
+        ]
         : undefined,
     },
     include: {
@@ -226,7 +226,17 @@ export default async function AuditoriaPage({
                     className="border-t border-white/10 align-top"
                   >
                     <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-400">
-                      {evento.creadoEn.toLocaleString("es-MX")}
+                    {evento.creadoEn.toLocaleString("es-MX", {
+                      timeZone: "America/Hermosillo",
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                    })}
+                  
                     </td>
 
                     <td className="px-5 py-4">
