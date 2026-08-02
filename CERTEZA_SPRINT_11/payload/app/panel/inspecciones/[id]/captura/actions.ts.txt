@@ -1,0 +1,116 @@
+"use server";
+
+import {
+  ClasificacionHallazgo,
+  EstadoInspeccion,
+  PrioridadHallazgo,
+} from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import {
+  calcularIndiceHabitacional,
+  obtenerSemaforoHabitacional,
+} from "@/lib/indice-habitacional";
+
+const texto = (formData: FormData, nombre: string) =>
+  String(formData.get(nombre) ?? "").trim();
+
+function numeroOpcional(valor: string): number | null {
+  if (!valor) return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+async function recalcularInspeccion(inspeccionId: string) {
+  const hallazgos = await prisma.hallazgo.findMany({
+    where: { inspeccionId },
+    select: { clasificacion: true },
+  });
+
+  const indice = calcularIndiceHabitacional(
+    hallazgos.map((hallazgo) => hallazgo.clasificacion),
+  );
+
+  await prisma.inspeccion.update({
+    where: { id: inspeccionId },
+    data: {
+      estado: EstadoInspeccion.EN_PROCESO,
+      ish: indice,
+      semaforo: obtenerSemaforoHabitacional(indice),
+    },
+  });
+}
+
+export async function guardarPuntoInspeccion(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const area = texto(formData, "area");
+  const titulo = texto(formData, "titulo");
+  const clave = texto(formData, "clave");
+  const clasificacion = texto(
+    formData,
+    "clasificacion",
+  ) as ClasificacionHallazgo;
+  const descripcionIngresada = texto(formData, "descripcion");
+  const recomendacion = texto(formData, "recomendacion") || null;
+
+  if (!inspeccionId || !area || !titulo || !clave || !clasificacion) {
+    throw new Error("Faltan datos obligatorios del punto de inspección.");
+  }
+
+  const descripcion =
+    descripcionIngresada ||
+    (clasificacion === "C"
+      ? "Elemento revisado sin anomalías visibles al momento de la inspección."
+      : clasificacion === "NA"
+        ? "Punto no aplicable a las características del inmueble inspeccionado."
+        : "Condición registrada durante la inspección; consultar recomendación y prioridad.");
+
+  const prioridad = (texto(formData, "prioridad") ||
+    (clasificacion === "CR"
+      ? "P1"
+      : clasificacion === "NC"
+        ? "P2"
+        : clasificacion === "O"
+          ? "P4"
+          : "P5")) as PrioridadHallazgo;
+
+  const existente = await prisma.hallazgo.findFirst({
+    where: {
+      inspeccionId,
+      area,
+      titulo: `[${clave}] ${titulo}`,
+    },
+    select: { id: true },
+  });
+
+  const data = {
+    area,
+    titulo: `[${clave}] ${titulo}`,
+    descripcion,
+    clasificacion,
+    prioridad,
+    recomendacion,
+    ubicacion: texto(formData, "ubicacion") || null,
+    costoEstimado: numeroOpcional(texto(formData, "costoEstimado")),
+    tiempoReparacion: texto(formData, "tiempoReparacion") || null,
+    responsable: texto(formData, "responsable") || null,
+  };
+
+  if (existente) {
+    await prisma.hallazgo.update({ where: { id: existente.id }, data });
+  } else {
+    await prisma.hallazgo.create({
+      data: {
+        inspeccionId,
+        ...data,
+      },
+    });
+  }
+
+  await recalcularInspeccion(inspeccionId);
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte`);
+  revalidatePath("/panel");
+}

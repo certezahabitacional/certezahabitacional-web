@@ -1,0 +1,45 @@
+CERTEZA HABITACIONAL - SPRINT 11
+METODO CERTEZA Y EXPEDIENTE DE CAMPO
+
+INCLUYE
+- Checklist profesional con 30 puntos de inspeccion.
+- Diez grupos tecnicos: estructura, azotea, humedad, electricidad,
+  hidraulica, sanitaria, gas, acabados, exteriores y seguridad.
+- Captura C, O, NC, CR y NA por cada punto.
+- Prioridades P1 a P5.
+- Ubicacion, descripcion tecnica, recomendacion, costo estimado,
+  tiempo de reparacion y responsable sugerido.
+- Actualizacion de puntos ya capturados sin duplicarlos.
+- Avance visual del checklist.
+- Recalculo automatico del Indice de Salud Habitacional.
+- Registro de evidencia fotografica mediante URL publica.
+- Vinculacion de evidencia con hallazgos.
+- Integracion de botones Capturar inspeccion y Evidencias al expediente.
+
+IMPORTANTE
+- No modifica prisma/schema.prisma.
+- No requiere migracion de base de datos.
+- El paquete guarda respaldo de los archivos reemplazados.
+- Los archivos del paquete usan extension .txt para que Next.js no los
+  compile por error si la carpeta queda dentro del proyecto.
+
+INSTALACION
+1. Deten npm run dev.
+2. Extrae CERTEZA_SPRINT_11 dentro de la raiz del proyecto.
+3. En PowerShell, ubicado en la raiz del proyecto, ejecuta:
+
+powershell -ExecutionPolicy Bypass -File .\CERTEZA_SPRINT_11\INSTALAR_SPRINT_11.ps1
+
+4. Espera el mensaje SPRINT_11_INSTALADO.
+5. Ejecuta:
+
+npm run dev
+
+6. Abre una inspeccion y pulsa Capturar inspeccion.
+
+FLUJO DE PRUEBA
+Panel > Inspecciones > abrir expediente > Capturar inspeccion
+
+La carga directa de archivos a Supabase Storage se reserva para el siguiente
+modulo. En este sprint la evidencia se registra por URL publica para no exigir
+nuevas variables secretas ni configuracion adicional.

@@ -1,0 +1,67 @@
+CERTEZA HABITACIONAL - SPRINT 7
+BASE DE DATOS Y AUTENTICACION
+
+ESTE PAQUETE INCLUYE
+- Modelo PostgreSQL completo en Prisma.
+- Usuarios y roles: administrador, supervisor, inspector y cliente.
+- Autenticacion con correo y contrasena mediante Auth.js.
+- Proteccion de todas las rutas /panel.
+- Usuario administrador inicial.
+- Endpoint de diagnostico /api/health.
+- La interfaz existente de los Sprint 1-6 permanece incluida.
+
+IMPORTANTE
+Este sprint prepara la infraestructura real. Las pantallas actuales todavia leen y escriben localStorage.
+La migracion de cada modulo a la base de datos se realizara de manera gradual en el Sprint 8 para evitar perder la informacion existente.
+
+PASO 1 - RESPALDO
+Copia completa de tu proyecto antes de reemplazar archivos.
+
+PASO 2 - COPIAR
+Copia el contenido de este paquete a la raiz de:
+C:\Users\GILSAR\certezahabitacional-web-oficial
+Acepta combinar carpetas y reemplazar los archivos indicados.
+
+PASO 3 - POSTGRESQL
+Crea una base PostgreSQL en Supabase, Prisma Postgres u otro proveedor.
+Copia la cadena de conexion.
+
+PASO 4 - VARIABLES
+Copia .env.example y renombralo a .env.local.
+Completa DATABASE_URL, AUTH_SECRET, ADMIN_EMAIL y ADMIN_PASSWORD.
+No publiques ni compartas .env.local.
+
+Para crear AUTH_SECRET desde PowerShell puedes ejecutar:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+PASO 5 - INSTALAR
+Abre PowerShell en la raiz del proyecto y ejecuta:
+Set-ExecutionPolicy -Scope Process Bypass
+.\INSTALAR_SPRINT_7.ps1
+
+Alternativa manual:
+npm install next-auth@beta @prisma/client bcryptjs zod
+npm install -D prisma tsx
+npx prisma generate
+npx prisma migrate dev --name inicio_nube
+npx tsx prisma/seed.ts
+
+PASO 6 - PROBAR
+npm run dev
+
+Abre:
+http://localhost:3000/api/health
+
+Debe responder con ok: true y baseDeDatos: conectada.
+
+Luego entra a:
+http://localhost:3000/login
+
+Usa ADMIN_EMAIL y ADMIN_PASSWORD definidos en .env.local.
+
+NOTA SOBRE PACKAGE.JSON
+No se reemplaza package.json para no borrar tus scripts existentes.
+El instalador agrega las dependencias necesarias.
+
+SIGUIENTE ETAPA
+Sprint 8 migrara Clientes, Inspectores e Inspecciones desde localStorage hacia APIs y PostgreSQL, incluyendo una herramienta de importacion de los datos actuales.

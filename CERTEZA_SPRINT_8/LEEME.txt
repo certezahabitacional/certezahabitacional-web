@@ -1,0 +1,19 @@
+CERTEZA HABITACIONAL - SPRINT 8 BASE OPERATIVA
+
+Incluye:
+- Panel con indicadores reales de Prisma/Supabase.
+- Clientes: alta, búsqueda, listado y eliminación controlada.
+- Inspectores: usuario de acceso, ficha técnica y activación/inactivación.
+- Agenda: próximas inspecciones reales.
+- Sustituye datos demostrativos y localStorage en estos módulos.
+
+INSTALACIÓN
+1. Detén npm run dev presionando Ctrl+C.
+2. Coloca esta carpeta dentro de la raíz del proyecto.
+3. Desde la raíz ejecuta:
+   powershell -ExecutionPolicy Bypass -File .\CERTEZA_SPRINT_8\INSTALAR_SPRINT_8.ps1
+4. Ejecuta:
+   npm run dev
+5. Abre http://localhost:3000/panel
+
+No modifica auth.ts, proxy.ts, .env ni contraseñas.

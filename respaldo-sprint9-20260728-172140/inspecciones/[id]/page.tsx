@@ -1,0 +1,422 @@
+"use client";
+
+import Link from "next/link";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+
+type Clasificacion = "C" | "O" | "NC" | "CR" | "NA";
+type Prioridad = "P1" | "P2" | "P3" | "P4" | "P5";
+
+type Inspeccion = {
+  id: string;
+  folio: string;
+  cliente: string;
+  telefono: string;
+  correo: string;
+  tipoServicio: string;
+  tipoInmueble: string;
+  direccion: string;
+  ciudad: string;
+  superficie: string;
+  fecha: string;
+  inspector: string;
+  estado: string;
+  observaciones: string;
+  creadaEn: string;
+};
+
+type Hallazgo = {
+  id: string;
+  inspeccionId: string;
+  area: string;
+  elemento: string;
+  ubicacion: string;
+  descripcion: string;
+  clasificacion: Clasificacion;
+  prioridad: Prioridad;
+  recomendacion: string;
+  evidencia?: string;
+  evidenciaNombre?: string;
+  creadoEn: string;
+};
+
+const AREAS = [
+  "Cimentación y estructura",
+  "Muros y fachadas",
+  "Cubierta e impermeabilización",
+  "Instalación hidráulica",
+  "Instalación sanitaria",
+  "Instalación eléctrica",
+  "Gas",
+  "Puertas y ventanas",
+  "Pisos y recubrimientos",
+  "Baños",
+  "Cocina",
+  "Patios y exteriores",
+  "Seguridad",
+  "Otro",
+];
+
+const CLASIFICACIONES: Clasificacion[] = ["C", "O", "NC", "CR", "NA"];
+const PRIORIDADES: Prioridad[] = ["P1", "P2", "P3", "P4", "P5"];
+
+const formularioInicial = {
+  area: AREAS[0],
+  elemento: "",
+  ubicacion: "",
+  descripcion: "",
+  clasificacion: "O" as Clasificacion,
+  prioridad: "P3" as Prioridad,
+  recomendacion: "",
+  evidencia: "",
+  evidenciaNombre: "",
+};
+
+function etiquetaClasificacion(clasificacion: Clasificacion) {
+  const etiquetas: Record<Clasificacion, string> = {
+    C: "Conforme",
+    O: "Observación",
+    NC: "No Conforme",
+    CR: "Condición Crítica",
+    NA: "No Aplica",
+  };
+  return etiquetas[clasificacion];
+}
+
+function claseClasificacion(clasificacion: Clasificacion) {
+  const clases: Record<Clasificacion, string> = {
+    C: "bg-emerald-400/10 text-emerald-300 border-emerald-400/20",
+    O: "bg-amber-400/10 text-amber-300 border-amber-400/20",
+    NC: "bg-orange-400/10 text-orange-300 border-orange-400/20",
+    CR: "bg-rose-400/10 text-rose-300 border-rose-400/20",
+    NA: "bg-slate-400/10 text-slate-300 border-slate-400/20",
+  };
+  return clases[clasificacion];
+}
+
+function clasePrioridad(prioridad: Prioridad) {
+  const clases: Record<Prioridad, string> = {
+    P1: "bg-rose-500 text-white",
+    P2: "bg-orange-400 text-slate-950",
+    P3: "bg-amber-300 text-slate-950",
+    P4: "bg-sky-300 text-slate-950",
+    P5: "bg-slate-300 text-slate-950",
+  };
+  return clases[prioridad];
+}
+
+function calcularISH(hallazgos: Hallazgo[]) {
+  const evaluables = hallazgos.filter((hallazgo) => hallazgo.clasificacion !== "NA");
+  if (evaluables.length === 0) return 100;
+
+  const valores: Record<Exclude<Clasificacion, "NA">, number> = {
+    C: 100,
+    O: 80,
+    NC: 50,
+    CR: 0,
+  };
+
+  const total = evaluables.reduce((suma, hallazgo) => {
+    if (hallazgo.clasificacion === "NA") return suma;
+    return suma + valores[hallazgo.clasificacion];
+  }, 0);
+
+  return Math.round(total / evaluables.length);
+}
+
+function semaforoISH(ish: number) {
+  if (ish >= 85) return { texto: "Condición favorable", clase: "bg-emerald-400/20 text-emerald-950" };
+  if (ish >= 70) return { texto: "Requiere atención", clase: "bg-amber-400/30 text-amber-950" };
+  return { texto: "Condición prioritaria", clase: "bg-rose-400/30 text-rose-950" };
+}
+
+export default function ExpedientePage() {
+  const params = useParams();
+  const inspeccionId = String(params.id);
+
+  const [inspeccion, setInspeccion] = useState<Inspeccion | null>(null);
+  const [hallazgos, setHallazgos] = useState<Hallazgo[]>([]);
+  const [formulario, setFormulario] = useState(formularioInicial);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [filtro, setFiltro] = useState("Todos");
+  const [mensaje, setMensaje] = useState("");
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    const inspeccionesGuardadas = localStorage.getItem("certeza-habitacional-inspecciones");
+    if (inspeccionesGuardadas) {
+      try {
+        const inspecciones = JSON.parse(inspeccionesGuardadas) as Inspeccion[];
+        setInspeccion(inspecciones.find((item) => item.id === inspeccionId) ?? null);
+      } catch {
+        setInspeccion(null);
+      }
+    }
+
+    const hallazgosGuardados = localStorage.getItem(`certeza-hallazgos-${inspeccionId}`);
+    if (hallazgosGuardados) {
+      try {
+        setHallazgos(JSON.parse(hallazgosGuardados) as Hallazgo[]);
+      } catch {
+        localStorage.removeItem(`certeza-hallazgos-${inspeccionId}`);
+      }
+    }
+    setCargando(false);
+  }, [inspeccionId]);
+
+  useEffect(() => {
+    if (!cargando) {
+      localStorage.setItem(`certeza-hallazgos-${inspeccionId}`, JSON.stringify(hallazgos));
+    }
+  }, [hallazgos, inspeccionId, cargando]);
+
+  const hallazgosFiltrados = useMemo(
+    () => filtro === "Todos" ? hallazgos : hallazgos.filter((hallazgo) => hallazgo.clasificacion === filtro),
+    [hallazgos, filtro],
+  );
+
+  const resumen = useMemo(() => ({
+    total: hallazgos.length,
+    conformes: hallazgos.filter((h) => h.clasificacion === "C").length,
+    observaciones: hallazgos.filter((h) => h.clasificacion === "O").length,
+    noConformes: hallazgos.filter((h) => h.clasificacion === "NC").length,
+    criticos: hallazgos.filter((h) => h.clasificacion === "CR").length,
+  }), [hallazgos]);
+
+  const ish = useMemo(() => calcularISH(hallazgos), [hallazgos]);
+  const semaforo = semaforoISH(ish);
+
+  function actualizarCampo(campo: keyof typeof formularioInicial, valor: string) {
+    setFormulario((actual) => ({ ...actual, [campo]: valor }));
+  }
+
+  function cargarEvidencia(event: ChangeEvent<HTMLInputElement>) {
+    const archivo = event.target.files?.[0];
+    if (!archivo) return;
+    if (!archivo.type.startsWith("image/")) {
+      setMensaje("Selecciona un archivo de imagen válido.");
+      return;
+    }
+    if (archivo.size > 1_500_000) {
+      setMensaje("La imagen debe pesar menos de 1.5 MB.");
+      return;
+    }
+
+    const lector = new FileReader();
+    lector.onload = () => {
+      setFormulario((actual) => ({
+        ...actual,
+        evidencia: String(lector.result),
+        evidenciaNombre: archivo.name,
+      }));
+      setMensaje("");
+    };
+    lector.readAsDataURL(archivo);
+  }
+
+  function guardarHallazgo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!formulario.elemento.trim() || !formulario.ubicacion.trim() || !formulario.descripcion.trim()) {
+      setMensaje("Completa elemento, ubicación y descripción del hallazgo.");
+      return;
+    }
+
+    const nuevoHallazgo: Hallazgo = {
+      id: crypto.randomUUID(),
+      inspeccionId,
+      ...formulario,
+      creadoEn: new Date().toISOString(),
+    };
+
+    setHallazgos((actuales) => [nuevoHallazgo, ...actuales]);
+    setFormulario(formularioInicial);
+    setMensaje("");
+    setMostrarFormulario(false);
+  }
+
+  function eliminarHallazgo(id: string) {
+    if (!window.confirm("¿Deseas eliminar este hallazgo?")) return;
+    setHallazgos((actuales) => actuales.filter((hallazgo) => hallazgo.id !== id));
+  }
+
+  if (cargando) {
+    return <main className="grid min-h-screen place-items-center bg-slate-950 text-cyan-300">Cargando expediente...</main>;
+  }
+
+  if (!inspeccion) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-white">
+        <div className="text-center">
+          <h1 className="text-4xl font-black">Expediente no encontrado</h1>
+          <Link href="/panel/inspecciones" className="mt-8 inline-block rounded-full bg-cyan-400 px-7 py-4 font-black text-slate-950">
+            Regresar a inspecciones
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-white">
+      <header className="border-b border-white/10 bg-slate-950/95">
+        <div className="mx-auto flex max-w-[1500px] flex-col justify-between gap-5 px-6 py-6 lg:flex-row lg:items-center">
+          <div>
+            <Link href="/panel/inspecciones" className="text-sm font-bold text-cyan-300">← Regresar a inspecciones</Link>
+            <h1 className="mt-3 text-3xl font-black">{inspeccion.folio}</h1>
+            <p className="mt-2 text-slate-400">{inspeccion.cliente} · {inspeccion.tipoServicio}</p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              href={`/panel/inspecciones/${inspeccionId}/reporte`}
+              className="rounded-full border border-cyan-300/30 px-6 py-4 text-center font-black text-cyan-300 hover:bg-cyan-300/10"
+            >
+              Vista previa del reporte
+            </Link>
+            <Link
+              href={`/panel/inspecciones/${inspeccionId}/firmas`}
+              className="rounded-full border border-emerald-300/30 px-6 py-4 text-center font-black text-emerald-300 hover:bg-emerald-300/10"
+            >
+              Firmas
+            </Link>
+            <Link
+              href={`/panel/inspecciones/${inspeccionId}/certificado`}
+              className="rounded-full border border-amber-300/30 px-6 py-4 text-center font-black text-amber-300 hover:bg-amber-300/10"
+            >
+              Certificado
+            </Link>
+            <button
+              type="button"
+              onClick={() => setMostrarFormulario(true)}
+              className="rounded-full bg-cyan-400 px-6 py-4 font-black text-slate-950"
+            >
+              + Registrar hallazgo
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[1500px] px-6 py-8">
+        <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
+          <div className="rounded-3xl border border-white/10 bg-slate-900 p-8">
+            <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-300">Datos del expediente</p>
+            <div className="mt-7 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <Dato titulo="Cliente" valor={inspeccion.cliente} />
+              <Dato titulo="Teléfono" valor={inspeccion.telefono} />
+              <Dato titulo="Inmueble" valor={inspeccion.tipoInmueble} />
+              <Dato titulo="Dirección" valor={`${inspeccion.direccion}, ${inspeccion.ciudad}`} />
+              <Dato titulo="Fecha" valor={inspeccion.fecha} />
+              <Dato titulo="Inspector" valor={inspeccion.inspector} />
+            </div>
+          </div>
+          <aside className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+            <p className="text-sm font-black uppercase tracking-[0.2em]">Índice de Salud Habitacional</p>
+            <p className="mt-6 text-7xl font-black">{ish}</p>
+            <div className={`mt-5 rounded-2xl px-5 py-4 font-black ${semaforo.clase}`}>{semaforo.texto}</div>
+          </aside>
+        </section>
+
+        <section className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
+          <Indicador titulo="Total" valor={resumen.total} clase="text-cyan-300" />
+          <Indicador titulo="Conformes" valor={resumen.conformes} clase="text-emerald-300" />
+          <Indicador titulo="Observaciones" valor={resumen.observaciones} clase="text-amber-300" />
+          <Indicador titulo="No conformes" valor={resumen.noConformes} clase="text-orange-300" />
+          <Indicador titulo="Críticos" valor={resumen.criticos} clase="text-rose-300" />
+        </section>
+
+        <section className="mt-8 overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
+          <div className="flex flex-col justify-between gap-4 border-b border-white/10 p-6 sm:flex-row sm:items-center">
+            <h2 className="text-2xl font-black">Hallazgos registrados</h2>
+            <select value={filtro} onChange={(e) => setFiltro(e.target.value)} className="rounded-full border border-white/10 bg-slate-950 px-5 py-3 font-bold">
+              <option>Todos</option>
+              {CLASIFICACIONES.map((c) => <option key={c} value={c}>{c} · {etiquetaClasificacion(c)}</option>)}
+            </select>
+          </div>
+
+          {hallazgosFiltrados.length === 0 ? (
+            <div className="px-6 py-20 text-center text-slate-400">No hay hallazgos registrados.</div>
+          ) : (
+            <div className="divide-y divide-white/10">
+              {hallazgosFiltrados.map((hallazgo) => (
+                <article key={hallazgo.id} className="p-6 sm:p-8">
+                  <div className="grid gap-7 lg:grid-cols-[1fr_260px]">
+                    <div>
+                      <div className="flex flex-wrap gap-3">
+                        <span className={`rounded-full border px-4 py-2 text-xs font-black ${claseClasificacion(hallazgo.clasificacion)}`}>
+                          {hallazgo.clasificacion} · {etiquetaClasificacion(hallazgo.clasificacion)}
+                        </span>
+                        <span className={`rounded-full px-4 py-2 text-xs font-black ${clasePrioridad(hallazgo.prioridad)}`}>{hallazgo.prioridad}</span>
+                      </div>
+                      <p className="mt-6 text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">{hallazgo.area}</p>
+                      <h3 className="mt-2 text-2xl font-black">{hallazgo.elemento}</h3>
+                      <p className="mt-2 text-sm text-slate-400">Ubicación: {hallazgo.ubicacion}</p>
+                      <div className="mt-6 rounded-2xl bg-white/5 p-5"><p>{hallazgo.descripcion}</p></div>
+                      {hallazgo.recomendacion && <div className="mt-4 rounded-2xl bg-cyan-400/10 p-5"><p className="font-bold text-cyan-300">Recomendación</p><p className="mt-2">{hallazgo.recomendacion}</p></div>}
+                    </div>
+                    <div>
+                      {hallazgo.evidencia ? <img src={hallazgo.evidencia} alt="Evidencia" className="h-52 w-full rounded-2xl object-cover" /> : <div className="grid h-52 place-items-center rounded-2xl border border-dashed border-white/15 text-slate-500">Sin fotografía</div>}
+                      <button onClick={() => eliminarHallazgo(hallazgo.id)} className="mt-4 w-full rounded-full border border-rose-400/20 px-5 py-3 text-sm font-bold text-rose-300">Eliminar hallazgo</button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {mostrarFormulario && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/90 px-4 py-8 backdrop-blur">
+          <div className="mx-auto max-w-5xl rounded-[2rem] border border-white/10 bg-slate-900">
+            <div className="flex items-center justify-between border-b border-white/10 p-6 sm:p-8">
+              <div><p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-300">Método Certeza®</p><h2 className="mt-2 text-3xl font-black">Registrar hallazgo</h2></div>
+              <button onClick={() => setMostrarFormulario(false)} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 text-xl">×</button>
+            </div>
+            <form onSubmit={guardarHallazgo} className="p-6 sm:p-8">
+              <div className="grid gap-6 md:grid-cols-2">
+                <Seleccion etiqueta="Área" valor={formulario.area} opciones={AREAS} cambiar={(v) => actualizarCampo("area", v)} />
+                <Campo etiqueta="Elemento revisado *" valor={formulario.elemento} cambiar={(v) => actualizarCampo("elemento", v)} />
+                <Campo etiqueta="Ubicación *" valor={formulario.ubicacion} cambiar={(v) => actualizarCampo("ubicacion", v)} />
+                <div className="grid grid-cols-2 gap-4">
+                  <Seleccion etiqueta="Clasificación" valor={formulario.clasificacion} opciones={CLASIFICACIONES} cambiar={(v) => actualizarCampo("clasificacion", v)} />
+                  <Seleccion etiqueta="Prioridad" valor={formulario.prioridad} opciones={PRIORIDADES} cambiar={(v) => actualizarCampo("prioridad", v)} />
+                </div>
+                <div className="md:col-span-2"><AreaTexto etiqueta="Descripción *" valor={formulario.descripcion} cambiar={(v) => actualizarCampo("descripcion", v)} /></div>
+                <div className="md:col-span-2"><AreaTexto etiqueta="Recomendación técnica" valor={formulario.recomendacion} cambiar={(v) => actualizarCampo("recomendacion", v)} /></div>
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-bold text-slate-300">Evidencia fotográfica</label>
+                  <input type="file" accept="image/*" onChange={cargarEvidencia} className="w-full rounded-2xl border border-dashed border-white/15 bg-white/5 px-5 py-5 text-sm" />
+                  {formulario.evidencia && <img src={formulario.evidencia} alt="Vista previa" className="mt-5 h-64 w-full rounded-2xl object-cover" />}
+                </div>
+              </div>
+              {mensaje && <p className="mt-6 rounded-2xl bg-rose-400/10 px-5 py-4 font-bold text-rose-300">{mensaje}</p>}
+              <div className="mt-8 flex justify-end gap-3">
+                <button type="button" onClick={() => setMostrarFormulario(false)} className="rounded-full border border-white/15 px-7 py-4 font-bold">Cancelar</button>
+                <button type="submit" className="rounded-full bg-cyan-400 px-7 py-4 font-black text-slate-950">Guardar hallazgo</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function Dato({ titulo, valor }: { titulo: string; valor: string }) {
+  return <div><p className="text-sm font-bold text-slate-500">{titulo}</p><p className="mt-2 font-bold text-slate-200">{valor || "No registrado"}</p></div>;
+}
+
+function Indicador({ titulo, valor, clase }: { titulo: string; valor: number; clase: string }) {
+  return <article className="rounded-3xl border border-white/10 bg-slate-900 p-6"><p className="text-sm font-bold text-slate-400">{titulo}</p><p className={`mt-4 text-4xl font-black ${clase}`}>{valor}</p></article>;
+}
+
+function Campo({ etiqueta, valor, cambiar }: { etiqueta: string; valor: string; cambiar: (valor: string) => void }) {
+  return <div><label className="mb-2 block text-sm font-bold text-slate-300">{etiqueta}</label><input value={valor} onChange={(e) => cambiar(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-white outline-none focus:border-cyan-300" /></div>;
+}
+
+function AreaTexto({ etiqueta, valor, cambiar }: { etiqueta: string; valor: string; cambiar: (valor: string) => void }) {
+  return <div><label className="mb-2 block text-sm font-bold text-slate-300">{etiqueta}</label><textarea value={valor} onChange={(e) => cambiar(e.target.value)} rows={4} className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-white outline-none focus:border-cyan-300" /></div>;
+}
+
+function Seleccion({ etiqueta, valor, opciones, cambiar }: { etiqueta: string; valor: string; opciones: readonly string[]; cambiar: (valor: string) => void }) {
+  return <div><label className="mb-2 block text-sm font-bold text-slate-300">{etiqueta}</label><select value={valor} onChange={(e) => cambiar(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-white outline-none focus:border-cyan-300">{opciones.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}</select></div>;
+}

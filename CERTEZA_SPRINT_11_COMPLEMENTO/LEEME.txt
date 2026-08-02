@@ -1,0 +1,20 @@
+CERTEZA HABITACIONAL - SPRINT 11 COMPLEMENTO
+
+Incluye:
+- Expediente técnico ampliado.
+- Edición de inspector, fecha, tipo de servicio y observaciones.
+- Inicio, continuación y cancelación de inspecciones.
+- Progreso del expediente.
+- Actividad reciente derivada de hallazgos, evidencias, firmas y certificado.
+- Métricas de hallazgos, críticos, no conformes e índice.
+- Lista profesional de inspecciones con acceso directo al expediente.
+- Hallazgo rápido desde el expediente.
+
+No modifica prisma/schema.prisma y no requiere migración.
+
+INSTALACIÓN
+1. Detén npm run dev.
+2. Extrae CERTEZA_SPRINT_11_COMPLEMENTO dentro de la raíz del proyecto.
+3. Desde la raíz ejecuta:
+   powershell -ExecutionPolicy Bypass -File .\CERTEZA_SPRINT_11_COMPLEMENTO\INSTALAR_SPRINT_11_COMPLEMENTO.ps1
+4. Al terminar ejecuta npm run dev.

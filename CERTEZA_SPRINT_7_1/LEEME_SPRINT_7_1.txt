@@ -1,0 +1,26 @@
+CERTEZA HABITACIONAL - SPRINT 7.1
+Correccion del inicio de sesion
+
+QUE CAMBIA
+- El inicio de sesion ahora usa una Server Action de Auth.js.
+- El panel se protege desde app/panel/layout.tsx.
+- Ya no se usa proxy.ts ni middleware.ts para proteger /panel.
+- Se conserva Prisma, Supabase, bcrypt y los roles existentes.
+
+INSTALACION FACIL
+1. Deten el servidor presionando Ctrl+C en la ventana donde se ejecuta npm run dev.
+2. Extrae la carpeta CERTEZA_SPRINT_7_1 dentro de:
+   C:\Users\GILSAR\certezahabitacional-web-oficial
+3. La carpeta debe quedar asi:
+   C:\Users\GILSAR\certezahabitacional-web-oficial\CERTEZA_SPRINT_7_1
+4. Haz clic derecho en INSTALAR_SPRINT_7_1.ps1 y selecciona Ejecutar con PowerShell.
+5. En PowerShell, dentro del proyecto, ejecuta:
+   npm run dev
+6. Abre:
+   http://localhost:3000/login
+7. Usa el correo y la contrasena definidos en .env.local.
+
+IMPORTANTE
+- No escribas Ctrl+C o Ctrl+S como comandos. Son combinaciones de teclas.
+- No compartas .env, .env.local, DATABASE_URL ni AUTH_SECRET.
+- El instalador elimina proxy.ts y middleware.ts porque el panel queda protegido por su layout del servidor.

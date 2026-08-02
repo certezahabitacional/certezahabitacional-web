@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RolUsuario {
+  ADMINISTRADOR
+  SUPERVISOR
+  INSPECTOR
+  CLIENTE
+}
+
+enum EstadoInspeccion {
+  PROGRAMADA
+  EN_PROCESO
+  REPORTE_PENDIENTE
+  FINALIZADA
+  CANCELADA
+}
+
+enum TipoCliente {
+  PARTICULAR
+  INMOBILIARIA
+  CONSTRUCTORA
+  INVERSIONISTA
+}
+
+enum ClasificacionHallazgo {
+  C
+  O
+  NC
+  CR
+  NA
+}
+
+enum PrioridadHallazgo {
+  P1
+  P2
+  P3
+  P4
+  P5
+}
+
+model Usuario {
+  id              String       @id @default(cuid())
+  nombre          String
+  email           String       @unique
+  passwordHash    String
+  rol             RolUsuario   @default(INSPECTOR)
+  activo          Boolean      @default(true)
+  ultimoAcceso    DateTime?
+  creadoEn        DateTime     @default(now())
+  actualizadoEn   DateTime     @updatedAt
+  inspector       Inspector?
+  cliente         Cliente?
+  hallazgosCreados Hallazgo[]   @relation("HallazgoCreadoPor")
+  fotosSubidas    Fotografia[]  @relation("FotoSubidaPor")
+}
+
+model Cliente {
+  id            String       @id @default(cuid())
+  usuarioId     String?      @unique
+  usuario       Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  nombre        String
+  telefono      String?
+  correo        String?
+  tipo          TipoCliente  @default(PARTICULAR)
+  empresa       String?
+  direccion     String?
+  ciudad        String?
+  notas         String?
+  creadoEn      DateTime     @default(now())
+  actualizadoEn DateTime     @updatedAt
+  inspecciones  Inspeccion[]
+
+  @@index([nombre])
+  @@index([correo])
+  @@index([telefono])
+}
+
+model Inspector {
+  id             String       @id @default(cuid())
+  usuarioId      String       @unique
+  usuario        Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  telefono       String?
+  especialidad   String?
+  cedula         String?
+  ciudad         String?
+  activo         Boolean      @default(true)
+  creadoEn       DateTime     @default(now())
+  actualizadoEn  DateTime     @updatedAt
+  inspecciones   Inspeccion[]
+}
+
+model Inspeccion {
+  id             String             @id @default(cuid())
+  folio          String             @unique
+  clienteId      String
+  cliente        Cliente            @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  inspectorId    String?
+  inspector      Inspector?         @relation(fields: [inspectorId], references: [id], onDelete: SetNull)
+  tipoServicio   String
+  tipoInmueble   String
+  direccion      String
+  ciudad         String
+  superficieM2   Decimal?           @db.Decimal(10, 2)
+  fechaProgramada DateTime
+  estado         EstadoInspeccion   @default(PROGRAMADA)
+  observaciones  String?
+  ish            Decimal?           @db.Decimal(5, 2)
+  semaforo       String?
+  creadoEn       DateTime           @default(now())
+  actualizadoEn  DateTime           @updatedAt
+  hallazgos      Hallazgo[]
+  fotografias    Fotografia[]
+  firmas         Firma[]
+  certificado    Certificado?
+
+  @@index([fechaProgramada])
+  @@index([estado])
+  @@index([clienteId])
+  @@index([inspectorId])
+}
+
+model Hallazgo {
+  id              String                 @id @default(cuid())
+  inspeccionId    String
+  inspeccion      Inspeccion             @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  creadoPorId     String?
+  creadoPor       Usuario?               @relation("HallazgoCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  area             String
+  titulo           String
+  descripcion      String
+  clasificacion    ClasificacionHallazgo
+  prioridad        PrioridadHallazgo
+  recomendacion    String?
+  ubicacion        String?
+  resuelto         Boolean                @default(false)
+  creadoEn         DateTime               @default(now())
+  actualizadoEn    DateTime               @updatedAt
+  fotografias      Fotografia[]
+
+  @@index([inspeccionId])
+  @@index([clasificacion])
+  @@index([prioridad])
+}
+
+model Fotografia {
+  id            String       @id @default(cuid())
+  inspeccionId  String
+  inspeccion    Inspeccion   @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  hallazgoId    String?
+  hallazgo      Hallazgo?    @relation(fields: [hallazgoId], references: [id], onDelete: SetNull)
+  subidaPorId   String?
+  subidaPor     Usuario?     @relation("FotoSubidaPor", fields: [subidaPorId], references: [id], onDelete: SetNull)
+  url           String
+  publicId      String?      @unique
+  descripcion   String?
+  latitud       Decimal?     @db.Decimal(10, 7)
+  longitud      Decimal?     @db.Decimal(10, 7)
+  tomadaEn      DateTime?
+  creadaEn      DateTime     @default(now())
+
+  @@index([inspeccionId])
+  @@index([hallazgoId])
+}
+
+model Firma {
+  id            String      @id @default(cuid())
+  inspeccionId  String
+  inspeccion    Inspeccion  @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  tipo          String
+  nombreFirmante String
+  imagenUrl     String
+  firmadaEn     DateTime    @default(now())
+  ip            String?
+
+  @@index([inspeccionId])
+}
+
+model Certificado {
+  id             String      @id @default(cuid())
+  inspeccionId   String      @unique
+  inspeccion     Inspeccion  @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  folio          String      @unique
+  codigoValidacion String    @unique
+  dictamen       String
+  ish            Decimal     @db.Decimal(5, 2)
+  emitidoEn      DateTime    @default(now())
+  pdfUrl         String?
+  vigente        Boolean     @default(true)
+}

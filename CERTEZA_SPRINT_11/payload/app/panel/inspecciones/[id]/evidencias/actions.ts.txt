@@ -1,0 +1,51 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+
+const texto = (formData: FormData, nombre: string) =>
+  String(formData.get(nombre) ?? "").trim();
+
+export async function registrarEvidencia(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const url = texto(formData, "url");
+
+  if (!inspeccionId || !url) {
+    throw new Error("La inspección y la URL de la evidencia son obligatorias.");
+  }
+
+  try {
+    new URL(url);
+  } catch {
+    throw new Error("La URL de la evidencia no es válida.");
+  }
+
+  const hallazgoId = texto(formData, "hallazgoId") || null;
+
+  await prisma.fotografia.create({
+    data: {
+      inspeccionId,
+      hallazgoId,
+      url,
+      descripcion: texto(formData, "descripcion") || null,
+      tomadaEn: texto(formData, "tomadaEn")
+        ? new Date(texto(formData, "tomadaEn"))
+        : null,
+    },
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/evidencias`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte`);
+}
+
+export async function eliminarEvidencia(formData: FormData) {
+  const id = texto(formData, "id");
+  const inspeccionId = texto(formData, "inspeccionId");
+
+  if (!id || !inspeccionId) return;
+
+  await prisma.fotografia.delete({ where: { id } });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/evidencias`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte`);
+}

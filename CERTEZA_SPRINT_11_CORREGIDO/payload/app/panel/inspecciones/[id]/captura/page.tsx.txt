@@ -1,0 +1,268 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import {
+  agruparPuntosMetodoCerteza,
+  TOTAL_PUNTOS_METODO_CERTEZA,
+} from "@/lib/metodo-certeza";
+import { guardarPuntoInspeccion } from "./actions";
+
+const clases: Record<string, string> = {
+  C: "bg-emerald-400/15 text-emerald-300",
+  O: "bg-amber-400/15 text-amber-300",
+  NC: "bg-orange-400/15 text-orange-300",
+  CR: "bg-rose-400/15 text-rose-300",
+  NA: "bg-slate-400/15 text-slate-300",
+};
+
+export default async function CapturaPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id },
+    include: {
+      cliente: true,
+      inmueble: true,
+      hallazgos: { orderBy: [{ area: "asc" }, { titulo: "asc" }] },
+    },
+  });
+
+  if (!inspeccion) notFound();
+
+  const hallazgosPorTitulo = new Map(
+    inspeccion.hallazgos.map((hallazgo) => [hallazgo.titulo, hallazgo]),
+  );
+  const grupos = agruparPuntosMetodoCerteza();
+  const puntosEvaluados = [...hallazgosPorTitulo.keys()].filter((titulo) =>
+    /^\[[A-Z]{3}-\d{2}\]/.test(titulo),
+  ).length;
+  const avance = Math.round(
+    (puntosEvaluados / TOTAL_PUNTOS_METODO_CERTEZA) * 100,
+  );
+
+  return (
+    <main className="min-h-screen bg-slate-950 px-4 py-7 text-white sm:px-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div>
+            <Link
+              href={`/panel/inspecciones/${id}`}
+              className="text-sm font-black text-cyan-300"
+            >
+              ← Expediente
+            </Link>
+            <p className="mt-5 text-sm font-black text-cyan-300">
+              {inspeccion.folio}
+            </p>
+            <h1 className="text-3xl font-black sm:text-4xl">
+              Captura Método Certeza®
+            </h1>
+            <p className="mt-2 text-slate-400">
+              {inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble} · {inspeccion.cliente.nombre}
+            </p>
+          </div>
+
+          <div className="min-w-72 rounded-3xl border border-white/10 bg-slate-900 p-5">
+            <div className="flex items-center justify-between text-sm font-black">
+              <span>Avance del checklist</span>
+              <span className="text-cyan-300">{puntosEvaluados}/{TOTAL_PUNTOS_METODO_CERTEZA}</span>
+            </div>
+            <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-800">
+              <div
+                className="h-full rounded-full bg-cyan-400 transition-all"
+                style={{ width: `${avance}%` }}
+              />
+            </div>
+            <p className="mt-2 text-right text-xs text-slate-400">{avance}% completado</p>
+          </div>
+        </div>
+
+        <div className="mt-8 space-y-8">
+          {Object.entries(grupos).map(([area, puntos]) => (
+            <section
+              key={area}
+              className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900"
+            >
+              <div className="border-b border-white/10 px-5 py-4 sm:px-6">
+                <h2 className="text-xl font-black">{area}</h2>
+                <p className="mt-1 text-xs text-slate-500">{puntos.length} puntos de revisión</p>
+              </div>
+
+              <div className="divide-y divide-white/10">
+                {puntos.map((punto) => {
+                  const tituloGuardado = `[${punto.clave}] ${punto.titulo}`;
+                  const existente = hallazgosPorTitulo.get(tituloGuardado);
+
+                  return (
+                    <details key={punto.clave} className="group">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-5 sm:px-6">
+                        <div>
+                          <p className="text-xs font-black text-cyan-300">{punto.clave}</p>
+                          <h3 className="mt-1 font-black">{punto.titulo}</h3>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {existente ? (
+                            <span className={`rounded-full px-3 py-1 text-xs font-black ${clases[existente.clasificacion]}`}>
+                              {existente.clasificacion}
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-black text-slate-500">
+                              PENDIENTE
+                            </span>
+                          )}
+                          <span className="text-slate-500 transition group-open:rotate-180">⌄</span>
+                        </div>
+                      </summary>
+
+                      <form
+                        action={guardarPuntoInspeccion}
+                        className="border-t border-white/10 bg-slate-950/40 px-5 py-6 sm:px-6"
+                      >
+                        <input type="hidden" name="inspeccionId" value={id} />
+                        <input type="hidden" name="area" value={area} />
+                        <input type="hidden" name="titulo" value={punto.titulo} />
+                        <input type="hidden" name="clave" value={punto.clave} />
+
+                        <div className="grid gap-4 lg:grid-cols-4">
+                          <CampoSelect
+                            name="clasificacion"
+                            label="Clasificación"
+                            defaultValue={existente?.clasificacion ?? "C"}
+                            options={[
+                              ["C", "C · Conforme"],
+                              ["O", "O · Observación"],
+                              ["NC", "NC · No conforme"],
+                              ["CR", "CR · Crítico"],
+                              ["NA", "NA · No aplica"],
+                            ]}
+                          />
+                          <CampoSelect
+                            name="prioridad"
+                            label="Prioridad"
+                            defaultValue={existente?.prioridad ?? "P5"}
+                            options={[
+                              ["P1", "P1 · Inmediata"],
+                              ["P2", "P2 · Alta"],
+                              ["P3", "P3 · Media"],
+                              ["P4", "P4 · Baja"],
+                              ["P5", "P5 · Informativa"],
+                            ]}
+                          />
+                          <Campo name="ubicacion" label="Ubicación" defaultValue={existente?.ubicacion ?? ""} />
+                          <Campo name="costoEstimado" label="Costo estimado (MXN)" type="number" defaultValue={existente?.costoEstimado ? String(existente.costoEstimado) : ""} />
+                        </div>
+
+                        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                          <CampoArea
+                            name="descripcion"
+                            label="Descripción / evidencia observada"
+                            defaultValue={existente?.descripcion ?? ""}
+                            placeholder="Describe únicamente hechos visibles y medibles."
+                          />
+                          <CampoArea
+                            name="recomendacion"
+                            label="Recomendación técnica"
+                            defaultValue={existente?.recomendacion ?? punto.recomendacionBase}
+                          />
+                        </div>
+
+                        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                          <Campo name="tiempoReparacion" label="Tiempo estimado de reparación" defaultValue={existente?.tiempoReparacion ?? ""} />
+                          <Campo name="responsable" label="Especialista o responsable sugerido" defaultValue={existente?.responsable ?? ""} />
+                        </div>
+
+                        <button className="mt-5 rounded-full bg-cyan-400 px-6 py-3 font-black text-slate-950 hover:bg-cyan-300">
+                          {existente ? "Actualizar punto" : "Guardar punto"}
+                        </button>
+                      </form>
+                    </details>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Campo({
+  name,
+  label,
+  type = "text",
+  defaultValue,
+}: {
+  name: string;
+  label: string;
+  type?: string;
+  defaultValue: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">{label}</span>
+      <input
+        name={name}
+        type={type}
+        defaultValue={defaultValue}
+        step={type === "number" ? "0.01" : undefined}
+        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
+      />
+    </label>
+  );
+}
+
+function CampoArea({
+  name,
+  label,
+  defaultValue,
+  placeholder,
+}: {
+  name: string;
+  label: string;
+  defaultValue: string;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">{label}</span>
+      <textarea
+        name={name}
+        rows={4}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
+      />
+    </label>
+  );
+}
+
+function CampoSelect({
+  name,
+  label,
+  defaultValue,
+  options,
+}: {
+  name: string;
+  label: string;
+  defaultValue: string;
+  options: [string, string][];
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
+      >
+        {options.map(([value, text]) => (
+          <option key={value} value={value}>{text}</option>
+        ))}
+      </select>
+    </label>
+  );
+}

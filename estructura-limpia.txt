@@ -1,0 +1,182 @@
+=== APP ===
+Listado de rutas de carpetas
+El n·mero de serie del volumen es 00000200 BA30:DCA0
+C:\USERS\GILSAR\CERTEZAHABITACIONAL-WEB-OFICIAL\APP
+|   favicon.ico
+|   globals.css
+|   layout.tsx
+|   page.tsx
+|   
++---acceso
+|       page.tsx
+|       
++---api
+|   +---auth
+|   |   \---[...nextauth]
+|   |           route.ts
+|   |           
+|   +---health
+|   |       route.ts
+|   |       
+|   \---inspecciones
+|       \---[id]
+|           |   route.ts
+|           |   
+|           \---firmas
+|                   route.ts
+|                   
++---certificados
+|   |   page.tsx
+|   |   
+|   \---verificar
+|       \---[codigo]
+|               page.tsx
+|               
++---login
+|       LoginForm.tsx
+|       page.tsx
+|       
++---panel
+|   |   ExecutiveInsights.tsx
+|   |   layout.tsx
+|   |   OperationalTrends.tsx
+|   |   page.tsx
+|   |   
+|   +---agenda
+|   |       page.tsx
+|   |       
+|   +---auditoria
+|   |       page.tsx
+|   |       
+|   +---clientes
+|   |   |   actions.ts
+|   |   |   page.tsx
+|   |   |   
+|   |   \---[id]
+|   |           page.tsx
+|   |           
+|   +---configuracion
+|   |       page.tsx
+|   |       
+|   +---inmuebles
+|   |       actions.ts
+|   |       page.tsx
+|   |       
+|   +---inspecciones
+|   |   |   page.tsx
+|   |   |   
+|   |   +---id
+|   |   +---nueva
+|   |   |       actions.ts
+|   |   |       page.tsx
+|   |   |       
+|   |   \---[id]
+|   |       |   actions.ts
+|   |       |   page.tsx
+|   |       |   
+|   |       +---captura
+|   |       |       page.tsx
+|   |       |       
+|   |       +---certificado
+|   |       |       actions.ts
+|   |       |       page.tsx
+|   |       |       PrintButton.tsx
+|   |       |       
+|   |       +---editar
+|   |       |       actions.ts
+|   |       |       page.tsx
+|   |       |       
+|   |       +---evidencias
+|   |       |       actions.ts
+|   |       |       page.tsx
+|   |       |       
+|   |       +---firmas
+|   |       |       page.tsx
+|   |       |       
+|   |       \---reporte
+|   |               page.tsx
+|   |               PrintButton.tsx
+|   |               
+|   +---inspectores
+|   |       actions.ts
+|   |       page.tsx
+|   |       
+|   \---usuarios
+|           actions.ts
+|           page.tsx
+|           
+\---portal
+    |   layout.tsx
+    |   page.tsx
+    |   
+    \---inspecciones
+        |   page.tsx
+        |   
+        \---[id]
+                page.tsx
+                
+
+=== LIB ===
+Listado de rutas de carpetas
+El n·mero de serie del volumen es 000001C2 BA30:DCA0
+C:\USERS\GILSAR\CERTEZAHABITACIONAL-WEB-OFICIAL\LIB
+    administrador-actual.ts
+    auditoria.ts
+    cliente-actual.ts
+    indice-habitacional.ts
+    metodo-certeza.ts
+    prisma.ts
+    
+No existe ninguna subcarpeta 
+
+
+=== PRISMA ===
+Listado de rutas de carpetas
+El n·mero de serie del volumen es 000001BD BA30:DCA0
+C:\USERS\GILSAR\CERTEZAHABITACIONAL-WEB-OFICIAL\PRISMA
+|   schema.prisma
+|   seed.ts
+|   
+\---migrations
+    |   migration_lock.toml
+    |   
+    +---20260728071051_inicio
+    |       migration.sql
+    |       
+    +---20260728234841_sprint9
+    |       migration.sql
+    |       
+    +---20260730023017_revocacion_certificados
+    |       migration.sql
+    |       
+    +---20260730044253_auditoria
+    |       migration.sql
+    |       
+    \---20260731193558_auditoria_por_inspeccion
+            migration.sql
+            
+
+=== SCRIPTS ===
+Listado de rutas de carpetas
+El n·mero de serie del volumen es 0000022B BA30:DCA0
+C:\USERS\GILSAR\CERTEZAHABITACIONAL-WEB-OFICIAL\SCRIPTS
+    crear-cliente-portal.ts
+    probar-password.ts
+    reparar-administrador.mjs
+    restablecer-admin.ts
+    
+No existe ninguna subcarpeta 
+
+
+=== PUBLIC ===
+Listado de rutas de carpetas
+El n·mero de serie del volumen es 00000207 BA30:DCA0
+C:\USERS\GILSAR\CERTEZAHABITACIONAL-WEB-OFICIAL\PUBLIC
+    file.svg
+    globe.svg
+    next.svg
+    vercel.svg
+    window.svg
+    
+No existe ninguna subcarpeta 
+

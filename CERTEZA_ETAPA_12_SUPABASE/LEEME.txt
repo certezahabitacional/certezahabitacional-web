@@ -1,0 +1,26 @@
+CERTEZA HABITACIONAL - ETAPA 12
+Sincronizacion permanente de firmas con Supabase
+
+INCLUYE
+- Consulta protegida del expediente mediante API.
+- Lectura de firmas desde la tabla Firma.
+- Guardado permanente de firma del inspector y del cliente.
+- Sustitucion de localStorage en el modulo de firmas.
+- Estados de carga, guardado y errores.
+- Respaldo automatico.
+- Validacion de Prisma y npm run build.
+
+NO REQUIERE MIGRACION
+El modelo Firma ya existe en prisma/schema.prisma.
+
+INSTALACION
+1. Detener npm run dev con Ctrl+C.
+2. Extraer CERTEZA_ETAPA_12_SUPABASE en la raiz del proyecto.
+3. Ejecutar:
+   powershell -ExecutionPolicy Bypass -File .\CERTEZA_ETAPA_12_SUPABASE\INSTALAR_ETAPA_12.ps1
+4. Cuando aparezca ETAPA_12_INSTALADA, ejecutar npm run dev.
+5. Abrir una inspeccion, entrar a Firmas, firmar y guardar.
+6. Recargar la pagina para confirmar que las firmas persisten.
+
+SEGURIDAD
+Las APIs requieren una sesion valida de Auth.js.

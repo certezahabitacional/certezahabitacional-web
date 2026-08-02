@@ -1,0 +1,27 @@
+CERTEZA HABITACIONAL - SPRINT 11 CORREGIDO
+
+ESTA VERSION REPARA
+- El archivo truncado app/panel/inspecciones/nueva/page.tsx.
+- La validacion de fecha y hora.
+- La conversion del Decimal de superficie antes de crear la inspeccion.
+- La validacion Cliente-Inmueble.
+- La asignacion opcional de inspector.
+- La generacion de folio sin duplicados.
+- La integracion del Metodo Certeza, captura y evidencias del Sprint 11.
+
+INSTALACION
+1. Deten npm run dev.
+2. Extrae CERTEZA_SPRINT_11_CORREGIDO dentro de la raiz del proyecto.
+3. Desde PowerShell, en la raiz del proyecto, ejecuta:
+
+powershell -ExecutionPolicy Bypass -File .\CERTEZA_SPRINT_11_CORREGIDO\INSTALAR_SPRINT_11_CORREGIDO.ps1
+
+4. Espera el mensaje SPRINT_11_CORREGIDO_INSTALADO.
+5. Ejecuta npm run dev.
+6. Abre http://localhost:3000/panel/inspecciones/nueva
+
+IMPORTANTE
+- El instalador crea un respaldo antes de reemplazar archivos.
+- No modifica prisma/schema.prisma.
+- No requiere una nueva migracion.
+- Los archivos internos usan extension .txt para que Next.js no los compile dentro de la carpeta del instalador.

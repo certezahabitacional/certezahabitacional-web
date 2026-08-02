@@ -1,1 +1,25 @@
-:root{--navy:#0b2845;--blue:#0f5f9f;--sky:#eaf4fb;--ink:#17212b;--muted:#5e6b77;--line:#dbe4eb;--white:#fff;--green:#1f9d67;--amber:#e5a62b;--red:#d94b45}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:#fff;line-height:1.55}.shell{width:min(1140px,calc(100% - 40px));margin:auto}.nav{height:82px;display:flex;align-items:center;justify-content:space-between}.brand{display:flex;gap:12px;align-items:center;text-decoration:none;color:var(--navy);font-size:1.05rem}.mark{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--navy);color:#fff;font-weight:800}.nav nav{display:flex;align-items:center;gap:26px}.nav nav a{text-decoration:none;color:#334454;font-size:.94rem}.navCta{background:var(--navy);color:#fff!important;padding:11px 16px;border-radius:8px}.hero{background:linear-gradient(135deg,#f6fbff 0%,#e9f4fb 55%,#dcecf6 100%);padding:82px 0 88px}.heroGrid{display:grid;grid-template-columns:1.35fr .75fr;gap:72px;align-items:center}.eyebrow{font-size:.75rem;letter-spacing:.16em;font-weight:800;color:var(--blue);margin:0 0 14px}.eyebrow.light{color:#8fd4ff}h1{font-size:clamp(2.7rem,5.2vw,4.8rem);line-height:1.03;letter-spacing:-.045em;color:var(--navy);margin:0 0 24px;max-width:850px}h2{font-size:clamp(2rem,3.6vw,3.15rem);line-height:1.1;letter-spacing:-.035em;margin:0;color:var(--navy)}h3{color:var(--navy);margin:16px 0 8px}.lead{font-size:1.18rem;color:#526271;max-width:720px}.actions{display:flex;gap:14px;margin:32px 0}.button{display:inline-flex;align-items:center;justify-content:center;padding:14px 20px;border-radius:8px;text-decoration:none;font-weight:750}.primary{background:var(--blue);color:#fff}.secondary{border:1px solid #a9bbc9;color:var(--navy);background:#fff}.white{background:#fff;color:var(--navy)}.trust{display:flex;flex-wrap:wrap;gap:18px;color:#526271;font-size:.9rem}.inspectionCard{background:#fff;border:1px solid rgba(11,40,69,.08);border-radius:18px;padding:28px;box-shadow:0 22px 60px rgba(11,40,69,.14)}.cardTop{display:flex;justify-content:space-between;color:#6a7885;font-size:.88rem}.cardTop strong{color:var(--blue)}.gauge{margin:26px 0;background:var(--sky);border-radius:14px;padding:28px 20px;text-align:center}.gauge span{display:block;color:#667482;font-size:.85rem}.gauge b{font-size:1.4rem;color:var(--navy)}.legend{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.legend span{padding:9px 0;text-align:center;border-radius:7px;color:#fff;font-weight:800}.ok{background:var(--green)}.obs{background:var(--amber)}.nc{background:#db743b}.critical{background:var(--red)}.na{background:#87939d}.inspectionCard p{color:var(--muted);font-size:.92rem;margin-bottom:0}.section{padding:96px 0}.sectionHeading{display:grid;grid-template-columns:1.25fr .75fr;gap:40px;align-items:end;margin-bottom:44px}.sectionHeading p{color:var(--muted);margin:0}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}.service{padding:26px;border:1px solid var(--line);border-radius:14px;background:#fff}.serviceIcon{font-size:1.8rem;color:var(--blue)}.service p,.about p{color:var(--muted)}.method{padding:96px 0;background:var(--navy)}.sectionHeading.light h2,.sectionHeading.light p{color:#fff}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}.steps article{border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:24px;color:#d9e6ef}.steps article>span{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#1680c4;color:#fff;font-weight:800}.steps h3{color:#fff}.about{display:grid;grid-template-columns:1fr 1fr;gap:80px}.contact{background:var(--blue);padding:70px 0}.contactGrid{display:flex;justify-content:space-between;gap:40px;align-items:center;color:#fff}.contact h2{color:#fff}.contact p{max-width:660px}footer{background:#071c30;color:#b9c7d2}.footer{min-height:76px;display:flex;justify-content:space-between;align-items:center;font-size:.85rem}@media(max-width:900px){.nav nav a:not(.navCta){display:none}.heroGrid,.sectionHeading,.about{grid-template-columns:1fr}.cards,.steps{grid-template-columns:repeat(2,1fr)}.heroGrid{gap:42px}.contactGrid{align-items:flex-start;flex-direction:column}}@media(max-width:560px){.shell{width:min(100% - 28px,1140px)}.nav{height:72px}.brand span:last-child{font-size:.92rem}.hero{padding:58px 0}.cards,.steps{grid-template-columns:1fr}.section,.method{padding:72px 0}.actions{flex-direction:column}.button{width:100%}.footer{padding:20px 0;gap:8px;align-items:flex-start;flex-direction:column}}
+@import "tailwindcss";
+
+:root {
+  --background: #020617;
+  --foreground: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
