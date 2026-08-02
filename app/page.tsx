@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const whatsappUrl =
   "https://wa.me/526561489459?text=Hola%2C%20me%20interesa%20una%20inspecci%C3%B3n%20de%20vivienda%20con%20Certeza%20Habitacional.%20Me%20gustar%C3%ADa%20recibir%20informaci%C3%B3n.";
 
@@ -80,7 +82,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <a href="#inicio" className="flex items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-xl bg-cyan-400 font-black text-slate-950">
               CH
@@ -112,14 +114,23 @@ export default function Home() {
             </a>
           </nav>
 
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-full bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300"
-          >
-            Solicitar inspección
-          </a>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="rounded-full border border-cyan-300 px-5 py-3 text-sm font-black text-cyan-300 transition hover:bg-cyan-300 hover:text-slate-950"
+            >
+              Acceso
+            </Link>
+
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="hidden rounded-full bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 sm:inline-block"
+            >
+              Solicitar inspección
+            </a>
+          </div>
         </div>
       </header>
 
@@ -221,6 +232,7 @@ export default function Home() {
                 <p className="text-sm font-bold">
                   Índice de Salud Habitacional
                 </p>
+
                 <div className="mt-2 flex items-end justify-between">
                   <p className="text-5xl font-black">ISH</p>
                   <p className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white">
@@ -257,10 +269,12 @@ export default function Home() {
                 <p className="text-sm font-black text-cyan-700">
                   {service.code}
                 </p>
+
                 <h3 className="mt-8 text-xl font-black">{service.title}</h3>
                 <p className="mt-4 leading-7 text-slate-600">
                   {service.description}
                 </p>
+
                 <a
                   href={whatsappUrl}
                   target="_blank"
@@ -281,6 +295,7 @@ export default function Home() {
             <p className="font-black uppercase tracking-[0.2em]">
               Método Certeza®
             </p>
+
             <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">
               Un proceso claro, desde la agenda hasta el seguimiento
             </h2>
@@ -447,6 +462,9 @@ export default function Home() {
             <a href="#contacto" className="hover:text-cyan-300">
               Contacto
             </a>
+            <Link href="/login" className="hover:text-cyan-300">
+              Acceso
+            </Link>
           </div>
         </div>
       </footer>
