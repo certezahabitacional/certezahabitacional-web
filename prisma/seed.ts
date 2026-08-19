@@ -3,36 +3,88 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-console.log("ADMIN_EMAIL:", process.env.ADMIN_EMAIL);
-console.log("ADMIN_PASSWORD cargada:", Boolean(process.env.ADMIN_PASSWORD));
+function obtenerVariableObligatoria(nombre: string): string {
+  const valor = process.env[nombre]?.trim();
 
-async function main() {
-  const email = (process.env.ADMIN_EMAIL ?? "admin@certezahabitacional.mx").toLowerCase();
-  const password = process.env.ADMIN_PASSWORD ?? "Cambiar123!";
+  if (!valor) {
+    throw new Error(
+      `Falta la variable de entorno ${nombre}. Agrégala al archivo .env antes de ejecutar el seed.`
+    );
+  }
+
+  return valor;
+}
+
+async function prepararUsuario({
+  nombre,
+  email,
+  password,
+  rol,
+}: {
+  nombre: string;
+  email: string;
+  password: string;
+  rol: RolUsuario;
+}) {
+  const emailNormalizado = email.trim().toLowerCase();
   const passwordHash = await bcrypt.hash(password, 12);
 
   await prisma.usuario.upsert({
-    where: { email },
+    where: {
+      email: emailNormalizado,
+    },
     update: {
-      nombre: "Administrador Certeza",
+      nombre,
       passwordHash,
-      rol: RolUsuario.ADMINISTRADOR,
+      rol,
       activo: true,
     },
     create: {
-      nombre: "Administrador Certeza",
-      email,
+      nombre,
+      email: emailNormalizado,
       passwordHash,
-      rol: RolUsuario.ADMINISTRADOR,
+      rol,
       activo: true,
     },
   });
 
-  console.log(`Administrador preparado: ${email}`);
+  console.log(`✓ ${rol} preparado: ${emailNormalizado}`);
+}
+
+async function main() {
+  console.log("Preparando usuarios iniciales...");
+  console.log("");
+
+  const adminEmail = obtenerVariableObligatoria("ADMIN_EMAIL");
+  const adminPassword = obtenerVariableObligatoria("ADMIN_PASSWORD");
+
+  const coordinadorEmail = obtenerVariableObligatoria("COORDINADOR_EMAIL");
+  const coordinadorPassword = obtenerVariableObligatoria(
+    "COORDINADOR_PASSWORD"
+  );
+
+  await prepararUsuario({
+    nombre: "Administrador Certeza",
+    email: adminEmail,
+    password: adminPassword,
+    rol: RolUsuario.ADMINISTRADOR,
+  });
+
+  await prepararUsuario({
+    nombre: "Coordinador Certeza",
+    email: coordinadorEmail,
+    password: coordinadorPassword,
+    rol: RolUsuario.COORDINADOR,
+  });
+
+  console.log("");
+  console.log("✓ Seed completado correctamente.");
 }
 
 main()
   .catch((error) => {
+    console.error("");
+    console.error("Error ejecutando el seed:");
     console.error(error);
     process.exit(1);
   })

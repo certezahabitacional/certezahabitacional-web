@@ -43,41 +43,37 @@ export const {
       },
 
       async authorize(credentials) {
-        const resultado =
-          credencialesSchema.safeParse(credentials);
+        const resultado = credencialesSchema.safeParse(credentials);
 
         if (!resultado.success) {
           return null;
         }
 
-        const email =
-          resultado.data.email.toLowerCase();
+        const email = resultado.data.email.toLowerCase();
 
-        const usuario =
-          await prisma.usuario.findUnique({
-            where: {
-              email,
-            },
+        const usuario = await prisma.usuario.findUnique({
+          where: {
+            email,
+          },
 
-            select: {
-              id: true,
-              nombre: true,
-              email: true,
-              passwordHash: true,
-              rol: true,
-              activo: true,
-            },
-          });
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+            passwordHash: true,
+            rol: true,
+            activo: true,
+          },
+        });
 
         if (!usuario?.activo) {
           return null;
         }
 
-        const passwordValido =
-          await bcrypt.compare(
-            resultado.data.password,
-            usuario.passwordHash,
-          );
+        const passwordValido = await bcrypt.compare(
+          resultado.data.password,
+          usuario.passwordHash,
+        );
 
         if (!passwordValido) {
           return null;
@@ -115,13 +111,8 @@ export const {
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = String(
-          token.id ?? token.sub ?? "",
-        );
-
-        session.user.role = String(
-          token.role ?? "",
-        );
+        session.user.id = String(token.id ?? token.sub ?? "");
+        session.user.role = String(token.role ?? "");
       }
 
       return session;

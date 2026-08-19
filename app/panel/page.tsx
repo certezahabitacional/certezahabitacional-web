@@ -1,214 +1,383 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ClasificacionHallazgo,
   EstadoInspeccion,
 } from "@prisma/client";
+
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import ExecutiveInsights from "./ExecutiveInsights";
-import OperationalTrends from "./OperationalTrends";
+
 export default async function PanelPage() {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const rol = session.user.role;
+
+  const esCoordinador = rol === "COORDINADOR";
+
+  const tieneAccesoPanel =
+    rol === "ADMINISTRADOR" ||
+    rol === "SUPERVISOR" ||
+    rol === "COORDINADOR";
+
+  if (!tieneAccesoPanel) {
+    redirect("/acceso");
+  }
+
+  /*
+   * CONSULTAS PRINCIPALES
+   *
+   * Se agruparon para reducir considerablemente
+   * la cantidad de conexiones a Supabase.
+   */
   const [
-    activas,
-    programadas,
-    reportesPendientes,
-    clientes,
-    criticos,
-    certificadosEmitidos,
-    certificadosRevocados,
-    recientes,
-    ish,
     inspeccionesPorEstado,
-    hallazgosPorClasificacion,
-    inspeccionesConSemaforo,
+    clientes,
+    recientes,
   ] = await Promise.all([
-    prisma.inspeccion.count({
-      where: {
-        estado: EstadoInspeccion.EN_PROCESO,
-      },
-    }),
-
-    prisma.inspeccion.count({
-      where: {
-        estado: EstadoInspeccion.PROGRAMADA,
-      },
-    }),
-
-    prisma.inspeccion.count({
-      where: {
-        estado: EstadoInspeccion.REPORTE_PENDIENTE,
-      },
-    }),
-
-    prisma.cliente.count(),
-
-    prisma.hallazgo.count({
-      where: {
-        clasificacion: ClasificacionHallazgo.CR,
-        resuelto: false,
-      },
-    }),
-
-    prisma.certificado.count(),
-
-    prisma.certificado.count({
-      where: {
-        vigente: false,
-      },
-    }),
-
-    prisma.inspeccion.findMany({
-      include: {
-        cliente: true,
-      },
-      orderBy: {
-        actualizadoEn: "desc",
-      },
-      take: 6,
-    }),
-
-    prisma.inspeccion.aggregate({
-      _avg: {
-        ish: true,
-      },
-      where: {
-        ish: {
-          not: null,
-        },
-      },
-    }),
-
     prisma.inspeccion.groupBy({
       by: ["estado"],
       _count: {
         _all: true,
       },
-      orderBy: {
-        estado: "asc",
-      },
     }),
 
-    prisma.hallazgo.groupBy({
-      by: ["clasificacion"],
-      _count: {
-        _all: true,
-      },
-      orderBy: {
-        clasificacion: "asc",
-      },
-    }),
+    prisma.cliente.count(),
 
-    prisma.inspeccion.groupBy({
-      by: ["semaforo"],
-      where: {
-        semaforo: {
-          not: null,
+    prisma.inspeccion.findMany({
+      include: {
+        cliente: {
+          select: {
+            nombre: true,
+          },
         },
       },
-      _count: {
-        _all: true,
-      },
+
       orderBy: {
-        semaforo: "asc",
+        actualizadoEn: "desc",
       },
+
+      take: esCoordinador ? 4 : 6,
     }),
   ]);
 
-  const ishPromedio = Number(ish._avg.ish ?? 0).toFixed(1);
+  function obtenerCantidadEstado(
+    estado: EstadoInspeccion,
+  ) {
+    return (
+      inspeccionesPorEstado.find(
+        (item) => item.estado === estado,
+      )?._count._all ?? 0
+    );
+  }
 
-  const totalEstados = inspeccionesPorEstado.reduce(
-    (total, item) => total + item._count._all,
-    0,
+  const activas = obtenerCantidadEstado(
+    EstadoInspeccion.EN_PROCESO,
   );
 
-  const totalClasificaciones =
-    hallazgosPorClasificacion.reduce(
-      (total, item) => total + item._count._all,
+  const programadas = obtenerCantidadEstado(
+    EstadoInspeccion.PROGRAMADA,
+  );
+
+  const reportesPendientes =
+    obtenerCantidadEstado(
+      EstadoInspeccion.REPORTE_PENDIENTE,
+    );
+
+  /*
+   * INFORMACIÓN EJECUTIVA
+   *
+   * No se carga para COORDINADOR.
+   */
+  let criticos = 0;
+  let certificadosEmitidos = 0;
+  let certificadosRevocados = 0;
+  let ishPromedio = "0.0";
+
+  let distribucionHallazgos: Array<{
+    etiqueta: string;
+    valor: number;
+    porcentaje: number;
+  }> = [];
+
+  let distribucionSemaforo: Array<{
+    etiqueta: string;
+    valor: number;
+    porcentaje: number;
+  }> = [];
+
+  if (!esCoordinador) {
+    const [
+      criticosResultado,
+      certificadosPorVigencia,
+      ish,
+      hallazgosPorClasificacion,
+      inspeccionesConSemaforo,
+    ] = await Promise.all([
+      prisma.hallazgo.count({
+        where: {
+          clasificacion:
+            ClasificacionHallazgo.CR,
+
+          resuelto: false,
+        },
+      }),
+
+      prisma.certificado.groupBy({
+        by: ["vigente"],
+
+        _count: {
+          _all: true,
+        },
+      }),
+
+      prisma.inspeccion.aggregate({
+        _avg: {
+          ish: true,
+        },
+
+        where: {
+          ish: {
+            not: null,
+          },
+        },
+      }),
+
+      prisma.hallazgo.groupBy({
+        by: ["clasificacion"],
+
+        _count: {
+          _all: true,
+        },
+      }),
+
+      prisma.inspeccion.groupBy({
+        by: ["semaforo"],
+
+        where: {
+          semaforo: {
+            not: null,
+          },
+        },
+
+        _count: {
+          _all: true,
+        },
+      }),
+    ]);
+
+    criticos = criticosResultado;
+
+    certificadosEmitidos =
+      certificadosPorVigencia.reduce(
+        (total, item) =>
+          total + item._count._all,
+        0,
+      );
+
+    certificadosRevocados =
+      certificadosPorVigencia.find(
+        (item) => item.vigente === false,
+      )?._count._all ?? 0;
+
+    ishPromedio = Number(
+      ish._avg.ish ?? 0,
+    ).toFixed(1);
+
+    const totalClasificaciones =
+      hallazgosPorClasificacion.reduce(
+        (total, item) =>
+          total + item._count._all,
+        0,
+      );
+
+    distribucionHallazgos =
+      hallazgosPorClasificacion.map(
+        (item) => ({
+          etiqueta: etiquetaClasificacion(
+            item.clasificacion,
+          ),
+
+          valor: item._count._all,
+
+          porcentaje:
+            totalClasificaciones > 0
+              ? Math.round(
+                  (item._count._all /
+                    totalClasificaciones) *
+                    100,
+                )
+              : 0,
+        }),
+      );
+
+    const totalSemaforos =
+      inspeccionesConSemaforo.reduce(
+        (total, item) =>
+          total + item._count._all,
+        0,
+      );
+
+    distribucionSemaforo =
+      inspeccionesConSemaforo.map(
+        (item) => ({
+          etiqueta:
+            item.semaforo ??
+            "SIN EVALUAR",
+
+          valor: item._count._all,
+
+          porcentaje:
+            totalSemaforos > 0
+              ? Math.round(
+                  (item._count._all /
+                    totalSemaforos) *
+                    100,
+                )
+              : 0,
+        }),
+      );
+  }
+
+  const totalEstados =
+    inspeccionesPorEstado.reduce(
+      (total, item) =>
+        total + item._count._all,
       0,
     );
 
-  const totalSemaforos = inspeccionesConSemaforo.reduce(
-    (total, item) => total + item._count._all,
-    0,
-  );
+  const distribucionEstados =
+    inspeccionesPorEstado.map(
+      (item) => ({
+        etiqueta: item.estado.replaceAll(
+          "_",
+          " ",
+        ),
 
-  const indicadores = [
-    {
-      titulo: "Inspecciones activas",
-      valor: activas,
-      detalle: "Actualmente en proceso",
-    },
-    {
-      titulo: "Programadas",
-      valor: programadas,
-      detalle: "Pendientes de iniciar",
-    },
-    {
-      titulo: "Reportes pendientes",
-      valor: reportesPendientes,
-      detalle: "Por completar o emitir",
-    },
-    {
-      titulo: "Clientes registrados",
-      valor: clientes,
-      detalle: "Base total de clientes",
-    },
-    {
-      titulo: "Hallazgos críticos",
-      valor: criticos,
-      detalle: "Críticos sin resolver",
-    },
-    {
-      titulo: "Certificados emitidos",
-      valor: certificadosEmitidos,
-      detalle: "Total histórico",
-    },
-  ];
+        valor: item._count._all,
 
-  const distribucionEstados = inspeccionesPorEstado.map(
-    (item) => ({
-      etiqueta: item.estado.replaceAll("_", " "),
-      valor: item._count._all,
-      porcentaje:
-        totalEstados > 0
-          ? Math.round(
-              (item._count._all / totalEstados) * 100,
-            )
-          : 0,
-    }),
-  );
+        porcentaje:
+          totalEstados > 0
+            ? Math.round(
+                (item._count._all /
+                  totalEstados) *
+                  100,
+              )
+            : 0,
+      }),
+    );
 
-  const distribucionHallazgos =
-    hallazgosPorClasificacion.map((item) => ({
-      etiqueta: etiquetaClasificacion(
-        item.clasificacion,
-      ),
-      valor: item._count._all,
-      porcentaje:
-        totalClasificaciones > 0
-          ? Math.round(
-              (item._count._all /
-                totalClasificaciones) *
-                100,
-            )
-          : 0,
-    }));
+  const indicadores = esCoordinador
+    ? [
+        {
+          titulo:
+            "Inspecciones activas",
 
-  const distribucionSemaforo =
-    inspeccionesConSemaforo.map((item) => ({
-      etiqueta: item.semaforo ?? "SIN EVALUAR",
-      valor: item._count._all,
-      porcentaje:
-        totalSemaforos > 0
-          ? Math.round(
-              (item._count._all / totalSemaforos) *
-                100,
-            )
-          : 0,
-    }));
+          valor: activas,
+
+          detalle:
+            "Actualmente en proceso",
+        },
+
+        {
+          titulo: "Programadas",
+
+          valor: programadas,
+
+          detalle:
+            "Pendientes de iniciar",
+        },
+
+        {
+          titulo:
+            "Reportes pendientes",
+
+          valor: reportesPendientes,
+
+          detalle:
+            "Por completar o emitir",
+        },
+
+        {
+          titulo:
+            "Clientes registrados",
+
+          valor: clientes,
+
+          detalle:
+            "Base total de clientes",
+        },
+      ]
+    : [
+        {
+          titulo:
+            "Inspecciones activas",
+
+          valor: activas,
+
+          detalle:
+            "Actualmente en proceso",
+        },
+
+        {
+          titulo: "Programadas",
+
+          valor: programadas,
+
+          detalle:
+            "Pendientes de iniciar",
+        },
+
+        {
+          titulo:
+            "Reportes pendientes",
+
+          valor: reportesPendientes,
+
+          detalle:
+            "Por completar o emitir",
+        },
+
+        {
+          titulo:
+            "Clientes registrados",
+
+          valor: clientes,
+
+          detalle:
+            "Base total de clientes",
+        },
+
+        {
+          titulo:
+            "Hallazgos críticos",
+
+          valor: criticos,
+
+          detalle:
+            "Críticos sin resolver",
+        },
+
+        {
+          titulo:
+            "Certificados emitidos",
+
+          valor:
+            certificadosEmitidos,
+
+          detalle:
+            "Total histórico",
+        },
+      ];
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
       <div className="mx-auto max-w-7xl">
+        {/* ENCABEZADO */}
         <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.25em] text-cyan-300">
@@ -216,15 +385,23 @@ export default async function PanelPage() {
             </p>
 
             <h1 className="mt-2 text-4xl font-black">
-              Dashboard ejecutivo
+              {esCoordinador
+                ? "Panel de coordinación"
+                : "Dashboard ejecutivo"}
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Resumen operativo y estado general de la
-              plataforma.
+              {esCoordinador
+                ? "Clientes, inmuebles, cotizaciones, precios y agenda."
+                : "Resumen operativo y estado general de la plataforma."}
+            </p>
+
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-amber-300">
+              Sesión: {rol}
             </p>
           </div>
 
+          {/* MENÚ PRINCIPAL */}
           <nav className="flex flex-wrap gap-3">
             <BotonNavegacion
               href="/panel/clientes"
@@ -237,46 +414,81 @@ export default async function PanelPage() {
             />
 
             <BotonNavegacion
-              href="/panel/inspectores"
-              texto="Inspectores"
-            />
-
-            <BotonNavegacion
               href="/panel/agenda"
               texto="Agenda"
             />
 
-            <BotonNavegacion
-              href="/panel/auditoria"
-              texto="Auditoría"
-            />
+            {(esCoordinador ||
+              rol ===
+                "ADMINISTRADOR") && (
+              <>
+                <BotonNavegacion
+                  href="/panel/paquetes"
+                  texto="Paquetes"
+                />
 
-            <BotonNavegacion
-              href="/panel/usuarios"
-              texto="Usuarios"
-            />
+                <BotonNavegacion
+                  href="/panel/cotizaciones"
+                  texto="Cotizaciones"
+                />
+              </>
+            )}
 
-            <Link
-              href="/panel/inspecciones/nueva"
-              className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
-            >
-              Nueva inspección
-            </Link>
+            {!esCoordinador && (
+              <>
+                <BotonNavegacion
+                  href="/panel/inspectores"
+                  texto="Inspectores"
+                />
+
+                <BotonNavegacion
+                  href="/panel/auditoria"
+                  texto="Auditoría"
+                />
+
+                <BotonNavegacion
+                  href="/panel/usuarios"
+                  texto="Usuarios"
+                />
+
+                <Link
+                  href="/panel/inspecciones/nueva"
+                  className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
+                >
+                  Nueva inspección
+                </Link>
+              </>
+            )}
           </nav>
         </header>
 
-        <section className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {indicadores.map((indicador) => (
-            <Metrica
-              key={indicador.titulo}
-              titulo={indicador.titulo}
-              valor={indicador.valor}
-              detalle={indicador.detalle}
-            />
-          ))}
+        {/* MÉTRICAS */}
+        <section
+          className={`mt-8 grid gap-5 sm:grid-cols-2 ${
+            esCoordinador
+              ? "xl:grid-cols-4"
+              : "xl:grid-cols-3"
+          }`}
+        >
+          {indicadores.map(
+            (indicador) => (
+              <Metrica
+                key={indicador.titulo}
+                titulo={
+                  indicador.titulo
+                }
+                valor={indicador.valor}
+                detalle={
+                  indicador.detalle
+                }
+              />
+            ),
+          )}
         </section>
 
+        {/* CUERPO PRINCIPAL */}
         <section className="mt-8 grid gap-8 xl:grid-cols-[1fr_340px]">
+          {/* ACTIVIDAD */}
           <article className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
             <header className="flex items-center justify-between border-b border-white/10 p-6">
               <div>
@@ -285,21 +497,25 @@ export default async function PanelPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Últimas inspecciones actualizadas.
+                  Últimas inspecciones
+                  actualizadas.
                 </p>
               </div>
 
-              <Link
-                href="/panel/inspecciones"
-                className="text-sm font-bold text-cyan-300"
-              >
-                Ver todas →
-              </Link>
+              {!esCoordinador && (
+                <Link
+                  href="/panel/inspecciones"
+                  className="text-sm font-bold text-cyan-300"
+                >
+                  Ver todas →
+                </Link>
+              )}
             </header>
 
             {recientes.length === 0 ? (
               <p className="p-12 text-center text-slate-400">
-                Aún no hay inspecciones registradas.
+                Aún no hay inspecciones
+                registradas.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -309,15 +525,19 @@ export default async function PanelPage() {
                       <th className="px-6 py-4">
                         Folio
                       </th>
+
                       <th className="px-6 py-4">
                         Cliente
                       </th>
+
                       <th className="px-6 py-4">
                         Inmueble
                       </th>
+
                       <th className="px-6 py-4">
                         Estado
                       </th>
+
                       <th className="px-6 py-4">
                         ISH
                       </th>
@@ -325,161 +545,280 @@ export default async function PanelPage() {
                   </thead>
 
                   <tbody>
-                    {recientes.map((inspeccion) => (
-                      <tr
-                        key={inspeccion.id}
-                        className="border-t border-white/10"
-                      >
-                        <td className="px-6 py-5">
-                          <Link
-                            href={`/panel/inspecciones/${inspeccion.id}`}
-                            className="font-black text-cyan-300"
-                          >
-                            {inspeccion.folio}
-                          </Link>
-                        </td>
-
-                        <td className="px-6 py-5 font-bold">
-                          {
-                            inspeccion.cliente
-                              .nombre
+                    {recientes.map(
+                      (inspeccion) => (
+                        <tr
+                          key={
+                            inspeccion.id
                           }
-                        </td>
-
-                        <td className="px-6 py-5 text-slate-400">
-                          <p>
-                            {
-                              inspeccion.tipoInmueble
-                            }
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-600">
-                            {inspeccion.ciudad}
-                          </p>
-                        </td>
-
-                        <td className="px-6 py-5">
-                          <span className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-black text-amber-300">
-                            {inspeccion.estado.replaceAll(
-                              "_",
-                              " ",
+                          className="border-t border-white/10"
+                        >
+                          <td className="px-6 py-5">
+                            {!esCoordinador ? (
+                              <Link
+                                href={`/panel/inspecciones/${inspeccion.id}`}
+                                className="font-black text-cyan-300"
+                              >
+                                {
+                                  inspeccion.folio
+                                }
+                              </Link>
+                            ) : (
+                              <span className="font-black text-cyan-300">
+                                {
+                                  inspeccion.folio
+                                }
+                              </span>
                             )}
-                          </span>
-                        </td>
+                          </td>
 
-                        <td className="px-6 py-5 font-black">
-                          {inspeccion.ish !== null
-                            ? Number(
-                                inspeccion.ish,
-                              ).toFixed(0)
-                            : "—"}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-6 py-5 font-bold">
+                            {
+                              inspeccion
+                                .cliente
+                                .nombre
+                            }
+                          </td>
+
+                          <td className="px-6 py-5 text-slate-400">
+                            <p>
+                              {
+                                inspeccion.tipoInmueble
+                              }
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-600">
+                              {
+                                inspeccion.ciudad
+                              }
+                            </p>
+                          </td>
+
+                          <td className="px-6 py-5">
+                            <span className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-black text-amber-300">
+                              {inspeccion.estado.replaceAll(
+                                "_",
+                                " ",
+                              )}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-5 font-black">
+                            {inspeccion.ish !==
+                            null
+                              ? Number(
+                                  inspeccion.ish,
+                                ).toFixed(
+                                  0,
+                                )
+                              : "—"}
+                          </td>
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </table>
               </div>
             )}
           </article>
 
+          {/* COLUMNA DERECHA */}
           <aside className="space-y-5">
-            <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
-              <p className="text-xs font-black uppercase tracking-[0.25em]">
-                Índice general
-              </p>
+            {esCoordinador ? (
+              <>
+                <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+                  <p className="text-xs font-black uppercase tracking-[0.25em]">
+                    Coordinación
+                  </p>
 
-              <p className="mt-7 text-7xl font-black">
-                {ishPromedio}
-              </p>
+                  <p className="mt-6 text-4xl font-black">
+                    {programadas}
+                  </p>
 
-              <p className="mt-2 text-xl font-black">
-                ISH promedio
-              </p>
+                  <p className="mt-2 font-black">
+                    inspecciones programadas
+                  </p>
 
-              <div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-950/20">
-                <div
-                  className="h-full rounded-full bg-slate-950"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(
-                        0,
-                        Number(ishPromedio),
-                      ),
-                    )}%`,
-                  }}
-                />
-              </div>
-            </section>
+                  <p className="mt-4 text-sm font-semibold text-slate-800">
+                    Gestiona desde aquí
+                    clientes, inmuebles,
+                    cotizaciones, paquetes y
+                    agenda.
+                  </p>
+                </section>
 
-            <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
-              <p className="text-sm font-bold text-slate-400">
-                Certificados revocados
-              </p>
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <h2 className="text-lg font-black">
+                    Operación comercial
+                  </h2>
 
-              <p className="mt-3 text-4xl font-black text-rose-300">
-                {certificadosRevocados}
-              </p>
+                  <div className="mt-5 space-y-3">
+                    <Acceso
+                      href="/panel/clientes"
+                      texto="Gestionar clientes"
+                    />
 
-              <Link
-                href="/certificados"
-                className="mt-5 inline-block text-sm font-bold text-cyan-300"
-              >
-                Revisar certificados →
-              </Link>
-            </section>
+                    <Acceso
+                      href="/panel/inmuebles"
+                      texto="Gestionar inmuebles"
+                    />
 
-            <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
-              <h2 className="text-lg font-black">
-                Accesos rápidos
-              </h2>
+                    <Acceso
+                      href="/panel/paquetes"
+                      texto="Paquetes y precios"
+                    />
 
-              <div className="mt-5 space-y-3">
-                <Acceso
-                  href="/panel/inspecciones"
-                  texto="Ver inspecciones"
-                />
+                    <Acceso
+                      href="/panel/cotizaciones"
+                      texto="Cotizaciones"
+                    />
 
-                <Acceso
-                  href="/panel/agenda"
-                  texto="Consultar agenda"
-                />
+                    <Acceso
+                      href="/panel/agenda"
+                      texto="Consultar agenda"
+                    />
+                  </div>
+                </section>
 
-                <Acceso
-                  href="/panel/auditoria"
-                  texto="Revisar auditoría"
-                />
+                <section className="rounded-3xl border border-amber-300/20 bg-amber-300/5 p-7">
+                  <p className="text-xs font-black uppercase tracking-widest text-amber-300">
+                    CertezaHabitacional
+                    v2.0
+                  </p>
 
-                <Acceso
-                  href="/panel/configuracion"
-                  texto="Configuración"
-                />
-              </div>
-            </section>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">
+                    Flujo comercial:
+                    cliente → inmueble →
+                    paquete → cotización →
+                    agenda → inspección.
+                  </p>
+                </section>
+              </>
+            ) : (
+              <>
+                <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+                  <p className="text-xs font-black uppercase tracking-[0.25em]">
+                    Índice general
+                  </p>
+
+                  <p className="mt-7 text-7xl font-black">
+                    {ishPromedio}
+                  </p>
+
+                  <p className="mt-2 text-xl font-black">
+                    ISH promedio
+                  </p>
+
+                  <div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-950/20">
+                    <div
+                      className="h-full rounded-full bg-slate-950"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            Number(
+                              ishPromedio,
+                            ),
+                          ),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <p className="text-sm font-bold text-slate-400">
+                    Certificados revocados
+                  </p>
+
+                  <p className="mt-3 text-4xl font-black text-rose-300">
+                    {
+                      certificadosRevocados
+                    }
+                  </p>
+
+                  <Link
+                    href="/certificados"
+                    className="mt-5 inline-block text-sm font-bold text-cyan-300"
+                  >
+                    Revisar certificados →
+                  </Link>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <h2 className="text-lg font-black">
+                    Accesos rápidos
+                  </h2>
+
+                  <div className="mt-5 space-y-3">
+                    <Acceso
+                      href="/panel/inspecciones"
+                      texto="Ver inspecciones"
+                    />
+
+                    <Acceso
+                      href="/panel/agenda"
+                      texto="Consultar agenda"
+                    />
+
+                    <Acceso
+                      href="/panel/paquetes"
+                      texto="Paquetes y precios"
+                    />
+
+                    <Acceso
+                      href="/panel/cotizaciones"
+                      texto="Cotizaciones"
+                    />
+
+                    <Acceso
+                      href="/panel/auditoria"
+                      texto="Revisar auditoría"
+                    />
+
+                    <Acceso
+                      href="/panel/configuracion"
+                      texto="Configuración"
+                    />
+                  </div>
+                </section>
+              </>
+            )}
           </aside>
         </section>
 
-        <section className="mt-8 grid gap-8 xl:grid-cols-3">
+        {/* DISTRIBUCIONES */}
+        <section
+          className={`mt-8 grid gap-8 ${
+            esCoordinador
+              ? "xl:grid-cols-1"
+              : "xl:grid-cols-3"
+          }`}
+        >
           <Distribucion
             titulo="Inspecciones por estado"
             items={distribucionEstados}
           />
 
-          <Distribucion
-            titulo="Hallazgos por clasificación"
-            items={distribucionHallazgos}
-          />
+          {!esCoordinador && (
+            <>
+              <Distribucion
+                titulo="Hallazgos por clasificación"
+                items={
+                  distribucionHallazgos
+                }
+              />
 
-          <Distribucion
-            titulo="Semáforo habitacional"
-            items={distribucionSemaforo}
-          />
+              <Distribucion
+                titulo="Semáforo habitacional"
+                items={
+                  distribucionSemaforo
+                }
+              />
+            </>
+          )}
         </section>
-
-          <ExecutiveInsights />
-          
-          <OperationalTrends />
-
       </div>
     </main>
   );
@@ -542,7 +881,10 @@ function Metrica({
       </p>
 
       <p className="mt-4 text-4xl font-black text-cyan-300">
-        {String(valor).padStart(2, "0")}
+        {String(valor).padStart(
+          2,
+          "0",
+        )}
       </p>
 
       <p className="mt-2 text-xs text-slate-600">
@@ -588,7 +930,8 @@ function Distribucion({
 
       {items.length === 0 ? (
         <p className="mt-6 text-sm text-slate-500">
-          No hay información disponible.
+          No hay información
+          disponible.
         </p>
       ) : (
         <div className="mt-7 space-y-5">
