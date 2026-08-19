@@ -217,6 +217,7 @@ model Inspeccion {
   superficieM2    Decimal?          @db.Decimal(10, 2)
 
   fechaProgramada DateTime
+  zonaHoraria     String            @default("America/Ciudad_Juarez")
   estado          EstadoInspeccion  @default(PROGRAMADA)
 
   observaciones   String?

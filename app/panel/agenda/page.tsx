@@ -9,11 +9,51 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { agendarCotizacion } from "./actions";
 
-const formatoFecha = new Intl.DateTimeFormat("es-MX", {
-  dateStyle: "full",
-  timeStyle: "short",
-  timeZone: "America/Hermosillo",
-});
+const ZONAS_HORARIAS = [
+  {
+    value: "America/Ciudad_Juarez",
+    label: "Ciudad Juárez",
+  },
+  {
+    value: "America/Tijuana",
+    label: "Tijuana",
+  },
+  {
+    value: "America/Hermosillo",
+    label: "Hermosillo",
+  },
+  {
+    value: "America/Chihuahua",
+    label: "Chihuahua",
+  },
+  {
+    value: "America/Mazatlan",
+    label: "Mazatlán",
+  },
+  {
+    value: "America/Monterrey",
+    label: "Monterrey",
+  },
+  {
+    value: "America/Mexico_City",
+    label: "Ciudad de México",
+  },
+  {
+    value: "America/Cancun",
+    label: "Cancún",
+  },
+];
+
+function formatoFecha(
+  fecha: Date,
+  zonaHoraria: string,
+) {
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "full",
+    timeStyle: "short",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
 
 function dinero(valor: unknown) {
   return new Intl.NumberFormat("es-MX", {
@@ -37,8 +77,7 @@ export default async function AgendaPage() {
     redirect("/acceso");
   }
 
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  const ahora = new Date();
 
   const [
     cotizacionesAceptadas,
@@ -50,6 +89,7 @@ export default async function AgendaPage() {
       where: {
         estado: EstadoCotizacion.ACEPTADA,
       },
+
       include: {
         cliente: {
           select: {
@@ -57,6 +97,7 @@ export default async function AgendaPage() {
             telefono: true,
           },
         },
+
         inmueble: {
           select: {
             alias: true,
@@ -65,12 +106,14 @@ export default async function AgendaPage() {
             ciudad: true,
           },
         },
+
         paquete: {
           select: {
             nombre: true,
           },
         },
       },
+
       orderBy: {
         creadoEn: "asc",
       },
@@ -79,8 +122,9 @@ export default async function AgendaPage() {
     prisma.inspeccion.findMany({
       where: {
         fechaProgramada: {
-          gte: hoy,
+          gte: ahora,
         },
+
         estado: {
           in: [
             EstadoInspeccion.PROGRAMADA,
@@ -88,12 +132,14 @@ export default async function AgendaPage() {
           ],
         },
       },
+
       include: {
         cliente: {
           select: {
             nombre: true,
           },
         },
+
         inspector: {
           include: {
             usuario: {
@@ -104,19 +150,23 @@ export default async function AgendaPage() {
           },
         },
       },
+
       orderBy: {
         fechaProgramada: "asc",
       },
+
       take: 100,
     }),
 
     prisma.inspector.findMany({
       where: {
         activo: true,
+
         usuario: {
           activo: true,
         },
       },
+
       include: {
         usuario: {
           select: {
@@ -124,6 +174,7 @@ export default async function AgendaPage() {
           },
         },
       },
+
       orderBy: {
         creadoEn: "asc",
       },
@@ -135,6 +186,7 @@ export default async function AgendaPage() {
           not: null,
         },
       },
+
       select: {
         cotizacionId: true,
       },
@@ -144,21 +196,28 @@ export default async function AgendaPage() {
   const idsAgendados = new Set(
     inspeccionesConCotizacion
       .map((item) => item.cotizacionId)
-      .filter((id): id is string => Boolean(id)),
+      .filter(
+        (id): id is string =>
+          Boolean(id),
+      ),
   );
 
-  const pendientes = cotizacionesAceptadas.filter(
-    (cotizacion) => !idsAgendados.has(cotizacion.id),
-  );
+  const pendientes =
+    cotizacionesAceptadas.filter(
+      (cotizacion) =>
+        !idsAgendados.has(cotizacion.id),
+    );
 
   const programadas = inspecciones.filter(
     (inspeccion) =>
-      inspeccion.estado === EstadoInspeccion.PROGRAMADA,
+      inspeccion.estado ===
+      EstadoInspeccion.PROGRAMADA,
   ).length;
 
   const enProceso = inspecciones.filter(
     (inspeccion) =>
-      inspeccion.estado === EstadoInspeccion.EN_PROCESO,
+      inspeccion.estado ===
+      EstadoInspeccion.EN_PROCESO,
   ).length;
 
   return (
@@ -182,8 +241,8 @@ export default async function AgendaPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Programa cotizaciones aceptadas y administra las próximas
-              inspecciones.
+              Programa cotizaciones aceptadas y
+              administra las próximas inspecciones.
             </p>
           </div>
 
@@ -241,17 +300,20 @@ export default async function AgendaPage() {
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Selecciona fecha, hora e inspector para crear la inspección.
+            Selecciona fecha, hora, zona horaria e
+            inspector para crear la inspección.
           </p>
 
           {pendientes.length === 0 ? (
             <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-slate-900/50 p-12 text-center">
               <p className="text-xl font-black">
-                No hay cotizaciones pendientes por agendar.
+                No hay cotizaciones pendientes por
+                agendar.
               </p>
 
               <p className="mt-2 text-slate-500">
-                Cuando una cotización cambie a ACEPTADA aparecerá aquí.
+                Cuando una cotización cambie a
+                ACEPTADA aparecerá aquí.
               </p>
 
               <Link
@@ -263,166 +325,244 @@ export default async function AgendaPage() {
             </div>
           ) : (
             <div className="mt-6 space-y-5">
-              {pendientes.map((cotizacion) => (
-                <article
-                  key={cotizacion.id}
-                  className="rounded-3xl border border-emerald-400/20 bg-slate-900 p-7"
-                >
-                  <div className="grid gap-8 xl:grid-cols-[1fr_420px]">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="font-mono text-xs font-black text-cyan-300">
-                          {cotizacion.folio}
-                        </span>
+              {pendientes.map(
+                (cotizacion) => (
+                  <article
+                    key={cotizacion.id}
+                    className="rounded-3xl border border-emerald-400/20 bg-slate-900 p-7"
+                  >
+                    <div className="grid gap-8 xl:grid-cols-[1fr_420px]">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="font-mono text-xs font-black text-cyan-300">
+                            {cotizacion.folio}
+                          </span>
 
-                        <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
-                          ACEPTADA
-                        </span>
-                      </div>
+                          <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
+                            ACEPTADA
+                          </span>
+                        </div>
 
-                      <h3 className="mt-4 text-2xl font-black">
-                        {cotizacion.cliente.nombre}
-                      </h3>
+                        <h3 className="mt-4 text-2xl font-black">
+                          {
+                            cotizacion.cliente
+                              .nombre
+                          }
+                        </h3>
 
-                      <div className="mt-4 space-y-2 text-sm text-slate-400">
-                        <p>
-                          <strong className="text-slate-200">
-                            Servicio:
-                          </strong>{" "}
-                          {cotizacion.paquete?.nombre ??
-                            "Inspección habitacional"}
-                        </p>
-
-                        <p>
-                          <strong className="text-slate-200">
-                            Inmueble:
-                          </strong>{" "}
-                          {cotizacion.inmueble?.alias ??
-                            "Sin inmueble asociado"}
-                        </p>
-
-                        <p>
-                          <strong className="text-slate-200">
-                            Dirección:
-                          </strong>{" "}
-                          {cotizacion.inmueble?.direccion ?? "Pendiente"}
-                        </p>
-
-                        <p>
-                          <strong className="text-slate-200">
-                            Ciudad:
-                          </strong>{" "}
-                          {cotizacion.inmueble?.ciudad ?? "Pendiente"}
-                        </p>
-
-                        <p>
-                          <strong className="text-slate-200">
-                            Superficie:
-                          </strong>{" "}
-                          {Number(
-                            cotizacion.superficieM2 ?? 0,
-                          ).toLocaleString("es-MX")}{" "}
-                          m²
-                        </p>
-
-                        {cotizacion.cliente.telefono && (
+                        <div className="mt-4 space-y-2 text-sm text-slate-400">
                           <p>
                             <strong className="text-slate-200">
-                              Teléfono:
+                              Servicio:
                             </strong>{" "}
-                            {cotizacion.cliente.telefono}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="mt-6 inline-block rounded-2xl bg-slate-950 px-5 py-4">
-                        <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                          Total contratado
-                        </p>
-
-                        <p className="mt-1 text-2xl font-black text-cyan-300">
-                          {dinero(cotizacion.total)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-950 p-6">
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
-                        Programar inspección
-                      </p>
-
-                      {!cotizacion.inmueble ? (
-                        <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
-                          <p className="font-black text-amber-300">
-                            Falta asociar inmueble
+                            {cotizacion.paquete
+                              ?.nombre ??
+                              "Inspección habitacional"}
                           </p>
 
-                          <p className="mt-2 text-sm text-slate-400">
-                            Esta cotización no puede programarse hasta tener
-                            un inmueble asociado.
+                          <p>
+                            <strong className="text-slate-200">
+                              Inmueble:
+                            </strong>{" "}
+                            {cotizacion.inmueble
+                              ?.alias ??
+                              "Sin inmueble asociado"}
+                          </p>
+
+                          <p>
+                            <strong className="text-slate-200">
+                              Dirección:
+                            </strong>{" "}
+                            {cotizacion.inmueble
+                              ?.direccion ??
+                              "Pendiente"}
+                          </p>
+
+                          <p>
+                            <strong className="text-slate-200">
+                              Ciudad:
+                            </strong>{" "}
+                            {cotizacion.inmueble
+                              ?.ciudad ??
+                              "Pendiente"}
+                          </p>
+
+                          <p>
+                            <strong className="text-slate-200">
+                              Superficie:
+                            </strong>{" "}
+                            {Number(
+                              cotizacion.superficieM2 ??
+                                0,
+                            ).toLocaleString(
+                              "es-MX",
+                            )}{" "}
+                            m²
+                          </p>
+
+                          {cotizacion.cliente
+                            .telefono && (
+                            <p>
+                              <strong className="text-slate-200">
+                                Teléfono:
+                              </strong>{" "}
+                              {
+                                cotizacion.cliente
+                                  .telefono
+                              }
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="mt-6 inline-block rounded-2xl bg-slate-950 px-5 py-4">
+                          <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+                            Total contratado
+                          </p>
+
+                          <p className="mt-1 text-2xl font-black text-cyan-300">
+                            {dinero(
+                              cotizacion.total,
+                            )}
                           </p>
                         </div>
-                      ) : (
-                        <form
-                          action={agendarCotizacion}
-                          className="mt-5 space-y-5"
-                        >
-                          <input
-                            type="hidden"
-                            name="cotizacionId"
-                            value={cotizacion.id}
-                          />
+                      </div>
 
-                          <div>
-                            <label className="text-sm font-bold text-slate-300">
-                              Fecha y hora
-                            </label>
+                      <div className="rounded-2xl bg-slate-950 p-6">
+                        <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
+                          Programar inspección
+                        </p>
 
-                            <input
-                              type="datetime-local"
-                              name="fechaHora"
-                              required
-                              className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
-                            />
+                        {!cotizacion.inmueble ? (
+                          <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
+                            <p className="font-black text-amber-300">
+                              Falta asociar inmueble
+                            </p>
+
+                            <p className="mt-2 text-sm text-slate-400">
+                              Esta cotización no puede
+                              programarse hasta tener
+                              un inmueble asociado.
+                            </p>
                           </div>
-
-                          <div>
-                            <label className="text-sm font-bold text-slate-300">
-                              Inspector
-                            </label>
-
-                            <select
-                              name="inspectorId"
-                              defaultValue=""
-                              className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
-                            >
-                              <option value="">
-                                Asignar después
-                              </option>
-
-                              {inspectores.map((inspector) => (
-                                <option
-                                  key={inspector.id}
-                                  value={inspector.id}
-                                >
-                                  {inspector.usuario.nombre}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <button
-                            type="submit"
-                            className="w-full rounded-full bg-emerald-300 px-6 py-4 font-black text-slate-950 transition hover:bg-emerald-200"
+                        ) : (
+                          <form
+                            action={
+                              agendarCotizacion
+                            }
+                            className="mt-5 space-y-5"
                           >
-                            Confirmar programación
-                          </button>
-                        </form>
-                      )}
+                            <input
+                              type="hidden"
+                              name="cotizacionId"
+                              value={
+                                cotizacion.id
+                              }
+                            />
+
+                            <div>
+                              <label className="text-sm font-bold text-slate-300">
+                                Fecha y hora
+                              </label>
+
+                              <input
+                                type="datetime-local"
+                                name="fechaHora"
+                                required
+                                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
+                              />
+
+                              <p className="mt-2 text-xs text-slate-500">
+                                La hora corresponde a
+                                la zona horaria que
+                                selecciones abajo.
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="text-sm font-bold text-slate-300">
+                                Zona horaria
+                              </label>
+
+                              <select
+                                name="zonaHoraria"
+                                defaultValue="America/Ciudad_Juarez"
+                                required
+                                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
+                              >
+                                {ZONAS_HORARIAS.map(
+                                  (zona) => (
+                                    <option
+                                      key={
+                                        zona.value
+                                      }
+                                      value={
+                                        zona.value
+                                      }
+                                    >
+                                      {
+                                        zona.label
+                                      }
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+
+                              <p className="mt-2 text-xs text-slate-500">
+                                Selecciona la zona del
+                                inmueble donde se
+                                realizará la
+                                inspección.
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="text-sm font-bold text-slate-300">
+                                Inspector
+                              </label>
+
+                              <select
+                                name="inspectorId"
+                                defaultValue=""
+                                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
+                              >
+                                <option value="">
+                                  Asignar después
+                                </option>
+
+                                {inspectores.map(
+                                  (inspector) => (
+                                    <option
+                                      key={
+                                        inspector.id
+                                      }
+                                      value={
+                                        inspector.id
+                                      }
+                                    >
+                                      {
+                                        inspector
+                                          .usuario
+                                          .nombre
+                                      }
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                            </div>
+
+                            <button
+                              type="submit"
+                              className="w-full rounded-full bg-emerald-300 px-6 py-4 font-black text-slate-950 transition hover:bg-emerald-200"
+                            >
+                              Confirmar programación
+                            </button>
+                          </form>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                ),
+              )}
             </div>
           )}
         </section>
@@ -444,59 +584,87 @@ export default async function AgendaPage() {
                 </p>
 
                 <p className="mt-2 text-slate-400">
-                  Las nuevas inspecciones aparecerán aquí.
+                  Las nuevas inspecciones aparecerán
+                  aquí.
                 </p>
               </div>
             ) : (
               <div className="divide-y divide-white/10">
-                {inspecciones.map((inspeccion) => (
-                  <article
-                    key={inspeccion.id}
-                    className="grid gap-5 p-6 md:grid-cols-[220px_1fr_1fr_auto] md:items-center"
-                  >
-                    <div>
-                      <p className="font-black text-cyan-300">
-                        {inspeccion.folio}
-                      </p>
-
-                      <p className="mt-2 text-sm capitalize text-slate-400">
-                        {formatoFecha.format(inspeccion.fechaProgramada)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="font-black">
-                        {inspeccion.cliente.nombre}
-                      </p>
-
-                      <p className="mt-1 text-sm text-slate-400">
-                        {inspeccion.tipoServicio}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold">
-                        {inspeccion.direccion}
-                      </p>
-
-                      <p className="mt-1 text-sm text-slate-400">
-                        {inspeccion.inspector?.usuario.nombre ??
-                          "Inspector pendiente"}
-                      </p>
-
-                      <p className="mt-1 text-xs font-black text-amber-300">
-                        {inspeccion.estado.replaceAll("_", " ")}
-                      </p>
-                    </div>
-
-                    <Link
-                      href={`/panel/inspecciones/${inspeccion.id}`}
-                      className="rounded-full bg-cyan-400 px-5 py-3 text-center text-sm font-black text-slate-950"
+                {inspecciones.map(
+                  (inspeccion) => (
+                    <article
+                      key={inspeccion.id}
+                      className="grid gap-5 p-6 md:grid-cols-[220px_1fr_1fr_auto] md:items-center"
                     >
-                      Abrir
-                    </Link>
-                  </article>
-                ))}
+                      <div>
+                        <p className="font-black text-cyan-300">
+                          {inspeccion.folio}
+                        </p>
+
+                        <p className="mt-2 text-sm capitalize text-slate-400">
+                          {formatoFecha(
+                            inspeccion.fechaProgramada,
+                            inspeccion.zonaHoraria,
+                          )}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-600">
+                          {
+                            ZONAS_HORARIAS.find(
+                              (zona) =>
+                                zona.value ===
+                                inspeccion.zonaHoraria,
+                            )?.label ??
+                            inspeccion.zonaHoraria
+                          }
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="font-black">
+                          {
+                            inspeccion.cliente
+                              .nombre
+                          }
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-400">
+                          {
+                            inspeccion.tipoServicio
+                          }
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="font-bold">
+                          {
+                            inspeccion.direccion
+                          }
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-400">
+                          {inspeccion.inspector
+                            ?.usuario.nombre ??
+                            "Inspector pendiente"}
+                        </p>
+
+                        <p className="mt-1 text-xs font-black text-amber-300">
+                          {inspeccion.estado.replaceAll(
+                            "_",
+                            " ",
+                          )}
+                        </p>
+                      </div>
+
+                      <Link
+                        href={`/panel/inspecciones/${inspeccion.id}`}
+                        className="rounded-full bg-cyan-400 px-5 py-3 text-center text-sm font-black text-slate-950"
+                      >
+                        Abrir
+                      </Link>
+                    </article>
+                  ),
+                )}
               </div>
             )}
           </div>

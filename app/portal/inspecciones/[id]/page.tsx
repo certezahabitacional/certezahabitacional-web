@@ -4,6 +4,31 @@ import { createClient } from "@supabase/supabase-js";
 import { obtenerClienteActual } from "@/lib/cliente-actual";
 import { prisma } from "@/lib/prisma";
 
+function formatearFechaHora(
+  fecha: Date,
+  zonaHoraria: string,
+) {
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
+
+function formatearFechaHoraCorta(
+  fecha: Date,
+  zonaHoraria: string,
+) {
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
+
 function obtenerSupabase() {
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey =
@@ -252,14 +277,15 @@ export default async function PortalInspeccionDetallePage({
 
               <Dato
                 label="Fecha programada"
-                value={inspeccion.fechaProgramada.toLocaleDateString(
-                  "es-MX",
-                  {
-                    day: "2-digit",
-                    month: "long",
-                    year: "numeric",
-                  },
+                value={formatearFechaHora(
+                  inspeccion.fechaProgramada,
+                  inspeccion.zonaHoraria,
                 )}
+              />
+
+              <Dato
+                label="Zona horaria"
+                value={inspeccion.zonaHoraria}
               />
 
               <Dato
@@ -585,8 +611,9 @@ export default async function PortalInspeccionDetallePage({
                     </p>
 
                     <p className="mt-1 text-xs text-slate-600">
-                      {firma.firmadaEn.toLocaleString(
-                        "es-MX",
+                      {formatearFechaHoraCorta(
+                        firma.firmadaEn,
+                        inspeccion.zonaHoraria,
                       )}
                     </p>
                   </div>

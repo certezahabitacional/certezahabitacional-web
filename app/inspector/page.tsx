@@ -1,8 +1,23 @@
 import {
   EstadoInspeccion,
 } from "@prisma/client";
+
 import { obtenerInspectorActual } from "@/lib/inspector-actual";
 import { prisma } from "@/lib/prisma";
+
+function formatoFecha(
+  fecha: Date,
+  zonaHoraria: string,
+) {
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
 
 export default async function InspectorPage() {
   const inspector =
@@ -178,16 +193,15 @@ export default async function InspectorPage() {
                     <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500">
                       <span>
                         Fecha:{" "}
-                        {inspeccion.fechaProgramada.toLocaleString(
-                          "es-MX",
-                          {
-                            day: "2-digit",
-                            month: "long",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
+                        {formatoFecha(
+                          inspeccion.fechaProgramada,
+                          inspeccion.zonaHoraria,
                         )}
+                      </span>
+
+                      <span>
+                        Zona:{" "}
+                        {inspeccion.zonaHoraria}
                       </span>
 
                       <span>

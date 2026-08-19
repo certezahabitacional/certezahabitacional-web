@@ -5,6 +5,7 @@ import {
   EstadoInspeccion,
 } from "@prisma/client";
 import { randomUUID } from "crypto";
+import { fromZonedTime } from "date-fns-tz";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -41,7 +42,7 @@ function texto(
 function generarFolioInspeccion() {
   const fecha = new Date();
 
-  const year = fecha.getFullYear();
+  const year = fecha.getUTCFullYear();
 
   const codigo = randomUUID()
     .replaceAll("-", "")
@@ -51,8 +52,27 @@ function generarFolioInspeccion() {
   return `CH-INS-${year}-${codigo}`;
 }
 
-function convertirFechaHermosillo(
+function zonaHorariaValida(
+  zonaHoraria: string,
+) {
+  if (!zonaHoraria) {
+    return false;
+  }
+
+  try {
+    new Intl.DateTimeFormat("es-MX", {
+      timeZone: zonaHoraria,
+    }).format(new Date());
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function convertirFechaLocalAUTC(
   valor: string,
+  zonaHoraria: string,
 ) {
   if (!valor) {
     throw new Error(
@@ -60,13 +80,15 @@ function convertirFechaHermosillo(
     );
   }
 
-  /*
-   * Hermosillo trabaja en UTC-7 durante todo el año.
-   * datetime-local no incluye zona horaria,
-   * por eso la agregamos explícitamente.
-   */
-  const fecha = new Date(
-    `${valor}:00-07:00`,
+  if (!zonaHorariaValida(zonaHoraria)) {
+    throw new Error(
+      "Selecciona una zona horaria válida.",
+    );
+  }
+
+  const fecha = fromZonedTime(
+    valor,
+    zonaHoraria,
   );
 
   if (Number.isNaN(fecha.getTime())) {
@@ -99,15 +121,27 @@ export async function agendarCotizacion(
     "fechaHora",
   );
 
+  const zonaHoraria = texto(
+    formData,
+    "zonaHoraria",
+  );
+
   if (!cotizacionId) {
     throw new Error(
       "No se recibió la cotización.",
     );
   }
 
+  if (!zonaHoraria) {
+    throw new Error(
+      "Selecciona la zona horaria de la inspección.",
+    );
+  }
+
   const fechaProgramada =
-    convertirFechaHermosillo(
+    convertirFechaLocalAUTC(
       fechaHora,
+      zonaHoraria,
     );
 
   if (
@@ -173,10 +207,6 @@ export async function agendarCotizacion(
     );
   }
 
-  /*
-   * Evita crear dos inspecciones
-   * para la misma cotización.
-   */
   const inspeccionExistente =
     await prisma.inspeccion.findFirst({
       where: {
@@ -253,6 +283,8 @@ export async function agendarCotizacion(
 
       fechaProgramada,
 
+      zonaHoraria,
+
       estado:
         EstadoInspeccion.PROGRAMADA,
 
@@ -268,6 +300,10 @@ export async function agendarCotizacion(
 
   revalidatePath(
     "/panel/cotizaciones",
+  );
+
+  revalidatePath(
+    "/panel/inspecciones",
   );
 
   revalidatePath(

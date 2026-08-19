@@ -2,6 +2,20 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { obtenerClienteActual } from "@/lib/cliente-actual";
 
+function formatoFecha(
+  fecha: Date,
+  zonaHoraria: string,
+) {
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
+
 export default async function PortalInspeccionesPage() {
   const cliente = await obtenerClienteActual();
 
@@ -108,14 +122,15 @@ export default async function PortalInspeccionesPage() {
 
                   <Dato
                     label="Fecha programada"
-                    value={inspeccion.fechaProgramada.toLocaleDateString(
-                      "es-MX",
-                      {
-                        day: "2-digit",
-                        month: "long",
-                        year: "numeric",
-                      },
+                    value={formatoFecha(
+                      inspeccion.fechaProgramada,
+                      inspeccion.zonaHoraria,
                     )}
+                  />
+
+                  <Dato
+                    label="Zona horaria"
+                    value={inspeccion.zonaHoraria}
                   />
 
                   <Dato

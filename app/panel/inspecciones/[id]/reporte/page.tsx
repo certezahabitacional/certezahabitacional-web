@@ -22,6 +22,29 @@ const estiloClasificacion: Record<string, string> = {
   NA: "bg-slate-100 text-slate-700",
 };
 
+function formatoFechaHora(
+  fecha: Date,
+  zonaHoraria: string,
+) {
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
+
+function formatoFecha(
+  fecha: Date,
+  zonaHoraria: string,
+) {
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
+
 function obtenerSupabase() {
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -181,13 +204,9 @@ export default async function ReportePage({
       hallazgo.clasificacion === "C",
   );
 
-  const fechaReporte = new Date().toLocaleDateString(
-    "es-MX",
-    {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    },
+  const fechaReporte = formatoFecha(
+    new Date(),
+    inspeccion.zonaHoraria,
   );
 
   return (
@@ -473,9 +492,14 @@ export default async function ReportePage({
               />
               <Row
                 label="Fecha programada"
-                value={inspeccion.fechaProgramada.toLocaleString(
-                  "es-MX",
+                value={formatoFechaHora(
+                  inspeccion.fechaProgramada,
+                  inspeccion.zonaHoraria,
                 )}
+              />
+              <Row
+                label="Zona horaria"
+                value={inspeccion.zonaHoraria}
               />
               <Row
                 label="Estado"
