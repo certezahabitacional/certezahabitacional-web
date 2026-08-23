@@ -1,19 +1,33 @@
 import Link from "next/link";
+import { EstadoPago } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
 import {
   cambiarEstado,
   cancelarInspeccion,
   crearHallazgo,
   iniciarInspeccion,
+  liberarInicioSinPago,
 } from "./actions";
 
 type SearchParams = Promise<{ ok?: string; error?: string }>;
 
-const formatoFecha = new Intl.DateTimeFormat("es-MX", {
-  dateStyle: "long",
-  timeStyle: "short",
-});
+function formatoFecha(valor: Date, zonaHoraria: string) {
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: zonaHoraria,
+  }).format(valor);
+}
+
+function dinero(valor: unknown) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+  }).format(Number(valor ?? 0));
+}
 
 export default async function ExpedientePage({
   params,
@@ -24,6 +38,7 @@ export default async function ExpedientePage({
 }) {
   const { id } = await params;
   const query = await searchParams;
+  const session = await auth();
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },
@@ -32,6 +47,15 @@ export default async function ExpedientePage({
       inmueble: true,
       inspector: { include: { usuario: true } },
       certificado: true,
+      cotizacion: {
+        select: {
+          folio: true,
+          total: true,
+          montoPagado: true,
+          estadoPago: true,
+          esquemaPago: true,
+        },
+      },
       hallazgos: {
         orderBy: { creadoEn: "desc" },
         include: { fotografias: { select: { id: true } } },
@@ -42,6 +66,27 @@ export default async function ExpedientePage({
   });
 
   if (!inspeccion) notFound();
+
+  const totalCotizacion = Number(inspeccion.cotizacion?.total ?? 0);
+  const montoPagado = Number(inspeccion.cotizacion?.montoPagado ?? 0);
+  const saldoPendiente = Math.max(0, totalCotizacion - montoPagado);
+  const pagoLiquidado =
+    !inspeccion.cotizacion ||
+    (inspeccion.cotizacion.estadoPago === EstadoPago.PAGADO &&
+      saldoPendiente <= 0.01);
+
+  const excepcionAdministrativa =
+    Boolean(inspeccion.inicioLiberadoSinPago) && !pagoLiquidado;
+
+  const operacionBloqueada =
+    inspeccion.estado === "PROGRAMADA" &&
+    !pagoLiquidado &&
+    !excepcionAdministrativa;
+
+  const rolesDirectivos = ["DIRECTOR", "GERENTE", "ADMINISTRADOR"];
+  const esDirectivo = session?.user?.role
+    ? rolesDirectivos.includes(session.user.role)
+    : false;
 
   const totalHallazgos = inspeccion.hallazgos.length;
   const criticos = inspeccion.hallazgos.filter(
@@ -127,6 +172,11 @@ export default async function ExpedientePage({
               <div className="flex flex-wrap items-center gap-3">
                 <p className="font-black text-cyan-300">{inspeccion.folio}</p>
                 <Estado estado={inspeccion.estado} />
+                {excepcionAdministrativa && (
+                  <span className="rounded-full bg-violet-400/15 px-3 py-1 text-xs font-black text-violet-300">
+                    EXCEPCIÓN ADMINISTRATIVA
+                  </span>
+                )}
               </div>
               <h1 className="mt-2 text-3xl font-black">
                 {inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}
@@ -135,7 +185,7 @@ export default async function ExpedientePage({
                 {inspeccion.cliente.nombre} · {inspeccion.direccion}, {inspeccion.ciudad}
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Programada: {formatoFecha.format(inspeccion.fechaProgramada)}
+                Programada: {formatoFecha(inspeccion.fechaProgramada, inspeccion.zonaHoraria)}
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 Inspector: {inspeccion.inspector?.usuario.nombre ?? "Sin asignar"}
@@ -149,12 +199,20 @@ export default async function ExpedientePage({
               >
                 Editar
               </Link>
-              <form action={iniciarInspeccion}>
-                <input type="hidden" name="id" value={inspeccion.id} />
-                <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300">
-                  {inspeccion.estado === "PROGRAMADA" ? "Iniciar inspección" : "Continuar captura"}
-                </button>
-              </form>
+              {operacionBloqueada ? (
+                <span className="cursor-not-allowed rounded-full border border-amber-300/30 bg-amber-300/10 px-5 py-3 font-black text-amber-300">
+                  Saldo pendiente — {dinero(saldoPendiente)}
+                </span>
+              ) : (
+                <form action={iniciarInspeccion}>
+                  <input type="hidden" name="id" value={inspeccion.id} />
+                  <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300">
+                    {inspeccion.estado === "PROGRAMADA"
+                      ? "Iniciar inspección"
+                      : "Continuar captura"}
+                  </button>
+                </form>
+              )}
               <Link
                 href={`/panel/inspecciones/${inspeccion.id}/reporte`}
                 className="rounded-full border border-white/15 px-5 py-3 font-black hover:bg-white/5"
@@ -170,6 +228,133 @@ export default async function ExpedientePage({
             </div>
           </div>
         </header>
+
+        {inspeccion.cotizacion && (
+          <section
+            className={`mt-5 rounded-3xl border p-5 ${
+              pagoLiquidado
+                ? "border-emerald-400/20 bg-emerald-400/5"
+                : excepcionAdministrativa
+                  ? "border-violet-400/20 bg-violet-400/5"
+                  : "border-amber-300/20 bg-amber-300/5"
+            }`}
+          >
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+              <div>
+                <p
+                  className={`text-xs font-black uppercase tracking-[0.2em] ${
+                    pagoLiquidado
+                      ? "text-emerald-300"
+                      : excepcionAdministrativa
+                        ? "text-violet-300"
+                        : "text-amber-300"
+                  }`}
+                >
+                  {pagoLiquidado
+                    ? "Pago liquidado"
+                    : excepcionAdministrativa
+                      ? "Excepción administrativa activa"
+                      : "Bloqueo financiero"}
+                </p>
+                <p className="mt-2 text-lg font-black">
+                  {pagoLiquidado
+                    ? "La inspección está habilitada para iniciar."
+                    : excepcionAdministrativa
+                      ? "Dirección, Gerencia o Administración autorizó iniciar esta inspección aun con saldo pendiente."
+                      : "La inspección puede estar programada, pero no puede iniciar con saldo pendiente."}
+                </p>
+
+                {!pagoLiquidado && !excepcionAdministrativa && (
+                  <p className="mt-1 text-sm text-slate-400">
+                    Liquida {dinero(saldoPendiente)} para habilitar el inicio de la inspección.
+                  </p>
+                )}
+
+                {excepcionAdministrativa && (
+                  <p className="mt-1 text-sm text-violet-200">
+                    El saldo de {dinero(saldoPendiente)} continúa pendiente y deberá mantenerse visible hasta su liquidación.
+                  </p>
+                )}
+
+                {excepcionAdministrativa &&
+                  esDirectivo &&
+                  inspeccion.motivoLiberacionPago && (
+                    <div className="mt-4 rounded-2xl border border-violet-300/15 bg-violet-300/5 p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-violet-300">
+                        Motivo registrado
+                      </p>
+                      <p className="mt-2 text-sm text-slate-300">
+                        {inspeccion.motivoLiberacionPago}
+                      </p>
+                      {inspeccion.inicioLiberadoEn && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Autorizada el{" "}
+                          {formatoFecha(
+                            inspeccion.inicioLiberadoEn,
+                            inspeccion.zonaHoraria,
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 text-right">
+                <DatoMini etiqueta="Total" valor={dinero(totalCotizacion)} />
+                <DatoMini etiqueta="Pagado" valor={dinero(montoPagado)} />
+                <DatoMini etiqueta="Saldo" valor={dinero(saldoPendiente)} />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {inspeccion.cotizacion &&
+          !pagoLiquidado &&
+          !excepcionAdministrativa &&
+          inspeccion.estado === "PROGRAMADA" &&
+          esDirectivo && (
+            <section className="mt-5 rounded-3xl border border-violet-400/20 bg-violet-400/5 p-5">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">
+                Excepción de nivel directivo
+              </p>
+
+              <h2 className="mt-2 text-lg font-black">
+                Autorizar inicio con saldo pendiente
+              </h2>
+
+              <p className="mt-2 text-sm text-slate-400">
+                Esta acción no modifica el pago ni elimina el saldo. Únicamente libera
+                el inicio de esta inspección y deja registro de quién, cuándo y por qué
+                autorizó la excepción.
+              </p>
+
+              <form action={liberarInicioSinPago} className="mt-4">
+                <input type="hidden" name="id" value={inspeccion.id} />
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-slate-300">
+                    Justificación obligatoria
+                  </span>
+
+                  <textarea
+                    name="motivo"
+                    required
+                    minLength={10}
+                    rows={3}
+                    placeholder="Ej. Cliente corporativo con pago programado para el día..."
+                    className="w-full rounded-2xl border border-violet-300/20 bg-slate-950 px-4 py-3 outline-none focus:border-violet-300"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  className="mt-4 rounded-full bg-violet-300 px-5 py-3 font-black text-slate-950 transition hover:bg-violet-200"
+                >
+                  Autorizar excepción administrativa
+                </button>
+              </form>
+            </section>
+          )}
 
         <section className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
           <Metrica etiqueta="Avance" valor={`${avance}%`} />
@@ -210,24 +395,42 @@ export default async function ExpedientePage({
             <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
               <h2 className="text-xl font-black">Acciones</h2>
               <div className="mt-5 grid gap-3">
-                <Link
-                  href={`/panel/inspecciones/${inspeccion.id}/captura`}
-                  className="rounded-2xl bg-cyan-400 px-4 py-3 text-center font-black text-slate-950"
-                >
-                  Capturar Método Certeza
-                </Link>
-                <Link
-                  href={`/panel/inspecciones/${inspeccion.id}/evidencias`}
-                  className="rounded-2xl border border-white/15 px-4 py-3 text-center font-black"
-                >
-                  Evidencias ({inspeccion.fotografias.length})
-                </Link>
-                <Link
-                  href={`/panel/inspecciones/${inspeccion.id}/firmas`}
-                  className="rounded-2xl border border-white/15 px-4 py-3 text-center font-black"
-                >
-                  Firmas ({inspeccion.firmas.length})
-                </Link>
+                {operacionBloqueada ? (
+                  <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-center font-black text-amber-300">
+                    Captura bloqueada por saldo pendiente
+                  </div>
+                ) : (
+                  <Link
+                    href={`/panel/inspecciones/${inspeccion.id}/captura`}
+                    className="rounded-2xl bg-cyan-400 px-4 py-3 text-center font-black text-slate-950"
+                  >
+                    Capturar Método Certeza
+                  </Link>
+                )}
+                {operacionBloqueada ? (
+                  <div className="rounded-2xl border border-white/10 px-4 py-3 text-center font-black text-slate-600">
+                    Evidencias bloqueadas
+                  </div>
+                ) : (
+                  <Link
+                    href={`/panel/inspecciones/${inspeccion.id}/evidencias`}
+                    className="rounded-2xl border border-white/15 px-4 py-3 text-center font-black"
+                  >
+                    Evidencias ({inspeccion.fotografias.length})
+                  </Link>
+                )}
+                {operacionBloqueada ? (
+                  <div className="rounded-2xl border border-white/10 px-4 py-3 text-center font-black text-slate-600">
+                    Firmas bloqueadas
+                  </div>
+                ) : (
+                  <Link
+                    href={`/panel/inspecciones/${inspeccion.id}/firmas`}
+                    className="rounded-2xl border border-white/15 px-4 py-3 text-center font-black"
+                  >
+                    Firmas ({inspeccion.firmas.length})
+                  </Link>
+                )}
                 <Link
                   href={`/panel/inspecciones/${inspeccion.id}/certificado`}
                   className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-center font-black text-cyan-300"
@@ -246,9 +449,9 @@ export default async function ExpedientePage({
                     className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
                   >
                     <option value="PROGRAMADA">Programada</option>
-                    <option value="EN_PROCESO">En proceso</option>
-                    <option value="REPORTE_PENDIENTE">Reporte pendiente</option>
-                    <option value="FINALIZADA">Finalizada</option>
+                    <option value="EN_PROCESO" disabled={operacionBloqueada}>En proceso</option>
+                    <option value="REPORTE_PENDIENTE" disabled={operacionBloqueada}>Reporte pendiente</option>
+                    <option value="FINALIZADA" disabled={operacionBloqueada}>Finalizada</option>
                     <option value="CANCELADA">Cancelada</option>
                   </select>
                 </label>
@@ -298,7 +501,7 @@ export default async function ExpedientePage({
                     <div>
                       <p className="font-black">{evento.titulo}</p>
                       <p className="text-sm text-slate-400">{evento.detalle}</p>
-                      <p className="mt-1 text-xs text-slate-500">{formatoFecha.format(evento.fecha)}</p>
+                      <p className="mt-1 text-xs text-slate-500">{formatoFecha(evento.fecha, inspeccion.zonaHoraria)}</p>
                     </div>
                   </div>
                 ))}
@@ -329,6 +532,14 @@ export default async function ExpedientePage({
 
             <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
               <h2 className="text-2xl font-black">Hallazgo rápido</h2>
+              {operacionBloqueada ? (
+                <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
+                  <p className="font-black text-amber-300">Captura no disponible</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Liquida el saldo pendiente de {dinero(saldoPendiente)} antes de iniciar la inspección y registrar hallazgos.
+                  </p>
+                </div>
+              ) : (
               <form action={crearHallazgo} className="mt-5 grid gap-4 md:grid-cols-2">
                 <input type="hidden" name="inspeccionId" value={inspeccion.id} />
                 <Campo name="area" label="Área *" placeholder="Instalación eléctrica" />
@@ -359,11 +570,23 @@ export default async function ExpedientePage({
                   <button className="w-full rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950">Guardar hallazgo</button>
                 </div>
               </form>
+              )}
             </section>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function DatoMini({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+        {etiqueta}
+      </p>
+      <p className="mt-1 text-sm font-black text-slate-200">{valor}</p>
+    </div>
   );
 }
 

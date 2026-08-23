@@ -9,7 +9,9 @@ datasource db {
 }
 
 enum RolUsuario {
+  DIRECTOR
   ADMINISTRADOR
+  GERENTE
   COORDINADOR
   SUPERVISOR
   INSPECTOR
@@ -39,6 +41,8 @@ enum TipoCalculoPrecio {
 
 enum EstadoCotizacion {
   BORRADOR
+  PENDIENTE_AUTORIZACION
+  AUTORIZADA
   ENVIADA
   ACEPTADA
   RECHAZADA
@@ -51,6 +55,11 @@ enum EstadoPago {
   PARCIAL
   PAGADO
   CANCELADO
+}
+
+enum EsquemaPago {
+  UNA_EXHIBICION
+  DOS_EXHIBICIONES_50_50
 }
 
 enum ClasificacionHallazgo {
@@ -92,6 +101,9 @@ model Usuario {
   rol                   RolUsuario         @default(INSPECTOR)
   activo                Boolean            @default(true)
   ultimoAcceso          DateTime?
+  intentosFallidos      Int                @default(0)
+  bloqueadoHasta        DateTime?
+  ultimoFalloLogin      DateTime?
   creadoEn              DateTime           @default(now())
   actualizadoEn         DateTime           @updatedAt
 
@@ -103,7 +115,11 @@ model Usuario {
   eventos               EventoAuditoria[]
 
   cotizacionesCreadas   Cotizacion[]       @relation("CotizacionCreadaPor")
+  cotizacionesAutorizadas Cotizacion[] @relation("CotizacionAutorizadaPor")
+cotizacionesRechazadas  Cotizacion[] @relation("CotizacionRechazadaPor")
   inspeccionesAgendadas Inspeccion[]       @relation("InspeccionAgendadaPor")
+
+  @@index([bloqueadoHasta])
 }
 
 model Cliente {
@@ -217,11 +233,17 @@ model Inspeccion {
   superficieM2    Decimal?          @db.Decimal(10, 2)
 
   fechaProgramada DateTime
+  zonaHoraria     String @default("America/Ciudad_Juarez")
   estado          EstadoInspeccion  @default(PROGRAMADA)
 
   observaciones   String?
   ish             Decimal?          @db.Decimal(5, 2)
   semaforo        String?
+
+  inicioLiberadoSinPago Boolean   @default(false)
+  inicioLiberadoPorId   String?
+  inicioLiberadoEn      DateTime?
+  motivoLiberacionPago  String?
 
   creadoEn        DateTime          @default(now())
   actualizadoEn   DateTime          @updatedAt
@@ -238,6 +260,7 @@ model Inspeccion {
   @@index([inmuebleId])
   @@index([inspectorId])
   @@index([agendadaPorId])
+  @@index([inicioLiberadoPorId])
 }
 
 model Hallazgo {
@@ -406,6 +429,19 @@ model Cotizacion {
   creadaPorId            String?
   creadaPor              Usuario?           @relation("CotizacionCreadaPor", fields: [creadaPorId], references: [id], onDelete: SetNull)
 
+  autorizadaPorId         String?
+autorizadaPor           Usuario? @relation("CotizacionAutorizadaPor", fields: [autorizadaPorId], references: [id], onDelete: SetNull)
+autorizadaEn            DateTime?
+
+rechazadaPorId          String?
+rechazadaPor            Usuario? @relation("CotizacionRechazadaPor", fields: [rechazadaPorId], references: [id], onDelete: SetNull)
+rechazadaEn             DateTime?
+motivoRechazo           String?
+
+solicitudAutorizacionEn DateTime?
+
+zonaHoraria             String @default("America/Ciudad_Juarez")
+
   superficieM2           Decimal?           @db.Decimal(10, 2)
 
   precioBase             Decimal            @default(0) @db.Decimal(12, 2)
@@ -419,6 +455,8 @@ model Cotizacion {
 
   estado                 EstadoCotizacion   @default(BORRADOR)
   estadoPago             EstadoPago         @default(PENDIENTE)
+  esquemaPago            EsquemaPago        @default(UNA_EXHIBICION)
+  montoPagado            Decimal            @default(0) @db.Decimal(12, 2)
 
   vigenciaHasta          DateTime?
   notas                  String?

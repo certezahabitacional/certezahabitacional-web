@@ -1,7 +1,9 @@
 import Link from "next/link";
 import {
+  EsquemaPago,
   EstadoCotizacion,
   EstadoInspeccion,
+  EstadoPago,
 } from "@prisma/client";
 import { redirect } from "next/navigation";
 
@@ -22,7 +24,37 @@ function dinero(valor: unknown) {
   }).format(Number(valor ?? 0));
 }
 
-export default async function AgendaPage() {
+function puedeAgendar({
+  estado,
+  estadoPago,
+  esquemaPago,
+}: {
+  estado: EstadoCotizacion;
+  estadoPago: EstadoPago;
+  esquemaPago: EsquemaPago;
+}) {
+  if (estado !== EstadoCotizacion.ACEPTADA) {
+    return false;
+  }
+
+  if (estadoPago === EstadoPago.PAGADO) {
+    return true;
+  }
+
+  return (
+    esquemaPago === EsquemaPago.DOS_EXHIBICIONES_50_50 &&
+    estadoPago === EstadoPago.PARCIAL
+  );
+}
+
+export default async function AgendaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    ok?: string;
+    error?: string;
+  }>;
+}) {
   const session = await auth();
 
   if (!session?.user) {
@@ -36,6 +68,8 @@ export default async function AgendaPage() {
   ) {
     redirect("/acceso");
   }
+
+  const params = await searchParams;
 
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
@@ -148,7 +182,13 @@ export default async function AgendaPage() {
   );
 
   const pendientes = cotizacionesAceptadas.filter(
-    (cotizacion) => !idsAgendados.has(cotizacion.id),
+    (cotizacion) =>
+      !idsAgendados.has(cotizacion.id) &&
+      puedeAgendar({
+        estado: cotizacion.estado,
+        estadoPago: cotizacion.estadoPago,
+        esquemaPago: cotizacion.esquemaPago,
+      }),
   );
 
   const programadas = inspecciones.filter(
@@ -182,8 +222,8 @@ export default async function AgendaPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Programa cotizaciones aceptadas y administra las próximas
-              inspecciones.
+              Programa únicamente cotizaciones aceptadas que cumplen la
+              condición mínima de pago y administra las próximas inspecciones.
             </p>
           </div>
 
@@ -211,11 +251,33 @@ export default async function AgendaPage() {
           </div>
         </header>
 
+        {(params.ok || params.error) && (
+          <div
+            className={`mt-7 rounded-2xl border p-5 ${
+              params.error
+                ? "border-rose-400/20 bg-rose-400/5"
+                : "border-emerald-400/20 bg-emerald-400/5"
+            }`}
+          >
+            <p
+              className={`text-xs font-black uppercase tracking-[0.2em] ${
+                params.error ? "text-rose-300" : "text-emerald-300"
+              }`}
+            >
+              {params.error ? "Acción no disponible" : "Operación completada"}
+            </p>
+
+            <p className="mt-2 font-bold text-slate-200">
+              {params.error ?? params.ok}
+            </p>
+          </div>
+        )}
+
         <section className="mt-8 grid gap-5 sm:grid-cols-3">
           <Indicador
             titulo="Por agendar"
             valor={pendientes.length}
-            detalle="Cotizaciones aceptadas"
+            detalle="Aceptadas con pago suficiente"
           />
 
           <Indicador
@@ -237,11 +299,11 @@ export default async function AgendaPage() {
           </p>
 
           <h2 className="mt-2 text-2xl font-black">
-            Cotizaciones aceptadas
+            Cotizaciones habilitadas
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Selecciona fecha, hora e inspector para crear la inspección.
+            Solo aparecen cotizaciones aceptadas que ya cumplen la condición mínima de pago para programación.
           </p>
 
           {pendientes.length === 0 ? (
@@ -251,7 +313,7 @@ export default async function AgendaPage() {
               </p>
 
               <p className="mt-2 text-slate-500">
-                Cuando una cotización cambie a ACEPTADA aparecerá aquí.
+                Una cotización aparecerá aquí cuando esté ACEPTADA y cumpla el pago mínimo requerido.
               </p>
 
               <Link
@@ -277,6 +339,18 @@ export default async function AgendaPage() {
 
                         <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
                           ACEPTADA
+                        </span>
+
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${
+                            cotizacion.estadoPago === EstadoPago.PAGADO
+                              ? "bg-emerald-400/10 text-emerald-300"
+                              : "bg-cyan-400/10 text-cyan-300"
+                          }`}
+                        >
+                          {cotizacion.estadoPago === EstadoPago.PAGADO
+                            ? "PAGO: 100% PAGADO"
+                            : "PAGO: PRIMER 50% PAGADO"}
                         </span>
                       </div>
 
@@ -335,14 +409,49 @@ export default async function AgendaPage() {
                         )}
                       </div>
 
-                      <div className="mt-6 inline-block rounded-2xl bg-slate-950 px-5 py-4">
+                      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                        <DatoPago
+                          titulo="Total"
+                          valor={dinero(cotizacion.total)}
+                        />
+
+                        <DatoPago
+                          titulo="Pagado"
+                          valor={dinero(cotizacion.montoPagado)}
+                        />
+
+                        <DatoPago
+                          titulo="Saldo"
+                          valor={dinero(
+                            Math.max(
+                              0,
+                              Number(cotizacion.total) -
+                                Number(cotizacion.montoPagado),
+                            ),
+                          )}
+                        />
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950 p-5">
                         <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                          Total contratado
+                          Esquema de pago
                         </p>
 
-                        <p className="mt-1 text-2xl font-black text-cyan-300">
-                          {dinero(cotizacion.total)}
+                        <p className="mt-2 font-black text-slate-200">
+                          {cotizacion.esquemaPago ===
+                          EsquemaPago.DOS_EXHIBICIONES_50_50
+                            ? "Dos exhibiciones 50/50"
+                            : "Una exhibición"}
                         </p>
+
+                        {cotizacion.esquemaPago ===
+                          EsquemaPago.DOS_EXHIBICIONES_50_50 &&
+                          cotizacion.estadoPago === EstadoPago.PARCIAL && (
+                            <p className="mt-2 text-sm text-amber-300">
+                              Puede programarse, pero la inspección no deberá
+                              iniciar hasta liquidar el saldo restante.
+                            </p>
+                          )}
                       </div>
                     </div>
 
@@ -503,6 +612,26 @@ export default async function AgendaPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function DatoPago({
+  titulo,
+  valor,
+}: {
+  titulo: string;
+  valor: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-slate-950 p-4">
+      <p className="text-xs font-black uppercase tracking-widest text-slate-600">
+        {titulo}
+      </p>
+
+      <p className="mt-2 font-black text-slate-200">
+        {valor}
+      </p>
+    </div>
   );
 }
 

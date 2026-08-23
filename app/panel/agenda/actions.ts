@@ -1,8 +1,10 @@
 "use server";
 
 import {
+  EsquemaPago,
   EstadoCotizacion,
   EstadoInspeccion,
+  EstadoPago,
 } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
@@ -38,9 +40,28 @@ function texto(
   ).trim();
 }
 
+function redirigirError(
+  mensaje: string,
+): never {
+  redirect(
+    `/panel/agenda?error=${encodeURIComponent(
+      mensaje,
+    )}`,
+  );
+}
+
+function redirigirOk(
+  mensaje: string,
+): never {
+  redirect(
+    `/panel/agenda?ok=${encodeURIComponent(
+      mensaje,
+    )}`,
+  );
+}
+
 function generarFolioInspeccion() {
   const fecha = new Date();
-
   const year = fecha.getFullYear();
 
   const codigo = randomUUID()
@@ -55,22 +76,17 @@ function convertirFechaHermosillo(
   valor: string,
 ) {
   if (!valor) {
-    throw new Error(
+    redirigirError(
       "Selecciona fecha y hora para la inspección.",
     );
   }
 
-  /*
-   * Hermosillo trabaja en UTC-7 durante todo el año.
-   * datetime-local no incluye zona horaria,
-   * por eso la agregamos explícitamente.
-   */
   const fecha = new Date(
     `${valor}:00-07:00`,
   );
 
   if (Number.isNaN(fecha.getTime())) {
-    throw new Error(
+    redirigirError(
       "La fecha seleccionada no es válida.",
     );
   }
@@ -78,10 +94,42 @@ function convertirFechaHermosillo(
   return fecha;
 }
 
+function puedeAgendarCotizacion({
+  estado,
+  estadoPago,
+  esquemaPago,
+}: {
+  estado: EstadoCotizacion;
+  estadoPago: EstadoPago;
+  esquemaPago: EsquemaPago;
+}) {
+  if (
+    estado !==
+    EstadoCotizacion.ACEPTADA
+  ) {
+    return false;
+  }
+
+  if (
+    estadoPago ===
+    EstadoPago.PAGADO
+  ) {
+    return true;
+  }
+
+  return (
+    esquemaPago ===
+      EsquemaPago.DOS_EXHIBICIONES_50_50 &&
+    estadoPago ===
+      EstadoPago.PARCIAL
+  );
+}
+
 export async function agendarCotizacion(
   formData: FormData,
 ) {
-  const session = await verificarPermiso();
+  const session =
+    await verificarPermiso();
 
   const cotizacionId = texto(
     formData,
@@ -100,7 +148,7 @@ export async function agendarCotizacion(
   );
 
   if (!cotizacionId) {
-    throw new Error(
+    redirigirError(
       "No se recibió la cotización.",
     );
   }
@@ -114,7 +162,7 @@ export async function agendarCotizacion(
     fechaProgramada.getTime() <
     Date.now()
   ) {
-    throw new Error(
+    redirigirError(
       "La inspección no puede programarse en una fecha pasada.",
     );
   }
@@ -153,7 +201,7 @@ export async function agendarCotizacion(
     });
 
   if (!cotizacion) {
-    throw new Error(
+    redirigirError(
       "La cotización no existe.",
     );
   }
@@ -162,34 +210,53 @@ export async function agendarCotizacion(
     cotizacion.estado !==
     EstadoCotizacion.ACEPTADA
   ) {
-    throw new Error(
-      "Solo se pueden agendar cotizaciones aceptadas.",
+    redirigirError(
+      "Primero el cliente debe aceptar la cotización antes de programarla.",
+    );
+  }
+
+  if (
+    !puedeAgendarCotizacion({
+      estado:
+        cotizacion.estado,
+      estadoPago:
+        cotizacion.estadoPago,
+      esquemaPago:
+        cotizacion.esquemaPago,
+    })
+  ) {
+    if (
+      cotizacion.esquemaPago ===
+      EsquemaPago.DOS_EXHIBICIONES_50_50
+    ) {
+      redirigirError(
+        "Para agendar esta cotización debes registrar primero el 50% del pago.",
+      );
+    }
+
+    redirigirError(
+      "Esta cotización debe estar pagada al 100% antes de poder agendarla.",
     );
   }
 
   if (!cotizacion.inmueble) {
-    throw new Error(
+    redirigirError(
       "La cotización debe tener un inmueble asociado antes de agendarse.",
     );
   }
 
-  /*
-   * Evita crear dos inspecciones
-   * para la misma cotización.
-   */
   const inspeccionExistente =
     await prisma.inspeccion.findFirst({
       where: {
         cotizacionId,
       },
-
       select: {
         id: true,
       },
     });
 
   if (inspeccionExistente) {
-    throw new Error(
+    redirigirError(
       "Esta cotización ya fue programada.",
     );
   }
@@ -208,7 +275,7 @@ export async function agendarCotizacion(
       });
 
     if (!inspector?.activo) {
-      throw new Error(
+      redirigirError(
         "El inspector seleccionado no está disponible.",
       );
     }
@@ -272,5 +339,9 @@ export async function agendarCotizacion(
 
   revalidatePath(
     "/panel",
+  );
+
+  redirigirOk(
+    "Inspección programada correctamente.",
   );
 }

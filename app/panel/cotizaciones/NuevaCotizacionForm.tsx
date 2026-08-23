@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  EsquemaPago,
   TipoCalculoPrecio,
 } from "@prisma/client";
 import {
@@ -70,6 +71,11 @@ export default function NuevaCotizacionForm({
 
   const [descuento, setDescuento] =
     useState(0);
+
+  const [esquemaPago, setEsquemaPago] =
+    useState<EsquemaPago>(
+      EsquemaPago.UNA_EXHIBICION,
+    );
 
   const inmueblesCliente = useMemo(
     () =>
@@ -329,6 +335,128 @@ export default function NuevaCotizacionForm({
           className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
         />
       </div>
+
+      <section className="lg:col-span-2 rounded-3xl border border-white/10 bg-slate-950 p-6">
+        <p className="text-xs font-black uppercase tracking-widest text-cyan-300">
+          Forma de pago
+        </p>
+
+        <h3 className="mt-2 text-xl font-black text-white">
+          Selecciona el esquema de pago
+        </h3>
+
+        <p className="mt-2 text-sm text-slate-400">
+          La cotización podrá pagarse en una sola
+          exhibición o en dos exhibiciones del 50%.
+        </p>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <label
+            className={`cursor-pointer rounded-2xl border p-5 transition ${
+              esquemaPago ===
+              EsquemaPago.UNA_EXHIBICION
+                ? "border-cyan-300 bg-cyan-400/10"
+                : "border-white/10 bg-slate-900"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="esquemaPago"
+                value={
+                  EsquemaPago.UNA_EXHIBICION
+                }
+                checked={
+                  esquemaPago ===
+                  EsquemaPago.UNA_EXHIBICION
+                }
+                onChange={() =>
+                  setEsquemaPago(
+                    EsquemaPago.UNA_EXHIBICION,
+                  )
+                }
+                className="mt-1"
+              />
+
+              <div>
+                <p className="font-black text-white">
+                  Una exhibición
+                </p>
+
+                <p className="mt-1 text-sm text-slate-400">
+                  Pago del 100% del servicio.
+                </p>
+
+                {calculo.total > 0 && (
+                  <p className="mt-3 text-xl font-black text-cyan-300">
+                    {dinero(calculo.total)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </label>
+
+          <label
+            className={`cursor-pointer rounded-2xl border p-5 transition ${
+              esquemaPago ===
+              EsquemaPago.DOS_EXHIBICIONES_50_50
+                ? "border-emerald-300 bg-emerald-400/10"
+                : "border-white/10 bg-slate-900"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="esquemaPago"
+                value={
+                  EsquemaPago.DOS_EXHIBICIONES_50_50
+                }
+                checked={
+                  esquemaPago ===
+                  EsquemaPago.DOS_EXHIBICIONES_50_50
+                }
+                onChange={() =>
+                  setEsquemaPago(
+                    EsquemaPago.DOS_EXHIBICIONES_50_50,
+                  )
+                }
+                className="mt-1"
+              />
+
+              <div>
+                <p className="font-black text-white">
+                  Dos exhibiciones 50/50
+                </p>
+
+                <p className="mt-1 text-sm text-slate-400">
+                  50% para poder agendar y el 50%
+                  restante deberá estar liquidado
+                  antes de iniciar la inspección.
+                </p>
+
+                {calculo.total > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xl font-black text-emerald-300">
+                      {dinero(
+                        calculo.total / 2,
+                      )}{" "}
+                      +{" "}
+                      {dinero(
+                        calculo.total / 2,
+                      )}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      Total:{" "}
+                      {dinero(calculo.total)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </label>
+        </div>
+      </section>
 
       <div className="lg:col-span-2">
         <label className="text-sm font-bold text-slate-300">

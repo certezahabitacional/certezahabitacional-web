@@ -20,7 +20,9 @@ export default async function PanelPage() {
   const esCoordinador = rol === "COORDINADOR";
 
   const tieneAccesoPanel =
+    rol === "DIRECTOR" ||
     rol === "ADMINISTRADOR" ||
+    rol === "GERENTE" ||
     rol === "SUPERVISOR" ||
     rol === "COORDINADOR";
 
@@ -419,8 +421,8 @@ export default async function PanelPage() {
             />
 
             {(esCoordinador ||
-              rol ===
-                "ADMINISTRADOR") && (
+              rol === "ADMINISTRADOR" ||
+              rol === "DIRECTOR") && (
               <>
                 <BotonNavegacion
                   href="/panel/paquetes"

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  EsquemaPago,
   EstadoCotizacion,
   EstadoPago,
 } from "@prisma/client";
@@ -12,15 +13,20 @@ import NuevaCotizacionForm from "./NuevaCotizacionForm";
 
 import {
   cambiarEstadoCotizacion,
-  cambiarEstadoPago,
+  registrarPagoTotal,
+  registrarPrimerPago50,
+  registrarSegundoPago50,
 } from "./actions";
 
 function dinero(valor: unknown) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 2,
-  }).format(Number(valor ?? 0));
+  return new Intl.NumberFormat(
+    "es-MX",
+    {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    },
+  ).format(Number(valor ?? 0));
 }
 
 function fecha(valor: Date | null) {
@@ -28,14 +34,24 @@ function fecha(valor: Date | null) {
     return "—";
   }
 
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(valor);
+  return new Intl.DateTimeFormat(
+    "es-MX",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    },
+  ).format(valor);
 }
 
-export default async function CotizacionesPage() {
+export default async function CotizacionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    ok?: string;
+    error?: string;
+  }>;
+}) {
   const session = await auth();
 
   if (!session?.user) {
@@ -43,11 +59,16 @@ export default async function CotizacionesPage() {
   }
 
   if (
+    session.user.role !== "DIRECTOR" &&
     session.user.role !== "ADMINISTRADOR" &&
+    session.user.role !== "GERENTE" &&
     session.user.role !== "COORDINADOR"
   ) {
     redirect("/acceso");
   }
+
+  const params =
+    await searchParams;
 
   const [
     clientes,
@@ -119,6 +140,18 @@ export default async function CotizacionesPage() {
             nombre: true,
           },
         },
+
+        autorizadaPor: {
+          select: {
+            nombre: true,
+          },
+        },
+
+        rechazadaPor: {
+          select: {
+            nombre: true,
+          },
+        },
       },
 
       orderBy: {
@@ -127,59 +160,67 @@ export default async function CotizacionesPage() {
     }),
   ]);
 
-  const inmuebles = inmueblesDb.map(
-    (inmueble) => ({
-      ...inmueble,
+  const inmuebles =
+    inmueblesDb.map(
+      (inmueble) => ({
+        ...inmueble,
 
-      superficieConstruccionM2:
-        inmueble.superficieConstruccionM2 === null
-          ? null
-          : Number(
-              inmueble.superficieConstruccionM2,
-            ),
-    }),
-  );
+        superficieConstruccionM2:
+          inmueble.superficieConstruccionM2 ===
+          null
+            ? null
+            : Number(
+                inmueble.superficieConstruccionM2,
+              ),
+      }),
+    );
 
-  const paquetes = paquetesDb.map(
-    (paquete) => ({
-      id: paquete.id,
-      nombre: paquete.nombre,
-      codigo: paquete.codigo,
-      tipoCalculo: paquete.tipoCalculo,
+  const paquetes =
+    paquetesDb.map(
+      (paquete) => ({
+        id: paquete.id,
+        nombre: paquete.nombre,
+        codigo: paquete.codigo,
+        tipoCalculo:
+          paquete.tipoCalculo,
 
-      precioBase: Number(
-        paquete.precioBase,
-      ),
+        precioBase: Number(
+          paquete.precioBase,
+        ),
 
-      superficieIncluidaM2:
-        paquete.superficieIncluidaM2 === null
-          ? null
-          : Number(
-              paquete.superficieIncluidaM2,
-            ),
+        superficieIncluidaM2:
+          paquete.superficieIncluidaM2 ===
+          null
+            ? null
+            : Number(
+                paquete.superficieIncluidaM2,
+              ),
 
-      precioM2Adicional:
-        paquete.precioM2Adicional === null
-          ? null
-          : Number(
-              paquete.precioM2Adicional,
-            ),
+        precioM2Adicional:
+          paquete.precioM2Adicional ===
+          null
+            ? null
+            : Number(
+                paquete.precioM2Adicional,
+              ),
 
-      superficieMinimaM2:
-        paquete.superficieMinimaM2 === null
-          ? null
-          : Number(
-              paquete.superficieMinimaM2,
-            ),
+        superficieMinimaM2:
+          paquete.superficieMinimaM2 ===
+          null
+            ? null
+            : Number(
+                paquete.superficieMinimaM2,
+              ),
 
-      superficieMaximaM2:
-        paquete.superficieMaximaM2 === null
-          ? null
-          : Number(
-              paquete.superficieMaximaM2,
-            ),
-    }),
-  );
+        superficieMaximaM2:
+          paquete.superficieMaximaM2 ===
+          null
+            ? null
+            : Number(
+                paquete.superficieMaximaM2,
+              ),
+      }),
+    );
 
   const totalCotizaciones =
     cotizaciones.length;
@@ -197,20 +238,24 @@ export default async function CotizacionesPage() {
         item.estado ===
           EstadoCotizacion.BORRADOR ||
         item.estado ===
+          EstadoCotizacion.PENDIENTE_AUTORIZACION ||
+        item.estado ===
+          EstadoCotizacion.AUTORIZADA ||
+        item.estado ===
           EstadoCotizacion.ENVIADA,
     ).length;
 
   const valorCotizado =
     cotizaciones.reduce(
       (total, item) =>
-        total + Number(item.total),
+        total +
+        Number(item.total),
       0,
     );
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
       <div className="mx-auto max-w-7xl">
-        {/* ENCABEZADO */}
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <Link
@@ -266,7 +311,34 @@ export default async function CotizacionesPage() {
           </div>
         </div>
 
-        {/* INDICADORES */}
+        {(params.ok ||
+          params.error) && (
+          <div
+            className={`mt-7 rounded-2xl border p-5 ${
+              params.error
+                ? "border-rose-400/20 bg-rose-400/5"
+                : "border-emerald-400/20 bg-emerald-400/5"
+            }`}
+          >
+            <p
+              className={`text-xs font-black uppercase tracking-[0.2em] ${
+                params.error
+                  ? "text-rose-300"
+                  : "text-emerald-300"
+              }`}
+            >
+              {params.error
+                ? "Acción no disponible"
+                : "Operación completada"}
+            </p>
+
+            <p className="mt-2 font-bold text-slate-200">
+              {params.error ??
+                params.ok}
+            </p>
+          </div>
+        )}
+
         <section className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <Indicador
             titulo="Cotizaciones"
@@ -281,7 +353,7 @@ export default async function CotizacionesPage() {
             valor={String(
               totalAceptadas,
             ).padStart(2, "0")}
-            detalle="Listas para programar"
+            detalle="Aceptadas por el cliente"
           />
 
           <Indicador
@@ -289,17 +361,18 @@ export default async function CotizacionesPage() {
             valor={String(
               totalPendientes,
             ).padStart(2, "0")}
-            detalle="Borrador o enviadas"
+            detalle="En elaboración, autorización o envío"
           />
 
           <Indicador
             titulo="Valor cotizado"
-            valor={dinero(valorCotizado)}
+            valor={dinero(
+              valorCotizado,
+            )}
             detalle="Importe acumulado"
           />
         </section>
 
-        {/* NUEVA COTIZACIÓN */}
         <section className="mt-10 rounded-3xl border border-cyan-400/20 bg-slate-900 p-7">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-300">
@@ -312,9 +385,9 @@ export default async function CotizacionesPage() {
 
             <p className="mt-2 text-sm text-slate-500">
               Selecciona cliente, inmueble,
-              superficie y paquete. El sistema
-              calculará automáticamente el
-              importe.
+              superficie, paquete y forma de pago.
+              El sistema calculará automáticamente
+              el importe.
             </p>
           </div>
 
@@ -336,7 +409,8 @@ export default async function CotizacionesPage() {
                 Ir a Clientes
               </Link>
             </div>
-          ) : paquetes.length === 0 ? (
+          ) : paquetes.length ===
+            0 ? (
             <div className="mt-7 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-6">
               <p className="font-black text-amber-300">
                 No existen paquetes activos.
@@ -365,7 +439,6 @@ export default async function CotizacionesPage() {
           )}
         </section>
 
-        {/* HISTORIAL */}
         <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -380,13 +453,15 @@ export default async function CotizacionesPage() {
 
             <p className="text-sm text-slate-500">
               {cotizaciones.length} registro
-              {cotizaciones.length === 1
+              {cotizaciones.length ===
+              1
                 ? ""
                 : "s"}
             </p>
           </div>
 
-          {cotizaciones.length === 0 ? (
+          {cotizaciones.length ===
+          0 ? (
             <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-slate-900/50 p-12 text-center">
               <p className="text-xl font-black">
                 Todavía no hay cotizaciones.
@@ -400,359 +475,774 @@ export default async function CotizacionesPage() {
           ) : (
             <div className="mt-6 space-y-5">
               {cotizaciones.map(
-                (cotizacion) => (
-                  <article
-                    key={cotizacion.id}
-                    className="rounded-3xl border border-white/10 bg-slate-900 p-7"
-                  >
-                    <div className="flex flex-col justify-between gap-6 xl:flex-row">
-                      {/* DATOS PRINCIPALES */}
-                      <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <p className="font-mono text-xs font-bold text-cyan-300">
-                            {cotizacion.folio}
-                          </p>
+                (cotizacion) => {
+                  const total =
+                    Number(
+                      cotizacion.total,
+                    );
 
-                          <EstadoCotizacionBadge
-                            estado={
-                              cotizacion.estado
+                  const pagado =
+                    Number(
+                      cotizacion.montoPagado,
+                    );
+
+                  const saldo =
+                    Math.max(
+                      0,
+                      total -
+                        pagado,
+                    );
+
+                  const es5050 =
+                    cotizacion.esquemaPago ===
+                    EsquemaPago.DOS_EXHIBICIONES_50_50;
+
+                  const primer50 =
+                    total / 2;
+
+                  const puedeAgendar =
+                    cotizacion.estado ===
+                      EstadoCotizacion.ACEPTADA &&
+                    (
+                      cotizacion.estadoPago ===
+                        EstadoPago.PAGADO ||
+                      (
+                        es5050 &&
+                        cotizacion.estadoPago ===
+                          EstadoPago.PARCIAL
+                      )
+                    );
+
+                  return (
+                    <article
+                      key={
+                        cotizacion.id
+                      }
+                      className="rounded-3xl border border-white/10 bg-slate-900 p-7"
+                    >
+                      <div className="flex flex-col justify-between gap-6 xl:flex-row">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <p className="font-mono text-xs font-bold text-cyan-300">
+                              {
+                                cotizacion.folio
+                              }
+                            </p>
+
+                            <EstadoCotizacionBadge
+                              estado={
+                                cotizacion.estado
+                              }
+                            />
+
+                            <EstadoPagoBadge
+                              estado={
+                                cotizacion.estadoPago
+                              }
+                              esquemaPago={
+                                cotizacion.esquemaPago
+                              }
+                            />
+                          </div>
+
+                          <h3 className="mt-3 text-2xl font-black">
+                            {
+                              cotizacion
+                                .cliente
+                                .nombre
                             }
-                          />
+                          </h3>
 
-                          <EstadoPagoBadge
-                            estado={
-                              cotizacion.estadoPago
-                            }
-                          />
-                        </div>
-
-                        <h3 className="mt-3 text-2xl font-black">
-                          {
-                            cotizacion
-                              .cliente
-                              .nombre
-                          }
-                        </h3>
-
-                        <div className="mt-3 space-y-1 text-sm text-slate-400">
-                          <p>
-                            <span className="font-bold text-slate-300">
-                              Inmueble:
-                            </span>{" "}
-                            {cotizacion.inmueble
-                              ? `${cotizacion.inmueble.alias} — ${cotizacion.inmueble.direccion}`
-                              : "Sin inmueble asociado"}
-                          </p>
-
-                          <p>
-                            <span className="font-bold text-slate-300">
-                              Paquete:
-                            </span>{" "}
-                            {cotizacion.paquete
-                              ?.nombre ??
-                              "Sin paquete"}
-                          </p>
-
-                          {cotizacion.creadaPor
-                            ?.nombre && (
+                          <div className="mt-3 space-y-1 text-sm text-slate-400">
                             <p>
                               <span className="font-bold text-slate-300">
-                                Elaboró:
+                                Inmueble:
                               </span>{" "}
-                              {
-                                cotizacion
-                                  .creadaPor
-                                  .nombre
-                              }
+                              {cotizacion.inmueble
+                                ? `${cotizacion.inmueble.alias} — ${cotizacion.inmueble.direccion}`
+                                : "Sin inmueble asociado"}
                             </p>
-                          )}
 
-                          <p>
-                            <span className="font-bold text-slate-300">
-                              Creada:
-                            </span>{" "}
+                            <p>
+                              <span className="font-bold text-slate-300">
+                                Paquete:
+                              </span>{" "}
+                              {cotizacion.paquete
+                                ?.nombre ??
+                                "Sin paquete"}
+                            </p>
+
+                            {cotizacion.creadaPor
+                              ?.nombre && (
+                              <p>
+                                <span className="font-bold text-slate-300">
+                                  Elaboró:
+                                </span>{" "}
+                                {
+                                  cotizacion
+                                    .creadaPor
+                                    .nombre
+                                }
+                              </p>
+                            )}
+
+                            <p>
+                              <span className="font-bold text-slate-300">
+                                Creada:
+                              </span>{" "}
+                              {fecha(
+                                cotizacion.creadoEn,
+                              )}
+                            </p>
+
+                            {cotizacion.solicitudAutorizacionEn && (
+                              <p>
+                                <span className="font-bold text-slate-300">
+                                  Autorización solicitada:
+                                </span>{" "}
+                                {fecha(
+                                  cotizacion.solicitudAutorizacionEn,
+                                )}
+                              </p>
+                            )}
+
+                            {cotizacion.autorizadaEn && (
+                              <p>
+                                <span className="font-bold text-emerald-300">
+                                  Autorizada:
+                                </span>{" "}
+                                {fecha(
+                                  cotizacion.autorizadaEn,
+                                )}
+                                {cotizacion.autorizadaPor
+                                  ?.nombre
+                                  ? ` por ${cotizacion.autorizadaPor.nombre}`
+                                  : ""}
+                              </p>
+                            )}
+
+                            {cotizacion.rechazadaEn && (
+                              <p>
+                                <span className="font-bold text-rose-300">
+                                  Rechazada:
+                                </span>{" "}
+                                {fecha(
+                                  cotizacion.rechazadaEn,
+                                )}
+                                {cotizacion.rechazadaPor
+                                  ?.nombre
+                                  ? ` por ${cotizacion.rechazadaPor.nombre}`
+                                  : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="xl:text-right">
+                          <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+                            Total cotizado
+                          </p>
+
+                          <p className="mt-1 text-4xl font-black text-cyan-300">
+                            {dinero(
+                              cotizacion.total,
+                            )}
+                          </p>
+
+                          <p className="mt-2 text-xs text-slate-500">
+                            Vigencia hasta:{" "}
                             {fecha(
-                              cotizacion.creadoEn,
+                              cotizacion.vigenciaHasta,
                             )}
                           </p>
                         </div>
                       </div>
 
-                      {/* TOTAL */}
-                      <div className="xl:text-right">
-                        <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                          Total cotizado
-                        </p>
+                      <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                        <Dato
+                          titulo="Superficie"
+                          valor={`${Number(
+                            cotizacion.superficieM2 ??
+                              0,
+                          ).toLocaleString(
+                            "es-MX",
+                          )} m²`}
+                        />
 
-                        <p className="mt-1 text-4xl font-black text-cyan-300">
-                          {dinero(
-                            cotizacion.total,
+                        <Dato
+                          titulo="Precio base"
+                          valor={dinero(
+                            cotizacion.precioBase,
                           )}
-                        </p>
+                        />
 
-                        <p className="mt-2 text-xs text-slate-500">
-                          Vigencia hasta:{" "}
-                          {fecha(
-                            cotizacion.vigenciaHasta,
+                        <Dato
+                          titulo="m² adicionales"
+                          valor={`${Number(
+                            cotizacion.metrosAdicionales,
+                          ).toLocaleString(
+                            "es-MX",
+                          )} m²`}
+                        />
+
+                        <Dato
+                          titulo="Cargo m²"
+                          valor={dinero(
+                            cotizacion.cargoMetrosAdicionales,
                           )}
-                        </p>
-                      </div>
-                    </div>
+                        />
 
-                    {/* DESGLOSE */}
-                    <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-                      <Dato
-                        titulo="Superficie"
-                        valor={`${Number(
-                          cotizacion.superficieM2 ??
-                            0,
-                        ).toLocaleString(
-                          "es-MX",
-                        )} m²`}
-                      />
-
-                      <Dato
-                        titulo="Precio base"
-                        valor={dinero(
-                          cotizacion.precioBase,
-                        )}
-                      />
-
-                      <Dato
-                        titulo="m² adicionales"
-                        valor={`${Number(
-                          cotizacion.metrosAdicionales,
-                        ).toLocaleString(
-                          "es-MX",
-                        )} m²`}
-                      />
-
-                      <Dato
-                        titulo="Cargo m²"
-                        valor={dinero(
-                          cotizacion.cargoMetrosAdicionales,
-                        )}
-                      />
-
-                      <Dato
-                        titulo="Extras"
-                        valor={dinero(
-                          cotizacion.cargosExtra,
-                        )}
-                      />
-
-                      <Dato
-                        titulo="Descuento"
-                        valor={dinero(
-                          cotizacion.descuento,
-                        )}
-                      />
-                    </div>
-
-                    {/* SUBTOTAL */}
-                    <div className="mt-4 flex flex-wrap justify-end gap-6 rounded-2xl bg-slate-950 p-5">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-slate-600">
-                          Subtotal
-                        </p>
-
-                        <p className="mt-1 text-xl font-black text-slate-200">
-                          {dinero(
-                            cotizacion.subtotal,
+                        <Dato
+                          titulo="Extras"
+                          valor={dinero(
+                            cotizacion.cargosExtra,
                           )}
-                        </p>
+                        />
+
+                        <Dato
+                          titulo="Descuento"
+                          valor={dinero(
+                            cotizacion.descuento,
+                          )}
+                        />
                       </div>
 
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
-                          Total
-                        </p>
+                      <div className="mt-4 flex flex-wrap justify-end gap-6 rounded-2xl bg-slate-950 p-5">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-widest text-slate-600">
+                            Subtotal
+                          </p>
 
-                        <p className="mt-1 text-xl font-black text-cyan-300">
-                          {dinero(
-                            cotizacion.total,
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* NOTAS */}
-                    {(cotizacion.notas ||
-                      cotizacion.observacionesInternas) && (
-                      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                        {cotizacion.notas && (
-                          <div className="rounded-2xl border border-white/10 p-5">
-                            <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                              Notas
-                            </p>
-
-                            <p className="mt-2 text-sm leading-6 text-slate-300">
-                              {
-                                cotizacion.notas
-                              }
-                            </p>
-                          </div>
-                        )}
-
-                        {cotizacion.observacionesInternas && (
-                          <div className="rounded-2xl border border-amber-300/10 bg-amber-300/5 p-5">
-                            <p className="text-xs font-black uppercase tracking-widest text-amber-300">
-                              Uso interno
-                            </p>
-
-                            <p className="mt-2 text-sm leading-6 text-slate-300">
-                              {
-                                cotizacion.observacionesInternas
-                              }
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* CAMBIAR ESTADOS */}
-                    <div className="mt-7 flex flex-col gap-4 border-t border-white/10 pt-6 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="flex flex-wrap gap-5">
-                        <form
-                          action={
-                            cambiarEstadoCotizacion
-                          }
-                          className="flex flex-wrap items-center gap-3"
-                        >
-                          <input
-                            type="hidden"
-                            name="id"
-                            value={
-                              cotizacion.id
-                            }
-                          />
-
-                          <label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                            Cotización
-                          </label>
-
-                          <select
-                            name="estado"
-                            defaultValue={
-                              cotizacion.estado
-                            }
-                            className="rounded-xl border border-white/10 bg-slate-950 px-4 py-2 text-sm"
-                          >
-                            {Object.values(
-                              EstadoCotizacion,
-                            ).map(
-                              (estado) => (
-                                <option
-                                  key={
-                                    estado
-                                  }
-                                  value={
-                                    estado
-                                  }
-                                >
-                                  {estado.replaceAll(
-                                    "_",
-                                    " ",
-                                  )}
-                                </option>
-                              ),
+                          <p className="mt-1 text-xl font-black text-slate-200">
+                            {dinero(
+                              cotizacion.subtotal,
                             )}
-                          </select>
+                          </p>
+                        </div>
 
-                          <button
-                            type="submit"
-                            className="text-sm font-black text-cyan-300"
-                          >
-                            Guardar
-                          </button>
-                        </form>
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-widest text-cyan-400">
+                            Total
+                          </p>
 
-                        <form
-                          action={
-                            cambiarEstadoPago
-                          }
-                          className="flex flex-wrap items-center gap-3"
-                        >
-                          <input
-                            type="hidden"
-                            name="id"
-                            value={
-                              cotizacion.id
-                            }
-                          />
-
-                          <label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                            Pago
-                          </label>
-
-                          <select
-                            name="estadoPago"
-                            defaultValue={
-                              cotizacion.estadoPago
-                            }
-                            className="rounded-xl border border-white/10 bg-slate-950 px-4 py-2 text-sm"
-                          >
-                            {Object.values(
-                              EstadoPago,
-                            ).map(
-                              (estado) => (
-                                <option
-                                  key={
-                                    estado
-                                  }
-                                  value={
-                                    estado
-                                  }
-                                >
-                                  {estado.replaceAll(
-                                    "_",
-                                    " ",
-                                  )}
-                                </option>
-                              ),
+                          <p className="mt-1 text-xl font-black text-cyan-300">
+                            {dinero(
+                              cotizacion.total,
                             )}
-                          </select>
-
-                          <button
-                            type="submit"
-                            className="text-sm font-black text-amber-300"
-                          >
-                            Guardar
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-
-                    {/* ACEPTADA */}
-                    {cotizacion.estado ===
-                      EstadoCotizacion.ACEPTADA && (
-                      <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
-                        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                          <div>
-                            <p className="font-black text-emerald-300">
-                              Cotización
-                              aceptada
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-400">
-                              Ya puede pasar al
-                              proceso de agenda y
-                              asignación de
-                              inspector.
-                            </p>
-                          </div>
-
-                          <Link
-                            href="/panel/agenda"
-                            className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950"
-                          >
-                            Ir a Agenda
-                          </Link>
+                          </p>
                         </div>
                       </div>
-                    )}
-                  </article>
-                ),
+
+                      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                        <Dato
+                          titulo="Esquema de pago"
+                          valor={
+                            es5050
+                              ? "Dos exhibiciones 50/50"
+                              : "Una exhibición"
+                          }
+                        />
+
+                        <Dato
+                          titulo="Pagado"
+                          valor={dinero(
+                            pagado,
+                          )}
+                        />
+
+                        <Dato
+                          titulo="Saldo"
+                          valor={dinero(
+                            saldo,
+                          )}
+                        />
+                      </div>
+
+                      {es5050 && (
+                        <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-5">
+                          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
+                            Condición 50/50
+                          </p>
+
+                          <p className="mt-2 text-sm text-slate-300">
+                            Primer pago:{" "}
+                            {dinero(
+                              primer50,
+                            )}
+                            . Con este 50% la
+                            inspección puede
+                            agendarse. El saldo de{" "}
+                            {dinero(
+                              primer50,
+                            )}{" "}
+                            debe quedar liquidado
+                            antes de iniciar la
+                            inspección.
+                          </p>
+                        </div>
+                      )}
+
+                      {(cotizacion.notas ||
+                        cotizacion.observacionesInternas) && (
+                        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                          {cotizacion.notas && (
+                            <div className="rounded-2xl border border-white/10 p-5">
+                              <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+                                Notas
+                              </p>
+
+                              <p className="mt-2 text-sm leading-6 text-slate-300">
+                                {
+                                  cotizacion.notas
+                                }
+                              </p>
+                            </div>
+                          )}
+
+                          {cotizacion.observacionesInternas && (
+                            <div className="rounded-2xl border border-amber-300/10 bg-amber-300/5 p-5">
+                              <p className="text-xs font-black uppercase tracking-widest text-amber-300">
+                                Uso interno
+                              </p>
+
+                              <p className="mt-2 text-sm leading-6 text-slate-300">
+                                {
+                                  cotizacion.observacionesInternas
+                                }
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {cotizacion.motivoRechazo && (
+                        <div className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-400/5 p-5">
+                          <p className="text-xs font-black uppercase tracking-widest text-rose-300">
+                            Motivo de rechazo
+                          </p>
+
+                          <p className="mt-2 text-sm leading-6 text-slate-300">
+                            {
+                              cotizacion.motivoRechazo
+                            }
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="mt-7 flex flex-col gap-4 border-t border-white/10 pt-6">
+                        <div className="flex flex-wrap items-center gap-4">
+                          {cotizacion.estado ===
+                            EstadoCotizacion.BORRADOR && (
+                            <form
+                              action={
+                                cambiarEstadoCotizacion
+                              }
+                            >
+                              <input
+                                type="hidden"
+                                name="id"
+                                value={
+                                  cotizacion.id
+                                }
+                              />
+
+                              <input
+                                type="hidden"
+                                name="estado"
+                                value={
+                                  EstadoCotizacion.PENDIENTE_AUTORIZACION
+                                }
+                              />
+
+                              <button
+                                type="submit"
+                                className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+                              >
+                                Solicitar autorización
+                              </button>
+                            </form>
+                          )}
+
+                          {cotizacion.estado ===
+                            EstadoCotizacion.PENDIENTE_AUTORIZACION &&
+                            session.user.role ===
+                              "DIRECTOR" && (
+                              <>
+                                <form
+                                  action={
+                                    cambiarEstadoCotizacion
+                                  }
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="id"
+                                    value={
+                                      cotizacion.id
+                                    }
+                                  />
+
+                                  <input
+                                    type="hidden"
+                                    name="estado"
+                                    value={
+                                      EstadoCotizacion.AUTORIZADA
+                                    }
+                                  />
+
+                                  <button
+                                    type="submit"
+                                    className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-200"
+                                  >
+                                    Autorizar cotización
+                                  </button>
+                                </form>
+
+                                <form
+                                  action={
+                                    cambiarEstadoCotizacion
+                                  }
+                                  className="flex flex-wrap items-center gap-3"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="id"
+                                    value={
+                                      cotizacion.id
+                                    }
+                                  />
+
+                                  <input
+                                    type="hidden"
+                                    name="estado"
+                                    value={
+                                      EstadoCotizacion.RECHAZADA
+                                    }
+                                  />
+
+                                  <input
+                                    type="text"
+                                    name="motivoRechazo"
+                                    placeholder="Motivo del rechazo"
+                                    className="min-w-64 rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-600"
+                                  />
+
+                                  <button
+                                    type="submit"
+                                    className="rounded-full bg-rose-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-rose-200"
+                                  >
+                                    Rechazar cotización
+                                  </button>
+                                </form>
+                              </>
+                            )}
+
+                          {cotizacion.estado ===
+                            EstadoCotizacion.PENDIENTE_AUTORIZACION &&
+                            session.user.role !==
+                              "DIRECTOR" && (
+                              <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 px-5 py-4">
+                                <p className="text-sm font-black text-amber-300">
+                                  Pendiente de
+                                  autorización del
+                                  director.
+                                </p>
+                              </div>
+                            )}
+
+                          {cotizacion.estado ===
+                            EstadoCotizacion.AUTORIZADA && (
+                            <form
+                              action={
+                                cambiarEstadoCotizacion
+                              }
+                            >
+                              <input
+                                type="hidden"
+                                name="id"
+                                value={
+                                  cotizacion.id
+                                }
+                              />
+
+                              <input
+                                type="hidden"
+                                name="estado"
+                                value={
+                                  EstadoCotizacion.ENVIADA
+                                }
+                              />
+
+                              <button
+                                type="submit"
+                                className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+                              >
+                                Marcar como enviada
+                              </button>
+                            </form>
+                          )}
+
+                          {cotizacion.estado ===
+                            EstadoCotizacion.ENVIADA && (
+                            <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-5 py-4">
+                              <p className="text-sm font-black text-cyan-300">
+                                Enviada al cliente.
+                                Pendiente de
+                                aceptación.
+                              </p>
+                            </div>
+                          )}
+
+                          {cotizacion.estado ===
+                            EstadoCotizacion.RECHAZADA && (
+                            <div className="rounded-2xl border border-rose-300/20 bg-rose-300/5 px-5 py-4">
+                              <p className="text-sm font-black text-rose-300">
+                                Cotización rechazada.
+                              </p>
+                            </div>
+                          )}
+
+                          {cotizacion.estado ===
+                            EstadoCotizacion.VENCIDA && (
+                            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 px-5 py-4">
+                              <p className="text-sm font-black text-amber-300">
+                                Cotización vencida.
+                              </p>
+                            </div>
+                          )}
+
+                          {cotizacion.estado ===
+                            EstadoCotizacion.CANCELADA && (
+                            <div className="rounded-2xl border border-slate-400/20 bg-slate-400/5 px-5 py-4">
+                              <p className="text-sm font-black text-slate-300">
+                                Cotización cancelada.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {cotizacion.estado ===
+                        EstadoCotizacion.ACEPTADA && (
+                        <div className="mt-6">
+                          {cotizacion.estadoPago ===
+                            EstadoPago.PENDIENTE &&
+                            es5050 && (
+                              <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
+                                <p className="font-black text-amber-300">
+                                  Cotización aceptada
+                                  — primer pago
+                                  pendiente
+                                </p>
+
+                                <p className="mt-1 text-sm text-slate-400">
+                                  Registra el primer
+                                  50% para habilitar
+                                  Agenda.
+                                </p>
+
+                                <form
+                                  action={
+                                    registrarPrimerPago50
+                                  }
+                                  className="mt-4"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="id"
+                                    value={
+                                      cotizacion.id
+                                    }
+                                  />
+
+                                  <button className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">
+                                    Registrar primer
+                                    50% —{" "}
+                                    {dinero(
+                                      primer50,
+                                    )}
+                                  </button>
+                                </form>
+                              </div>
+                            )}
+
+                          {cotizacion.estadoPago ===
+                            EstadoPago.PENDIENTE &&
+                            !es5050 && (
+                              <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
+                                <p className="font-black text-amber-300">
+                                  Cotización aceptada
+                                  — pago pendiente
+                                </p>
+
+                                <p className="mt-1 text-sm text-slate-400">
+                                  Esta cotización es
+                                  de una sola
+                                  exhibición. Debe
+                                  liquidarse al 100%
+                                  para habilitar
+                                  Agenda.
+                                </p>
+
+                                <form
+                                  action={
+                                    registrarPagoTotal
+                                  }
+                                  className="mt-4"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="id"
+                                    value={
+                                      cotizacion.id
+                                    }
+                                  />
+
+                                  <button className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">
+                                    Registrar pago
+                                    total —{" "}
+                                    {dinero(
+                                      total,
+                                    )}
+                                  </button>
+                                </form>
+                              </div>
+                            )}
+
+                          {cotizacion.estadoPago ===
+                            EstadoPago.PARCIAL &&
+                            es5050 && (
+                              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
+                                <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+                                  <div>
+                                    <p className="font-black text-emerald-300">
+                                      Primer 50%
+                                      recibido —
+                                      Agenda habilitada
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-slate-400">
+                                      Pagado:{" "}
+                                      {dinero(
+                                        pagado,
+                                      )}
+                                      . Saldo:{" "}
+                                      {dinero(
+                                        saldo,
+                                      )}
+                                      . El segundo
+                                      50% debe
+                                      liquidarse antes
+                                      de iniciar la
+                                      inspección.
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-3">
+                                    <Link
+                                      href="/panel/agenda"
+                                      className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950"
+                                    >
+                                      Ir a Agenda
+                                    </Link>
+
+                                    <form
+                                      action={
+                                        registrarSegundoPago50
+                                      }
+                                    >
+                                      <input
+                                        type="hidden"
+                                        name="id"
+                                        value={
+                                          cotizacion.id
+                                        }
+                                      />
+
+                                      <button className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300">
+                                        Registrar
+                                        segundo 50% —{" "}
+                                        {dinero(
+                                          saldo,
+                                        )}
+                                      </button>
+                                    </form>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                          {cotizacion.estadoPago ===
+                            EstadoPago.PAGADO && (
+                              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
+                                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                                  <div>
+                                    <p className="font-black text-emerald-300">
+                                      Cotización
+                                      liquidada al
+                                      100%
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-slate-400">
+                                      El pago está
+                                      completo. La
+                                      cotización puede
+                                      pasar a Agenda y
+                                      la inspección
+                                      podrá iniciar
+                                      cuando llegue su
+                                      fecha programada.
+                                    </p>
+                                  </div>
+
+                                  <Link
+                                    href="/panel/agenda"
+                                    className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950"
+                                  >
+                                    Ir a Agenda
+                                  </Link>
+                                </div>
+                              </div>
+                            )}
+
+                          {cotizacion.estadoPago ===
+                            EstadoPago.CANCELADO && (
+                              <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 p-5">
+                                <p className="font-black text-rose-300">
+                                  Pago cancelado
+                                </p>
+
+                                <p className="mt-1 text-sm text-slate-400">
+                                  La cotización no
+                                  puede avanzar a
+                                  Agenda mientras el
+                                  pago permanezca
+                                  cancelado.
+                                </p>
+                              </div>
+                            )}
+
+                          {!puedeAgendar &&
+                            cotizacion.estadoPago !==
+                              EstadoPago.PENDIENTE &&
+                            cotizacion.estadoPago !==
+                              EstadoPago.CANCELADO &&
+                            !(
+                              es5050 &&
+                              cotizacion.estadoPago ===
+                                EstadoPago.PARCIAL
+                            ) && (
+                              <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
+                                <p className="font-black text-amber-300">
+                                  Agenda todavía no
+                                  habilitada
+                                </p>
+                              </div>
+                            )}
+                        </div>
+                      )}
+                    </article>
+                  );
+                },
               )}
             </div>
           )}
@@ -817,29 +1307,50 @@ function EstadoCotizacionBadge({
     "bg-slate-400/10 text-slate-300";
 
   if (
-    estado === EstadoCotizacion.ACEPTADA
+    estado ===
+    EstadoCotizacion.PENDIENTE_AUTORIZACION
+  ) {
+    estilos =
+      "bg-amber-400/10 text-amber-300";
+  }
+
+  if (
+    estado ===
+    EstadoCotizacion.AUTORIZADA
+  ) {
+    estilos =
+      "bg-violet-400/10 text-violet-300";
+  }
+
+  if (
+    estado ===
+    EstadoCotizacion.ACEPTADA
   ) {
     estilos =
       "bg-emerald-400/10 text-emerald-300";
   }
 
   if (
-    estado === EstadoCotizacion.ENVIADA
+    estado ===
+    EstadoCotizacion.ENVIADA
   ) {
     estilos =
       "bg-cyan-400/10 text-cyan-300";
   }
 
   if (
-    estado === EstadoCotizacion.RECHAZADA ||
-    estado === EstadoCotizacion.CANCELADA
+    estado ===
+      EstadoCotizacion.RECHAZADA ||
+    estado ===
+      EstadoCotizacion.CANCELADA
   ) {
     estilos =
       "bg-rose-400/10 text-rose-300";
   }
 
   if (
-    estado === EstadoCotizacion.VENCIDA
+    estado ===
+    EstadoCotizacion.VENCIDA
   ) {
     estilos =
       "bg-amber-400/10 text-amber-300";
@@ -849,41 +1360,68 @@ function EstadoCotizacionBadge({
     <span
       className={`rounded-full px-3 py-1 text-xs font-black ${estilos}`}
     >
-      {estado.replaceAll("_", " ")}
+      {estado.replaceAll(
+        "_",
+        " ",
+      )}
     </span>
   );
 }
 
 function EstadoPagoBadge({
   estado,
+  esquemaPago,
 }: {
   estado: EstadoPago;
+  esquemaPago: EsquemaPago;
 }) {
   let estilos =
     "bg-amber-400/10 text-amber-300";
 
-  if (estado === EstadoPago.PAGADO) {
+  let texto =
+    "PAGO: PENDIENTE";
+
+  if (
+    estado ===
+    EstadoPago.PAGADO
+  ) {
     estilos =
       "bg-emerald-400/10 text-emerald-300";
-  }
 
-  if (estado === EstadoPago.PARCIAL) {
-    estilos =
-      "bg-cyan-400/10 text-cyan-300";
+    texto =
+      "PAGO: 100% PAGADO";
   }
 
   if (
-    estado === EstadoPago.CANCELADO
+    estado ===
+    EstadoPago.PARCIAL
+  ) {
+    estilos =
+      "bg-cyan-400/10 text-cyan-300";
+
+    texto =
+      esquemaPago ===
+      EsquemaPago.DOS_EXHIBICIONES_50_50
+        ? "PAGO: PRIMER 50% PAGADO"
+        : "PAGO: PARCIAL";
+  }
+
+  if (
+    estado ===
+    EstadoPago.CANCELADO
   ) {
     estilos =
       "bg-rose-400/10 text-rose-300";
+
+    texto =
+      "PAGO: CANCELADO";
   }
 
   return (
     <span
       className={`rounded-full px-3 py-1 text-xs font-black ${estilos}`}
     >
-      PAGO: {estado.replaceAll("_", " ")}
+      {texto}
     </span>
   );
 }

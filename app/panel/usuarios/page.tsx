@@ -2,6 +2,7 @@ import Link from "next/link";
 import { RolUsuario } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { obtenerAdministradorActual } from "@/lib/administrador-actual";
+import PasswordField from "@/components/forms/PasswordField";
 import {
   cambiarEstadoUsuario,
   cambiarPasswordUsuario,
@@ -167,12 +168,12 @@ export default async function UsuariosPage({
                 autocompletar="email"
               />
 
-              <Campo
-                nombre="password"
-                etiqueta="Contraseña inicial"
-                tipo="password"
-                autocompletar="new-password"
-                minimo={8}
+              <PasswordField
+                name="password"
+                label="Contraseña inicial"
+                autoComplete="new-password"
+                minLength={8}
+                inputClassName="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
               />
 
               <label className="block">
@@ -411,14 +412,14 @@ export default async function UsuariosPage({
                               value={usuario.id}
                             />
 
-                            <input
-                              type="password"
+                            <PasswordField
                               name="password"
-                              required
-                              minLength={8}
+                              label=""
                               autoComplete="new-password"
+                              minLength={8}
                               placeholder="Nueva contraseña"
-                              className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-cyan-300"
+                              wrapperClassName="min-w-0 flex-1"
+                              inputClassName="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
                             />
 
                             <button

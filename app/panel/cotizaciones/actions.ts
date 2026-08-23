@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  EsquemaPago,
   EstadoCotizacion,
   EstadoPago,
   TipoCalculoPrecio,
@@ -20,6 +21,7 @@ async function verificarPermiso() {
   }
 
   if (
+    session.user.role !== "DIRECTOR" &&
     session.user.role !== "ADMINISTRADOR" &&
     session.user.role !== "COORDINADOR"
   ) {
@@ -29,8 +31,13 @@ async function verificarPermiso() {
   return session;
 }
 
-function texto(formData: FormData, campo: string) {
-  return String(formData.get(campo) ?? "").trim();
+function texto(
+  formData: FormData,
+  campo: string,
+) {
+  return String(
+    formData.get(campo) ?? "",
+  ).trim();
 }
 
 function numero(
@@ -42,7 +49,9 @@ function numero(
 
   if (!valor) {
     if (requerido) {
-      throw new Error(`${campo} es obligatorio.`);
+      redirigirError(
+        `${campo} es obligatorio.`,
+      );
     }
 
     return 0;
@@ -50,11 +59,36 @@ function numero(
 
   const convertido = Number(valor);
 
-  if (!Number.isFinite(convertido) || convertido < 0) {
-    throw new Error(`${campo} no es válido.`);
+  if (
+    !Number.isFinite(convertido) ||
+    convertido < 0
+  ) {
+    redirigirError(
+      `${campo} no es válido.`,
+    );
   }
 
   return convertido;
+}
+
+function redirigirError(
+  mensaje: string,
+): never {
+  redirect(
+    `/panel/cotizaciones?error=${encodeURIComponent(
+      mensaje,
+    )}`,
+  );
+}
+
+function redirigirOk(
+  mensaje: string,
+): never {
+  redirect(
+    `/panel/cotizaciones?ok=${encodeURIComponent(
+      mensaje,
+    )}`,
+  );
 }
 
 function generarFolio() {
@@ -88,24 +122,35 @@ function calcularPrecio({
   let metrosAdicionales = 0;
   let cargoMetrosAdicionales = 0;
 
-  if (tipoCalculo === TipoCalculoPrecio.POR_M2) {
+  if (
+    tipoCalculo ===
+    TipoCalculoPrecio.POR_M2
+  ) {
     metrosAdicionales = superficieM2;
+
     cargoMetrosAdicionales =
-      superficieM2 * precioM2Adicional;
+      superficieM2 *
+      precioM2Adicional;
   }
 
-  if (tipoCalculo === TipoCalculoPrecio.HIBRIDO) {
+  if (
+    tipoCalculo ===
+    TipoCalculoPrecio.HIBRIDO
+  ) {
     metrosAdicionales = Math.max(
       0,
-      superficieM2 - superficieIncluidaM2,
+      superficieM2 -
+        superficieIncluidaM2,
     );
 
     cargoMetrosAdicionales =
-      metrosAdicionales * precioM2Adicional;
+      metrosAdicionales *
+      precioM2Adicional;
   }
 
   const baseAplicable =
-    tipoCalculo === TipoCalculoPrecio.POR_M2
+    tipoCalculo ===
+    TipoCalculoPrecio.POR_M2
       ? 0
       : precioBase;
 
@@ -114,7 +159,10 @@ function calcularPrecio({
     cargoMetrosAdicionales +
     cargosExtra;
 
-  const total = Math.max(0, subtotal - descuento);
+  const total = Math.max(
+    0,
+    subtotal - descuento,
+  );
 
   return {
     precioBase: baseAplicable,
@@ -128,19 +176,50 @@ function calcularPrecio({
 export async function crearCotizacion(
   formData: FormData,
 ) {
-  const session = await verificarPermiso();
+  const session =
+    await verificarPermiso();
 
-  const clienteId = texto(formData, "clienteId");
+  const clienteId = texto(
+    formData,
+    "clienteId",
+  );
+
   const inmuebleId =
-    texto(formData, "inmuebleId") || null;
-  const paqueteId = texto(formData, "paqueteId");
+    texto(
+      formData,
+      "inmuebleId",
+    ) || null;
+
+  const paqueteId = texto(
+    formData,
+    "paqueteId",
+  );
+
+  const esquemaPago = texto(
+    formData,
+    "esquemaPago",
+  ) as EsquemaPago;
 
   if (!clienteId) {
-    throw new Error("Selecciona un cliente.");
+    redirigirError(
+      "Selecciona un cliente.",
+    );
   }
 
   if (!paqueteId) {
-    throw new Error("Selecciona un paquete.");
+    redirigirError(
+      "Selecciona un paquete.",
+    );
+  }
+
+  if (
+    !Object.values(
+      EsquemaPago,
+    ).includes(esquemaPago)
+  ) {
+    redirigirError(
+      "Selecciona un esquema de pago válido.",
+    );
   }
 
   const paquete =
@@ -150,23 +229,29 @@ export async function crearCotizacion(
       },
     });
 
-  if (!paquete || !paquete.activo) {
-    throw new Error(
+  if (
+    !paquete ||
+    !paquete.activo
+  ) {
+    redirigirError(
       "El paquete seleccionado no está disponible.",
     );
   }
 
-  const cliente = await prisma.cliente.findUnique({
-    where: {
-      id: clienteId,
-    },
-    select: {
-      id: true,
-    },
-  });
+  const cliente =
+    await prisma.cliente.findUnique({
+      where: {
+        id: clienteId,
+      },
+      select: {
+        id: true,
+      },
+    });
 
   if (!cliente) {
-    throw new Error("El cliente no existe.");
+    redirigirError(
+      "El cliente no existe.",
+    );
   }
 
   if (inmuebleId) {
@@ -182,7 +267,7 @@ export async function crearCotizacion(
       });
 
     if (!inmueble) {
-      throw new Error(
+      redirigirError(
         "El inmueble no pertenece al cliente seleccionado.",
       );
     }
@@ -204,18 +289,25 @@ export async function crearCotizacion(
     "descuento",
   );
 
-  const precioBase = Number(paquete.precioBase);
-
-  const superficieIncluidaM2 = Number(
-    paquete.superficieIncluidaM2 ?? 0,
+  const precioBase = Number(
+    paquete.precioBase,
   );
 
-  const precioM2Adicional = Number(
-    paquete.precioM2Adicional ?? 0,
-  );
+  const superficieIncluidaM2 =
+    Number(
+      paquete.superficieIncluidaM2 ??
+        0,
+    );
+
+  const precioM2Adicional =
+    Number(
+      paquete.precioM2Adicional ??
+        0,
+    );
 
   const calculo = calcularPrecio({
-    tipoCalculo: paquete.tipoCalculo,
+    tipoCalculo:
+      paquete.tipoCalculo,
     superficieM2,
     precioBase,
     superficieIncluidaM2,
@@ -226,10 +318,12 @@ export async function crearCotizacion(
 
   const vigenciaDias = 15;
 
-  const vigenciaHasta = new Date();
+  const vigenciaHasta =
+    new Date();
 
   vigenciaHasta.setDate(
-    vigenciaHasta.getDate() + vigenciaDias,
+    vigenciaHasta.getDate() +
+      vigenciaDias,
   );
 
   await prisma.cotizacion.create({
@@ -240,29 +334,46 @@ export async function crearCotizacion(
       inmuebleId,
       paqueteId,
 
-      creadaPorId: session.user.id,
+      creadaPorId:
+        session.user.id,
 
       superficieM2,
 
-      precioBase: calculo.precioBase,
+      precioBase:
+        calculo.precioBase,
+
       metrosAdicionales:
         calculo.metrosAdicionales,
+
       cargoMetrosAdicionales:
         calculo.cargoMetrosAdicionales,
 
       cargosExtra,
       descuento,
 
-      subtotal: calculo.subtotal,
-      total: calculo.total,
+      subtotal:
+        calculo.subtotal,
 
-      estado: EstadoCotizacion.BORRADOR,
-      estadoPago: EstadoPago.PENDIENTE,
+      total:
+        calculo.total,
+
+      estado:
+        EstadoCotizacion.BORRADOR,
+
+      estadoPago:
+        EstadoPago.PENDIENTE,
+
+      esquemaPago,
+
+      montoPagado: 0,
 
       vigenciaHasta,
 
       notas:
-        texto(formData, "notas") || null,
+        texto(
+          formData,
+          "notas",
+        ) || null,
 
       observacionesInternas:
         texto(
@@ -272,67 +383,507 @@ export async function crearCotizacion(
     },
   });
 
-  revalidatePath("/panel/cotizaciones");
+  revalidatePath(
+    "/panel/cotizaciones",
+  );
+
+  redirigirOk(
+    "Cotización creada correctamente.",
+  );
 }
 
 export async function cambiarEstadoCotizacion(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  const session =
+    await verificarPermiso();
 
-  const id = texto(formData, "id");
+  const id = texto(
+    formData,
+    "id",
+  );
 
-  const estado = texto(
+  const nuevoEstado = texto(
     formData,
     "estado",
   ) as EstadoCotizacion;
 
   if (
-    !Object.values(EstadoCotizacion).includes(
-      estado,
-    )
+    !Object.values(
+      EstadoCotizacion,
+    ).includes(nuevoEstado)
   ) {
-    throw new Error(
+    redirigirError(
       "Estado de cotización inválido.",
     );
   }
 
-  await prisma.cotizacion.update({
-    where: {
-      id,
-    },
-    data: {
-      estado,
-    },
-  });
+  const cotizacion =
+    await prisma.cotizacion.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        estado: true,
+      },
+    });
 
-  revalidatePath("/panel/cotizaciones");
+  if (!cotizacion) {
+    redirigirError(
+      "La cotización no existe.",
+    );
+  }
+
+  const estadoActual =
+    cotizacion.estado;
+
+  const esDirector =
+    session.user.role ===
+    "DIRECTOR";
+
+  if (
+    estadoActual ===
+    nuevoEstado
+  ) {
+    redirigirOk(
+      "La cotización ya se encuentra en ese estado.",
+    );
+  }
+
+  if (
+    estadoActual ===
+    EstadoCotizacion.BORRADOR
+  ) {
+    if (
+      nuevoEstado !==
+      EstadoCotizacion.PENDIENTE_AUTORIZACION
+    ) {
+      redirigirError(
+        "Primero debes solicitar autorización de la cotización.",
+      );
+    }
+
+    await prisma.cotizacion.update({
+      where: {
+        id,
+      },
+      data: {
+        estado:
+          EstadoCotizacion.PENDIENTE_AUTORIZACION,
+
+        solicitudAutorizacionEn:
+          new Date(),
+
+        autorizadaPorId: null,
+        autorizadaEn: null,
+
+        rechazadaPorId: null,
+        rechazadaEn: null,
+        motivoRechazo: null,
+      },
+    });
+
+    revalidatePath(
+      "/panel/cotizaciones",
+    );
+
+    redirigirOk(
+      "La cotización fue enviada a autorización.",
+    );
+  }
+
+  if (
+    estadoActual ===
+    EstadoCotizacion.PENDIENTE_AUTORIZACION
+  ) {
+    if (!esDirector) {
+      redirigirError(
+        "Solo un director puede autorizar o rechazar una cotización.",
+      );
+    }
+
+    if (
+      nuevoEstado ===
+      EstadoCotizacion.AUTORIZADA
+    ) {
+      await prisma.cotizacion.update({
+        where: {
+          id,
+        },
+        data: {
+          estado:
+            EstadoCotizacion.AUTORIZADA,
+
+          autorizadaPorId:
+            session.user.id,
+
+          autorizadaEn:
+            new Date(),
+
+          rechazadaPorId: null,
+          rechazadaEn: null,
+          motivoRechazo: null,
+        },
+      });
+
+      revalidatePath(
+        "/panel/cotizaciones",
+      );
+
+      redirigirOk(
+        "Cotización autorizada correctamente.",
+      );
+    }
+
+    if (
+      nuevoEstado ===
+      EstadoCotizacion.RECHAZADA
+    ) {
+      const motivoRechazo =
+        texto(
+          formData,
+          "motivoRechazo",
+        ) || null;
+
+      await prisma.cotizacion.update({
+        where: {
+          id,
+        },
+        data: {
+          estado:
+            EstadoCotizacion.RECHAZADA,
+
+          rechazadaPorId:
+            session.user.id,
+
+          rechazadaEn:
+            new Date(),
+
+          motivoRechazo,
+        },
+      });
+
+      revalidatePath(
+        "/panel/cotizaciones",
+      );
+
+      redirigirOk(
+        "Cotización rechazada.",
+      );
+    }
+
+    redirigirError(
+      "La cotización pendiente únicamente puede ser autorizada o rechazada por un director.",
+    );
+  }
+
+  if (
+    estadoActual ===
+    EstadoCotizacion.AUTORIZADA
+  ) {
+    if (
+      nuevoEstado !==
+      EstadoCotizacion.ENVIADA
+    ) {
+      redirigirError(
+        "Una cotización autorizada únicamente puede pasar a enviada.",
+      );
+    }
+
+    await prisma.cotizacion.update({
+      where: {
+        id,
+      },
+      data: {
+        estado:
+          EstadoCotizacion.ENVIADA,
+      },
+    });
+
+    revalidatePath(
+      "/panel/cotizaciones",
+    );
+
+    revalidatePath(
+      "/portal/cotizaciones",
+    );
+
+    redirigirOk(
+      "Cotización marcada como enviada al cliente.",
+    );
+  }
+
+  if (
+    estadoActual ===
+      EstadoCotizacion.ENVIADA &&
+    nuevoEstado ===
+      EstadoCotizacion.ACEPTADA
+  ) {
+    redirigirError(
+      "La aceptación debe realizarla el cliente desde su portal.",
+    );
+  }
+
+  redirigirError(
+    `La transición ${estadoActual} → ${nuevoEstado} no está permitida en este momento.`,
+  );
 }
 
-export async function cambiarEstadoPago(
+async function obtenerCotizacionPago(
+  id: string,
+) {
+  if (!id) {
+    redirigirError(
+      "Cotización inválida.",
+    );
+  }
+
+  const cotizacion =
+    await prisma.cotizacion.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+        estado: true,
+        estadoPago: true,
+        esquemaPago: true,
+        total: true,
+        montoPagado: true,
+      },
+    });
+
+  if (!cotizacion) {
+    redirigirError(
+      "La cotización no existe.",
+    );
+  }
+
+  if (
+    cotizacion.estado !==
+    EstadoCotizacion.ACEPTADA
+  ) {
+    redirigirError(
+      "Primero el cliente debe aceptar la cotización antes de registrar un pago.",
+    );
+  }
+
+  return cotizacion;
+}
+
+export async function registrarPrimerPago50(
   formData: FormData,
 ) {
   await verificarPermiso();
 
-  const id = texto(formData, "id");
-
-  const estadoPago = texto(
+  const id = texto(
     formData,
-    "estadoPago",
-  ) as EstadoPago;
+    "id",
+  );
 
-  if (!Object.values(EstadoPago).includes(estadoPago)) {
-    throw new Error("Estado de pago inválido.");
+  const cotizacion =
+    await obtenerCotizacionPago(id);
+
+  if (
+    cotizacion.esquemaPago !==
+    EsquemaPago.DOS_EXHIBICIONES_50_50
+  ) {
+    redirigirError(
+      "Esta cotización no está configurada para pago en dos exhibiciones 50/50.",
+    );
   }
+
+  if (
+    cotizacion.estadoPago !==
+    EstadoPago.PENDIENTE
+  ) {
+    redirigirError(
+      "El primer 50% ya fue registrado o la cotización ya está liquidada.",
+    );
+  }
+
+  const total = Number(
+    cotizacion.total,
+  );
+
+  const primerPago =
+    total / 2;
 
   await prisma.cotizacion.update({
     where: {
       id,
     },
     data: {
-      estadoPago,
+      estadoPago:
+        EstadoPago.PARCIAL,
+      montoPagado:
+        primerPago,
     },
   });
 
-  revalidatePath("/panel/cotizaciones");
+  revalidatePath(
+    "/panel/cotizaciones",
+  );
+
+  revalidatePath(
+    "/panel/agenda",
+  );
+
+  redirigirOk(
+    `Primer 50% registrado correctamente: ${primerPago.toLocaleString(
+      "es-MX",
+      {
+        style: "currency",
+        currency: "MXN",
+      },
+    )}. La cotización ya puede pasar a Agenda.`,
+  );
+}
+
+export async function registrarSegundoPago50(
+  formData: FormData,
+) {
+  await verificarPermiso();
+
+  const id = texto(
+    formData,
+    "id",
+  );
+
+  const cotizacion =
+    await obtenerCotizacionPago(id);
+
+  if (
+    cotizacion.esquemaPago !==
+    EsquemaPago.DOS_EXHIBICIONES_50_50
+  ) {
+    redirigirError(
+      "Esta cotización no está configurada para pago en dos exhibiciones 50/50.",
+    );
+  }
+
+  if (
+    cotizacion.estadoPago ===
+    EstadoPago.PENDIENTE
+  ) {
+    redirigirError(
+      "Primero debes registrar el primer 50% antes de registrar el segundo.",
+    );
+  }
+
+  if (
+    cotizacion.estadoPago ===
+    EstadoPago.PAGADO
+  ) {
+    redirigirOk(
+      "La cotización ya se encuentra liquidada al 100%.",
+    );
+  }
+
+  if (
+    cotizacion.estadoPago !==
+    EstadoPago.PARCIAL
+  ) {
+    redirigirError(
+      "El segundo 50% no puede registrarse en el estado actual.",
+    );
+  }
+
+  const total = Number(
+    cotizacion.total,
+  );
+
+  await prisma.cotizacion.update({
+    where: {
+      id,
+    },
+    data: {
+      estadoPago:
+        EstadoPago.PAGADO,
+      montoPagado:
+        total,
+    },
+  });
+
+  revalidatePath(
+    "/panel/cotizaciones",
+  );
+
+  revalidatePath(
+    "/panel/agenda",
+  );
+
+  redirigirOk(
+    "Segundo 50% registrado. La cotización quedó liquidada al 100%.",
+  );
+}
+
+export async function registrarPagoTotal(
+  formData: FormData,
+) {
+  await verificarPermiso();
+
+  const id = texto(
+    formData,
+    "id",
+  );
+
+  const cotizacion =
+    await obtenerCotizacionPago(id);
+
+  if (
+    cotizacion.esquemaPago !==
+    EsquemaPago.UNA_EXHIBICION
+  ) {
+    redirigirError(
+      "Esta cotización está configurada para pago en dos exhibiciones 50/50.",
+    );
+  }
+
+  if (
+    cotizacion.estadoPago ===
+    EstadoPago.PAGADO
+  ) {
+    redirigirOk(
+      "La cotización ya se encuentra liquidada al 100%.",
+    );
+  }
+
+  if (
+    cotizacion.estadoPago !==
+    EstadoPago.PENDIENTE
+  ) {
+    redirigirError(
+      "El pago total no puede registrarse en el estado actual.",
+    );
+  }
+
+  const total = Number(
+    cotizacion.total,
+  );
+
+  await prisma.cotizacion.update({
+    where: {
+      id,
+    },
+    data: {
+      estadoPago:
+        EstadoPago.PAGADO,
+      montoPagado:
+        total,
+    },
+  });
+
+  revalidatePath(
+    "/panel/cotizaciones",
+  );
+
+  revalidatePath(
+    "/panel/agenda",
+  );
+
+  redirigirOk(
+    "Pago total registrado. La cotización quedó liquidada al 100%.",
+  );
 }

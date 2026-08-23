@@ -15,9 +15,11 @@ export default async function AccesoPage() {
     case "INSPECTOR":
       redirect("/inspector");
 
+    case "DIRECTOR":
     case "ADMINISTRADOR":
-    case "SUPERVISOR":
+    case "GERENTE":
     case "COORDINADOR":
+    case "SUPERVISOR":
       redirect("/panel");
 
     default:
