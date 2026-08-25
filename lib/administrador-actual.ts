@@ -26,7 +26,11 @@ export async function obtenerAdministradorActual() {
     redirect("/login");
   }
 
-  if (administrador.rol !== "ADMINISTRADOR") {
+  const tieneAcceso =
+    administrador.rol === "DIRECTOR" ||
+    administrador.rol === "ADMINISTRADOR";
+
+  if (!tieneAcceso) {
     redirect("/panel");
   }
 

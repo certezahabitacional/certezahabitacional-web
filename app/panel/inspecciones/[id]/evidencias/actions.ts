@@ -29,6 +29,29 @@ function obtenerSupabase() {
   });
 }
 
+function urlEvidencias(
+  inspeccionId: string,
+  hallazgoId?: string,
+  tipo?: "ok" | "error",
+  mensaje?: string,
+) {
+  const params = new URLSearchParams();
+
+  if (hallazgoId) {
+    params.set("hallazgoId", hallazgoId);
+  }
+
+  if (tipo && mensaje) {
+    params.set(tipo, mensaje);
+  }
+
+  const query = params.toString();
+
+  return `/panel/inspecciones/${inspeccionId}/evidencias${
+    query ? `?${query}` : ""
+  }`;
+}
+
 export async function registrarEvidencia(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const hallazgoId = texto(formData, "hallazgoId");
@@ -43,7 +66,12 @@ export async function registrarEvidencia(formData: FormData) {
 
   if (!(archivo instanceof File) || archivo.size === 0) {
     redirect(
-      `/panel/inspecciones/${inspeccionId}/evidencias?error=Selecciona%20una%20fotografia`,
+      urlEvidencias(
+        inspeccionId,
+        hallazgoId,
+        "error",
+        "Selecciona una fotografía",
+      ),
     );
   }
 
@@ -55,7 +83,12 @@ export async function registrarEvidencia(formData: FormData) {
 
   if (!tiposPermitidos.includes(archivo.type)) {
     redirect(
-      `/panel/inspecciones/${inspeccionId}/evidencias?error=Formato%20no%20permitido`,
+      urlEvidencias(
+        inspeccionId,
+        hallazgoId,
+        "error",
+        "Formato no permitido",
+      ),
     );
   }
 
@@ -63,22 +96,28 @@ export async function registrarEvidencia(formData: FormData) {
 
   if (archivo.size > limiteBytes) {
     redirect(
-      `/panel/inspecciones/${inspeccionId}/evidencias?error=La%20imagen%20supera%2010%20MB`,
+      urlEvidencias(
+        inspeccionId,
+        hallazgoId,
+        "error",
+        "La imagen supera 10 MB",
+      ),
     );
   }
 
   const inspeccion = await prisma.inspeccion.findUnique({
-    where: {
-      id: inspeccionId,
-    },
-    select: {
-      id: true,
-    },
+    where: { id: inspeccionId },
+    select: { id: true },
   });
 
   if (!inspeccion) {
     redirect(
-      `/panel/inspecciones/${inspeccionId}/evidencias?error=Expediente%20no%20encontrado`,
+      urlEvidencias(
+        inspeccionId,
+        hallazgoId,
+        "error",
+        "Expediente no encontrado",
+      ),
     );
   }
 
@@ -88,14 +127,17 @@ export async function registrarEvidencia(formData: FormData) {
         id: hallazgoId,
         inspeccionId,
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
 
     if (!hallazgo) {
       redirect(
-        `/panel/inspecciones/${inspeccionId}/evidencias?error=Hallazgo%20no%20valido`,
+        urlEvidencias(
+          inspeccionId,
+          hallazgoId,
+          "error",
+          "Hallazgo no válido",
+        ),
       );
     }
   }
@@ -108,18 +150,21 @@ export async function registrarEvidencia(formData: FormData) {
   const rutaStorage =
     `${inspeccionId}/${randomUUID()}.${extension}`;
 
-  const buffer = Buffer.from(await archivo.arrayBuffer());
+  const buffer = Buffer.from(
+    await archivo.arrayBuffer(),
+  );
 
   const supabase = obtenerSupabase();
   const bucket =
     process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
 
-  const { error: errorSubida } = await supabase.storage
-    .from(bucket)
-    .upload(rutaStorage, buffer, {
-      contentType: archivo.type,
-      upsert: false,
-    });
+  const { error: errorSubida } =
+    await supabase.storage
+      .from(bucket)
+      .upload(rutaStorage, buffer, {
+        contentType: archivo.type,
+        upsert: false,
+      });
 
   if (errorSubida) {
     console.error(
@@ -128,43 +173,56 @@ export async function registrarEvidencia(formData: FormData) {
     );
 
     redirect(
-      `/panel/inspecciones/${inspeccionId}/evidencias?error=No%20se%20pudo%20subir%20la%20fotografia`,
+      urlEvidencias(
+        inspeccionId,
+        hallazgoId,
+        "error",
+        "No se pudo subir la fotografía",
+      ),
     );
   }
 
   try {
-   const fotografia = await prisma.fotografia.create({
-      data: {
-      inspeccionId,
-      hallazgoId: hallazgoId || null,
-      url: rutaStorage,
-      descripcion: descripcion || null,
-    },
-  });
+    const fotografia =
+      await prisma.fotografia.create({
+        data: {
+          inspeccionId,
+          hallazgoId: hallazgoId || null,
+          url: rutaStorage,
+          descripcion: descripcion || null,
+        },
+      });
 
-   await registrarAuditoria({
-    tipo: TipoEvento.SUBIR_EVIDENCIA,
-    entidad: "Fotografia",
-    entidadId: fotografia.id,
-    inspeccionId,
-    descripcion: descripcion
-      ? `Se agregó una evidencia fotográfica: ${descripcion}.`
-      : "Se agregó una evidencia fotográfica.",
-  });
-    } catch (error) {
-  await supabase.storage
-    .from(bucket)
-    .remove([rutaStorage]);
+    await registrarAuditoria({
+      tipo: TipoEvento.SUBIR_EVIDENCIA,
+      entidad: "Fotografia",
+      entidadId: fotografia.id,
+      inspeccionId,
+      descripcion: descripcion
+        ? `Se agregó una evidencia fotográfica: ${descripcion}.`
+        : hallazgoId
+          ? "Se agregó una evidencia fotográfica vinculada a un hallazgo."
+          : "Se agregó una evidencia fotográfica del expediente.",
+    });
+  } catch (error) {
+    await supabase.storage
+      .from(bucket)
+      .remove([rutaStorage]);
 
     console.error(
-    "Error al registrar evidencia en Prisma:",
-    error,
-  );
+      "Error al registrar evidencia en Prisma:",
+      error,
+    );
 
-  redirect(
-    `/panel/inspecciones/${inspeccionId}/evidencias?error=No%20se%20pudo%20registrar%20la%20evidencia`,
-  );
-}
+    redirect(
+      urlEvidencias(
+        inspeccionId,
+        hallazgoId,
+        "error",
+        "No se pudo registrar la evidencia",
+      ),
+    );
+  }
 
   revalidatePath(
     `/panel/inspecciones/${inspeccionId}`,
@@ -175,6 +233,113 @@ export async function registrarEvidencia(formData: FormData) {
   );
 
   redirect(
-    `/panel/inspecciones/${inspeccionId}/evidencias?ok=Evidencia%20guardada`,
+    urlEvidencias(
+      inspeccionId,
+      hallazgoId,
+      "ok",
+      "Evidencia guardada",
+    ),
+  );
+}
+
+export async function eliminarEvidencia(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const fotografiaId = texto(formData, "fotografiaId");
+  const hallazgoIdContexto = texto(formData, "hallazgoId");
+
+  if (!inspeccionId || !fotografiaId) {
+    redirect(
+      inspeccionId
+        ? urlEvidencias(
+            inspeccionId,
+            hallazgoIdContexto,
+            "error",
+            "No se pudo identificar la evidencia",
+          )
+        : "/panel/inspecciones?error=No%20se%20identifico%20la%20inspeccion",
+    );
+  }
+
+  const fotografia = await prisma.fotografia.findFirst({
+    where: {
+      id: fotografiaId,
+      inspeccionId,
+    },
+    select: {
+      id: true,
+      url: true,
+      hallazgoId: true,
+    },
+  });
+
+  if (!fotografia) {
+    redirect(
+      urlEvidencias(
+        inspeccionId,
+        hallazgoIdContexto,
+        "error",
+        "Evidencia no encontrada",
+      ),
+    );
+  }
+
+  try {
+    await prisma.fotografia.delete({
+      where: {
+        id: fotografia.id,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Error al eliminar evidencia en Prisma:",
+      error,
+    );
+
+    redirect(
+      urlEvidencias(
+        inspeccionId,
+        hallazgoIdContexto || fotografia.hallazgoId || undefined,
+        "error",
+        "No se pudo eliminar la evidencia",
+      ),
+    );
+  }
+
+  if (
+    !fotografia.url.startsWith("http://") &&
+    !fotografia.url.startsWith("https://")
+  ) {
+    const supabase = obtenerSupabase();
+    const bucket =
+      process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+
+    const { error: errorStorage } =
+      await supabase.storage
+        .from(bucket)
+        .remove([fotografia.url]);
+
+    if (errorStorage) {
+      console.error(
+        "La evidencia se eliminó de la base de datos, pero no se pudo borrar el archivo de Supabase:",
+        errorStorage,
+      );
+    }
+  }
+
+  revalidatePath(
+    `/panel/inspecciones/${inspeccionId}`,
+  );
+
+  revalidatePath(
+    `/panel/inspecciones/${inspeccionId}/evidencias`,
+  );
+
+  redirect(
+    urlEvidencias(
+      inspeccionId,
+      hallazgoIdContexto || fotografia.hallazgoId || undefined,
+      "ok",
+      "Evidencia eliminada",
+    ),
   );
 }

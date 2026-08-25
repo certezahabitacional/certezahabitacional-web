@@ -17,14 +17,18 @@ export default async function PanelPage() {
 
   const rol = session.user.role;
 
+  const esDirector = rol === "DIRECTOR";
+  const esAdministrador = rol === "ADMINISTRADOR";
+  const esGerente = rol === "GERENTE";
   const esCoordinador = rol === "COORDINADOR";
+  const esSupervisor = rol === "SUPERVISOR";
 
   const tieneAccesoPanel =
-    rol === "DIRECTOR" ||
-    rol === "ADMINISTRADOR" ||
-    rol === "GERENTE" ||
-    rol === "SUPERVISOR" ||
-    rol === "COORDINADOR";
+    esDirector ||
+    esAdministrador ||
+    esGerente ||
+    esCoordinador ||
+    esSupervisor;
 
   if (!tieneAccesoPanel) {
     redirect("/acceso");
@@ -63,7 +67,7 @@ export default async function PanelPage() {
         actualizadoEn: "desc",
       },
 
-      take: esCoordinador ? 4 : 6,
+      take: esAdministrador ? 4 : 6,
     }),
   ]);
 
@@ -93,7 +97,7 @@ export default async function PanelPage() {
   /*
    * INFORMACIÓN EJECUTIVA
    *
-   * No se carga para COORDINADOR.
+   * Solo se carga para DIRECCIÓN.
    */
   let criticos = 0;
   let certificadosEmitidos = 0;
@@ -112,7 +116,7 @@ export default async function PanelPage() {
     porcentaje: number;
   }> = [];
 
-  if (!esCoordinador) {
+  if (esDirector) {
     const [
       criticosResultado,
       certificadosPorVigencia,
@@ -273,108 +277,65 @@ export default async function PanelPage() {
       }),
     );
 
-  const indicadores = esCoordinador
-    ? [
-        {
-          titulo:
-            "Inspecciones activas",
+  const indicadoresBasicos = [
+    {
+      titulo: "Inspecciones activas",
+      valor: activas,
+      detalle: "Actualmente en proceso",
+    },
+    {
+      titulo: "Programadas",
+      valor: programadas,
+      detalle: "Pendientes de iniciar",
+    },
+    {
+      titulo: "Reportes pendientes",
+      valor: reportesPendientes,
+      detalle: "Por completar o revisar",
+    },
+    {
+      titulo: "Clientes registrados",
+      valor: clientes,
+      detalle: "Base total de clientes",
+    },
+  ];
 
-          valor: activas,
+  const indicadoresEjecutivos = [
+    {
+      titulo: "Inspecciones activas",
+      valor: activas,
+      detalle: "Actualmente en proceso",
+    },
+    {
+      titulo: "Programadas",
+      valor: programadas,
+      detalle: "Pendientes de iniciar",
+    },
+    {
+      titulo: "Reportes pendientes",
+      valor: reportesPendientes,
+      detalle: "Por completar o emitir",
+    },
+    {
+      titulo: "Clientes registrados",
+      valor: clientes,
+      detalle: "Base total de clientes",
+    },
+    {
+      titulo: "Hallazgos críticos",
+      valor: criticos,
+      detalle: "Críticos sin resolver",
+    },
+    {
+      titulo: "Certificados emitidos",
+      valor: certificadosEmitidos,
+      detalle: "Total histórico",
+    },
+  ];
 
-          detalle:
-            "Actualmente en proceso",
-        },
-
-        {
-          titulo: "Programadas",
-
-          valor: programadas,
-
-          detalle:
-            "Pendientes de iniciar",
-        },
-
-        {
-          titulo:
-            "Reportes pendientes",
-
-          valor: reportesPendientes,
-
-          detalle:
-            "Por completar o emitir",
-        },
-
-        {
-          titulo:
-            "Clientes registrados",
-
-          valor: clientes,
-
-          detalle:
-            "Base total de clientes",
-        },
-      ]
-    : [
-        {
-          titulo:
-            "Inspecciones activas",
-
-          valor: activas,
-
-          detalle:
-            "Actualmente en proceso",
-        },
-
-        {
-          titulo: "Programadas",
-
-          valor: programadas,
-
-          detalle:
-            "Pendientes de iniciar",
-        },
-
-        {
-          titulo:
-            "Reportes pendientes",
-
-          valor: reportesPendientes,
-
-          detalle:
-            "Por completar o emitir",
-        },
-
-        {
-          titulo:
-            "Clientes registrados",
-
-          valor: clientes,
-
-          detalle:
-            "Base total de clientes",
-        },
-
-        {
-          titulo:
-            "Hallazgos críticos",
-
-          valor: criticos,
-
-          detalle:
-            "Críticos sin resolver",
-        },
-
-        {
-          titulo:
-            "Certificados emitidos",
-
-          valor:
-            certificadosEmitidos,
-
-          detalle:
-            "Total histórico",
-        },
-      ];
+  const indicadores = esDirector
+    ? indicadoresEjecutivos
+    : indicadoresBasicos;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
@@ -387,15 +348,27 @@ export default async function PanelPage() {
             </p>
 
             <h1 className="mt-2 text-4xl font-black">
-              {esCoordinador
-                ? "Panel de coordinación"
-                : "Dashboard ejecutivo"}
+              {esDirector
+                ? "Dashboard ejecutivo"
+                : esAdministrador
+                  ? "Panel de administración"
+                  : esGerente
+                    ? "Panel de gerencia"
+                    : esCoordinador
+                      ? "Panel de coordinación técnica"
+                      : "Panel de supervisión"}
             </h1>
 
             <p className="mt-2 text-slate-400">
-              {esCoordinador
-                ? "Clientes, inmuebles, cotizaciones, precios y agenda."
-                : "Resumen operativo y estado general de la plataforma."}
+              {esDirector
+                ? "Resumen operativo, control, auditoría y estado general de la plataforma."
+                : esAdministrador
+                  ? "Clientes, inmuebles, cotizaciones, precios, agenda y seguimiento operativo."
+                  : esGerente
+                    ? "Aprobación operativa, cierre de inspecciones, asignación de inspectores y seguimiento de reportes pendientes."
+                    : esCoordinador
+                      ? "Revisión técnica, reportes pendientes y visto bueno de inspecciones."
+                      : "Seguimiento de campo e inspecciones activas."}
             </p>
 
             <p className="mt-2 text-xs font-bold uppercase tracking-widest text-amber-300">
@@ -405,54 +378,108 @@ export default async function PanelPage() {
 
           {/* MENÚ PRINCIPAL */}
           <nav className="flex flex-wrap gap-3">
-            <BotonNavegacion
-              href="/panel/clientes"
-              texto="Clientes"
-            />
-
-            <BotonNavegacion
-              href="/panel/inmuebles"
-              texto="Inmuebles"
-            />
-
-            <BotonNavegacion
-              href="/panel/agenda"
-              texto="Agenda"
-            />
-
-            {(esCoordinador ||
-              rol === "ADMINISTRADOR" ||
-              rol === "DIRECTOR") && (
+            {esAdministrador && (
               <>
+                <BotonNavegacion
+                  href="/panel/clientes"
+                  texto="Clientes"
+                />
+                <BotonNavegacion
+                  href="/panel/inmuebles"
+                  texto="Inmuebles"
+                />
+                <BotonNavegacion
+                  href="/panel/agenda"
+                  texto="Agenda"
+                />
                 <BotonNavegacion
                   href="/panel/paquetes"
                   texto="Paquetes"
                 />
-
                 <BotonNavegacion
                   href="/panel/cotizaciones"
                   texto="Cotizaciones"
                 />
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
               </>
             )}
 
-            {!esCoordinador && (
+            {esGerente && (
               <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
                 <BotonNavegacion
                   href="/panel/inspectores"
                   texto="Inspectores"
                 />
-
                 <BotonNavegacion
                   href="/panel/auditoria"
                   texto="Auditoría"
                 />
+              </>
+            )}
 
+            {esCoordinador && (
+              <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
+              </>
+            )}
+
+            {esSupervisor && (
+              <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
+              </>
+            )}
+
+            {esDirector && (
+              <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
+                <BotonNavegacion
+                  href="/panel/clientes"
+                  texto="Clientes"
+                />
+                <BotonNavegacion
+                  href="/panel/inmuebles"
+                  texto="Inmuebles"
+                />
+                <BotonNavegacion
+                  href="/panel/agenda"
+                  texto="Agenda"
+                />
+                <BotonNavegacion
+                  href="/panel/paquetes"
+                  texto="Paquetes"
+                />
+                <BotonNavegacion
+                  href="/panel/cotizaciones"
+                  texto="Cotizaciones"
+                />
+                <BotonNavegacion
+                  href="/panel/inspectores"
+                  texto="Inspectores"
+                />
+                <BotonNavegacion
+                  href="/panel/auditoria"
+                  texto="Auditoría"
+                />
                 <BotonNavegacion
                   href="/panel/usuarios"
                   texto="Usuarios"
                 />
-
                 <Link
                   href="/panel/inspecciones/nueva"
                   className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
@@ -467,9 +494,9 @@ export default async function PanelPage() {
         {/* MÉTRICAS */}
         <section
           className={`mt-8 grid gap-5 sm:grid-cols-2 ${
-            esCoordinador
-              ? "xl:grid-cols-4"
-              : "xl:grid-cols-3"
+            esDirector
+              ? "xl:grid-cols-3"
+              : "xl:grid-cols-4"
           }`}
         >
           {indicadores.map(
@@ -504,14 +531,12 @@ export default async function PanelPage() {
                 </p>
               </div>
 
-              {!esCoordinador && (
-                <Link
-                  href="/panel/inspecciones"
-                  className="text-sm font-bold text-cyan-300"
-                >
-                  Ver todas →
-                </Link>
-              )}
+              <Link
+                href="/panel/inspecciones"
+                className="text-sm font-bold text-cyan-300"
+              >
+                Ver todas →
+              </Link>
             </header>
 
             {recientes.length === 0 ? (
@@ -556,22 +581,12 @@ export default async function PanelPage() {
                           className="border-t border-white/10"
                         >
                           <td className="px-6 py-5">
-                            {!esCoordinador ? (
-                              <Link
-                                href={`/panel/inspecciones/${inspeccion.id}`}
-                                className="font-black text-cyan-300"
-                              >
-                                {
-                                  inspeccion.folio
-                                }
-                              </Link>
-                            ) : (
-                              <span className="font-black text-cyan-300">
-                                {
-                                  inspeccion.folio
-                                }
-                              </span>
-                            )}
+                            <Link
+                              href={`/panel/inspecciones/${inspeccion.id}`}
+                              className="font-black text-cyan-300"
+                            >
+                              {inspeccion.folio}
+                            </Link>
                           </td>
 
                           <td className="px-6 py-5 font-bold">
@@ -626,11 +641,11 @@ export default async function PanelPage() {
 
           {/* COLUMNA DERECHA */}
           <aside className="space-y-5">
-            {esCoordinador ? (
+            {esAdministrador && (
               <>
                 <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
                   <p className="text-xs font-black uppercase tracking-[0.25em]">
-                    Coordinación
+                    Administración
                   </p>
 
                   <p className="mt-6 text-4xl font-black">
@@ -642,16 +657,15 @@ export default async function PanelPage() {
                   </p>
 
                   <p className="mt-4 text-sm font-semibold text-slate-800">
-                    Gestiona desde aquí
-                    clientes, inmuebles,
-                    cotizaciones, paquetes y
-                    agenda.
+                    Gestiona la operación comercial y administrativa:
+                    clientes, inmuebles, cotizaciones, paquetes, agenda
+                    y seguimiento de inspecciones.
                   </p>
                 </section>
 
                 <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
                   <h2 className="text-lg font-black">
-                    Operación comercial
+                    Operación administrativa
                   </h2>
 
                   <div className="mt-5 space-y-3">
@@ -659,44 +673,157 @@ export default async function PanelPage() {
                       href="/panel/clientes"
                       texto="Gestionar clientes"
                     />
-
                     <Acceso
                       href="/panel/inmuebles"
                       texto="Gestionar inmuebles"
                     />
-
                     <Acceso
                       href="/panel/paquetes"
                       texto="Paquetes y precios"
                     />
-
                     <Acceso
                       href="/panel/cotizaciones"
                       texto="Cotizaciones"
                     />
-
                     <Acceso
-                      href="/panel/agenda"
-                      texto="Consultar agenda"
+                      href="/panel/inspecciones"
+                      texto="Seguimiento de inspecciones"
                     />
                   </div>
                 </section>
 
                 <section className="rounded-3xl border border-amber-300/20 bg-amber-300/5 p-7">
                   <p className="text-xs font-black uppercase tracking-widest text-amber-300">
-                    CertezaHabitacional
-                    v2.0
+                    Flujo administrativo
                   </p>
 
                   <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Flujo comercial:
-                    cliente → inmueble →
-                    paquete → cotización →
+                    Cliente → inmueble → paquete → cotización →
                     agenda → inspección.
                   </p>
                 </section>
               </>
-            ) : (
+            )}
+
+            {esGerente && (
+              <>
+                <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+                  <p className="text-xs font-black uppercase tracking-[0.25em]">
+                    Gerencia
+                  </p>
+
+                  <p className="mt-6 text-4xl font-black">
+                    {reportesPendientes}
+                  </p>
+
+                  <p className="mt-2 font-black">
+                    reporte(s) pendiente(s) de aprobación
+                  </p>
+
+                  <p className="mt-4 text-sm font-semibold text-slate-800">
+                    Revisa los expedientes con avance técnico y aprueba el cierre operativo cuando corresponda.
+                  </p>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <h2 className="text-lg font-black">
+                    Control de gerencia
+                  </h2>
+
+                  <div className="mt-5 space-y-3">
+                    <Acceso
+                      href="/panel/inspecciones"
+                      texto="Revisar inspecciones"
+                    />
+                    <Acceso
+                      href="/panel/inspectores"
+                      texto="Inspectores y carga operativa"
+                    />
+                    <Acceso
+                      href="/panel/auditoria"
+                      texto="Revisar auditoría"
+                    />
+                  </div>
+                </section>
+              </>
+            )}
+
+            {esCoordinador && (
+              <>
+                <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+                  <p className="text-xs font-black uppercase tracking-[0.25em]">
+                    Coordinación técnica
+                  </p>
+
+                  <p className="mt-6 text-4xl font-black">
+                    {reportesPendientes}
+                  </p>
+
+                  <p className="mt-2 font-black">
+                    reporte(s) pendiente(s) de revisión
+                  </p>
+
+                  <p className="mt-4 text-sm font-semibold text-slate-800">
+                    Revisa expedientes y registra el visto bueno técnico
+                    cuando la inspección esté lista.
+                  </p>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <h2 className="text-lg font-black">
+                    Revisión técnica
+                  </h2>
+
+                  <div className="mt-5 space-y-3">
+                    <Acceso
+                      href="/panel/inspecciones"
+                      texto="Revisar inspecciones"
+                    />
+                  </div>
+                </section>
+              </>
+            )}
+
+            {esSupervisor && (
+              <>
+                <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+                  <p className="text-xs font-black uppercase tracking-[0.25em]">
+                    Supervisión
+                  </p>
+
+                  <p className="mt-6 text-4xl font-black">
+                    {activas}
+                  </p>
+
+                  <p className="mt-2 font-black">
+                    inspección(es) en proceso
+                  </p>
+
+                  <p className="mt-4 text-sm font-semibold text-slate-800">
+                    Da seguimiento al trabajo de campo y a la agenda operativa.
+                  </p>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <h2 className="text-lg font-black">
+                    Supervisión de campo
+                  </h2>
+
+                  <div className="mt-5 space-y-3">
+                    <Acceso
+                      href="/panel/inspecciones"
+                      texto="Ver inspecciones"
+                    />
+                    <Acceso
+                      href="/panel/agenda"
+                      texto="Consultar agenda"
+                    />
+                  </div>
+                </section>
+              </>
+            )}
+
+            {esDirector && (
               <>
                 <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
                   <p className="text-xs font-black uppercase tracking-[0.25em]">
@@ -719,9 +846,7 @@ export default async function PanelPage() {
                           100,
                           Math.max(
                             0,
-                            Number(
-                              ishPromedio,
-                            ),
+                            Number(ishPromedio),
                           ),
                         )}%`,
                       }}
@@ -735,9 +860,7 @@ export default async function PanelPage() {
                   </p>
 
                   <p className="mt-3 text-4xl font-black text-rose-300">
-                    {
-                      certificadosRevocados
-                    }
+                    {certificadosRevocados}
                   </p>
 
                   <Link
@@ -750,7 +873,7 @@ export default async function PanelPage() {
 
                 <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
                   <h2 className="text-lg font-black">
-                    Accesos rápidos
+                    Control directivo
                   </h2>
 
                   <div className="mt-5 space-y-3">
@@ -758,27 +881,26 @@ export default async function PanelPage() {
                       href="/panel/inspecciones"
                       texto="Ver inspecciones"
                     />
-
                     <Acceso
                       href="/panel/agenda"
                       texto="Consultar agenda"
                     />
-
                     <Acceso
                       href="/panel/paquetes"
                       texto="Paquetes y precios"
                     />
-
                     <Acceso
                       href="/panel/cotizaciones"
                       texto="Cotizaciones"
                     />
-
                     <Acceso
                       href="/panel/auditoria"
                       texto="Revisar auditoría"
                     />
-
+                    <Acceso
+                      href="/panel/usuarios"
+                      texto="Gestionar usuarios"
+                    />
                     <Acceso
                       href="/panel/configuracion"
                       texto="Configuración"
@@ -793,9 +915,9 @@ export default async function PanelPage() {
         {/* DISTRIBUCIONES */}
         <section
           className={`mt-8 grid gap-8 ${
-            esCoordinador
-              ? "xl:grid-cols-1"
-              : "xl:grid-cols-3"
+            esDirector
+              ? "xl:grid-cols-3"
+              : "xl:grid-cols-1"
           }`}
         >
           <Distribucion
@@ -803,7 +925,7 @@ export default async function PanelPage() {
             items={distribucionEstados}
           />
 
-          {!esCoordinador && (
+          {esDirector && (
             <>
               <Distribucion
                 titulo="Hallazgos por clasificación"

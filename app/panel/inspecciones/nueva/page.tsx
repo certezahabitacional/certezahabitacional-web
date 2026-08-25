@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { crearInspeccion } from "./actions";
 
@@ -14,6 +16,19 @@ export default async function NuevaInspeccionPage({
 }: {
   searchParams: SearchParams;
 }) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  if (
+    session.user.role !== "ADMINISTRADOR" &&
+    session.user.role !== "DIRECTOR"
+  ) {
+    redirect("/acceso");
+  }
+
   const params = await searchParams;
 
   const [clientes, inmuebles, inspectores] = await Promise.all([
@@ -30,7 +45,12 @@ export default async function NuevaInspeccionPage({
       orderBy: { alias: "asc" },
     }),
     prisma.inspector.findMany({
-      where: { activo: true },
+      where: {
+        activo: true,
+        usuario: {
+          activo: true,
+        },
+      },
       include: {
         usuario: {
           select: { nombre: true },
@@ -40,19 +60,32 @@ export default async function NuevaInspeccionPage({
     }),
   ]);
 
-  const hayDatosBasicos = clientes.length > 0 && inmuebles.length > 0;
+  const hayDatosBasicos =
+    clientes.length > 0 && inmuebles.length > 0;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
       <div className="mx-auto max-w-3xl">
-        <Link href="/panel" className="text-sm font-bold text-cyan-300">
-          ← Panel
+        <Link
+          href="/panel/inspecciones"
+          className="text-sm font-bold text-cyan-300"
+        >
+          ← Inspecciones
         </Link>
 
-        <h1 className="mt-2 text-3xl font-black">Nueva inspección</h1>
+        <h1 className="mt-2 text-3xl font-black">
+          Nueva inspección
+        </h1>
+
         <p className="mt-1 text-slate-400">
           Programa la visita y abre el expediente técnico.
         </p>
+
+        <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-5 py-4 text-sm leading-6 text-cyan-100">
+          La creación y programación de nuevas inspecciones está
+          reservada a Administración y Dirección. La ejecución en
+          campo solo puede iniciarla el Inspector asignado o Dirección.
+        </div>
 
         {params.error && (
           <p className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-5 py-4 font-bold text-rose-300">
@@ -101,11 +134,26 @@ export default async function NuevaInspeccionPage({
             label="Tipo de inspección *"
             required
             options={[
-              { value: "ENTREGA", label: "Entrega de vivienda" },
-              { value: "GARANTIA", label: "Garantía" },
-              { value: "USADA", label: "Vivienda usada" },
-              { value: "PREVENTIVA", label: "Preventiva" },
-              { value: "DICTAMEN", label: "Dictamen técnico" },
+              {
+                value: "ENTREGA",
+                label: "Entrega de vivienda",
+              },
+              {
+                value: "GARANTIA",
+                label: "Garantía",
+              },
+              {
+                value: "USADA",
+                label: "Vivienda usada",
+              },
+              {
+                value: "PREVENTIVA",
+                label: "Preventiva",
+              },
+              {
+                value: "DICTAMEN",
+                label: "Dictamen técnico",
+              },
             ]}
           />
 
@@ -173,7 +221,10 @@ function CampoSelect({
         className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
       >
         {options.map((option) => (
-          <option key={`${name}-${option.value || "vacio"}`} value={option.value}>
+          <option
+            key={`${name}-${option.value || "vacio"}`}
+            value={option.value}
+          >
             {option.label}
           </option>
         ))}

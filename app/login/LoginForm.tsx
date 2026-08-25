@@ -16,12 +16,6 @@ type RespuestaSignIn = {
 };
 
 export default function LoginForm() {
-  const [email, setEmail] =
-    useState("");
-
-  const [password, setPassword] =
-    useState("");
-
   const [
     mostrarPassword,
     setMostrarPassword,
@@ -42,6 +36,30 @@ export default function LoginForm() {
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+
+    if (enviando) {
+      return;
+    }
+
+    const formData = new FormData(
+      event.currentTarget,
+    );
+
+    const email = String(
+      formData.get("email") ?? "",
+    ).trim();
+
+    const password = String(
+      formData.get("password") ?? "",
+    );
+
+    if (!email || !password) {
+      setTipoMensaje("error");
+      setMensaje(
+        "Ingresa tu correo y contraseña.",
+      );
+      return;
+    }
 
     setMensaje("");
     setEnviando(true);
@@ -78,8 +96,7 @@ export default function LoginForm() {
         return;
       }
 
-      window.location.href =
-        respuesta?.url || "/acceso";
+      window.location.assign("/acceso");
     } catch (error) {
       console.error(
         "Error al iniciar sesión:",
@@ -122,6 +139,8 @@ export default function LoginForm() {
 
         <form
           onSubmit={iniciarSesion}
+          method="post"
+          action="/login"
           className="mt-8 space-y-5"
         >
           <label className="block">
@@ -130,16 +149,16 @@ export default function LoginForm() {
             </span>
 
             <input
+              name="email"
               type="email"
-              value={email}
-              onChange={(event) =>
-                setEmail(
-                  event.target.value,
-                )
-              }
               required
               autoComplete="email"
-              className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-cyan-300"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode="email"
+              disabled={enviando}
+              className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-base outline-none focus:border-cyan-300 disabled:opacity-70"
             />
           </label>
 
@@ -150,21 +169,20 @@ export default function LoginForm() {
 
             <div className="relative">
               <input
+                name="password"
                 type={
                   mostrarPassword
                     ? "text"
                     : "password"
                 }
-                value={password}
-                onChange={(event) =>
-                  setPassword(
-                    event.target.value,
-                  )
-                }
                 required
                 minLength={8}
                 autoComplete="current-password"
-                className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                disabled={enviando}
+                className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 pr-24 text-base outline-none focus:border-cyan-300 disabled:opacity-70"
               />
 
               <button
@@ -182,7 +200,8 @@ export default function LoginForm() {
                 aria-pressed={
                   mostrarPassword
                 }
-                className="absolute inset-y-0 right-3 my-auto h-fit rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-black text-slate-300 transition hover:border-cyan-300 hover:text-cyan-300"
+                disabled={enviando}
+                className="absolute inset-y-0 right-3 my-auto h-fit rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-black text-slate-300 transition hover:border-cyan-300 hover:text-cyan-300 disabled:opacity-60"
               >
                 {mostrarPassword
                   ? "Ocultar"

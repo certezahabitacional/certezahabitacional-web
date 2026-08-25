@@ -16,10 +16,7 @@ const crearUsuarioSchema = z.object({
   nombre: z
     .string()
     .trim()
-    .min(
-      3,
-      "El nombre debe tener al menos 3 caracteres.",
-    ),
+    .min(3, "El nombre debe tener al menos 3 caracteres."),
 
   email: z
     .string()
@@ -28,10 +25,7 @@ const crearUsuarioSchema = z.object({
 
   password: z
     .string()
-    .min(
-      8,
-      "La contraseña debe tener al menos 8 caracteres.",
-    ),
+    .min(8, "La contraseña debe tener al menos 8 caracteres."),
 
   rol: z.nativeEnum(RolUsuario),
 });
@@ -76,26 +70,72 @@ function regresarConExito(
   );
 }
 
+async function obtenerGestorActual() {
+  const gestor = await obtenerAdministradorActual();
+
+  if (
+    gestor.rol !== RolUsuario.DIRECTOR &&
+    gestor.rol !== RolUsuario.ADMINISTRADOR
+  ) {
+    regresarConError(
+      "Solo Dirección y Administración pueden gestionar usuarios.",
+    );
+  }
+
+  return gestor;
+}
+
+function validarRolCreable(
+  rolGestor: RolUsuario,
+  rolNuevo: RolUsuario,
+) {
+  if (rolGestor === RolUsuario.DIRECTOR) {
+    return;
+  }
+
+  if (
+    rolNuevo === RolUsuario.DIRECTOR ||
+    rolNuevo === RolUsuario.ADMINISTRADOR
+  ) {
+    regresarConError(
+      "Administración no puede crear cuentas de Director ni de Administrador. Esa facultad corresponde exclusivamente a Dirección.",
+    );
+  }
+}
+
+function validarUsuarioObjetivo(
+  rolGestor: RolUsuario,
+  usuarioObjetivo: {
+    id: string;
+    rol: RolUsuario;
+  },
+) {
+  if (
+    rolGestor === RolUsuario.ADMINISTRADOR &&
+    usuarioObjetivo.rol === RolUsuario.DIRECTOR
+  ) {
+    regresarConError(
+      "Administración no puede modificar, desactivar ni restablecer la contraseña de una cuenta de Dirección.",
+    );
+  }
+}
+
 export async function crearUsuario(
   formData: FormData,
 ) {
-  const administrador =
-    await obtenerAdministradorActual();
+  const gestor = await obtenerGestorActual();
 
   const resultado =
     crearUsuarioSchema.safeParse({
       nombre: texto(formData, "nombre"),
-
       email: texto(
         formData,
         "email",
       ).toLowerCase(),
-
       password: texto(
         formData,
         "password",
       ),
-
       rol: texto(formData, "rol"),
     });
 
@@ -112,6 +152,8 @@ export async function crearUsuario(
     password,
     rol,
   } = resultado.data;
+
+  validarRolCreable(gestor.rol, rol);
 
   const usuarioExistente =
     await prisma.usuario.findUnique({
@@ -178,9 +220,9 @@ export async function crearUsuario(
       tipo: TipoEvento.CREAR,
       entidad: "Usuario",
       entidadId: usuario.id,
-      usuarioId: administrador.id,
+      usuarioId: gestor.id,
       descripcion:
-        `Se creó el usuario ${usuario.email} ` +
+        `${gestor.rol} creó el usuario ${usuario.email} ` +
         `con rol ${usuario.rol}.`,
     });
   } catch (error) {
@@ -195,6 +237,8 @@ export async function crearUsuario(
   }
 
   revalidatePath("/panel/usuarios");
+  revalidatePath("/panel/inspectores");
+  revalidatePath("/panel");
 
   regresarConExito(
     "Usuario creado correctamente.",
@@ -204,8 +248,7 @@ export async function crearUsuario(
 export async function cambiarEstadoUsuario(
   formData: FormData,
 ) {
-  const administrador =
-    await obtenerAdministradorActual();
+  const gestor = await obtenerGestorActual();
 
   const usuarioId = texto(
     formData,
@@ -224,7 +267,7 @@ export async function cambiarEstadoUsuario(
   }
 
   if (
-    usuarioId === administrador.id
+    usuarioId === gestor.id
   ) {
     regresarConError(
       "No puedes desactivar tu propia cuenta.",
@@ -250,6 +293,31 @@ export async function cambiarEstadoUsuario(
     regresarConError(
       "El usuario no fue encontrado.",
     );
+  }
+
+  validarUsuarioObjetivo(
+    gestor.rol,
+    usuarioActual,
+  );
+
+  if (
+    gestor.rol === RolUsuario.DIRECTOR &&
+    usuarioActual.rol === RolUsuario.DIRECTOR &&
+    !nuevoEstado
+  ) {
+    const directoresActivos =
+      await prisma.usuario.count({
+        where: {
+          rol: RolUsuario.DIRECTOR,
+          activo: true,
+        },
+      });
+
+    if (directoresActivos <= 1) {
+      regresarConError(
+        "No puedes desactivar al único Director activo de la plataforma.",
+      );
+    }
   }
 
   const usuario =
@@ -286,13 +354,15 @@ export async function cambiarEstadoUsuario(
     tipo: TipoEvento.EDITAR,
     entidad: "Usuario",
     entidadId: usuario.id,
-    usuarioId: administrador.id,
+    usuarioId: gestor.id,
     descripcion: nuevoEstado
-      ? `Se activó la cuenta ${usuario.email}.`
-      : `Se desactivó la cuenta ${usuario.email}.`,
+      ? `${gestor.rol} activó la cuenta ${usuario.email}.`
+      : `${gestor.rol} desactivó la cuenta ${usuario.email}.`,
   });
 
   revalidatePath("/panel/usuarios");
+  revalidatePath("/panel/inspectores");
+  revalidatePath("/panel");
 
   regresarConExito(
     nuevoEstado
@@ -304,8 +374,7 @@ export async function cambiarEstadoUsuario(
 export async function cambiarPasswordUsuario(
   formData: FormData,
 ) {
-  const administrador =
-    await obtenerAdministradorActual();
+  const gestor = await obtenerGestorActual();
 
   const resultado =
     cambiarPasswordSchema.safeParse({
@@ -313,7 +382,6 @@ export async function cambiarPasswordUsuario(
         formData,
         "usuarioId",
       ),
-
       password: texto(
         formData,
         "password",
@@ -340,6 +408,7 @@ export async function cambiarPasswordUsuario(
       select: {
         id: true,
         email: true,
+        rol: true,
       },
     });
 
@@ -348,6 +417,11 @@ export async function cambiarPasswordUsuario(
       "El usuario no fue encontrado.",
     );
   }
+
+  validarUsuarioObjetivo(
+    gestor.rol,
+    usuario,
+  );
 
   const passwordHash =
     await bcrypt.hash(password, 12);
@@ -365,9 +439,9 @@ export async function cambiarPasswordUsuario(
     tipo: TipoEvento.EDITAR,
     entidad: "Usuario",
     entidadId: usuario.id,
-    usuarioId: administrador.id,
+    usuarioId: gestor.id,
     descripcion:
-      `Se restableció la contraseña de ` +
+      `${gestor.rol} restableció la contraseña de ` +
       `${usuario.email}.`,
   });
 
