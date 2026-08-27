@@ -225,7 +225,7 @@ export default async function NuevaInspeccionPage({
           </div>
         ) : (
           <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-5 py-4 text-sm leading-6 text-cyan-100">
-            La creación y programación de nuevas inspecciones estÃ¡ reservada a Gerencia y DirecciÃ³n. La ejecución en campo corresponde exclusivamente al Inspector asignado.
+            La creación y programación de nuevas inspecciones está reservada a Gerencia y Dirección. La ejecución en campo corresponde exclusivamente al Inspector asignado.
           </div>
         )}
 

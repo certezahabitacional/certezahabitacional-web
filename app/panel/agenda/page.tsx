@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {
   EstadoInspeccion,
   RolUsuario,
@@ -202,7 +202,9 @@ export default async function AgendaPage({
               }
               className="text-sm font-black text-cyan-300"
             >
-              â† Volver
+              {usuarioActual.rol === RolUsuario.INSPECTOR
+                ? "← Inspector"
+                : "← Panel"}
             </Link>
 
             <p className="mt-7 text-xs font-black uppercase tracking-[0.3em] text-amber-300">

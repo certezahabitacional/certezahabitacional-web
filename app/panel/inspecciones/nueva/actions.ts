@@ -308,7 +308,7 @@ export async function crearInspeccion(formData: FormData) {
       ultimaInspeccion.id !== antecedente.id
     ) {
       errorNuevaInspeccion(
-        "La inspección seleccionada ya no es la última versiÃ³n del inmueble. Abre la versiÃ³n más reciente para crear el siguiente seguimiento.",
+        "La inspección seleccionada ya no es la última versión del inmueble. Abre la versión más reciente para crear el siguiente seguimiento.",
         antecedente.id,
       );
     }
@@ -458,7 +458,7 @@ export async function crearInspeccion(formData: FormData) {
   /*
    * Si Dirección crea una V1 sin Inspector asignado, intentamos
    * resolver la zona por la ciudad del inmueble. Si no existe una
-   * coincidencia inequÃ­voca, se bloquea la creaciÃ³n en vez de
+   * coincidencia inequívoca, se bloquea la creación en vez de
    * generar una inspección sin alcance territorial.
    */
   if (
@@ -508,10 +508,10 @@ export async function crearInspeccion(formData: FormData) {
    * Con el esquema actual, la evidencia disponible para acreditar
    * la liberación comercial previa es una cotización ACEPTADA,
    * correspondiente al mismo cliente/inmueble y que todavía no
-   * estÃ© vinculada a otra inspección.
+   * esté vinculada a otra inspección.
    *
    * Esto impide que Gerencia cree V1/V2/V3/V4 sin una cotización
-   * previamente procesada por AdministraciÃ³n y aceptada por el Cliente.
+   * previamente procesada por Administración y aceptada por el Cliente.
    */
   const cotizacionDisponible =
     await prisma.cotizacion.findFirst({
@@ -538,14 +538,14 @@ export async function crearInspeccion(formData: FormData) {
   if (!cotizacionDisponible) {
     errorNuevaInspeccion(
       antecedenteId
-        ? "No existe una cotización ACEPTADA y disponible para crear esta inspección de seguimiento. AdministraciÃ³n debe completar primero el proceso correspondiente."
-        : "No existe una cotización ACEPTADA y disponible para crear esta inspección. AdministraciÃ³n debe completar primero el proceso correspondiente.",
+        ? "No existe una cotización ACEPTADA y disponible para crear esta inspección de seguimiento. Administración debe completar primero el proceso correspondiente."
+        : "No existe una cotización ACEPTADA y disponible para crear esta inspección. Administración debe completar primero el proceso correspondiente.",
       antecedenteId || undefined,
     );
   }
 
   /*
-   * CondiciÃ³n administrativa de pago para programar:
+   * Condición administrativa de pago para programar:
    *
    * UNA_EXHIBICION:
    *   requiere pago total (PAGADO).
@@ -604,7 +604,7 @@ export async function crearInspeccion(formData: FormData) {
   }
 
   /*
-   * Para V1 calculamos la secuencia histÃ³rica del inmueble.
+   * Para V1 calculamos la secuencia histórica del inmueble.
    * Para V2/V3/V4 ya quedó establecida arriba a partir del antecedente.
    */
   if (!antecedenteId) {

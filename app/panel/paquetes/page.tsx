@@ -308,12 +308,12 @@ export default async function PaquetesPage() {
                 {/* DATOS DEL PAQUETE */}
                 <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <Dato
-                    titulo="Rango mÃ­nimo"
+                    titulo="Rango mínimo"
                     valor={metros(paquete.superficieMinimaM2)}
                   />
 
                   <Dato
-                    titulo="Rango mÃ¡ximo"
+                    titulo="Rango máximo"
                     valor={metros(paquete.superficieMaximaM2)}
                   />
 

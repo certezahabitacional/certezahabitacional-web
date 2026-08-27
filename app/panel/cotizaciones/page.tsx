@@ -32,7 +32,7 @@ function dinero(valor: unknown) {
 
 function fecha(valor: Date | null) {
   if (!valor) {
-    return "â€”";
+    return "—";
   }
 
   return new Intl.DateTimeFormat(
@@ -99,10 +99,10 @@ export default async function CotizacionesPage({
     esDirector || esAdministrador;
 
   /*
-   * Gerencia puede consultar la cotizaciÃ³n completa en modo
+   * Gerencia puede consultar la cotización completa en modo
    * solo lectura, incluidos importe, esquema de pago, monto
    * pagado y saldo, para saber si el servicio cumple la
-   * condiciÃ³n administrativa necesaria para programarse.
+   * condición administrativa necesaria para programarse.
    */
   const puedeVerDatosAdministrativos =
     esDirector ||
@@ -304,7 +304,7 @@ export default async function CotizacionesPage({
               href="/panel"
               className="text-sm font-black text-cyan-300 transition hover:text-cyan-200"
             >
-              â† Volver al panel
+              ← Volver al panel
             </Link>
 
             <p className="mt-7 text-sm font-black uppercase tracking-[0.3em] text-amber-300">
@@ -318,7 +318,7 @@ export default async function CotizacionesPage({
             <p className="mt-3 max-w-3xl text-slate-400">
               {esGerente
                 ? "Consulta el estado comercial de las cotizaciones en modo solo lectura."
-                : "Calcula, registra y controla el precio de cada servicio antes de programar la inspecciÃ³n."}
+                : "Calcula, registra y controla el precio de cada servicio antes de programar la inspección."}
             </p>
           </div>
 
@@ -374,8 +374,8 @@ export default async function CotizacionesPage({
               }`}
             >
               {params.error
-                ? "AcciÃ³n no disponible"
-                : "OperaciÃ³n completada"}
+                ? "Acción no disponible"
+                : "Operación completada"}
             </p>
 
             <p className="mt-2 font-bold text-slate-200">
@@ -407,7 +407,7 @@ export default async function CotizacionesPage({
             valor={String(
               totalPendientes,
             ).padStart(2, "0")}
-            detalle="En elaboraciÃ³n, autorizaciÃ³n o envÃ­o"
+            detalle="En elaboración, autorización o envío"
           />
 
           <Indicador
@@ -429,17 +429,17 @@ export default async function CotizacionesPage({
           <section className="mt-10 rounded-3xl border border-cyan-400/20 bg-slate-900 p-7">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-300">
-              OperaciÃ³n comercial
+              Operación comercial
             </p>
 
             <h2 className="mt-2 text-2xl font-black">
-              Nueva cotizaciÃ³n
+              Nueva cotización
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
               Selecciona cliente, inmueble,
               superficie, paquete y forma de pago.
-              El sistema calcularÃ¡ automÃ¡ticamente
+              El sistema calculará automáticamente
               el importe.
             </p>
           </div>
@@ -452,7 +452,7 @@ export default async function CotizacionesPage({
 
               <p className="mt-2 text-sm text-slate-400">
                 Debes registrar un cliente antes
-                de generar una cotizaciÃ³n.
+                de generar una cotización.
               </p>
 
               <Link
@@ -518,12 +518,12 @@ export default async function CotizacionesPage({
           0 ? (
             <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-slate-900/50 p-12 text-center">
               <p className="text-xl font-black">
-                TodavÃ­a no hay cotizaciones.
+                Todavía no hay cotizaciones.
               </p>
 
               <p className="mt-2 text-slate-500">
-                La primera cotizaciÃ³n aparecerÃƒÂ¡
-                aquÃ­ despuÃ©s de guardarla.
+                La primera cotización aparecerá
+                aquí después de guardarla.
               </p>
             </div>
           ) : (
@@ -615,7 +615,7 @@ export default async function CotizacionesPage({
                                 Inmueble:
                               </span>{" "}
                               {cotizacion.inmueble
-                                ? `${cotizacion.inmueble.alias} â€” ${cotizacion.inmueble.direccion}`
+                                ? `${cotizacion.inmueble.alias} — ${cotizacion.inmueble.direccion}`
                                 : "Sin inmueble asociado"}
                             </p>
 
@@ -632,7 +632,7 @@ export default async function CotizacionesPage({
                               cotizacion.creadaPor?.nombre && (
                                 <p>
                                   <span className="font-bold text-slate-300">
-                                    ElaborÃ³:
+                                    Elaboró:
                                   </span>{" "}
                                   {cotizacion.creadaPor.nombre}
                                 </p>
@@ -651,7 +651,7 @@ export default async function CotizacionesPage({
                               cotizacion.solicitudAutorizacionEn && (
                                 <p>
                                   <span className="font-bold text-slate-300">
-                                    AutorizaciÃ³n solicitada:
+                                    Autorización solicitada:
                                   </span>{" "}
                                   {fecha(cotizacion.solicitudAutorizacionEn)}
                                 </p>
@@ -729,7 +729,7 @@ export default async function CotizacionesPage({
                               0,
                           ).toLocaleString(
                             "es-MX",
-                          )} mÂ²`}
+                          )} m²`}
                         />
 
                         <Dato
@@ -740,16 +740,16 @@ export default async function CotizacionesPage({
                         />
 
                         <Dato
-                          titulo="mÂ² adicionales"
+                          titulo="m² adicionales"
                           valor={`${Number(
                             cotizacion.metrosAdicionales,
                           ).toLocaleString(
                             "es-MX",
-                          )} mÂ²`}
+                          )} m²`}
                         />
 
                         <Dato
-                          titulo="Cargo mÂ²"
+                          titulo="Cargo m²"
                           valor={dinero(
                             cotizacion.cargoMetrosAdicionales,
                           )}
@@ -802,7 +802,7 @@ export default async function CotizacionesPage({
                           valor={
                             es5050
                               ? "Dos exhibiciones 50/50"
-                              : "Una exhibiciÃ³n"
+                              : "Una exhibición"
                           }
                         />
 
@@ -824,7 +824,7 @@ export default async function CotizacionesPage({
                       {es5050 && (
                         <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-5">
                           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
-                            CondiciÃ³n 50/50
+                            Condición 50/50
                           </p>
 
                           <p className="mt-2 text-sm text-slate-300">
@@ -833,14 +833,14 @@ export default async function CotizacionesPage({
                               primer50,
                             )}
                             . Con este 50% la
-                            inspecciÃ³n puede
+                            inspección puede
                             agendarse. El saldo de{" "}
                             {dinero(
                               primer50,
                             )}{" "}
                             debe quedar liquidado
                             antes de iniciar la
-                            inspecciÃ³n.
+                            inspección.
                           </p>
                         </div>
                       )}
@@ -926,7 +926,7 @@ export default async function CotizacionesPage({
                                 type="submit"
                                 className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
                               >
-                                Solicitar autorizaciÃ³n
+                                Solicitar autorización
                               </button>
                             </form>
                           )}
@@ -960,7 +960,7 @@ export default async function CotizacionesPage({
                                     type="submit"
                                     className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-200"
                                   >
-                                    Autorizar cotizaciÃ³n
+                                    Autorizar cotización
                                   </button>
                                 </form>
 
@@ -997,7 +997,7 @@ export default async function CotizacionesPage({
                                     type="submit"
                                     className="rounded-full bg-rose-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-rose-200"
                                   >
-                                    Rechazar cotizaciÃ³n
+                                    Rechazar cotización
                                   </button>
                                 </form>
                               </>
@@ -1041,7 +1041,7 @@ export default async function CotizacionesPage({
                               <p className="text-sm font-black text-cyan-300">
                                 Enviada al cliente.
                                 Pendiente de
-                                aceptaciÃ³n.
+                                aceptación.
                               </p>
                             </div>
                           )}
@@ -1050,7 +1050,7 @@ export default async function CotizacionesPage({
                             EstadoCotizacion.RECHAZADA && (
                             <div className="rounded-2xl border border-rose-300/20 bg-rose-300/5 px-5 py-4">
                               <p className="text-sm font-black text-rose-300">
-                                CotizaciÃ³n rechazada.
+                                Cotización rechazada.
                               </p>
                             </div>
                           )}
@@ -1059,7 +1059,7 @@ export default async function CotizacionesPage({
                             EstadoCotizacion.VENCIDA && (
                             <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 px-5 py-4">
                               <p className="text-sm font-black text-amber-300">
-                                CotizaciÃ³n vencida.
+                                Cotización vencida.
                               </p>
                             </div>
                           )}
@@ -1068,7 +1068,7 @@ export default async function CotizacionesPage({
                             EstadoCotizacion.CANCELADA && (
                             <div className="rounded-2xl border border-slate-400/20 bg-slate-400/5 px-5 py-4">
                               <p className="text-sm font-black text-slate-300">
-                                CotizaciÃ³n cancelada.
+                                Cotización cancelada.
                               </p>
                             </div>
                           )}
@@ -1083,14 +1083,14 @@ export default async function CotizacionesPage({
                             es5050 && (
                               <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
                                 <p className="font-black text-amber-300">
-                                  CotizaciÃ³n aceptada
-                                  â€” primer pago
+                                  Cotización aceptada
+                                  — primer pago
                                   pendiente
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-400">
                                   Registra el primer
-                                  50% para habilitar la programaciÃ³n por Gerencia o DirecciÃ³n.
+                                  50% para habilitar la programación por Gerencia o Dirección.
                                 </p>
 
                                 <form
@@ -1109,7 +1109,7 @@ export default async function CotizacionesPage({
 
                                   <button className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">
                                     Registrar primer
-                                    50% â€”{" "}
+                                    50% —{" "}
                                     {dinero(
                                       primer50,
                                     )}
@@ -1123,16 +1123,16 @@ export default async function CotizacionesPage({
                             !es5050 && (
                               <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
                                 <p className="font-black text-amber-300">
-                                  CotizaciÃ³n aceptada
-                                  â€” pago pendiente
+                                  Cotización aceptada
+                                  — pago pendiente
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-400">
-                                  Esta cotizaciÃ³n es
+                                  Esta cotización es
                                   de una sola
-                                  exhibiciÃ³n. Debe
+                                  exhibición. Debe
                                   liquidarse al 100%
-                                  para habilitar la programaciÃ³n por Gerencia o DirecciÃ³n.
+                                  para habilitar la programación por Gerencia o Dirección.
                                 </p>
 
                                 <form
@@ -1151,7 +1151,7 @@ export default async function CotizacionesPage({
 
                                   <button className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">
                                     Registrar pago
-                                    total â€”{" "}
+                                    total —{" "}
                                     {dinero(
                                       total,
                                     )}
@@ -1168,8 +1168,8 @@ export default async function CotizacionesPage({
                                   <div>
                                     <p className="font-black text-emerald-300">
                                       Primer 50%
-                                      recibido â€”
-                                      ProgramaciÃ³n habilitada
+                                      recibido —
+                                      Programación habilitada
                                     </p>
 
                                     <p className="mt-1 text-sm text-slate-400">
@@ -1185,7 +1185,7 @@ export default async function CotizacionesPage({
                                       50% debe
                                       liquidarse antes
                                       de iniciar la
-                                      inspecciÃ³n.
+                                      inspección.
                                     </p>
                                   </div>
 
@@ -1212,7 +1212,7 @@ export default async function CotizacionesPage({
 
                                       <button className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300">
                                         Registrar
-                                        segundo 50% â€”{" "}
+                                        segundo 50% —{" "}
                                         {dinero(
                                           saldo,
                                         )}
@@ -1229,17 +1229,17 @@ export default async function CotizacionesPage({
                                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                                   <div>
                                     <p className="font-black text-emerald-300">
-                                      CotizaciÃ³n
+                                      Cotización
                                       liquidada al
                                       100%
                                     </p>
 
                                     <p className="mt-1 text-sm text-slate-400">
-                                      El pago estÃ¡
+                                      El pago está
                                       completo. La
-                                      cotizaciÃ³n ya cumple la condiciÃƒÂ³n administrativa de pago y
-                                      la inspecciÃ³n
-                                      podrÃ¡ iniciar
+                                      cotización ya cumple la condición administrativa de pago y
+                                      la inspección
+                                      podrá iniciar
                                       cuando llegue su
                                       fecha programada.
                                     </p>
@@ -1263,8 +1263,8 @@ export default async function CotizacionesPage({
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-400">
-                                  La cotizaciÃ³n no
-                                  puede avanzar a programaciÃ³n mientras el
+                                  La cotización no
+                                  puede avanzar a programación mientras el
                                   pago permanezca
                                   cancelado.
                                 </p>
@@ -1283,7 +1283,7 @@ export default async function CotizacionesPage({
                             ) && (
                               <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
                                 <p className="font-black text-amber-300">
-                                  ProgramaciÃ³n todavÃƒÂ­a no habilitada
+                                  Programación todavía no habilitada
                                 </p>
                               </div>
                             )}
@@ -1295,11 +1295,11 @@ export default async function CotizacionesPage({
                       {esGerente && (
                         <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
                           <p className="font-black text-emerald-300">
-                            Consulta Ãºnicamente
+                            Consulta únicamente
                           </p>
                           <p className="mt-1 text-sm text-slate-400">
                             Gerencia puede consultar el importe, esquema de pago,
-                            monto pagado y saldo para verificar si el servicio estÃ¡
+                            monto pagado y saldo para verificar si el servicio está
                             administrativamente habilitado, pero no puede crear,
                             autorizar, enviar, rechazar ni registrar pagos de
                             cotizaciones.

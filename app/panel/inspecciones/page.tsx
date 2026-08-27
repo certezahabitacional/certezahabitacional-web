@@ -27,7 +27,7 @@ export default async function InspeccionesPage() {
   /*
    * La base de datos es la fuente de verdad para rol y alcance
    * organizacional. No dependemos únicamente del rol almacenado
-   * en la sesiÃ³n.
+   * en la sesión.
    */
   const usuarioActual = await prisma.usuario.findUnique({
     where: {

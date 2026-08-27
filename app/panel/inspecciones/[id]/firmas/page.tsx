@@ -302,7 +302,7 @@ function FirmaCanvas({
 
       {!disabled && (
         <p className="mt-1 text-xs text-slate-500">
-          Formatos permitidos: PNG, JPG, JPEG o WEBP. Tamaño mÃ¡ximo: 5 MB.
+          Formatos permitidos: PNG, JPG, JPEG o WEBP. Tamaño máximo: 5 MB.
         </p>
       )}
 
@@ -586,7 +586,7 @@ export default function FirmasPage() {
         <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-6 text-sm leading-7 text-cyan-100">
           Las firmas quedan asociadas al expediente y pueden consultarse
           desde los perfiles autorizados. La modificación queda restringida
-          al Inspector asignado mientras la inspecciÃ³n se encuentre EN PROCESO.
+          al Inspector asignado mientras la inspección se encuentre EN PROCESO.
         </div>
       </div>
     </main>

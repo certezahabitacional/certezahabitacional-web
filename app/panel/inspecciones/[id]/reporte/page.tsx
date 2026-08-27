@@ -647,7 +647,7 @@ export default async function ReportePage({
             <Metric label="Conformes" value={resumen.C} />
             <Metric label="Observaciones" value={resumen.O} />
             <Metric label="No conformes" value={resumen.NC} />
-            <Metric label="CrÃ­ticos" value={resumen.CR} />
+            <Metric label="Críticos" value={resumen.CR} />
           </div>
 
           <div className="mt-5 rounded-[1.5rem] border border-slate-200 p-5">
@@ -675,7 +675,7 @@ export default async function ReportePage({
           <EncabezadoSeccion
             numero="02"
             titulo="Datos generales"
-            subtitulo="InformaciÃ³n del servicio, cliente e inmueble"
+            subtitulo="Información del servicio, cliente e inmueble"
           />
 
           <div className="primer-bloque-seccion mt-4 grid gap-4 md:grid-cols-2">
@@ -933,7 +933,7 @@ export default async function ReportePage({
                                 descripcion: foto.descripcion,
                                 imagenUrl: urlPorFotoAntecedente.get(foto.id) ?? null,
                               }))}
-                              vacio="Sin evidencia fotogrÃ¡fica antecedente"
+                              vacio="Sin evidencia fotográfica antecedente"
                             />
 
                             <ComparativoEvidencia
@@ -944,7 +944,7 @@ export default async function ReportePage({
                                 descripcion: foto.descripcion,
                                 imagenUrl: urlPorFoto.get(foto.id) ?? null,
                               }))}
-                              vacio="Sin evidencia fotogrÃ¡fica actual"
+                              vacio="Sin evidencia fotográfica actual"
                             />
                           </div>
                         </div>
@@ -1062,7 +1062,7 @@ export default async function ReportePage({
             <EncabezadoSeccion
               numero="05"
               titulo="Evidencia complementaria"
-              subtitulo="Fotografías no vinculadas a un hallazgo especÃ­fico"
+              subtitulo="Fotografías no vinculadas a un hallazgo específico"
             />
 
             <div className="mt-4 grid grid-cols-3 gap-3">
@@ -1176,7 +1176,7 @@ export default async function ReportePage({
           <EncabezadoSeccion
             numero="08"
             titulo="Certificado y validación"
-            subtitulo="VerificaciÃ³n de autenticidad documental"
+            subtitulo="Verificación de autenticidad documental"
           />
 
           {inspeccion.certificado ? (

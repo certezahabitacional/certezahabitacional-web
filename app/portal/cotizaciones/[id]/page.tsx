@@ -242,7 +242,7 @@ export default async function CotizacionClientePage({
               </section>
             )}
 
-            {/* COTIZACIÃ“N ENVIADA */}
+            {/* COTIZACIÓN ENVIADA */}
             {cotizacion.estado ===
               EstadoCotizacion.ENVIADA && (
               <section className="mt-8 rounded-3xl border border-cyan-400/30 bg-cyan-400/5 p-6">

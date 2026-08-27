@@ -260,7 +260,7 @@ export default async function CapturaPage({
             href={`/panel/inspecciones/${id}`}
             className="text-sm font-bold text-cyan-300"
           >
-            â† Volver al expediente
+            ← Volver al expediente
           </Link>
 
           <Link
@@ -306,7 +306,7 @@ export default async function CapturaPage({
             </h2>
 
             <p className="mt-2 text-sm text-slate-400">
-              Elige quÃ© quieres hacer antes de continuar con el siguiente hallazgo.
+              Elige qué quieres hacer antes de continuar con el siguiente hallazgo.
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -314,7 +314,7 @@ export default async function CapturaPage({
                 href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgoRecienCreado.id}`}
                 className="rounded-2xl bg-cyan-400 px-4 py-3 text-center font-black text-slate-950"
               >
-                ðŸ“· Tomar / agregar evidencia
+                📷 Tomar / agregar evidencia
               </Link>
 
               <Link
@@ -333,16 +333,16 @@ export default async function CapturaPage({
               {inspeccion.folio}
             </p>
             <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-black text-cyan-300">
-              INSPECCIÃ“N {String(inspeccion.numeroInspeccion).padStart(2, "0")} Â· V{inspeccion.numeroInspeccion}
+              INSPECCIÓN {String(inspeccion.numeroInspeccion).padStart(2, "0")} · V{inspeccion.numeroInspeccion}
             </span>
           </div>
 
           <h1 className="mt-2 text-3xl font-black">
-            Captura MÃ©todo CertezaÂ®
+            Captura Método Certeza®
           </h1>
 
           <p className="mt-2 text-slate-400">
-            {inspeccion.cliente.nombre} Â·{" "}
+            {inspeccion.cliente.nombre} ·{" "}
             {inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}
           </p>
 
@@ -361,13 +361,13 @@ export default async function CapturaPage({
         {hallazgosAntecedentesConImagenes.length > 0 && (
           <section className="mt-7 rounded-3xl border border-violet-400/20 bg-slate-900 p-5 sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-300">
-              Seguimiento de la inspecciÃ³n anterior
+              Seguimiento de la inspección anterior
             </p>
             <h2 className="mt-2 text-2xl font-black">
-              VerificaciÃ³n de hallazgos V{inspeccion.numeroInspeccion - 1}
+              Verificación de hallazgos V{inspeccion.numeroInspeccion - 1}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Revisa cada antecedente y registra su evoluciÃ³n. El expediente anterior permanece intacto.
+              Revisa cada antecedente y registra su evolución. El expediente anterior permanece intacto.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -381,7 +381,7 @@ export default async function CapturaPage({
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs font-black">
                       <span className="rounded-full bg-violet-400/10 px-3 py-1 text-violet-300">
-                        V{inspeccion.numeroInspeccion - 1} Â· #{index + 1}
+                        V{inspeccion.numeroInspeccion - 1} · #{index + 1}
                       </span>
                       <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-cyan-300">
                         {anterior.clasificacion}
@@ -399,25 +399,25 @@ export default async function CapturaPage({
 
                     {anterior.ubicacion && (
                       <p className="mt-2 text-sm text-slate-500">
-                        UbicaciÃ³n: {anterior.ubicacion}
+                        Ubicación: {anterior.ubicacion}
                       </p>
                     )}
 
                     <div className="mt-5 grid gap-4 lg:grid-cols-2">
                       <EvidenciaComparativa
-                        titulo={`ANTES Â· V${inspeccion.numeroInspeccion - 1}`}
+                        titulo={`ANTES · V${inspeccion.numeroInspeccion - 1}`}
                         subtitulo="Evidencia antecedente"
                         fotografias={anterior.fotografias}
-                        vacio="Sin evidencia fotogrÃ¡fica antecedente"
+                        vacio="Sin evidencia fotográfica antecedente"
                       />
 
                       <EvidenciaComparativa
-                        titulo={`ACTUAL Â· V${inspeccion.numeroInspeccion}`}
+                        titulo={`ACTUAL · V${inspeccion.numeroInspeccion}`}
                         subtitulo="Evidencia de seguimiento"
                         fotografias={seguimiento?.fotografias ?? []}
                         vacio={
                           seguimiento
-                            ? "AÃºn no se ha agregado evidencia actual"
+                            ? "Aún no se ha agregado evidencia actual"
                             : "Registra primero el seguimiento para agregar evidencia actual"
                         }
                       />
@@ -438,7 +438,7 @@ export default async function CapturaPage({
                             href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${seguimiento.id}`}
                             className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-black text-slate-950"
                           >
-                            ðŸ“· Agregar / ver evidencia actual ({seguimiento.fotografias.length})
+                            📷 Agregar / ver evidencia actual ({seguimiento.fotografias.length})
                           </Link>
                           <Link
                             href={`/panel/inspecciones/${id}/captura?editar=${seguimiento.id}#nuevo-hallazgo`}
@@ -458,7 +458,7 @@ export default async function CapturaPage({
 
                         <label className="block">
                           <span className="mb-2 block text-sm font-bold">
-                            Resultado de la verificaciÃ³n *
+                            Resultado de la verificación *
                           </span>
                           <select
                             name="estadoSeguimiento"
@@ -470,19 +470,19 @@ export default async function CapturaPage({
                             <option value="CORREGIDO">Corregido satisfactoriamente</option>
                             <option value="PARCIALMENTE_CORREGIDO">Parcialmente corregido</option>
                             <option value="NO_CORREGIDO">No corregido</option>
-                            <option value="CORRECCION_NO_SATISFACTORIA">CorrecciÃ³n no satisfactoria</option>
+                            <option value="CORRECCION_NO_SATISFACTORIA">Corrección no satisfactoria</option>
                             <option value="NO_VERIFICABLE">No verificable</option>
                           </select>
                         </label>
 
                         <label className="block">
                           <span className="mb-2 block text-sm font-bold">
-                            ObservaciÃ³n de seguimiento
+                            Observación de seguimiento
                           </span>
                           <textarea
                             name="observacionSeguimiento"
                             rows={3}
-                            placeholder="Describe lo observado durante la reinspecciÃ³n."
+                            placeholder="Describe lo observado durante la reinspección."
                             className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
                           />
                         </label>
@@ -515,9 +515,9 @@ export default async function CapturaPage({
                 }`}
               >
                 {editandoSeguimiento
-                  ? "EdiciÃ³n de seguimiento"
+                  ? "Edición de seguimiento"
                   : hallazgoEnEdicion
-                    ? "CorrecciÃ³n del expediente"
+                    ? "Corrección del expediente"
                     : "Captura en campo"}
               </p>
 
@@ -531,10 +531,10 @@ export default async function CapturaPage({
 
               <p className="mt-2 text-sm leading-6 text-slate-400">
                 {editandoSeguimiento
-                  ? "Actualiza el resultado de la verificaciÃ³n y, si es necesario, corrige la informaciÃ³n tÃ©cnica del hallazgo. Las evidencias existentes se conservarÃ¡n."
+                  ? "Actualiza el resultado de la verificación y, si es necesario, corrige la información técnica del hallazgo. Las evidencias existentes se conservarán."
                   : hallazgoEnEdicion
-                    ? "Corrige la informaciÃ³n del hallazgo y guarda los cambios. Las evidencias existentes se conservarÃ¡n."
-                    : "Guarda el hallazgo y decide inmediatamente si agregas evidencia o continÃºas con el siguiente."}
+                    ? "Corrige la información del hallazgo y guarda los cambios. Las evidencias existentes se conservarán."
+                    : "Guarda el hallazgo y decide inmediatamente si agregas evidencia o continúas con el siguiente."}
               </p>
             </div>
 
@@ -542,7 +542,7 @@ export default async function CapturaPage({
               {editandoSeguimiento
                 ? "Seguimiento"
                 : hallazgoEnEdicion
-                  ? "EdiciÃ³n"
+                  ? "Edición"
                   : `#${totalHallazgos + 1}`}
             </span>
           </div>
@@ -574,17 +574,17 @@ export default async function CapturaPage({
               <>
                 <div className="md:col-span-2 rounded-2xl border border-violet-400/20 bg-violet-400/5 p-4">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-300">
-                    EvoluciÃ³n del hallazgo
+                    Evolución del hallazgo
                   </p>
                   <p className="mt-2 text-sm text-slate-400">
-                    Este hallazgo procede de la inspecciÃ³n anterior. La ediciÃ³n
-                    conserva intacto el expediente histÃ³rico antecedente.
+                    Este hallazgo procede de la inspección anterior. La edición
+                    conserva intacto el expediente histórico antecedente.
                   </p>
                 </div>
 
                 <label className="block">
                   <span className="mb-2 block text-sm font-bold">
-                    Resultado de la verificaciÃ³n *
+                    Resultado de la verificación *
                   </span>
                   <select
                     name="estadoSeguimiento"
@@ -598,20 +598,20 @@ export default async function CapturaPage({
                     <option value="CORREGIDO">Corregido satisfactoriamente</option>
                     <option value="PARCIALMENTE_CORREGIDO">Parcialmente corregido</option>
                     <option value="NO_CORREGIDO">No corregido</option>
-                    <option value="CORRECCION_NO_SATISFACTORIA">CorrecciÃ³n no satisfactoria</option>
+                    <option value="CORRECCION_NO_SATISFACTORIA">Corrección no satisfactoria</option>
                     <option value="NO_VERIFICABLE">No verificable</option>
                   </select>
                 </label>
 
                 <label className="block">
                   <span className="mb-2 block text-sm font-bold">
-                    ObservaciÃ³n de seguimiento
+                    Observación de seguimiento
                   </span>
                   <textarea
                     name="observacionSeguimiento"
                     rows={3}
                     defaultValue={hallazgoEnEdicion.observacionSeguimiento ?? ""}
-                    placeholder="Describe lo observado durante la reinspecciÃ³n."
+                    placeholder="Describe lo observado durante la reinspección."
                     className="w-full rounded-2xl border border-violet-400/20 bg-slate-950 px-4 py-3 text-base"
                   />
                 </label>
@@ -620,28 +620,28 @@ export default async function CapturaPage({
 
             <Campo
               name="area"
-              label="Ãrea *"
-              placeholder="InstalaciÃ³n elÃ©ctrica"
+              label="Área *"
+              placeholder="Instalación eléctrica"
               defaultValue={hallazgoEnEdicion?.area ?? ""}
             />
 
             <Campo
               name="titulo"
-              label="TÃ­tulo *"
-              placeholder="Contacto sin tierra fÃ­sica"
+              label="Título *"
+              placeholder="Contacto sin tierra física"
               defaultValue={hallazgoEnEdicion?.titulo ?? ""}
             />
 
             <Campo
               name="ubicacion"
-              label="UbicaciÃ³n"
-              placeholder="RecÃ¡mara principal"
+              label="Ubicación"
+              placeholder="Recámara principal"
               defaultValue={hallazgoEnEdicion?.ubicacion ?? ""}
             />
 
             <label className="block">
               <span className="mb-2 block text-sm font-bold">
-                ClasificaciÃ³n
+                Clasificación
               </span>
 
               <select
@@ -650,16 +650,16 @@ export default async function CapturaPage({
                 className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-base"
               >
                 <option value="C">Conforme</option>
-                <option value="O">ObservaciÃ³n</option>
+                <option value="O">Observación</option>
                 <option value="NC">No conforme</option>
-                <option value="CR">CrÃ­tico</option>
+                <option value="CR">Crítico</option>
                 <option value="NA">No aplica</option>
               </select>
             </label>
 
             <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold">
-                DescripciÃ³n *
+                Descripción *
               </span>
 
               <textarea
@@ -704,13 +704,13 @@ export default async function CapturaPage({
 
             <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold">
-                RecomendaciÃ³n
+                Recomendación
               </span>
 
               <textarea
                 name="recomendacion"
                 rows={3}
-                placeholder="AcciÃ³n correctiva o recomendaciÃ³n sugerida."
+                placeholder="Acción correctiva o recomendación sugerida."
                 defaultValue={hallazgoEnEdicion?.recomendacion ?? ""}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-base"
               />
@@ -733,7 +733,7 @@ export default async function CapturaPage({
                 href={`/panel/inspecciones/${id}/captura`}
                 className="md:col-span-2 rounded-full border border-white/15 px-5 py-3 text-center font-black text-slate-300"
               >
-                Cancelar ediciÃ³n
+                Cancelar edición
               </Link>
             )}
           </form>
@@ -761,7 +761,7 @@ export default async function CapturaPage({
 
           {inspeccion.hallazgos.length === 0 ? (
             <div className="mt-6 rounded-2xl bg-slate-950 p-6 text-center text-slate-400">
-              AÃºn no hay hallazgos registrados.
+              Aún no hay hallazgos registrados.
             </div>
           ) : (
             <div className="mt-5 divide-y divide-white/10">
@@ -807,7 +807,7 @@ export default async function CapturaPage({
 
                     {hallazgo.ubicacion && (
                       <p className="mt-2 text-sm text-slate-500">
-                        UbicaciÃ³n: {hallazgo.ubicacion}
+                        Ubicación: {hallazgo.ubicacion}
                       </p>
                     )}
 
@@ -836,7 +836,7 @@ export default async function CapturaPage({
                         href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgo.id}`}
                         className="min-h-11 rounded-2xl bg-cyan-400 px-4 py-3 text-center text-sm font-black text-slate-950"
                       >
-                        ðŸ“·{" "}
+                        📷{" "}
                         {fotos > 0
                           ? `Agregar otra evidencia (${fotos})`
                           : "Tomar / agregar evidencia"}
@@ -852,7 +852,7 @@ export default async function CapturaPage({
                         </Link>
                       ) : (
                         <div className="min-h-11 rounded-2xl border border-white/10 px-4 py-3 text-center text-sm font-bold text-slate-600">
-                          Sin fotografÃ­as
+                          Sin fotografías
                         </div>
                       )}
                     </div>
@@ -891,7 +891,7 @@ function etiquetaSeguimiento(valor: string | null) {
     CORREGIDO: "Corregido satisfactoriamente",
     PARCIALMENTE_CORREGIDO: "Parcialmente corregido",
     NO_CORREGIDO: "No corregido",
-    CORRECCION_NO_SATISFACTORIA: "CorrecciÃ³n no satisfactoria",
+    CORRECCION_NO_SATISFACTORIA: "Corrección no satisfactoria",
     NO_VERIFICABLE: "No verificable",
     NUEVO_HALLAZGO: "Nuevo hallazgo",
   };
@@ -936,7 +936,7 @@ function EvidenciaComparativa({
                   target="_blank"
                   rel="noreferrer"
                   className="block"
-                  title="Abrir fotografÃ­a en tamaÃ±o completo"
+                  title="Abrir fotografía en tamaño completo"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img

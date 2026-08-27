@@ -343,7 +343,7 @@ async function validarLiquidacionParaCertificado(inspeccionId: string) {
     redirigirError(inspeccionId, "La inspección no existe.");
   }
 
-  // Compatibilidad con expedientes histÃƒÂ³ricos sin cotización asociada.
+  // Compatibilidad con expedientes históricos sin cotización asociada.
   if (!inspeccion.cotizacion) {
     return inspeccion;
   }
@@ -511,7 +511,7 @@ export async function asignarInspector(formData: FormData) {
   const nombreNuevo = inspectorNuevo.usuario.nombre;
 
   /*
-   * Primera asignaciÃ³n:
+   * Primera asignación:
    * Gerencia o Dirección pueden asignar directamente.
    */
   if (!inspeccion.inspectorId) {
@@ -543,10 +543,10 @@ export async function asignarInspector(formData: FormData) {
   }
 
   /*
-   * ReasignaciÃ³n:
+   * Reasignación:
    * GERENTE solicita y ADMINISTRADOR/DIRECTOR resuelven.
    * DIRECTOR, por facultad global, puede reasignar directamente,
-   * dejando tambiÃ©n trazabilidad formal en ReasignacionInspector.
+   * dejando también trazabilidad formal en ReasignacionInspector.
    */
   if (motivo.length < 10) {
     redirigirError(
@@ -585,7 +585,7 @@ export async function asignarInspector(formData: FormData) {
           estado: EstadoReasignacionInspector.AUTORIZADA,
           motivo,
           comentarioResolucion:
-            "ReasignaciÃ³n autorizada y ejecutada directamente por Dirección.",
+            "Reasignación autorizada y ejecutada directamente por Dirección.",
           resueltaEn: new Date(),
         },
       });
@@ -636,7 +636,7 @@ export async function asignarInspector(formData: FormData) {
     inspeccionId,
     usuarioId: session.user.id,
     descripcion:
-      `Gerencia solicitÃ³ reasignar la inspección ${inspeccion.folio} ` +
+      `Gerencia solicitó reasignar la inspección ${inspeccion.folio} ` +
       `de ${nombreAnterior} a ${nombreNuevo}. Motivo: ${motivo}`,
   });
 
@@ -765,7 +765,7 @@ export async function autorizarReasignacionInspector(
         resueltaPorId: session.user.id,
         resueltaEn: new Date(),
         comentarioResolucion:
-          comentarioResolucion || "ReasignaciÃ³n autorizada.",
+          comentarioResolucion || "Reasignación autorizada.",
       },
     });
 
@@ -801,7 +801,7 @@ export async function autorizarReasignacionInspector(
 
   redirigirOk(
     inspeccionId,
-    `ReasignaciÃ³n autorizada. Nuevo Inspector: ${solicitud.inspectorPropuesto.usuario.nombre}.`,
+    `Reasignación autorizada. Nuevo Inspector: ${solicitud.inspectorPropuesto.usuario.nombre}.`,
   );
 }
 
@@ -904,7 +904,7 @@ export async function rechazarReasignacionInspector(
       `de ${solicitud.inspectorAnterior?.usuario.nombre ?? "Sin asignar"} ` +
       `a ${solicitud.inspectorPropuesto.usuario.nombre}. ` +
       `Motivo original: ${solicitud.motivo}. ` +
-      `ResoluciÃ³n: ${comentarioResolucion}`,
+      `Resolución: ${comentarioResolucion}`,
   });
 
   revalidarInspeccion(inspeccionId);
@@ -966,7 +966,7 @@ export async function liberarInicioSinPago(formData: FormData) {
   if (inspeccion.estado !== EstadoInspeccion.PROGRAMADA) {
     redirigirError(
       id,
-      "La excepción solo puede autorizarse mientras la inspección estÃƒÂ© PROGRAMADA.",
+      "La excepción solo puede autorizarse mientras la inspección esté PROGRAMADA.",
     );
   }
 
@@ -1069,7 +1069,7 @@ export async function crearHallazgo(formData: FormData) {
   ) {
     redirigirError(
       inspeccionId,
-      "La clasificaciÃ³n seleccionada no es válida.",
+      "La clasificación seleccionada no es válida.",
     );
   }
 
@@ -1946,7 +1946,7 @@ export async function devolverAInspector(formData: FormData) {
   if (!inspeccion.inspectorId) {
     redirigirError(
       inspeccionId,
-      "La inspección no tiene un inspector asignado. Asigna un inspector antes de devolverla para correcciÃƒÂ³n.",
+      "La inspección no tiene un inspector asignado. Asigna un inspector antes de devolverla para corrección.",
     );
   }
 
@@ -1985,7 +1985,7 @@ export async function devolverAInspector(formData: FormData) {
     inspeccionId,
     descripcion:
       `Coordinación devolvió al Inspector la inspección ${inspeccion.folio}. ` +
-      `El expediente regresó a EN PROCESO para correcciÃƒÂ³n. Motivo: ${comentario}`,
+      `El expediente regresó a EN PROCESO para corrección. Motivo: ${comentario}`,
   });
 
   revalidarInspeccion(inspeccionId);
@@ -2297,7 +2297,7 @@ export async function aprobarDireccion(formData: FormData) {
   if (inspeccion.liberacionBloqueada) {
     redirigirError(
       inspeccionId,
-      "La inspección tiene un bloqueo directivo vigente. Usa la opciÃƒÂ³n «Levantar bloqueo y aprobar».",
+      "La inspección tiene un bloqueo directivo vigente. Usa la opción «Levantar bloqueo y aprobar».",
     );
   }
 
@@ -2504,7 +2504,7 @@ export async function retenerParaAuditoria(formData: FormData) {
   ) {
     redirigirError(
       inspeccionId,
-      "La auditoría directiva solo puede retener una inspección que ya terminÃƒÂ³ su captura.",
+      "La auditoría directiva solo puede retener una inspección que ya terminó su captura.",
     );
   }
 
@@ -2657,7 +2657,7 @@ export async function levantarBloqueoYAprobar(formData: FormData) {
     entidadId: inspeccion.id,
     inspeccionId,
     descripcion:
-      `Dirección levantÃƒÂ³ el bloqueo y aprobó la inspección ${inspeccion.folio}. ` +
+      `Dirección levantó el bloqueo y aprobó la inspección ${inspeccion.folio}. ` +
       `Comentario: ${comentario}`,
   });
 
@@ -2665,7 +2665,7 @@ export async function levantarBloqueoYAprobar(formData: FormData) {
 
   redirigirOk(
     inspeccionId,
-    "Dirección levantÃƒÂ³ el bloqueo y aprobó la inspección. El expediente quedó FINALIZADO.",
+    "Dirección levantó el bloqueo y aprobó la inspección. El expediente quedó FINALIZADO.",
   );
 }
 
@@ -2860,7 +2860,7 @@ export async function cancelarInspeccion(formData: FormData) {
     entidadId: inspeccion.id,
     inspeccionId: id,
     usuarioId: session.user.id,
-    descripcion: `${session.user.role} cancelÃƒÂ³ la inspección ${inspeccion.folio}. Motivo: ${motivo}`,
+    descripcion: `${session.user.role} canceló la inspección ${inspeccion.folio}. Motivo: ${motivo}`,
   });
 
   revalidatePath(`/panel/inspecciones/${id}`);
@@ -2885,7 +2885,7 @@ function dictamenDesdeIndice(indice: number) {
   if (indice >= 60) {
     return "El inmueble requiere atención correctiva prioritaria. Se recomienda atender los hallazgos no conformes antes de su recepción, ocupación o inversión.";
   }
-  return "El inmueble presenta condiciones críticas o deficiencias relevantes. Se recomienda no cerrar la recepción o adquisiciÃƒÂ³n hasta contar con correcciones y evaluaciones especializadas.";
+  return "El inmueble presenta condiciones críticas o deficiencias relevantes. Se recomienda no cerrar la recepción o adquisición hasta contar con correcciones y evaluaciones especializadas.";
 }
 
 export async function emitirCertificado(formData: FormData) {
