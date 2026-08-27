@@ -399,7 +399,7 @@ export default async function CertificadoPage({
 
   {!puedeRevocar && !puedeReactivar && (
     <div className="mt-7 border-t border-slate-200 pt-6 text-sm text-slate-500">
-      La revocación o reactivaciÃ³n de certificados corresponde exclusivamente a Dirección.
+      La revocación o reactivación de certificados corresponde exclusivamente a Dirección.
     </div>
   )}
 

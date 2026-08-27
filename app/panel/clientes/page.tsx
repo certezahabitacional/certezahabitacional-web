@@ -1,5 +1,4 @@
 ﻿import Link from "next/link";
-
 import { redirect } from "next/navigation";
 import {
   RolUsuario,
@@ -7,7 +6,6 @@ import {
 } from "@prisma/client";
 
 import { auth } from "@/auth";
-import { puede } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
 
 import {
@@ -59,28 +57,10 @@ export default async function ClientesPage({
     redirect("/acceso");
   }
 
-  if (
-    !puede(
-      usuarioActual.rol,
-      "CLIENTE_CREAR",
-    ) ||
-    !puede(
-      usuarioActual.rol,
-      "CLIENTE_EDITAR_ADMIN",
-    )
-  ) {
-    redirect("/acceso");
-  }
-
   const esDirector =
-    usuarioActual.rol === RolUsuario.DIRECTOR &&
-    puede(
-      usuarioActual.rol,
-      "REGISTRO_ELIMINAR_FISICO",
-    );
+    usuarioActual.rol === RolUsuario.DIRECTOR;
 
   const params = await searchParams;
-
   const q = params.q?.trim() ?? "";
 
   const [clientes, usuariosCliente] =
@@ -175,7 +155,7 @@ export default async function ClientesPage({
               href="/panel"
               className="text-sm font-bold text-cyan-300"
             >
-              Ã¢â€ Â Panel
+              ← Panel
             </Link>
 
             <h1 className="mt-2 text-3xl font-black">
@@ -220,7 +200,7 @@ export default async function ClientesPage({
         <div className="mt-8 grid gap-8 xl:grid-cols-[380px_1fr]">
           <section className="h-fit rounded-3xl border border-white/10 bg-slate-900 p-6">
             <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-300">
-              Alta rÃƒÂ¡pida
+              Alta rápida
             </p>
 
             <h2 className="mt-2 text-2xl font-black">
@@ -233,12 +213,12 @@ export default async function ClientesPage({
             >
               <Campo
                 name="nombre"
-                label="Nombre o razÃƒÂ³n social *"
+                label="Nombre o razón social *"
               />
 
               <Campo
                 name="telefono"
-                label="TelÃƒÂ©fono o WhatsApp *"
+                label="Teléfono o WhatsApp *"
               />
 
               <Campo
@@ -282,7 +262,7 @@ export default async function ClientesPage({
 
               <Campo
                 name="direccion"
-                label="DirecciÃƒÂ³n"
+                label="Dirección"
               />
 
               <label className="block">
@@ -329,7 +309,7 @@ export default async function ClientesPage({
 
                         <p className="mt-1 text-sm text-slate-400">
                           {cliente.telefono ??
-                            "Sin telÃƒÂ©fono"}
+                            "Sin teléfono"}
                         </p>
 
                         <p className="text-sm text-slate-500">
@@ -351,7 +331,7 @@ export default async function ClientesPage({
                         <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
                           <span className="text-emerald-300">
                             {cliente._count.inspecciones}{" "}
-                            inspecciÃƒÂ³n(es)
+                            inspección(es)
                           </span>
 
                           <span className="text-cyan-300">
@@ -361,7 +341,7 @@ export default async function ClientesPage({
 
                           <span className="text-amber-300">
                             {cliente._count.cotizaciones}{" "}
-                            cotizaciÃƒÂ³n(es)
+                            cotización(es)
                           </span>
                         </div>
                       </div>
@@ -386,7 +366,8 @@ export default async function ClientesPage({
                         </p>
 
                         <p className="mt-1 text-slate-300">
-                          {cliente.usuario.nombre} Ã¢â‚¬â€{" "}
+                          {cliente.usuario.nombre}{" "}
+                          —{" "}
                           {cliente.usuario.email}
                         </p>
 
@@ -416,13 +397,13 @@ export default async function ClientesPage({
 
                           <Campo
                             name="nombre"
-                            label="Nombre o razÃƒÂ³n social *"
+                            label="Nombre o razón social *"
                             defaultValue={cliente.nombre}
                           />
 
                           <Campo
                             name="telefono"
-                            label="TelÃƒÂ©fono o WhatsApp *"
+                            label="Teléfono o WhatsApp *"
                             defaultValue={
                               cliente.telefono ?? ""
                             }
@@ -481,7 +462,7 @@ export default async function ClientesPage({
                           <div className="md:col-span-2">
                             <Campo
                               name="direccion"
-                              label="DirecciÃƒÂ³n"
+                              label="Dirección"
                               defaultValue={
                                 cliente.direccion ?? ""
                               }
@@ -517,9 +498,9 @@ export default async function ClientesPage({
 
                           <p className="mt-2 text-sm text-slate-400">
                             Puedes vincular un usuario CLIENTE
-                            existente. Si ese usuario estÃƒÂ¡ asociado
+                            existente. Si ese usuario está asociado
                             actualmente a otro registro de cliente,
-                            el acceso se moverÃƒÂ¡ a este cliente. Sus
+                            el acceso se moverá a este cliente. Sus
                             inmuebles, cotizaciones e inspecciones
                             no se mueven.
                           </p>
@@ -553,16 +534,17 @@ export default async function ClientesPage({
                                     value={usuario.id}
                                     disabled={!usuario.activo}
                                   >
-                                    {usuario.nombre} Ã¢â‚¬â€{" "}
+                                    {usuario.nombre}{" "}
+                                    —{" "}
                                     {usuario.email}
                                     {usuario.cliente
                                       ? usuario.cliente.id ===
                                         cliente.id
-                                        ? " Ã¢â‚¬â€ vinculado aquÃƒÂ­"
-                                        : ` Ã¢â‚¬â€ actualmente en ${usuario.cliente.nombre}`
-                                      : " Ã¢â‚¬â€ disponible"}
+                                        ? " — vinculado aquí"
+                                        : ` — actualmente en ${usuario.cliente.nombre}`
+                                      : " — disponible"}
                                     {!usuario.activo
-                                      ? " Ã¢â‚¬â€ INACTIVO"
+                                      ? " — INACTIVO"
                                       : ""}
                                   </option>
                                 ),
@@ -597,12 +579,12 @@ export default async function ClientesPage({
                         {esDirector && (
                           <div className="mt-7 border-t border-white/10 pt-6">
                             <p className="text-xs font-black uppercase tracking-[0.2em] text-rose-300">
-                              EliminaciÃƒÂ³n
+                              Eliminación
                             </p>
 
                             <p className="mt-2 text-sm text-slate-500">
-                              Solo DirecciÃƒÂ³n puede eliminar
-                              fÃƒÂ­sicamente un registro sin usuario,
+                              Solo Dirección puede eliminar
+                              físicamente un registro sin usuario,
                               inmuebles, cotizaciones, inspecciones
                               ni historial asociado.
                             </p>
@@ -662,4 +644,3 @@ function Campo({
     </label>
   );
 }
-

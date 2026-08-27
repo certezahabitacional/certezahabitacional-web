@@ -747,7 +747,7 @@ export async function registrarPrimerPago50(
         style: "currency",
         currency: "MXN",
       },
-    )}. La cotización ya cumple la condición de pago para que Gerencia o Dirección puedan programar la inspecciÃ³n mediante el flujo vigente.`,
+    )}. La cotización ya cumple la condición de pago para que Gerencia o Dirección puedan programar la inspección mediante el flujo vigente.`,
   );
 }
 
@@ -825,7 +825,7 @@ export async function registrarSegundoPago50(
   );
 
   redirigirOk(
-    "Segundo 50% registrado. La cotización quedÃ³ liquidada al 100%.",
+    "Segundo 50% registrado. La cotización quedó liquidada al 100%.",
   );
 }
 
@@ -894,6 +894,6 @@ export async function registrarPagoTotal(
   );
 
   redirigirOk(
-    "Pago total registrado. La cotización quedÃ³ liquidada al 100%.",
+    "Pago total registrado. La cotización quedó liquidada al 100%.",
   );
 }
