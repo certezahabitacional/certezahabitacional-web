@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   ClasificacionHallazgo,
   EstadoInspeccion,
+  Prisma,
+  RolUsuario,
 } from "@prisma/client";
+import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -15,40 +17,93 @@ export default async function PanelPage() {
     redirect("/login");
   }
 
-  const rol = session.user.role;
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      id: true,
+      nombre: true,
+      rol: true,
+      activo: true,
+      zonaId: true,
+    },
+  });
 
-  const esCoordinador = rol === "COORDINADOR";
+  if (!usuarioActual || !usuarioActual.activo) {
+    redirect("/acceso");
+  }
+
+  const rol = usuarioActual.rol;
+
+  const esDirector = rol === RolUsuario.DIRECTOR;
+  const esAdministrador =
+    rol === RolUsuario.ADMINISTRADOR;
+  const esGerente = rol === RolUsuario.GERENTE;
+  const esCoordinador =
+    rol === RolUsuario.COORDINADOR;
 
   const tieneAccesoPanel =
-    rol === "ADMINISTRADOR" ||
-    rol === "SUPERVISOR" ||
-    rol === "COORDINADOR";
+    esDirector ||
+    esAdministrador ||
+    esGerente ||
+    esCoordinador;
 
   if (!tieneAccesoPanel) {
     redirect("/acceso");
   }
 
-  /*
-   * CONSULTAS PRINCIPALES
-   *
-   * Se agruparon para reducir considerablemente
-   * la cantidad de conexiones a Supabase.
-   */
+  let alcanceInspecciones: Prisma.InspeccionWhereInput = {};
+
+  if (esGerente) {
+    if (!usuarioActual.zonaId) {
+      alcanceInspecciones = {
+        id: "__SIN_ALCANCE__",
+      };
+    } else {
+      alcanceInspecciones = {
+        OR: [
+          {
+            zonaId: usuarioActual.zonaId,
+          },
+          {
+            zonaId: null,
+            inspector: {
+              usuario: {
+                zonaId: usuarioActual.zonaId,
+              },
+            },
+          },
+        ],
+      };
+    }
+  }
+
+  if (esCoordinador) {
+    alcanceInspecciones = {
+      inspector: {
+        usuario: {
+          coordinadorId: usuarioActual.id,
+        },
+      },
+    };
+  }
+
   const [
     inspeccionesPorEstado,
-    clientes,
     recientes,
+    clientes,
   ] = await Promise.all([
     prisma.inspeccion.groupBy({
       by: ["estado"],
+      where: alcanceInspecciones,
       _count: {
         _all: true,
       },
     }),
 
-    prisma.cliente.count(),
-
     prisma.inspeccion.findMany({
+      where: alcanceInspecciones,
       include: {
         cliente: {
           select: {
@@ -56,13 +111,15 @@ export default async function PanelPage() {
           },
         },
       },
-
       orderBy: {
         actualizadoEn: "desc",
       },
-
-      take: esCoordinador ? 4 : 6,
+      take: esAdministrador ? 4 : 6,
     }),
+
+    esDirector || esAdministrador
+      ? prisma.cliente.count()
+      : Promise.resolve(0),
   ]);
 
   function obtenerCantidadEstado(
@@ -88,11 +145,6 @@ export default async function PanelPage() {
       EstadoInspeccion.REPORTE_PENDIENTE,
     );
 
-  /*
-   * INFORMACIÓN EJECUTIVA
-   *
-   * No se carga para COORDINADOR.
-   */
   let criticos = 0;
   let certificadosEmitidos = 0;
   let certificadosRevocados = 0;
@@ -110,7 +162,7 @@ export default async function PanelPage() {
     porcentaje: number;
   }> = [];
 
-  if (!esCoordinador) {
+  if (esDirector) {
     const [
       criticosResultado,
       certificadosPorVigencia,
@@ -122,14 +174,12 @@ export default async function PanelPage() {
         where: {
           clasificacion:
             ClasificacionHallazgo.CR,
-
           resuelto: false,
         },
       }),
 
       prisma.certificado.groupBy({
         by: ["vigente"],
-
         _count: {
           _all: true,
         },
@@ -139,7 +189,6 @@ export default async function PanelPage() {
         _avg: {
           ish: true,
         },
-
         where: {
           ish: {
             not: null,
@@ -149,7 +198,6 @@ export default async function PanelPage() {
 
       prisma.hallazgo.groupBy({
         by: ["clasificacion"],
-
         _count: {
           _all: true,
         },
@@ -157,13 +205,11 @@ export default async function PanelPage() {
 
       prisma.inspeccion.groupBy({
         by: ["semaforo"],
-
         where: {
           semaforo: {
             not: null,
           },
         },
-
         _count: {
           _all: true,
         },
@@ -181,7 +227,8 @@ export default async function PanelPage() {
 
     certificadosRevocados =
       certificadosPorVigencia.find(
-        (item) => item.vigente === false,
+        (item) =>
+          item.vigente === false,
       )?._count._all ?? 0;
 
     ishPromedio = Number(
@@ -201,9 +248,7 @@ export default async function PanelPage() {
           etiqueta: etiquetaClasificacion(
             item.clasificacion,
           ),
-
           valor: item._count._all,
-
           porcentaje:
             totalClasificaciones > 0
               ? Math.round(
@@ -228,9 +273,7 @@ export default async function PanelPage() {
           etiqueta:
             item.semaforo ??
             "SIN EVALUAR",
-
           valor: item._count._all,
-
           porcentaje:
             totalSemaforos > 0
               ? Math.round(
@@ -257,9 +300,7 @@ export default async function PanelPage() {
           "_",
           " ",
         ),
-
         valor: item._count._all,
-
         porcentaje:
           totalEstados > 0
             ? Math.round(
@@ -271,113 +312,104 @@ export default async function PanelPage() {
       }),
     );
 
-  const indicadores = esCoordinador
-    ? [
-        {
-          titulo:
-            "Inspecciones activas",
+  const indicadores =
+    esDirector
+      ? [
+          {
+            titulo: "Inspecciones activas",
+            valor: activas,
+            detalle: "Actualmente en proceso",
+          },
+          {
+            titulo: "Programadas",
+            valor: programadas,
+            detalle: "Pendientes de iniciar",
+          },
+          {
+            titulo: "Reportes pendientes",
+            valor: reportesPendientes,
+            detalle: "Por completar o emitir",
+          },
+          {
+            titulo: "Clientes registrados",
+            valor: clientes,
+            detalle: "Base total de clientes",
+          },
+          {
+            titulo: "Hallazgos críticos",
+            valor: criticos,
+            detalle: "Críticos sin resolver",
+          },
+          {
+            titulo: "Certificados emitidos",
+            valor: certificadosEmitidos,
+            detalle: "Total histórico",
+          },
+        ]
+      : esAdministrador
+        ? [
+            {
+              titulo: "Inspecciones activas",
+              valor: activas,
+              detalle: "Seguimiento administrativo",
+            },
+            {
+              titulo: "Programadas",
+              valor: programadas,
+              detalle: "Servicios agendados",
+            },
+            {
+              titulo: "Reportes pendientes",
+              valor: reportesPendientes,
+              detalle: "Seguimiento del proceso",
+            },
+            {
+              titulo: "Clientes registrados",
+              valor: clientes,
+              detalle: "Base total de clientes",
+            },
+          ]
+        : [
+            {
+              titulo: "Inspecciones activas",
+              valor: activas,
+              detalle: "Dentro de tu alcance",
+            },
+            {
+              titulo: "Programadas",
+              valor: programadas,
+              detalle: "Dentro de tu alcance",
+            },
+            {
+              titulo: "Reportes pendientes",
+              valor: reportesPendientes,
+              detalle: esGerente
+                ? "Pendientes de control o aprobación"
+                : "Pendientes de revisión técnica",
+            },
+          ];
 
-          valor: activas,
+  const tituloPanel =
+    esDirector
+      ? "Dashboard ejecutivo"
+      : esAdministrador
+        ? "Panel de administración"
+        : esGerente
+          ? "Panel de gerencia"
+          : "Panel de coordinación técnica";
 
-          detalle:
-            "Actualmente en proceso",
-        },
-
-        {
-          titulo: "Programadas",
-
-          valor: programadas,
-
-          detalle:
-            "Pendientes de iniciar",
-        },
-
-        {
-          titulo:
-            "Reportes pendientes",
-
-          valor: reportesPendientes,
-
-          detalle:
-            "Por completar o emitir",
-        },
-
-        {
-          titulo:
-            "Clientes registrados",
-
-          valor: clientes,
-
-          detalle:
-            "Base total de clientes",
-        },
-      ]
-    : [
-        {
-          titulo:
-            "Inspecciones activas",
-
-          valor: activas,
-
-          detalle:
-            "Actualmente en proceso",
-        },
-
-        {
-          titulo: "Programadas",
-
-          valor: programadas,
-
-          detalle:
-            "Pendientes de iniciar",
-        },
-
-        {
-          titulo:
-            "Reportes pendientes",
-
-          valor: reportesPendientes,
-
-          detalle:
-            "Por completar o emitir",
-        },
-
-        {
-          titulo:
-            "Clientes registrados",
-
-          valor: clientes,
-
-          detalle:
-            "Base total de clientes",
-        },
-
-        {
-          titulo:
-            "Hallazgos críticos",
-
-          valor: criticos,
-
-          detalle:
-            "Críticos sin resolver",
-        },
-
-        {
-          titulo:
-            "Certificados emitidos",
-
-          valor:
-            certificadosEmitidos,
-
-          detalle:
-            "Total histórico",
-        },
-      ];
+  const descripcionPanel =
+    esDirector
+      ? "Resumen operativo, control, auditoría y estado general de la plataforma."
+      : esAdministrador
+        ? "Operación administrativa y comercial, clientes, inmuebles, cotizaciones y seguimiento."
+        : esGerente
+          ? "Control operativo de tu zona, asignación, aprobaciones y seguimiento de Coordinadores e Inspectores."
+          : "Revisión técnica y seguimiento de los Inspectores bajo tu coordinación.";
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
       <div className="mx-auto max-w-7xl">
-        {/* ENCABEZADO */}
         <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.25em] text-cyan-300">
@@ -385,15 +417,11 @@ export default async function PanelPage() {
             </p>
 
             <h1 className="mt-2 text-4xl font-black">
-              {esCoordinador
-                ? "Panel de coordinación"
-                : "Dashboard ejecutivo"}
+              {tituloPanel}
             </h1>
 
             <p className="mt-2 text-slate-400">
-              {esCoordinador
-                ? "Clientes, inmuebles, cotizaciones, precios y agenda."
-                : "Resumen operativo y estado general de la plataforma."}
+              {descripcionPanel}
             </p>
 
             <p className="mt-2 text-xs font-bold uppercase tracking-widest text-amber-300">
@@ -401,56 +429,138 @@ export default async function PanelPage() {
             </p>
           </div>
 
-          {/* MENÚ PRINCIPAL */}
           <nav className="flex flex-wrap gap-3">
-            <BotonNavegacion
-              href="/panel/clientes"
-              texto="Clientes"
-            />
-
-            <BotonNavegacion
-              href="/panel/inmuebles"
-              texto="Inmuebles"
-            />
-
-            <BotonNavegacion
-              href="/panel/agenda"
-              texto="Agenda"
-            />
-
-            {(esCoordinador ||
-              rol ===
-                "ADMINISTRADOR") && (
+            {esAdministrador && (
               <>
+                <BotonNavegacion
+                  href="/panel/clientes"
+                  texto="Clientes"
+                />
+                <BotonNavegacion
+                  href="/panel/inmuebles"
+                  texto="Inmuebles"
+                />
+                <BotonNavegacion
+                  href="/panel/agenda"
+                  texto="Agenda"
+                />
                 <BotonNavegacion
                   href="/panel/paquetes"
                   texto="Paquetes"
                 />
-
                 <BotonNavegacion
                   href="/panel/cotizaciones"
                   texto="Cotizaciones"
                 />
-              </>
-            )}
-
-            {!esCoordinador && (
-              <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
                 <BotonNavegacion
                   href="/panel/inspectores"
                   texto="Inspectores"
                 />
-
-                <BotonNavegacion
-                  href="/panel/auditoria"
-                  texto="Auditoría"
-                />
-
                 <BotonNavegacion
                   href="/panel/usuarios"
                   texto="Usuarios"
                 />
+              </>
+            )}
 
+            {esGerente && (
+              <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
+                <BotonNavegacion
+                  href="/panel/agenda"
+                  texto="Agenda"
+                />
+                <BotonNavegacion
+                  href="/panel/inspectores"
+                  texto="Inspectores"
+                />
+                <BotonNavegacion
+                  href="/panel/paquetes"
+                  texto="Paquetes"
+                />
+                <BotonNavegacion
+                  href="/panel/cotizaciones"
+                  texto="Cotizaciones"
+                />
+                <BotonNavegacion
+                  href="/panel/auditoria"
+                  texto="Auditoría"
+                />
+                <Link
+                  href="/panel/inspecciones/nueva"
+                  className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
+                >
+                  Nueva inspección
+                </Link>
+              </>
+            )}
+
+            {esCoordinador && (
+              <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
+                <BotonNavegacion
+                  href="/panel/agenda"
+                  texto="Agenda"
+                />
+                <BotonNavegacion
+                  href="/panel/inspectores"
+                  texto="Inspectores"
+                />
+              </>
+            )}
+
+            {esDirector && (
+              <>
+                <BotonNavegacion
+                  href="/panel/inspecciones"
+                  texto="Inspecciones"
+                />
+                <BotonNavegacion
+                  href="/panel/clientes"
+                  texto="Clientes"
+                />
+                <BotonNavegacion
+                  href="/panel/inmuebles"
+                  texto="Inmuebles"
+                />
+                <BotonNavegacion
+                  href="/panel/agenda"
+                  texto="Agenda"
+                />
+                <BotonNavegacion
+                  href="/panel/paquetes"
+                  texto="Paquetes"
+                />
+                <BotonNavegacion
+                  href="/panel/cotizaciones"
+                  texto="Cotizaciones"
+                />
+                <BotonNavegacion
+                  href="/panel/inspectores"
+                  texto="Inspectores"
+                />
+                <BotonNavegacion
+                  href="/panel/auditoria"
+                  texto="Auditoría"
+                />
+                <BotonNavegacion
+                  href="/panel/usuarios"
+                  texto="Usuarios"
+                />
+                <BotonNavegacion
+                  href="/panel/configuracion"
+                  texto="Configuración"
+                />
                 <Link
                   href="/panel/inspecciones/nueva"
                   className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
@@ -462,33 +572,28 @@ export default async function PanelPage() {
           </nav>
         </header>
 
-        {/* MÉTRICAS */}
         <section
           className={`mt-8 grid gap-5 sm:grid-cols-2 ${
-            esCoordinador
-              ? "xl:grid-cols-4"
-              : "xl:grid-cols-3"
+            esDirector
+              ? "xl:grid-cols-3"
+              : indicadores.length === 4
+                ? "xl:grid-cols-4"
+                : "xl:grid-cols-3"
           }`}
         >
           {indicadores.map(
             (indicador) => (
               <Metrica
                 key={indicador.titulo}
-                titulo={
-                  indicador.titulo
-                }
+                titulo={indicador.titulo}
                 valor={indicador.valor}
-                detalle={
-                  indicador.detalle
-                }
+                detalle={indicador.detalle}
               />
             ),
           )}
         </section>
 
-        {/* CUERPO PRINCIPAL */}
         <section className="mt-8 grid gap-8 xl:grid-cols-[1fr_340px]">
-          {/* ACTIVIDAD */}
           <article className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
             <header className="flex items-center justify-between border-b border-white/10 p-6">
               <div>
@@ -497,25 +602,21 @@ export default async function PanelPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Últimas inspecciones
-                  actualizadas.
+                  Últimas inspecciones actualizadas dentro de tu alcance.
                 </p>
               </div>
 
-              {!esCoordinador && (
-                <Link
-                  href="/panel/inspecciones"
-                  className="text-sm font-bold text-cyan-300"
-                >
-                  Ver todas →
-                </Link>
-              )}
+              <Link
+                href="/panel/inspecciones"
+                className="text-sm font-bold text-cyan-300"
+              >
+                Ver todas →
+              </Link>
             </header>
 
             {recientes.length === 0 ? (
               <p className="p-12 text-center text-slate-400">
-                Aún no hay inspecciones
-                registradas.
+                Aún no hay inspecciones registradas dentro de tu alcance.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -527,7 +628,9 @@ export default async function PanelPage() {
                       </th>
 
                       <th className="px-6 py-4">
-                        Cliente
+                        {esDirector || esAdministrador
+                          ? "Cliente"
+                          : "Referencia"}
                       </th>
 
                       <th className="px-6 py-4">
@@ -548,49 +651,32 @@ export default async function PanelPage() {
                     {recientes.map(
                       (inspeccion) => (
                         <tr
-                          key={
-                            inspeccion.id
-                          }
+                          key={inspeccion.id}
                           className="border-t border-white/10"
                         >
                           <td className="px-6 py-5">
-                            {!esCoordinador ? (
-                              <Link
-                                href={`/panel/inspecciones/${inspeccion.id}`}
-                                className="font-black text-cyan-300"
-                              >
-                                {
-                                  inspeccion.folio
-                                }
-                              </Link>
-                            ) : (
-                              <span className="font-black text-cyan-300">
-                                {
-                                  inspeccion.folio
-                                }
-                              </span>
-                            )}
+                            <Link
+                              href={`/panel/inspecciones/${inspeccion.id}`}
+                              className="font-black text-cyan-300"
+                            >
+                              {inspeccion.folio}
+                            </Link>
                           </td>
 
                           <td className="px-6 py-5 font-bold">
-                            {
-                              inspeccion
-                                .cliente
-                                .nombre
-                            }
+                            {esDirector ||
+                            esAdministrador
+                              ? inspeccion.cliente.nombre
+                              : "Expediente operativo"}
                           </td>
 
                           <td className="px-6 py-5 text-slate-400">
                             <p>
-                              {
-                                inspeccion.tipoInmueble
-                              }
+                              {inspeccion.tipoInmueble}
                             </p>
 
                             <p className="mt-1 text-xs text-slate-600">
-                              {
-                                inspeccion.ciudad
-                              }
+                              {inspeccion.ciudad}
                             </p>
                           </td>
 
@@ -608,9 +694,7 @@ export default async function PanelPage() {
                             null
                               ? Number(
                                   inspeccion.ish,
-                                ).toFixed(
-                                  0,
-                                )
+                                ).toFixed(0)
                               : "—"}
                           </td>
                         </tr>
@@ -622,13 +706,12 @@ export default async function PanelPage() {
             )}
           </article>
 
-          {/* COLUMNA DERECHA */}
           <aside className="space-y-5">
-            {esCoordinador ? (
+            {esAdministrador && (
               <>
                 <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
                   <p className="text-xs font-black uppercase tracking-[0.25em]">
-                    Coordinación
+                    Administración
                   </p>
 
                   <p className="mt-6 text-4xl font-black">
@@ -640,16 +723,13 @@ export default async function PanelPage() {
                   </p>
 
                   <p className="mt-4 text-sm font-semibold text-slate-800">
-                    Gestiona desde aquí
-                    clientes, inmuebles,
-                    cotizaciones, paquetes y
-                    agenda.
+                    Gestiona la operación comercial y administrativa sin sustituir las funciones técnicas u operativas de otros roles.
                   </p>
                 </section>
 
                 <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
                   <h2 className="text-lg font-black">
-                    Operación comercial
+                    Operación administrativa
                   </h2>
 
                   <div className="mt-5 space-y-3">
@@ -657,44 +737,122 @@ export default async function PanelPage() {
                       href="/panel/clientes"
                       texto="Gestionar clientes"
                     />
-
                     <Acceso
                       href="/panel/inmuebles"
                       texto="Gestionar inmuebles"
                     />
-
                     <Acceso
                       href="/panel/paquetes"
                       texto="Paquetes y precios"
                     />
-
                     <Acceso
                       href="/panel/cotizaciones"
                       texto="Cotizaciones"
                     />
+                    <Acceso
+                      href="/panel/usuarios"
+                      texto="Gestionar usuarios"
+                    />
+                    <Acceso
+                      href="/panel/inspectores"
+                      texto="Administrar Inspectores"
+                    />
+                  </div>
+                </section>
+              </>
+            )}
 
+            {esGerente && (
+              <>
+                <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+                  <p className="text-xs font-black uppercase tracking-[0.25em]">
+                    Gerencia
+                  </p>
+
+                  <p className="mt-6 text-4xl font-black">
+                    {reportesPendientes}
+                  </p>
+
+                  <p className="mt-2 font-black">
+                    reporte(s) pendiente(s)
+                  </p>
+
+                  <p className="mt-4 text-sm font-semibold text-slate-800">
+                    Controla la operación de su zona, asigna cuando corresponda y participa en el flujo de revisión y aprobación.
+                  </p>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <h2 className="text-lg font-black">
+                    Control de gerencia
+                  </h2>
+
+                  <div className="mt-5 space-y-3">
+                    <Acceso
+                      href="/panel/inspecciones"
+                      texto="Revisar inspecciones"
+                    />
                     <Acceso
                       href="/panel/agenda"
                       texto="Consultar agenda"
                     />
+                    <Acceso
+                      href="/panel/inspectores"
+                      texto="Inspectores de la zona"
+                    />
+                    <Acceso
+                      href="/panel/auditoria"
+                      texto="Auditar Coordinadores e Inspectores"
+                    />
                   </div>
                 </section>
+              </>
+            )}
 
-                <section className="rounded-3xl border border-amber-300/20 bg-amber-300/5 p-7">
-                  <p className="text-xs font-black uppercase tracking-widest text-amber-300">
-                    CertezaHabitacional
-                    v2.0
+            {esCoordinador && (
+              <>
+                <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
+                  <p className="text-xs font-black uppercase tracking-[0.25em]">
+                    Coordinación técnica
                   </p>
 
-                  <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Flujo comercial:
-                    cliente → inmueble →
-                    paquete → cotización →
-                    agenda → inspección.
+                  <p className="mt-6 text-4xl font-black">
+                    {reportesPendientes}
+                  </p>
+
+                  <p className="mt-2 font-black">
+                    reporte(s) pendiente(s) de revisión
+                  </p>
+
+                  <p className="mt-4 text-sm font-semibold text-slate-800">
+                    Revisa expedientes de los Inspectores bajo tu coordinación y registra el visto bueno técnico cuando corresponda.
                   </p>
                 </section>
+
+                <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
+                  <h2 className="text-lg font-black">
+                    Revisión técnica
+                  </h2>
+
+                  <div className="mt-5 space-y-3">
+                    <Acceso
+                      href="/panel/inspecciones"
+                      texto="Revisar inspecciones"
+                    />
+                    <Acceso
+                      href="/panel/agenda"
+                      texto="Consultar agenda"
+                    />
+                    <Acceso
+                      href="/panel/inspectores"
+                      texto="Mis Inspectores"
+                    />
+                  </div>
+                </section>
               </>
-            ) : (
+            )}
+
+            {esDirector && (
               <>
                 <section className="rounded-3xl bg-cyan-300 p-7 text-slate-950">
                   <p className="text-xs font-black uppercase tracking-[0.25em]">
@@ -717,9 +875,7 @@ export default async function PanelPage() {
                           100,
                           Math.max(
                             0,
-                            Number(
-                              ishPromedio,
-                            ),
+                            Number(ishPromedio),
                           ),
                         )}%`,
                       }}
@@ -733,9 +889,7 @@ export default async function PanelPage() {
                   </p>
 
                   <p className="mt-3 text-4xl font-black text-rose-300">
-                    {
-                      certificadosRevocados
-                    }
+                    {certificadosRevocados}
                   </p>
 
                   <Link
@@ -748,7 +902,7 @@ export default async function PanelPage() {
 
                 <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
                   <h2 className="text-lg font-black">
-                    Accesos rápidos
+                    Control directivo
                   </h2>
 
                   <div className="mt-5 space-y-3">
@@ -756,27 +910,26 @@ export default async function PanelPage() {
                       href="/panel/inspecciones"
                       texto="Ver inspecciones"
                     />
-
                     <Acceso
                       href="/panel/agenda"
                       texto="Consultar agenda"
                     />
-
                     <Acceso
                       href="/panel/paquetes"
                       texto="Paquetes y precios"
                     />
-
                     <Acceso
                       href="/panel/cotizaciones"
                       texto="Cotizaciones"
                     />
-
                     <Acceso
                       href="/panel/auditoria"
                       texto="Revisar auditoría"
                     />
-
+                    <Acceso
+                      href="/panel/usuarios"
+                      texto="Gestionar usuarios"
+                    />
                     <Acceso
                       href="/panel/configuracion"
                       texto="Configuración"
@@ -788,12 +941,11 @@ export default async function PanelPage() {
           </aside>
         </section>
 
-        {/* DISTRIBUCIONES */}
         <section
           className={`mt-8 grid gap-8 ${
-            esCoordinador
-              ? "xl:grid-cols-1"
-              : "xl:grid-cols-3"
+            esDirector
+              ? "xl:grid-cols-3"
+              : "xl:grid-cols-1"
           }`}
         >
           <Distribucion
@@ -801,20 +953,16 @@ export default async function PanelPage() {
             items={distribucionEstados}
           />
 
-          {!esCoordinador && (
+          {esDirector && (
             <>
               <Distribucion
                 titulo="Hallazgos por clasificación"
-                items={
-                  distribucionHallazgos
-                }
+                items={distribucionHallazgos}
               />
 
               <Distribucion
                 titulo="Semáforo habitacional"
-                items={
-                  distribucionSemaforo
-                }
+                items={distribucionSemaforo}
               />
             </>
           )}
@@ -930,8 +1078,7 @@ function Distribucion({
 
       {items.length === 0 ? (
         <p className="mt-6 text-sm text-slate-500">
-          No hay información
-          disponible.
+          No hay información disponible.
         </p>
       ) : (
         <div className="mt-7 space-y-5">

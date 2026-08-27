@@ -3,6 +3,11 @@ import { RolUsuario } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { obtenerAdministradorActual } from "@/lib/administrador-actual";
 import {
+  puedeAdministrarUsuario,
+  puedeCrearUsuario,
+} from "@/lib/permisos";
+import PasswordField from "@/components/forms/PasswordField";
+import {
   cambiarEstadoUsuario,
   cambiarPasswordUsuario,
   crearUsuario,
@@ -20,75 +25,116 @@ type PageProps = {
 export default async function UsuariosPage({
   searchParams,
 }: PageProps) {
-  const administrador =
-    await obtenerAdministradorActual();
+  const administrador = await obtenerAdministradorActual();
+  const parametros = await searchParams;
 
-  const parametros =
-    await searchParams;
+  const busqueda = parametros.q?.trim() ?? "";
+  const rolFiltro = parametros.rol?.trim() ?? "";
 
-  const busqueda =
-    parametros.q?.trim() ?? "";
-
-  const rolFiltro =
-    parametros.rol?.trim() ?? "";
-
-  const rolValido = Object.values(
-    RolUsuario,
-  ).includes(
+  const rolValido = Object.values(RolUsuario).includes(
     rolFiltro as RolUsuario,
   )
     ? (rolFiltro as RolUsuario)
     : undefined;
 
-  const usuarios =
-    await prisma.usuario.findMany({
-      where: {
-        AND: [
-          busqueda
-            ? {
-                OR: [
-                  {
-                    nombre: {
-                      contains: busqueda,
-                      mode: "insensitive",
-                    },
+  const esDirector = administrador.rol === RolUsuario.DIRECTOR;
+  const esAdministrador =
+    administrador.rol === RolUsuario.ADMINISTRADOR;
+
+  if (!esDirector && !esAdministrador) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-white">
+        <div className="max-w-xl rounded-3xl border border-rose-400/20 bg-rose-400/5 p-8 text-center">
+          <h1 className="text-2xl font-black text-rose-300">
+            Acceso restringido
+          </h1>
+          <p className="mt-3 text-slate-300">
+            Solo Dirección y Administración pueden gestionar usuarios.
+          </p>
+          <Link
+            href="/panel"
+            className="mt-6 inline-flex rounded-full border border-white/10 px-5 py-3 font-bold text-cyan-300"
+          >
+            Volver al panel
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const usuarios = await prisma.usuario.findMany({
+    where: {
+      AND: [
+        busqueda
+          ? {
+              OR: [
+                {
+                  nombre: {
+                    contains: busqueda,
+                    mode: "insensitive",
                   },
-                  {
-                    email: {
-                      contains: busqueda,
-                      mode: "insensitive",
-                    },
+                },
+                {
+                  email: {
+                    contains: busqueda,
+                    mode: "insensitive",
                   },
-                ],
-              }
-            : {},
-
-          rolValido
-            ? {
-                rol: rolValido,
-              }
-            : {},
-        ],
-      },
-
-      include: {
-        cliente: {
-          select: {
-            id: true,
-          },
-        },
-
-        inspector: {
-          select: {
-            id: true,
-          },
+                },
+              ],
+            }
+          : {},
+        rolValido
+          ? {
+              rol: rolValido,
+            }
+          : {},
+      ],
+    },
+    include: {
+      cliente: {
+        select: {
+          id: true,
         },
       },
-
-      orderBy: {
-        creadoEn: "desc",
+      inspector: {
+        select: {
+          id: true,
+        },
       },
-    });
+    },
+    orderBy: {
+      creadoEn: "desc",
+    },
+  });
+
+  const rolesDisponibles = [
+    RolUsuario.DIRECTOR,
+    RolUsuario.ADMINISTRADOR,
+    RolUsuario.GERENTE,
+    RolUsuario.COORDINADOR,
+    RolUsuario.CLIENTE,
+  ];
+
+  const rolesCreables =
+    rolesDisponibles.filter(
+      (rol) =>
+        puedeCrearUsuario(
+          administrador.rol,
+          rol,
+        ),
+    );
+
+  function puedeModificar(usuario: {
+    id: string;
+    rol: RolUsuario;
+  }) {
+    if (usuario.id === administrador.id) return false;
+
+    return puedeAdministrarUsuario(
+      administrador.rol,
+      usuario.rol,
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white">
@@ -96,7 +142,7 @@ export default async function UsuariosPage({
         <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">
-              Administración
+              {esDirector ? "Dirección" : "Administración"}
             </p>
 
             <h1 className="mt-2 text-4xl font-black">
@@ -104,13 +150,12 @@ export default async function UsuariosPage({
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Crea cuentas, asigna roles,
-              restablece contraseñas y controla
+              Crea cuentas, asigna roles, restablece contraseñas y controla
               el acceso a la plataforma.
             </p>
 
             <p className="mt-2 text-sm text-slate-600">
-              Administrador actual:{" "}
+              Usuario actual:{" "}
               <strong className="text-slate-300">
                 {administrador.nombre}
               </strong>
@@ -144,10 +189,24 @@ export default async function UsuariosPage({
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Los perfiles de cliente e inspector
-              se crearán automáticamente según
-              el rol seleccionado.
+              El perfil de Cliente se crea automáticamente al seleccionar ese rol.
+              Los Inspectores deben darse de alta desde el módulo de Inspectores.
             </p>
+
+            {!esDirector && (
+              <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-sm leading-6 text-amber-100">
+                Administración puede crear Gerentes, Coordinadores y Clientes.
+                Solo Dirección puede crear Administradores o Directores.
+                Los Inspectores se crean desde el módulo de Inspectores.
+              </div>
+            )}
+
+            <Link
+              href="/panel/inspectores"
+              className="mt-5 inline-flex rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
+            >
+              Ir al módulo de Inspectores
+            </Link>
 
             <form
               action={crearUsuario}
@@ -167,12 +226,12 @@ export default async function UsuariosPage({
                 autocompletar="email"
               />
 
-              <Campo
-                nombre="password"
-                etiqueta="Contraseña inicial"
-                tipo="password"
-                autocompletar="new-password"
-                minimo={8}
+              <PasswordField
+                name="password"
+                label="Contraseña inicial"
+                autoComplete="new-password"
+                minLength={8}
+                inputClassName="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
               />
 
               <label className="block">
@@ -186,28 +245,15 @@ export default async function UsuariosPage({
                   defaultValue=""
                   className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
                 >
-                  <option
-                    value=""
-                    disabled
-                  >
+                  <option value="" disabled>
                     Selecciona un rol
                   </option>
 
-                  <option value="ADMINISTRADOR">
-                    Administrador
-                  </option>
-
-                  <option value="SUPERVISOR">
-                    Supervisor
-                  </option>
-
-                  <option value="INSPECTOR">
-                    Inspector
-                  </option>
-
-                  <option value="CLIENTE">
-                    Cliente
-                  </option>
+                  {rolesCreables.map((rol) => (
+                    <option key={rol} value={rol}>
+                      {etiquetaRol(rol)}
+                    </option>
+                  ))}
                 </select>
               </label>
 
@@ -235,25 +281,13 @@ export default async function UsuariosPage({
                 defaultValue={rolFiltro}
                 className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
               >
-                <option value="">
-                  Todos los roles
-                </option>
-
-                <option value="ADMINISTRADOR">
-                  Administradores
-                </option>
-
-                <option value="SUPERVISOR">
-                  Supervisores
-                </option>
-
-                <option value="INSPECTOR">
-                  Inspectores
-                </option>
-
-                <option value="CLIENTE">
-                  Clientes
-                </option>
+                <option value="">Todos los roles</option>
+                <option value="DIRECTOR">Directores</option>
+                <option value="ADMINISTRADOR">Administradores</option>
+                <option value="GERENTE">Gerentes</option>
+                <option value="COORDINADOR">Coordinadores</option>
+                <option value="INSPECTOR">Inspectores</option>
+                <option value="CLIENTE">Clientes</option>
               </select>
 
               <button
@@ -283,8 +317,11 @@ export default async function UsuariosPage({
                 </p>
               ) : (
                 <div className="divide-y divide-white/10">
-                  {usuarios.map(
-                    (usuario) => (
+                  {usuarios.map((usuario) => {
+                    const modificable = puedeModificar(usuario);
+                    const esCuentaActual = usuario.id === administrador.id;
+
+                    return (
                       <article
                         key={usuario.id}
                         className="p-6"
@@ -296,24 +333,24 @@ export default async function UsuariosPage({
                                 {usuario.nombre}
                               </h3>
 
-                              <Rol
-                                rol={
-                                  usuario.rol
-                                }
-                              />
+                              <Rol rol={usuario.rol} />
+                              <Estado activo={usuario.activo} />
 
-                              <Estado
-                                activo={
-                                  usuario.activo
-                                }
-                              />
-
-                              {usuario.id ===
-                                administrador.id && (
+                              {esCuentaActual && (
                                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">
                                   TU CUENTA
                                 </span>
                               )}
+
+                              {!esDirector &&
+                                (
+                                  usuario.rol === RolUsuario.DIRECTOR ||
+                                  usuario.rol === RolUsuario.ADMINISTRADOR
+                                ) && (
+                                  <span className="rounded-full bg-rose-400/10 px-3 py-1 text-xs font-black text-rose-300">
+                                    PROTEGIDA
+                                  </span>
+                                )}
                             </div>
 
                             <p className="mt-2 text-sm text-slate-400">
@@ -323,59 +360,42 @@ export default async function UsuariosPage({
                             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
                               <span>
                                 Creado:{" "}
-                                {usuario.creadoEn.toLocaleDateString(
-                                  "es-MX",
-                                )}
+                                {usuario.creadoEn.toLocaleDateString("es-MX")}
                               </span>
 
                               <span>
                                 Último acceso:{" "}
                                 {usuario.ultimoAcceso
-                                  ? usuario.ultimoAcceso.toLocaleString(
-                                      "es-MX",
-                                    )
+                                  ? usuario.ultimoAcceso.toLocaleString("es-MX")
                                   : "Nunca"}
                               </span>
 
                               {usuario.cliente && (
                                 <span className="text-cyan-300">
-                                  Perfil de cliente
-                                  vinculado
+                                  Perfil de cliente vinculado
                                 </span>
                               )}
 
                               {usuario.inspector && (
                                 <span className="text-cyan-300">
-                                  Perfil de inspector
-                                  vinculado
+                                  Perfil de inspector vinculado
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {usuario.id !==
-                            administrador.id && (
-                            <form
-                              action={
-                                cambiarEstadoUsuario
-                              }
-                            >
+                          {modificable && (
+                            <form action={cambiarEstadoUsuario}>
                               <input
                                 type="hidden"
                                 name="usuarioId"
-                                value={
-                                  usuario.id
-                                }
+                                value={usuario.id}
                               />
 
                               <input
                                 type="hidden"
                                 name="activo"
-                                value={
-                                  usuario.activo
-                                    ? "false"
-                                    : "true"
-                                }
+                                value={usuario.activo ? "false" : "true"}
                               />
 
                               <button
@@ -386,52 +406,56 @@ export default async function UsuariosPage({
                                     : "rounded-full border border-emerald-400/30 px-4 py-2 text-sm font-black text-emerald-300 transition hover:bg-emerald-400/10"
                                 }
                               >
-                                {usuario.activo
-                                  ? "Desactivar"
-                                  : "Activar"}
+                                {usuario.activo ? "Desactivar" : "Activar"}
                               </button>
                             </form>
                           )}
                         </div>
 
-                        <details className="mt-5 rounded-2xl bg-slate-950">
-                          <summary className="cursor-pointer px-5 py-4 text-sm font-black text-cyan-300">
-                            Cambiar contraseña
-                          </summary>
+                        {modificable ? (
+                          <details className="mt-5 rounded-2xl bg-slate-950">
+                            <summary className="cursor-pointer px-5 py-4 text-sm font-black text-cyan-300">
+                              Cambiar contraseña
+                            </summary>
 
-                          <form
-                            action={
-                              cambiarPasswordUsuario
-                            }
-                            className="flex flex-col gap-3 border-t border-white/10 p-5 sm:flex-row"
-                          >
-                            <input
-                              type="hidden"
-                              name="usuarioId"
-                              value={usuario.id}
-                            />
-
-                            <input
-                              type="password"
-                              name="password"
-                              required
-                              minLength={8}
-                              autoComplete="new-password"
-                              placeholder="Nueva contraseña"
-                              className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-cyan-300"
-                            />
-
-                            <button
-                              type="submit"
-                              className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
+                            <form
+                              action={cambiarPasswordUsuario}
+                              className="flex flex-col gap-3 border-t border-white/10 p-5 sm:flex-row"
                             >
-                              Actualizar
-                            </button>
-                          </form>
-                        </details>
+                              <input
+                                type="hidden"
+                                name="usuarioId"
+                                value={usuario.id}
+                              />
+
+                              <PasswordField
+                                name="password"
+                                label=""
+                                autoComplete="new-password"
+                                minLength={8}
+                                placeholder="Nueva contraseña"
+                                wrapperClassName="min-w-0 flex-1"
+                                inputClassName="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
+                              />
+
+                              <button
+                                type="submit"
+                                className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
+                              >
+                                Actualizar
+                              </button>
+                            </form>
+                          </details>
+                        ) : (
+                          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-sm text-slate-500">
+                            {esCuentaActual
+                              ? "Tu propia cuenta no puede desactivarse desde este módulo."
+                              : "Esta cuenta está protegida y no puede ser modificada por Administración."}
+                          </div>
+                        )}
                       </article>
-                    ),
-                  )}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -440,6 +464,25 @@ export default async function UsuariosPage({
       </div>
     </main>
   );
+}
+
+function etiquetaRol(rol: RolUsuario) {
+  switch (rol) {
+    case RolUsuario.DIRECTOR:
+      return "Director";
+    case RolUsuario.ADMINISTRADOR:
+      return "Administrador";
+    case RolUsuario.GERENTE:
+      return "Gerente";
+    case RolUsuario.COORDINADOR:
+      return "Coordinador";
+    case RolUsuario.INSPECTOR:
+      return "Inspector";
+    case RolUsuario.CLIENTE:
+      return "Cliente";
+    default:
+      return rol;
+  }
 }
 
 function Campo({
@@ -473,33 +516,20 @@ function Campo({
   );
 }
 
-function Rol({
-  rol,
-}: {
-  rol: string;
-}) {
-  const estilos: Record<
-    string,
-    string
-  > = {
-    ADMINISTRADOR:
-      "bg-violet-400/10 text-violet-300",
-
-    SUPERVISOR:
-      "bg-sky-400/10 text-sky-300",
-
-    INSPECTOR:
-      "bg-amber-400/10 text-amber-300",
-
-    CLIENTE:
-      "bg-cyan-400/10 text-cyan-300",
+function Rol({ rol }: { rol: string }) {
+  const estilos: Record<string, string> = {
+    DIRECTOR: "bg-rose-400/10 text-rose-300",
+    ADMINISTRADOR: "bg-violet-400/10 text-violet-300",
+    GERENTE: "bg-emerald-400/10 text-emerald-300",
+    COORDINADOR: "bg-indigo-400/10 text-indigo-300",
+    INSPECTOR: "bg-amber-400/10 text-amber-300",
+    CLIENTE: "bg-cyan-400/10 text-cyan-300",
   };
 
   return (
     <span
       className={`rounded-full px-3 py-1 text-xs font-black ${
-        estilos[rol] ??
-        "bg-white/10 text-slate-300"
+        estilos[rol] ?? "bg-white/10 text-slate-300"
       }`}
     >
       {rol}
@@ -507,11 +537,7 @@ function Rol({
   );
 }
 
-function Estado({
-  activo,
-}: {
-  activo: boolean;
-}) {
+function Estado({ activo }: { activo: boolean }) {
   return (
     <span
       className={
@@ -520,9 +546,7 @@ function Estado({
           : "rounded-full bg-rose-400/10 px-3 py-1 text-xs font-black text-rose-300"
       }
     >
-      {activo
-        ? "ACTIVO"
-        : "INACTIVO"}
+      {activo ? "ACTIVO" : "INACTIVO"}
     </span>
   );
 }

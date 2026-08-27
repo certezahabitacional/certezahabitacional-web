@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { TipoCalculoPrecio } from "@prisma/client";
+import {
+  RolUsuario,
+  TipoCalculoPrecio,
+} from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -40,10 +43,29 @@ export default async function PaquetesPage() {
     redirect("/login");
   }
 
-  if (
-    session.user.role !== "ADMINISTRADOR" &&
-    session.user.role !== "COORDINADOR"
-  ) {
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      rol: true,
+      activo: true,
+    },
+  });
+
+  if (!usuarioActual || !usuarioActual.activo) {
+    redirect("/acceso");
+  }
+
+  const puedeGestionar =
+    usuarioActual.rol === RolUsuario.DIRECTOR ||
+    usuarioActual.rol === RolUsuario.ADMINISTRADOR;
+
+  const puedeConsultar =
+    puedeGestionar ||
+    usuarioActual.rol === RolUsuario.GERENTE;
+
+  if (!puedeConsultar) {
     redirect("/acceso");
   }
 
@@ -80,8 +102,9 @@ export default async function PaquetesPage() {
             </h1>
 
             <p className="mt-3 max-w-3xl text-slate-400">
-              Configura los precios que utilizará Coordinación para calcular
-              las cotizaciones de cada vivienda.
+              {puedeGestionar
+                ? "Configura los precios que utilizará Administración para elaborar las cotizaciones."
+                : "Consulta los paquetes y condiciones comerciales vigentes en modo solo lectura."}
             </p>
           </div>
 
@@ -91,6 +114,8 @@ export default async function PaquetesPage() {
           </div>
         </div>
 
+        {puedeGestionar && (
+          <>
         {/* NUEVO PAQUETE */}
         <section className="mt-10 rounded-3xl border border-cyan-400/20 bg-slate-900 p-7">
           <div>
@@ -214,6 +239,9 @@ export default async function PaquetesPage() {
           </form>
         </section>
 
+          </>
+        )}
+
         {/* LISTADO DE PAQUETES */}
         <section className="mt-8 space-y-5">
           {paquetes.length === 0 ? (
@@ -280,12 +308,12 @@ export default async function PaquetesPage() {
                 {/* DATOS DEL PAQUETE */}
                 <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <Dato
-                    titulo="Rango mínimo"
+                    titulo="Rango mÃ­nimo"
                     valor={metros(paquete.superficieMinimaM2)}
                   />
 
                   <Dato
-                    titulo="Rango máximo"
+                    titulo="Rango mÃ¡ximo"
                     valor={metros(paquete.superficieMaximaM2)}
                   />
 
@@ -304,6 +332,8 @@ export default async function PaquetesPage() {
                   />
                 </div>
 
+                {puedeGestionar && (
+                  <>
                 {/* EDITAR */}
                 <details className="mt-7 rounded-2xl border border-white/10 bg-slate-950 p-5">
                   <summary className="cursor-pointer font-black text-cyan-300">
@@ -447,6 +477,14 @@ export default async function PaquetesPage() {
                       : "Reactivar paquete"}
                   </button>
                 </form>
+                  </>
+                )}
+
+                {!puedeGestionar && (
+                  <div className="mt-7 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-200">
+                    Consulta de Gerencia en modo solo lectura.
+                  </div>
+                )}
               </article>
             ))
           )}

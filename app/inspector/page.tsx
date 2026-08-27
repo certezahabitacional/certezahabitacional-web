@@ -1,43 +1,71 @@
+import Link from "next/link";
 import {
   EstadoInspeccion,
+  RolUsuario,
 } from "@prisma/client";
+import { redirect } from "next/navigation";
 
-import { obtenerInspectorActual } from "@/lib/inspector-actual";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-function formatoFecha(
-  fecha: Date,
-  zonaHoraria: string,
-) {
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: zonaHoraria,
-  }).format(fecha);
-}
-
 export default async function InspectorPage() {
-  const inspector =
-    await obtenerInspectorActual();
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      id: true,
+      nombre: true,
+      email: true,
+      rol: true,
+      activo: true,
+      inspector: {
+        select: {
+          id: true,
+          activo: true,
+          telefono: true,
+          especialidad: true,
+          ciudad: true,
+        },
+      },
+    },
+  });
+
+  if (
+    !usuarioActual ||
+    !usuarioActual.activo ||
+    usuarioActual.rol !== RolUsuario.INSPECTOR ||
+    !usuarioActual.inspector ||
+    !usuarioActual.inspector.activo
+  ) {
+    redirect("/acceso");
+  }
 
   const inspecciones =
     await prisma.inspeccion.findMany({
       where: {
-        inspectorId: inspector.id,
+        inspectorId:
+          usuarioActual.inspector.id,
       },
 
       include: {
-        cliente: {
+        inmueble: {
           select: {
-            nombre: true,
-            telefono: true,
+            id: true,
+            alias: true,
+            tipo: true,
+            direccion: true,
+            colonia: true,
+            ciudad: true,
+            estado: true,
           },
         },
-
-        inmueble: true,
 
         _count: {
           select: {
@@ -93,13 +121,13 @@ export default async function InspectorPage() {
         </p>
 
         <h1 className="mt-3 text-4xl font-black">
-          {inspector.usuario.nombre}
+          {usuarioActual.nombre}
         </h1>
 
         <p className="mt-3 max-w-2xl">
-          Consulta tus inspecciones asignadas,
-          fechas programadas y avance de cada
-          expediente.
+          Consulta únicamente tus inspecciones
+          asignadas y ejecuta las actividades
+          propias de tu función como Inspector.
         </p>
       </section>
 
@@ -133,7 +161,7 @@ export default async function InspectorPage() {
 
           <p className="mt-2 text-sm text-slate-500">
             Solo se muestran las inspecciones
-            asignadas a tu perfil.
+            asignadas directamente a tu perfil.
           </p>
         </header>
 
@@ -144,9 +172,10 @@ export default async function InspectorPage() {
             </p>
 
             <p className="mt-2 text-sm text-slate-500">
-              Cuando el administrador te asigne
-              una inspección aparecerá en esta
-              pantalla.
+              Cuando Gerencia o Administración
+              te asignen una inspección dentro
+              del flujo autorizado, aparecerá
+              en esta pantalla.
             </p>
           </div>
         ) : (
@@ -171,37 +200,40 @@ export default async function InspectorPage() {
                     </div>
 
                     <p className="mt-3 font-bold text-slate-200">
-                      {
-                        inspeccion.cliente
-                          .nombre
-                      }
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-400">
                       {inspeccion.inmueble
                         ?.alias ??
                         inspeccion.tipoInmueble}
                     </p>
 
+                    <p className="mt-1 text-sm text-slate-400">
+                      {inspeccion.direccion}
+                      {inspeccion.inmueble
+                        ?.colonia
+                        ? `, ${inspeccion.inmueble.colonia}`
+                        : ""}
+                    </p>
+
                     <p className="mt-1 text-sm text-slate-500">
-                      {
-                        inspeccion.direccion
-                      }
-                      , {inspeccion.ciudad}
+                      {inspeccion.ciudad}
+                      {inspeccion.inmueble
+                        ?.estado
+                        ? `, ${inspeccion.inmueble.estado}`
+                        : ""}
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500">
                       <span>
                         Fecha:{" "}
-                        {formatoFecha(
-                          inspeccion.fechaProgramada,
-                          inspeccion.zonaHoraria,
+                        {inspeccion.fechaProgramada.toLocaleString(
+                          "es-MX",
+                          {
+                            day: "2-digit",
+                            month: "long",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
                         )}
-                      </span>
-
-                      <span>
-                        Zona:{" "}
-                        {inspeccion.zonaHoraria}
                       </span>
 
                       <span>
@@ -219,6 +251,51 @@ export default async function InspectorPage() {
                             .fotografias
                         }
                       </span>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <Link
+                        href={`/panel/inspecciones/${inspeccion.id}`}
+                        className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-cyan-300 transition hover:border-cyan-300"
+                      >
+                        Ver expediente
+                      </Link>
+
+                      {(inspeccion.estado ===
+                        EstadoInspeccion.PROGRAMADA ||
+                        inspeccion.estado ===
+                          EstadoInspeccion.EN_PROCESO) && (
+                        <Link
+                          href={`/panel/inspecciones/${inspeccion.id}/captura`}
+                          className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-black text-slate-950 transition hover:bg-cyan-300"
+                        >
+                          {inspeccion.estado ===
+                          EstadoInspeccion.PROGRAMADA
+                            ? "Iniciar captura"
+                            : "Continuar captura"}
+                        </Link>
+                      )}
+
+                      {inspeccion.estado ===
+                        EstadoInspeccion.REPORTE_PENDIENTE && (
+                        <span className="rounded-full bg-orange-400/10 px-4 py-2 text-sm font-black text-orange-300">
+                          En revisión
+                        </span>
+                      )}
+
+                      {inspeccion.estado ===
+                        EstadoInspeccion.FINALIZADA && (
+                        <span className="rounded-full bg-emerald-400/10 px-4 py-2 text-sm font-black text-emerald-300">
+                          Expediente cerrado
+                        </span>
+                      )}
+
+                      {inspeccion.estado ===
+                        EstadoInspeccion.CANCELADA && (
+                        <span className="rounded-full bg-rose-400/10 px-4 py-2 text-sm font-black text-rose-300">
+                          Cancelada
+                        </span>
+                      )}
                     </div>
                   </div>
 

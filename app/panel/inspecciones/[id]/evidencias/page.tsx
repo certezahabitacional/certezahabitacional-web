@@ -1,8 +1,17 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import {
+  EstadoInspeccion,
+  RolUsuario,
+} from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { registrarEvidencia } from "./actions";
+import {
+  eliminarEvidencia,
+  registrarEvidencia,
+} from "./actions";
+import EvidenciaSelector from "./EvidenciaSelector";
 
 function obtenerSupabase() {
   const url = process.env.SUPABASE_URL;
@@ -27,10 +36,110 @@ export default async function EvidenciasPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{
+    ok?: string;
+    error?: string;
+    hallazgoId?: string;
+  }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      zonaId: true,
+      gerenteId: true,
+      inspector: {
+        select: {
+          id: true,
+          activo: true,
+        },
+      },
+    },
+  });
+
+  if (!usuarioActual || !usuarioActual.activo) {
+    redirect("/acceso");
+  }
+
+  if (usuarioActual.rol === RolUsuario.CLIENTE) {
+    redirect("/portal");
+  }
+
+  if (usuarioActual.rol === RolUsuario.ADMINISTRADOR) {
+    redirect("/acceso");
+  }
+
+  const alcance = await prisma.inspeccion.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      estado: true,
+      zonaId: true,
+      inspectorId: true,
+      inspector: {
+        select: {
+          usuarioId: true,
+          usuario: {
+            select: {
+              zonaId: true,
+              gerenteId: true,
+              coordinadorId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!alcance) {
+    notFound();
+  }
+
+  if (usuarioActual.rol === RolUsuario.GERENTE) {
+    if (
+      alcance.inspector?.usuario.gerenteId !== usuarioActual.id
+    ) {
+      redirect("/acceso");
+    }
+  }
+
+  if (usuarioActual.rol === RolUsuario.COORDINADOR) {
+    if (
+      alcance.inspector?.usuario.coordinadorId !== usuarioActual.id
+    ) {
+      redirect("/acceso");
+    }
+  }
+
+  if (usuarioActual.rol === RolUsuario.INSPECTOR) {
+    if (
+      !usuarioActual.inspector ||
+      !usuarioActual.inspector.activo ||
+      alcance.inspectorId !== usuarioActual.inspector.id ||
+      alcance.inspector?.usuarioId !== usuarioActual.id
+    ) {
+      redirect("/acceso");
+    }
+  }
+
+  const puedeModificar =
+    usuarioActual.rol === RolUsuario.DIRECTOR ||
+    (usuarioActual.rol === RolUsuario.INSPECTOR &&
+      alcance.estado === EstadoInspeccion.EN_PROCESO);
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },
@@ -41,6 +150,8 @@ export default async function EvidenciasPage({
           id: true,
           titulo: true,
           area: true,
+          clasificacion: true,
+          prioridad: true,
         },
       },
       fotografias: {
@@ -48,7 +159,9 @@ export default async function EvidenciasPage({
         include: {
           hallazgo: {
             select: {
+              id: true,
               titulo: true,
+              area: true,
             },
           },
         },
@@ -60,12 +173,18 @@ export default async function EvidenciasPage({
     notFound();
   }
 
+  const hallazgoSeleccionado = query.hallazgoId
+    ? inspeccion.hallazgos.find(
+        (hallazgo) => hallazgo.id === query.hallazgoId,
+      )
+    : undefined;
+
   const supabase = obtenerSupabase();
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  const bucket =
+    process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
 
   const fotografias = await Promise.all(
     inspeccion.fotografias.map(async (foto) => {
-      // Conserva compatibilidad con registros antiguos que tengan URL pública.
       if (
         foto.url.startsWith("http://") ||
         foto.url.startsWith("https://")
@@ -87,6 +206,13 @@ export default async function EvidenciasPage({
     }),
   );
 
+  const fotografiasMostradas = hallazgoSeleccionado
+    ? fotografias.filter(
+        (foto) =>
+          foto.hallazgo?.id === hallazgoSeleccionado.id,
+      )
+    : fotografias;
+
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
       <div className="mx-auto max-w-5xl">
@@ -106,7 +232,8 @@ export default async function EvidenciasPage({
         </h1>
 
         <p className="mt-2 text-slate-400">
-          Las fotografías se almacenan de forma privada en Supabase Storage.
+          Agrega evidencia general de la inspección o vincúlala a un hallazgo
+          específico ya capturado.
         </p>
 
         {query.ok && (
@@ -121,30 +248,58 @@ export default async function EvidenciasPage({
           </p>
         )}
 
+        {hallazgoSeleccionado && (
+          <section className="mt-6 rounded-3xl border border-cyan-400/25 bg-cyan-400/5 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
+              Evidencias del hallazgo
+            </p>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span className="rounded-full bg-cyan-400/15 px-3 py-1 text-xs font-black text-cyan-300">
+                {hallazgoSeleccionado.clasificacion}
+              </span>
+
+              <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-black text-slate-300">
+                {hallazgoSeleccionado.prioridad}
+              </span>
+
+              <span className="text-sm font-bold text-slate-300">
+                {hallazgoSeleccionado.area}
+              </span>
+            </div>
+
+            <h2 className="mt-3 text-xl font-black">
+              {hallazgoSeleccionado.titulo}
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              {fotografiasMostradas.length} evidencia(s) vinculada(s) a este
+              hallazgo.
+            </p>
+
+            <Link
+              href={`/panel/inspecciones/${id}/evidencias`}
+              className="mt-4 inline-flex rounded-full border border-white/10 px-4 py-2 text-sm font-bold text-slate-300 hover:border-cyan-300/40 hover:text-cyan-300"
+            >
+              Ver todas las evidencias
+            </Link>
+          </section>
+        )}
+
+        {puedeModificar ? (
         <form
           action={registrarEvidencia}
           className="mt-7 grid gap-4 rounded-3xl border border-white/10 bg-slate-900 p-6 md:grid-cols-2"
         >
-          <input type="hidden" name="inspeccionId" value={id} />
+          <input
+            type="hidden"
+            name="inspeccionId"
+            value={id}
+          />
 
-          <label className="block md:col-span-2">
-            <span className="mb-2 block text-sm font-bold">
-              Seleccionar fotografía *
-            </span>
-
-            <input
-              name="archivo"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              capture="environment"
-              required
-              className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 file:mr-4 file:rounded-full file:border-0 file:bg-cyan-400 file:px-4 file:py-2 file:font-bold file:text-slate-950"
-            />
-
-            <span className="mt-2 block text-xs text-slate-400">
-              Formatos permitidos: JPG, PNG y WEBP. Tamaño máximo: 10 MB.
-            </span>
-          </label>
+          <div className="md:col-span-2">
+            <EvidenciaSelector />
+          </div>
 
           <label className="block">
             <span className="mb-2 block text-sm font-bold">
@@ -153,15 +308,26 @@ export default async function EvidenciasPage({
 
             <select
               name="hallazgoId"
+              defaultValue={
+                hallazgoSeleccionado?.id ?? ""
+              }
               className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
             >
-              <option value="">Evidencia general</option>
+              <option value="">
+                Evidencia general
+              </option>
 
-              {inspeccion.hallazgos.map((hallazgo) => (
-                <option key={hallazgo.id} value={hallazgo.id}>
-                  {hallazgo.area}: {hallazgo.titulo}
-                </option>
-              ))}
+              {inspeccion.hallazgos.map(
+                (hallazgo) => (
+                  <option
+                    key={hallazgo.id}
+                    value={hallazgo.id}
+                  >
+                    {hallazgo.area}:{" "}
+                    {hallazgo.titulo}
+                  </option>
+                ),
+              )}
             </select>
           </label>
 
@@ -182,41 +348,161 @@ export default async function EvidenciasPage({
           </button>
         </form>
 
-        {fotografias.length === 0 ? (
+        ) : (
+          <div className="mt-7 rounded-3xl border border-white/10 bg-slate-900 p-5 text-sm text-slate-400">
+            Evidencias en modo solo lectura para tu rol o para el estado actual del expediente.
+          </div>
+        )}
+
+        {fotografiasMostradas.length === 0 ? (
           <div className="mt-7 rounded-3xl border border-white/10 bg-slate-900 p-10 text-center text-slate-400">
-            Todavía no hay evidencias fotográficas registradas.
+            {hallazgoSeleccionado
+              ? "Este hallazgo todavía no tiene evidencias fotográficas."
+              : "Todavía no hay evidencias fotográficas registradas."}
           </div>
         ) : (
-          <section className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {fotografias.map((foto) => (
-              <article
-                key={foto.id}
-                className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900"
-              >
-                {foto.imagenUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={foto.imagenUrl}
-                    alt={foto.descripcion ?? "Evidencia"}
-                    className="h-56 w-full object-cover"
-                  />
-                ) : (
-                  <div className="grid h-56 place-items-center bg-slate-950 text-sm text-slate-500">
-                    No se pudo cargar la imagen
-                  </div>
-                )}
+          <section className="mt-7">
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
+                  {hallazgoSeleccionado
+                    ? "Galería del hallazgo"
+                    : "Galería del expediente"}
+                </p>
 
-                <div className="p-5">
-                  <p className="font-black">
-                    {foto.hallazgo?.titulo ?? "Evidencia general"}
-                  </p>
+                <h2 className="mt-2 text-2xl font-black">
+                  Evidencias registradas (
+                  {fotografiasMostradas.length})
+                </h2>
+              </div>
 
-                  <p className="mt-1 text-sm text-slate-400">
-                    {foto.descripcion ?? "Sin descripción"}
-                  </p>
-                </div>
-              </article>
-            ))}
+              {hallazgoSeleccionado && (
+                <Link
+                  href={`/panel/inspecciones/${id}/evidencias`}
+                  className="text-sm font-bold text-cyan-300 hover:text-cyan-200"
+                >
+                  Ver galería completa →
+                </Link>
+              )}
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {fotografiasMostradas.map(
+                (foto) => (
+                  <article
+                    key={foto.id}
+                    className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900"
+                  >
+                    {foto.imagenUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a
+                        href={foto.imagenUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block"
+                        title="Abrir fotografía en tamaño completo"
+                      >
+                        <img
+                          src={foto.imagenUrl}
+                          alt={
+                            foto.descripcion ??
+                            "Evidencia"
+                          }
+                          className="h-56 w-full object-cover transition hover:opacity-90"
+                        />
+                      </a>
+                    ) : (
+                      <div className="grid h-56 place-items-center bg-slate-950 text-sm text-slate-500">
+                        No se pudo cargar la imagen
+                      </div>
+                    )}
+
+                    <div className="p-5">
+                      {foto.hallazgo ? (
+                        <>
+                          <p className="text-xs font-bold text-cyan-300">
+                            {foto.hallazgo.area}
+                          </p>
+                          <p className="mt-1 font-black">
+                            {foto.hallazgo.titulo}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="font-black">
+                          Evidencia general
+                        </p>
+                      )}
+
+                      <p className="mt-2 text-sm text-slate-400">
+                        {foto.descripcion ??
+                          "Sin descripción"}
+                      </p>
+
+                      {foto.imagenUrl && (
+                        <a
+                          href={foto.imagenUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-4 inline-flex text-sm font-black text-cyan-300 hover:text-cyan-200"
+                        >
+                          Ver en grande ↗
+                        </a>
+                      )}
+
+                      {puedeModificar && (
+                      <details className="mt-4 border-t border-white/10 pt-4">
+                        <summary className="cursor-pointer text-sm font-bold text-rose-300">
+                          Eliminar evidencia
+                        </summary>
+
+                        <div className="mt-3 rounded-2xl border border-rose-400/20 bg-rose-400/5 p-3">
+                          <p className="text-xs leading-5 text-slate-400">
+                            Esta acción quitará la fotografía del expediente.
+                            Úsala solamente si la evidencia es incorrecta,
+                            duplicada o no corresponde al hallazgo.
+                          </p>
+
+                          <form
+                            action={
+                              eliminarEvidencia
+                            }
+                            className="mt-3"
+                          >
+                            <input
+                              type="hidden"
+                              name="inspeccionId"
+                              value={id}
+                            />
+                            <input
+                              type="hidden"
+                              name="fotografiaId"
+                              value={foto.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="hallazgoId"
+                              value={
+                                hallazgoSeleccionado?.id ??
+                                foto.hallazgo?.id ??
+                                ""
+                              }
+                            />
+
+                            <button
+                              type="submit"
+                              className="w-full rounded-full border border-rose-400/40 px-4 py-2 text-sm font-black text-rose-300 transition hover:bg-rose-400 hover:text-slate-950"
+                            >
+                              Confirmar eliminación
+                            </button>
+                          </form>
+                        </div>
+                      </details>
+                      )}
+                    </div>
+                  </article>
+                ),
+              )}
+            </div>
           </section>
         )}
       </div>

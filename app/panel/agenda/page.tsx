@@ -1,224 +1,193 @@
 import Link from "next/link";
 import {
-  EstadoCotizacion,
   EstadoInspeccion,
+  RolUsuario,
 } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { agendarCotizacion } from "./actions";
 
-const ZONAS_HORARIAS = [
-  {
-    value: "America/Ciudad_Juarez",
-    label: "Ciudad Juárez",
-  },
-  {
-    value: "America/Tijuana",
-    label: "Tijuana",
-  },
-  {
-    value: "America/Hermosillo",
-    label: "Hermosillo",
-  },
-  {
-    value: "America/Chihuahua",
-    label: "Chihuahua",
-  },
-  {
-    value: "America/Mazatlan",
-    label: "Mazatlán",
-  },
-  {
-    value: "America/Monterrey",
-    label: "Monterrey",
-  },
-  {
-    value: "America/Mexico_City",
-    label: "Ciudad de México",
-  },
-  {
-    value: "America/Cancun",
-    label: "Cancún",
-  },
-];
-
-function formatoFecha(
-  fecha: Date,
-  zonaHoraria: string,
-) {
+function formatoFecha(zonaHoraria: string) {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "full",
     timeStyle: "short",
     timeZone: zonaHoraria,
-  }).format(fecha);
+  });
 }
 
-function dinero(valor: unknown) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  }).format(Number(valor ?? 0));
-}
-
-export default async function AgendaPage() {
+export default async function AgendaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    ok?: string;
+    error?: string;
+  }>;
+}) {
   const session = await auth();
 
   if (!session?.user) {
     redirect("/login");
   }
 
-  if (
-    session.user.role !== "ADMINISTRADOR" &&
-    session.user.role !== "COORDINADOR" &&
-    session.user.role !== "SUPERVISOR"
-  ) {
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      zonaId: true,
+      zona: {
+        select: {
+          nombre: true,
+          codigo: true,
+          zonaHoraria: true,
+        },
+      },
+      inspector: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  if (!usuarioActual || !usuarioActual.activo) {
     redirect("/acceso");
   }
 
-  const ahora = new Date();
+  if (usuarioActual.rol === RolUsuario.CLIENTE) {
+    redirect("/portal/inspecciones");
+  }
 
-  const [
-    cotizacionesAceptadas,
-    inspecciones,
-    inspectores,
-    inspeccionesConCotizacion,
-  ] = await Promise.all([
-    prisma.cotizacion.findMany({
-      where: {
-        estado: EstadoCotizacion.ACEPTADA,
-      },
+  const params = await searchParams;
 
-      include: {
-        cliente: {
-          select: {
-            nombre: true,
-            telefono: true,
-          },
-        },
+  /*
+   * Alcance de agenda:
+   * DIRECTOR        -> global.
+   * ADMINISTRADOR   -> global, solo lectura operativa.
+   * GERENTE         -> Inspectores adscritos a su Gerencia.
+   * COORDINADOR     -> Inspectores bajo su coordinación.
+   * INSPECTOR       -> únicamente sus inspecciones.
+   */
+  let alcanceInspecciones: Record<string, unknown> = {};
 
-        inmueble: {
-          select: {
-            alias: true,
-            tipo: true,
-            direccion: true,
-            ciudad: true,
-          },
-        },
+  switch (usuarioActual.rol) {
+    case RolUsuario.DIRECTOR:
+    case RolUsuario.ADMINISTRADOR:
+      alcanceInspecciones = {};
+      break;
 
-        paquete: {
-          select: {
-            nombre: true,
-          },
-        },
-      },
-
-      orderBy: {
-        creadoEn: "asc",
-      },
-    }),
-
-    prisma.inspeccion.findMany({
-      where: {
-        fechaProgramada: {
-          gte: ahora,
-        },
-
-        estado: {
-          in: [
-            EstadoInspeccion.PROGRAMADA,
-            EstadoInspeccion.EN_PROCESO,
-          ],
-        },
-      },
-
-      include: {
-        cliente: {
-          select: {
-            nombre: true,
-          },
-        },
-
+    case RolUsuario.GERENTE:
+      alcanceInspecciones = {
         inspector: {
-          include: {
-            usuario: {
-              select: {
-                nombre: true,
-              },
+          usuario: {
+            gerenteId: usuarioActual.id,
+          },
+        },
+      };
+      break;
+
+    case RolUsuario.COORDINADOR:
+      alcanceInspecciones = {
+        inspector: {
+          usuario: {
+            coordinadorId: usuarioActual.id,
+          },
+        },
+      };
+      break;
+
+    case RolUsuario.INSPECTOR:
+      if (!usuarioActual.inspector?.id) {
+        redirect(
+          `/panel?error=${encodeURIComponent(
+            "Tu usuario no tiene un perfil de Inspector asociado.",
+          )}`,
+        );
+      }
+
+      alcanceInspecciones = {
+        inspectorId: usuarioActual.inspector.id,
+      };
+      break;
+
+    default:
+      redirect("/acceso");
+  }
+
+  /*
+   * Se muestran todas las inspecciones PROGRAMADAS y EN PROCESO
+   * dentro del alcance del usuario. No usamos medianoche del servidor
+   * como corte porque el sistema opera en varias zonas horarias.
+   */
+  const inspecciones = await prisma.inspeccion.findMany({
+    where: {
+      ...alcanceInspecciones,
+      estado: {
+        in: [
+          EstadoInspeccion.PROGRAMADA,
+          EstadoInspeccion.EN_PROCESO,
+        ],
+      },
+    },
+    include: {
+      cliente: {
+        select: {
+          nombre: true,
+        },
+      },
+      inspector: {
+        include: {
+          usuario: {
+            select: {
+              nombre: true,
             },
           },
         },
       },
-
-      orderBy: {
-        fechaProgramada: "asc",
-      },
-
-      take: 100,
-    }),
-
-    prisma.inspector.findMany({
-      where: {
-        activo: true,
-
-        usuario: {
-          activo: true,
+      zona: {
+        select: {
+          nombre: true,
+          codigo: true,
+          zonaHoraria: true,
         },
       },
-
-      include: {
-        usuario: {
-          select: {
-            nombre: true,
-          },
-        },
-      },
-
-      orderBy: {
-        creadoEn: "asc",
-      },
-    }),
-
-    prisma.inspeccion.findMany({
-      where: {
-        cotizacionId: {
-          not: null,
-        },
-      },
-
-      select: {
-        cotizacionId: true,
-      },
-    }),
-  ]);
-
-  const idsAgendados = new Set(
-    inspeccionesConCotizacion
-      .map((item) => item.cotizacionId)
-      .filter(
-        (id): id is string =>
-          Boolean(id),
-      ),
-  );
-
-  const pendientes =
-    cotizacionesAceptadas.filter(
-      (cotizacion) =>
-        !idsAgendados.has(cotizacion.id),
-    );
+    },
+    orderBy: {
+      fechaProgramada: "asc",
+    },
+    take: 200,
+  });
 
   const programadas = inspecciones.filter(
     (inspeccion) =>
-      inspeccion.estado ===
-      EstadoInspeccion.PROGRAMADA,
+      inspeccion.estado === EstadoInspeccion.PROGRAMADA,
   ).length;
 
   const enProceso = inspecciones.filter(
     (inspeccion) =>
-      inspeccion.estado ===
-      EstadoInspeccion.EN_PROCESO,
+      inspeccion.estado === EstadoInspeccion.EN_PROCESO,
   ).length;
+
+  const sinInspector = inspecciones.filter(
+    (inspeccion) => !inspeccion.inspectorId,
+  ).length;
+
+  const alcanceTexto =
+    usuarioActual.rol === RolUsuario.DIRECTOR
+      ? "Agenda global de Dirección"
+      : usuarioActual.rol === RolUsuario.ADMINISTRADOR
+        ? "Agenda global para seguimiento administrativo"
+        : usuarioActual.rol === RolUsuario.GERENTE
+          ? "Agenda de los Inspectores adscritos a tu Gerencia"
+          : usuarioActual.rol === RolUsuario.COORDINADOR
+            ? "Agenda de tus Inspectores"
+            : "Tu agenda de inspecciones";
+
+  const puedeCrear =
+    usuarioActual.rol === RolUsuario.GERENTE ||
+    usuarioActual.rol === RolUsuario.DIRECTOR;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
@@ -226,10 +195,14 @@ export default async function AgendaPage() {
         <header className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
             <Link
-              href="/panel"
+              href={
+                usuarioActual.rol === RolUsuario.INSPECTOR
+                  ? "/inspector"
+                  : "/panel"
+              }
               className="text-sm font-black text-cyan-300"
             >
-              ← Volver al panel
+              â† Volver
             </Link>
 
             <p className="mt-7 text-xs font-black uppercase tracking-[0.3em] text-amber-300">
@@ -241,340 +214,90 @@ export default async function AgendaPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Programa cotizaciones aceptadas y
-              administra las próximas inspecciones.
+              {alcanceTexto}. La programación y asignación corresponden a
+              Gerencia o Dirección; los demás roles consultan la agenda dentro
+              de su alcance.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              href="/panel/cotizaciones"
-              className="rounded-full border border-white/15 px-5 py-3 text-sm font-black hover:border-cyan-300 hover:text-cyan-300"
-            >
-              Cotizaciones
-            </Link>
+            {puedeCrear && (
+              <Link
+                href="/panel/inspecciones/nueva"
+                className="rounded-full bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950"
+              >
+                Nueva inspección
+              </Link>
+            )}
 
             <Link
-              href="/panel/clientes"
+              href="/panel/inspecciones"
               className="rounded-full border border-white/15 px-5 py-3 text-sm font-black hover:border-cyan-300 hover:text-cyan-300"
             >
-              Clientes
-            </Link>
-
-            <Link
-              href="/panel/inmuebles"
-              className="rounded-full border border-white/15 px-5 py-3 text-sm font-black hover:border-cyan-300 hover:text-cyan-300"
-            >
-              Inmuebles
+              Inspecciones
             </Link>
           </div>
         </header>
 
-        <section className="mt-8 grid gap-5 sm:grid-cols-3">
-          <Indicador
-            titulo="Por agendar"
-            valor={pendientes.length}
-            detalle="Cotizaciones aceptadas"
-          />
+        {(params.ok || params.error) && (
+          <div
+            className={`mt-7 rounded-2xl border p-5 ${
+              params.error
+                ? "border-rose-400/20 bg-rose-400/5"
+                : "border-emerald-400/20 bg-emerald-400/5"
+            }`}
+          >
+            <p
+              className={`text-xs font-black uppercase tracking-[0.2em] ${
+                params.error ? "text-rose-300" : "text-emerald-300"
+              }`}
+            >
+              {params.error ? "Acción no disponible" : "Operación completada"}
+            </p>
 
+            <p className="mt-2 font-bold text-slate-200">
+              {params.error ?? params.ok}
+            </p>
+          </div>
+        )}
+
+        <section className="mt-8 grid gap-5 sm:grid-cols-3">
           <Indicador
             titulo="Programadas"
             valor={programadas}
-            detalle="Próximas inspecciones"
+            detalle="Servicios pendientes de iniciar"
           />
 
           <Indicador
             titulo="En proceso"
             valor={enProceso}
-            detalle="Servicios iniciados"
+            detalle="Servicios actualmente iniciados"
+          />
+
+          <Indicador
+            titulo="Sin Inspector"
+            valor={sinInspector}
+            detalle="Pendientes de asignación"
           />
         </section>
 
-        <section className="mt-10">
-          <p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-300">
-            Pendientes por agendar
-          </p>
-
-          <h2 className="mt-2 text-2xl font-black">
-            Cotizaciones aceptadas
-          </h2>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Selecciona fecha, hora, zona horaria e
-            inspector para crear la inspección.
-          </p>
-
-          {pendientes.length === 0 ? (
-            <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-slate-900/50 p-12 text-center">
-              <p className="text-xl font-black">
-                No hay cotizaciones pendientes por
-                agendar.
-              </p>
-
-              <p className="mt-2 text-slate-500">
-                Cuando una cotización cambie a
-                ACEPTADA aparecerá aquí.
-              </p>
-
-              <Link
-                href="/panel/cotizaciones"
-                className="mt-5 inline-block font-black text-cyan-300"
-              >
-                Ir a Cotizaciones →
-              </Link>
-            </div>
-          ) : (
-            <div className="mt-6 space-y-5">
-              {pendientes.map(
-                (cotizacion) => (
-                  <article
-                    key={cotizacion.id}
-                    className="rounded-3xl border border-emerald-400/20 bg-slate-900 p-7"
-                  >
-                    <div className="grid gap-8 xl:grid-cols-[1fr_420px]">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="font-mono text-xs font-black text-cyan-300">
-                            {cotizacion.folio}
-                          </span>
-
-                          <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
-                            ACEPTADA
-                          </span>
-                        </div>
-
-                        <h3 className="mt-4 text-2xl font-black">
-                          {
-                            cotizacion.cliente
-                              .nombre
-                          }
-                        </h3>
-
-                        <div className="mt-4 space-y-2 text-sm text-slate-400">
-                          <p>
-                            <strong className="text-slate-200">
-                              Servicio:
-                            </strong>{" "}
-                            {cotizacion.paquete
-                              ?.nombre ??
-                              "Inspección habitacional"}
-                          </p>
-
-                          <p>
-                            <strong className="text-slate-200">
-                              Inmueble:
-                            </strong>{" "}
-                            {cotizacion.inmueble
-                              ?.alias ??
-                              "Sin inmueble asociado"}
-                          </p>
-
-                          <p>
-                            <strong className="text-slate-200">
-                              Dirección:
-                            </strong>{" "}
-                            {cotizacion.inmueble
-                              ?.direccion ??
-                              "Pendiente"}
-                          </p>
-
-                          <p>
-                            <strong className="text-slate-200">
-                              Ciudad:
-                            </strong>{" "}
-                            {cotizacion.inmueble
-                              ?.ciudad ??
-                              "Pendiente"}
-                          </p>
-
-                          <p>
-                            <strong className="text-slate-200">
-                              Superficie:
-                            </strong>{" "}
-                            {Number(
-                              cotizacion.superficieM2 ??
-                                0,
-                            ).toLocaleString(
-                              "es-MX",
-                            )}{" "}
-                            m²
-                          </p>
-
-                          {cotizacion.cliente
-                            .telefono && (
-                            <p>
-                              <strong className="text-slate-200">
-                                Teléfono:
-                              </strong>{" "}
-                              {
-                                cotizacion.cliente
-                                  .telefono
-                              }
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="mt-6 inline-block rounded-2xl bg-slate-950 px-5 py-4">
-                          <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                            Total contratado
-                          </p>
-
-                          <p className="mt-1 text-2xl font-black text-cyan-300">
-                            {dinero(
-                              cotizacion.total,
-                            )}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl bg-slate-950 p-6">
-                        <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
-                          Programar inspección
-                        </p>
-
-                        {!cotizacion.inmueble ? (
-                          <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
-                            <p className="font-black text-amber-300">
-                              Falta asociar inmueble
-                            </p>
-
-                            <p className="mt-2 text-sm text-slate-400">
-                              Esta cotización no puede
-                              programarse hasta tener
-                              un inmueble asociado.
-                            </p>
-                          </div>
-                        ) : (
-                          <form
-                            action={
-                              agendarCotizacion
-                            }
-                            className="mt-5 space-y-5"
-                          >
-                            <input
-                              type="hidden"
-                              name="cotizacionId"
-                              value={
-                                cotizacion.id
-                              }
-                            />
-
-                            <div>
-                              <label className="text-sm font-bold text-slate-300">
-                                Fecha y hora
-                              </label>
-
-                              <input
-                                type="datetime-local"
-                                name="fechaHora"
-                                required
-                                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
-                              />
-
-                              <p className="mt-2 text-xs text-slate-500">
-                                La hora corresponde a
-                                la zona horaria que
-                                selecciones abajo.
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="text-sm font-bold text-slate-300">
-                                Zona horaria
-                              </label>
-
-                              <select
-                                name="zonaHoraria"
-                                defaultValue="America/Ciudad_Juarez"
-                                required
-                                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
-                              >
-                                {ZONAS_HORARIAS.map(
-                                  (zona) => (
-                                    <option
-                                      key={
-                                        zona.value
-                                      }
-                                      value={
-                                        zona.value
-                                      }
-                                    >
-                                      {
-                                        zona.label
-                                      }
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-
-                              <p className="mt-2 text-xs text-slate-500">
-                                Selecciona la zona del
-                                inmueble donde se
-                                realizará la
-                                inspección.
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="text-sm font-bold text-slate-300">
-                                Inspector
-                              </label>
-
-                              <select
-                                name="inspectorId"
-                                defaultValue=""
-                                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
-                              >
-                                <option value="">
-                                  Asignar después
-                                </option>
-
-                                {inspectores.map(
-                                  (inspector) => (
-                                    <option
-                                      key={
-                                        inspector.id
-                                      }
-                                      value={
-                                        inspector.id
-                                      }
-                                    >
-                                      {
-                                        inspector
-                                          .usuario
-                                          .nombre
-                                      }
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-                            </div>
-
-                            <button
-                              type="submit"
-                              className="w-full rounded-full bg-emerald-300 px-6 py-4 font-black text-slate-950 transition hover:bg-emerald-200"
-                            >
-                              Confirmar programación
-                            </button>
-                          </form>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                ),
-              )}
-            </div>
-          )}
-        </section>
-
         <section className="mt-12">
-          <p className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">
-            Calendario operativo
-          </p>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">
+                Calendario operativo
+              </p>
 
-          <h2 className="mt-2 text-2xl font-black">
-            Próximas inspecciones
-          </h2>
+              <h2 className="mt-2 text-2xl font-black">
+                Inspecciones activas
+              </h2>
+            </div>
+
+            <p className="text-sm font-bold text-slate-500">
+              {inspecciones.length} registro
+              {inspecciones.length === 1 ? "" : "s"} en tu alcance
+            </p>
+          </div>
 
           <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
             {inspecciones.length === 0 ? (
@@ -584,17 +307,22 @@ export default async function AgendaPage() {
                 </p>
 
                 <p className="mt-2 text-slate-400">
-                  Las nuevas inspecciones aparecerán
-                  aquí.
+                  No existen inspecciones PROGRAMADAS o EN PROCESO dentro de tu
+                  alcance actual.
                 </p>
               </div>
             ) : (
               <div className="divide-y divide-white/10">
-                {inspecciones.map(
-                  (inspeccion) => (
+                {inspecciones.map((inspeccion) => {
+                  const zonaHoraria =
+                    inspeccion.zona?.zonaHoraria ??
+                    inspeccion.zonaHoraria ??
+                    "America/Ciudad_Juarez";
+
+                  return (
                     <article
                       key={inspeccion.id}
-                      className="grid gap-5 p-6 md:grid-cols-[220px_1fr_1fr_auto] md:items-center"
+                      className="grid gap-5 p-6 md:grid-cols-[230px_1fr_1fr_auto] md:items-center"
                     >
                       <div>
                         <p className="font-black text-cyan-300">
@@ -602,73 +330,108 @@ export default async function AgendaPage() {
                         </p>
 
                         <p className="mt-2 text-sm capitalize text-slate-400">
-                          {formatoFecha(
+                          {formatoFecha(zonaHoraria).format(
                             inspeccion.fechaProgramada,
-                            inspeccion.zonaHoraria,
                           )}
                         </p>
 
-                        <p className="mt-1 text-xs text-slate-600">
-                          {
-                            ZONAS_HORARIAS.find(
-                              (zona) =>
-                                zona.value ===
-                                inspeccion.zonaHoraria,
-                            )?.label ??
-                            inspeccion.zonaHoraria
-                          }
+                        <p className="mt-1 text-xs font-bold text-slate-600">
+                          {inspeccion.zona?.nombre ??
+                            inspeccion.ciudad}
                         </p>
                       </div>
 
                       <div>
                         <p className="font-black">
-                          {
-                            inspeccion.cliente
-                              .nombre
-                          }
+                          {inspeccion.cliente.nombre}
                         </p>
 
                         <p className="mt-1 text-sm text-slate-400">
-                          {
-                            inspeccion.tipoServicio
-                          }
+                          {inspeccion.tipoServicio}
                         </p>
                       </div>
 
                       <div>
                         <p className="font-bold">
-                          {
-                            inspeccion.direccion
-                          }
+                          {inspeccion.direccion}
                         </p>
 
                         <p className="mt-1 text-sm text-slate-400">
-                          {inspeccion.inspector
-                            ?.usuario.nombre ??
+                          {inspeccion.inspector?.usuario.nombre ??
                             "Inspector pendiente"}
                         </p>
 
-                        <p className="mt-1 text-xs font-black text-amber-300">
-                          {inspeccion.estado.replaceAll(
-                            "_",
-                            " ",
-                          )}
+                        <p
+                          className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-black ${
+                            inspeccion.estado ===
+                            EstadoInspeccion.EN_PROCESO
+                              ? "bg-amber-400/10 text-amber-300"
+                              : "bg-sky-400/10 text-sky-300"
+                          }`}
+                        >
+                          {inspeccion.estado.replaceAll("_", " ")}
                         </p>
                       </div>
 
                       <Link
-                        href={`/panel/inspecciones/${inspeccion.id}`}
+                        href={
+                          usuarioActual.rol === RolUsuario.ADMINISTRADOR
+                            ? "/panel/inspecciones"
+                            : usuarioActual.rol === RolUsuario.INSPECTOR
+                              ? `/inspector`
+                              : `/panel/inspecciones/${inspeccion.id}`
+                        }
                         className="rounded-full bg-cyan-400 px-5 py-3 text-center text-sm font-black text-slate-950"
                       >
-                        Abrir
+                        {usuarioActual.rol === RolUsuario.ADMINISTRADOR
+                          ? "Ver listado"
+                          : "Abrir"}
                       </Link>
                     </article>
-                  ),
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
         </section>
+
+        {usuarioActual.rol === RolUsuario.ADMINISTRADOR && (
+          <section className="mt-8 rounded-3xl border border-violet-400/20 bg-violet-400/5 p-6">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">
+              Seguimiento administrativo
+            </p>
+
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Administración puede consultar la agenda global para dar
+              seguimiento a pagos, documentación, clientes y requisitos
+              administrativos, pero no ejecuta funciones técnicas ni programa
+              inspecciones desde esta pantalla.
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                href="/panel/cotizaciones"
+                className="rounded-full border border-white/15 px-5 py-3 text-sm font-black hover:border-violet-300 hover:text-violet-300"
+              >
+                Cotizaciones
+              </Link>
+
+              <Link
+                href="/panel/clientes"
+                className="rounded-full border border-white/15 px-5 py-3 text-sm font-black hover:border-violet-300 hover:text-violet-300"
+              >
+                Clientes
+              </Link>
+
+              <Link
+                href="/panel/inmuebles"
+                className="rounded-full border border-white/15 px-5 py-3 text-sm font-black hover:border-violet-300 hover:text-violet-300"
+              >
+                Inmuebles
+              </Link>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
