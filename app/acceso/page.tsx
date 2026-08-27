@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 
 export default async function AccesoPage() {
@@ -19,7 +19,6 @@ export default async function AccesoPage() {
     case "ADMINISTRADOR":
     case "GERENTE":
     case "COORDINADOR":
-    case "SUPERVISOR":
       redirect("/panel");
 
     default:

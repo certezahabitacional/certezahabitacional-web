@@ -2,6 +2,10 @@ import Link from "next/link";
 import { RolUsuario } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { obtenerAdministradorActual } from "@/lib/administrador-actual";
+import {
+  puedeAdministrarUsuario,
+  puedeCrearUsuario,
+} from "@/lib/permisos";
 import PasswordField from "@/components/forms/PasswordField";
 import {
   cambiarEstadoUsuario,
@@ -103,31 +107,33 @@ export default async function UsuariosPage({
     },
   });
 
-  const rolesCreables = esDirector
-    ? [
-        RolUsuario.DIRECTOR,
-        RolUsuario.ADMINISTRADOR,
-        RolUsuario.GERENTE,
-        RolUsuario.COORDINADOR,
-        RolUsuario.SUPERVISOR,
-        RolUsuario.INSPECTOR,
-        RolUsuario.CLIENTE,
-      ]
-    : [
-        RolUsuario.GERENTE,
-        RolUsuario.COORDINADOR,
-        RolUsuario.SUPERVISOR,
-        RolUsuario.INSPECTOR,
-        RolUsuario.CLIENTE,
-      ];
+  const rolesDisponibles = [
+    RolUsuario.DIRECTOR,
+    RolUsuario.ADMINISTRADOR,
+    RolUsuario.GERENTE,
+    RolUsuario.COORDINADOR,
+    RolUsuario.CLIENTE,
+  ];
+
+  const rolesCreables =
+    rolesDisponibles.filter(
+      (rol) =>
+        puedeCrearUsuario(
+          administrador.rol,
+          rol,
+        ),
+    );
 
   function puedeModificar(usuario: {
     id: string;
     rol: RolUsuario;
   }) {
     if (usuario.id === administrador.id) return false;
-    if (esDirector) return true;
-    return usuario.rol !== RolUsuario.DIRECTOR;
+
+    return puedeAdministrarUsuario(
+      administrador.rol,
+      usuario.rol,
+    );
   }
 
   return (
@@ -183,17 +189,24 @@ export default async function UsuariosPage({
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Los perfiles de cliente e inspector se crearán automáticamente
-              según el rol seleccionado.
+              El perfil de Cliente se crea automáticamente al seleccionar ese rol.
+              Los Inspectores deben darse de alta desde el módulo de Inspectores.
             </p>
 
             {!esDirector && (
               <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-sm leading-6 text-amber-100">
-                Administración puede crear Gerentes, Coordinadores,
-                Supervisores, Inspectores y Clientes. Solo Dirección puede
-                crear Administradores o Directores.
+                Administración puede crear Gerentes, Coordinadores y Clientes.
+                Solo Dirección puede crear Administradores o Directores.
+                Los Inspectores se crean desde el módulo de Inspectores.
               </div>
             )}
+
+            <Link
+              href="/panel/inspectores"
+              className="mt-5 inline-flex rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
+            >
+              Ir al módulo de Inspectores
+            </Link>
 
             <form
               action={crearUsuario}
@@ -273,7 +286,6 @@ export default async function UsuariosPage({
                 <option value="ADMINISTRADOR">Administradores</option>
                 <option value="GERENTE">Gerentes</option>
                 <option value="COORDINADOR">Coordinadores</option>
-                <option value="SUPERVISOR">Supervisores</option>
                 <option value="INSPECTOR">Inspectores</option>
                 <option value="CLIENTE">Clientes</option>
               </select>
@@ -331,7 +343,10 @@ export default async function UsuariosPage({
                               )}
 
                               {!esDirector &&
-                                usuario.rol === RolUsuario.DIRECTOR && (
+                                (
+                                  usuario.rol === RolUsuario.DIRECTOR ||
+                                  usuario.rol === RolUsuario.ADMINISTRADOR
+                                ) && (
                                   <span className="rounded-full bg-rose-400/10 px-3 py-1 text-xs font-black text-rose-300">
                                     PROTEGIDA
                                   </span>
@@ -461,8 +476,6 @@ function etiquetaRol(rol: RolUsuario) {
       return "Gerente";
     case RolUsuario.COORDINADOR:
       return "Coordinador";
-    case RolUsuario.SUPERVISOR:
-      return "Supervisor";
     case RolUsuario.INSPECTOR:
       return "Inspector";
     case RolUsuario.CLIENTE:
@@ -509,7 +522,6 @@ function Rol({ rol }: { rol: string }) {
     ADMINISTRADOR: "bg-violet-400/10 text-violet-300",
     GERENTE: "bg-emerald-400/10 text-emerald-300",
     COORDINADOR: "bg-indigo-400/10 text-indigo-300",
-    SUPERVISOR: "bg-sky-400/10 text-sky-300",
     INSPECTOR: "bg-amber-400/10 text-amber-300",
     CLIENTE: "bg-cyan-400/10 text-cyan-300",
   };

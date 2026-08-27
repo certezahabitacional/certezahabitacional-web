@@ -1,6 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { RolUsuario } from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
 import QRCode from "qrcode";
+import { auth } from "@/auth";
+import { puede, puedeAbrirExpedienteTecnico } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
 import { emitirCertificado } from "../actions";
 import PrintButton from "./PrintButton";
@@ -23,6 +26,52 @@ export default async function CertificadoPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const usuarioActual =
+    await prisma.usuario.findUnique({
+      where: {
+        id: session.user.id,
+      },
+      select: {
+        id: true,
+        rol: true,
+        activo: true,
+        zonaId: true,
+        gerenteId: true,
+        coordinadorId: true,
+        inspector: {
+          select: {
+            id: true,
+            activo: true,
+          },
+        },
+      },
+    });
+
+  if (
+    !usuarioActual ||
+    !usuarioActual.activo
+  ) {
+    redirect("/acceso");
+  }
+
+  if (
+    usuarioActual.rol ===
+      RolUsuario.CLIENTE ||
+    usuarioActual.rol ===
+      RolUsuario.ADMINISTRADOR
+  ) {
+    redirect(
+      usuarioActual.rol === RolUsuario.CLIENTE
+        ? "/portal"
+        : "/acceso",
+    );
+  }
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },
@@ -35,7 +84,91 @@ export default async function CertificadoPage({
     },
   });
 
-  if (!inspeccion) notFound();
+  if (!inspeccion) {
+    notFound();
+  }
+
+  const puedeAbrirCertificado =
+    puede(
+      usuarioActual.rol,
+      "CERTIFICADO_VER",
+    ) &&
+    puedeAbrirExpedienteTecnico(
+      {
+        id: usuarioActual.id,
+        rol: usuarioActual.rol,
+        zonaId: usuarioActual.zonaId,
+        gerenteId: usuarioActual.gerenteId,
+        coordinadorId:
+          usuarioActual.coordinadorId,
+        inspectorId:
+          usuarioActual.inspector?.id ??
+          null,
+      },
+      {
+        id: inspeccion.id,
+        zonaId: inspeccion.zonaId,
+        clienteId: inspeccion.clienteId,
+        inspectorId:
+          inspeccion.inspectorId,
+        inspectorUsuarioId:
+          inspeccion.inspector?.usuarioId ??
+          null,
+        inspectorZonaId:
+          inspeccion.inspector?.usuario
+            .zonaId ?? null,
+        coordinadorUsuarioId:
+          inspeccion.inspector?.usuario
+            .coordinadorId ?? null,
+        gerenteUsuarioId:
+          inspeccion.inspector?.usuario
+            .gerenteId ?? null,
+      },
+    );
+
+  if (!puedeAbrirCertificado) {
+    redirect("/acceso");
+  }
+
+  const puedeEmitir =
+    puede(
+      usuarioActual.rol,
+      "CERTIFICADO_EMITIR",
+    ) &&
+    (
+      usuarioActual.rol ===
+        RolUsuario.GERENTE ||
+      usuarioActual.rol ===
+        RolUsuario.DIRECTOR
+    );
+
+  const puedeImprimir =
+    puede(
+      usuarioActual.rol,
+      "CERTIFICADO_IMPRIMIR",
+    ) &&
+    (
+      usuarioActual.rol ===
+        RolUsuario.GERENTE ||
+      usuarioActual.rol ===
+        RolUsuario.DIRECTOR
+    );
+
+  const puedeRevocar =
+    usuarioActual.rol ===
+      RolUsuario.DIRECTOR &&
+    puede(
+      usuarioActual.rol,
+      "CERTIFICADO_REVOCAR",
+    );
+
+  const puedeReactivar =
+    usuarioActual.rol ===
+      RolUsuario.DIRECTOR &&
+    puede(
+      usuarioActual.rol,
+      "CERTIFICADO_REACTIVAR",
+    );
 
   if (!inspeccion.certificado) {
     return (
@@ -55,12 +188,26 @@ export default async function CertificadoPage({
             </p>
             <p className="font-black">{inspeccion.semaforo ?? "SIN EVALUAR"}</p>
           </div>
-          <form action={emitirCertificado} className="mt-7">
-            <input type="hidden" name="inspeccionId" value={inspeccion.id} />
-            <button className="w-full rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950">
-              Emitir certificado definitivo
-            </button>
-          </form>
+          {puedeEmitir ? (
+            <form
+              action={emitirCertificado}
+              className="mt-7"
+            >
+              <input
+                type="hidden"
+                name="inspeccionId"
+                value={inspeccion.id}
+              />
+
+              <button className="w-full rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950">
+                Emitir certificado definitivo
+              </button>
+            </form>
+          ) : (
+            <div className="mt-7 rounded-2xl border border-white/10 bg-slate-950 p-4 text-sm text-slate-400">
+              El certificado todavía no ha sido emitido. Tu rol puede consultar el expediente, pero no emitir el certificado.
+            </div>
+          )}
           <Link
             href={`/panel/inspecciones/${inspeccion.id}`}
             className="mt-5 inline-block font-bold text-slate-400"
@@ -74,16 +221,16 @@ export default async function CertificadoPage({
 
   const certificado = inspeccion.certificado;
   const baseUrl =
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-const urlValidacion =
-  `${baseUrl}/certificados/verificar/${certificado.codigoValidacion}`;
+  const urlValidacion =
+    `${baseUrl}/certificados/verificar/${certificado.codigoValidacion}`;
 
-const qrDataUrl = await QRCode.toDataURL(urlValidacion, {
-  width: 260,
-  margin: 1,
-  errorCorrectionLevel: "M",
-});
+  const qrDataUrl = await QRCode.toDataURL(urlValidacion, {
+    width: 260,
+    margin: 1,
+    errorCorrectionLevel: "M",
+  });
 
   return (
     <main className="min-h-screen bg-slate-200 px-4 py-8 text-slate-950 print:bg-white print:p-0">
@@ -94,7 +241,9 @@ const qrDataUrl = await QRCode.toDataURL(urlValidacion, {
         >
           ← Volver al expediente
         </Link>
-        <PrintButton />
+        {puedeImprimir && (
+          <PrintButton />
+        )}
       </div>
 
       {query.ok && (
@@ -229,7 +378,8 @@ const qrDataUrl = await QRCode.toDataURL(urlValidacion, {
       )}
     </div>
 
-    {!certificado.vigente && (
+    {!certificado.vigente &&
+      puedeReactivar && (
       <form action={reactivarCertificado}>
         <input
           type="hidden"
@@ -247,7 +397,14 @@ const qrDataUrl = await QRCode.toDataURL(urlValidacion, {
     )}
   </div>
 
-  {certificado.vigente && (
+  {!puedeRevocar && !puedeReactivar && (
+    <div className="mt-7 border-t border-slate-200 pt-6 text-sm text-slate-500">
+      La revocación o reactivaciÃ³n de certificados corresponde exclusivamente a Dirección.
+    </div>
+  )}
+
+  {certificado.vigente &&
+    puedeRevocar && (
     <form
       action={revocarCertificado}
       className="mt-7 border-t border-slate-200 pt-6"

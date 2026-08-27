@@ -1,9 +1,13 @@
-import Link from "next/link";
+﻿import Link from "next/link";
+
+import { redirect } from "next/navigation";
 import {
   RolUsuario,
   TipoCliente,
 } from "@prisma/client";
 
+import { auth } from "@/auth";
+import { puede } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
 
 import {
@@ -14,10 +18,7 @@ import {
   vincularUsuarioCliente,
 } from "./actions";
 
-const etiquetas: Record<
-  TipoCliente,
-  string
-> = {
+const etiquetas: Record<TipoCliente, string> = {
   PARTICULAR: "Particular",
   INMOBILIARIA: "Inmobiliaria",
   CONSTRUCTORA: "Constructora",
@@ -33,95 +34,137 @@ export default async function ClientesPage({
     error?: string;
   }>;
 }) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
+    select: {
+      rol: true,
+      activo: true,
+    },
+  });
+
+  if (!usuarioActual || !usuarioActual.activo) {
+    redirect("/acceso");
+  }
+
+  if (
+    usuarioActual.rol !== RolUsuario.ADMINISTRADOR &&
+    usuarioActual.rol !== RolUsuario.DIRECTOR
+  ) {
+    redirect("/acceso");
+  }
+
+  if (
+    !puede(
+      usuarioActual.rol,
+      "CLIENTE_CREAR",
+    ) ||
+    !puede(
+      usuarioActual.rol,
+      "CLIENTE_EDITAR_ADMIN",
+    )
+  ) {
+    redirect("/acceso");
+  }
+
+  const esDirector =
+    usuarioActual.rol === RolUsuario.DIRECTOR &&
+    puede(
+      usuarioActual.rol,
+      "REGISTRO_ELIMINAR_FISICO",
+    );
+
   const params = await searchParams;
 
-  const q =
-    params.q?.trim() ?? "";
+  const q = params.q?.trim() ?? "";
 
-  const [
-    clientes,
-    usuariosCliente,
-  ] = await Promise.all([
-    prisma.cliente.findMany({
-      where: q
-        ? {
-            OR: [
-              {
-                nombre: {
-                  contains: q,
-                  mode: "insensitive",
+  const [clientes, usuariosCliente] =
+    await Promise.all([
+      prisma.cliente.findMany({
+        where: q
+          ? {
+              OR: [
+                {
+                  nombre: {
+                    contains: q,
+                    mode: "insensitive",
+                  },
                 },
-              },
-              {
-                telefono: {
-                  contains: q,
-                  mode: "insensitive",
+                {
+                  telefono: {
+                    contains: q,
+                    mode: "insensitive",
+                  },
                 },
-              },
-              {
-                correo: {
-                  contains: q,
-                  mode: "insensitive",
+                {
+                  correo: {
+                    contains: q,
+                    mode: "insensitive",
+                  },
                 },
-              },
-              {
-                ciudad: {
-                  contains: q,
-                  mode: "insensitive",
+                {
+                  ciudad: {
+                    contains: q,
+                    mode: "insensitive",
+                  },
                 },
-              },
-            ],
-          }
-        : undefined,
+              ],
+            }
+          : undefined,
 
-      include: {
-        usuario: {
-          select: {
-            id: true,
-            nombre: true,
-            email: true,
-            activo: true,
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+              activo: true,
+            },
+          },
+
+          _count: {
+            select: {
+              inspecciones: true,
+              inmuebles: true,
+              cotizaciones: true,
+            },
           },
         },
 
-        _count: {
-          select: {
-            inspecciones: true,
-            inmuebles: true,
-            cotizaciones: true,
+        orderBy: {
+          creadoEn: "desc",
+        },
+      }),
+
+      prisma.usuario.findMany({
+        where: {
+          rol: RolUsuario.CLIENTE,
+        },
+
+        select: {
+          id: true,
+          nombre: true,
+          email: true,
+          activo: true,
+
+          cliente: {
+            select: {
+              id: true,
+              nombre: true,
+            },
           },
         },
-      },
 
-      orderBy: {
-        creadoEn: "desc",
-      },
-    }),
-
-    prisma.usuario.findMany({
-      where: {
-        rol: RolUsuario.CLIENTE,
-      },
-
-      select: {
-        id: true,
-        nombre: true,
-        email: true,
-        activo: true,
-
-        cliente: {
-          select: {
-            id: true,
-            nombre: true,
-          },
+        orderBy: {
+          nombre: "asc",
         },
-      },
-
-      orderBy: {
-        nombre: "asc",
-      },
-    }),
-  ]);
+      }),
+    ]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
@@ -132,7 +175,7 @@ export default async function ClientesPage({
               href="/panel"
               className="text-sm font-bold text-cyan-300"
             >
-              ← Panel
+              Ã¢â€ Â Panel
             </Link>
 
             <h1 className="mt-2 text-3xl font-black">
@@ -140,7 +183,7 @@ export default async function ClientesPage({
             </h1>
 
             <p className="mt-1 text-slate-400">
-              Directorio, datos comerciales y acceso
+              Directorio administrativo, datos comerciales y acceso
               al portal del cliente.
             </p>
           </div>
@@ -162,8 +205,7 @@ export default async function ClientesPage({
           </form>
         </div>
 
-        {(params.ok ||
-          params.error) && (
+        {(params.ok || params.error) && (
           <p
             className={`mt-6 rounded-2xl px-5 py-4 font-bold ${
               params.error
@@ -171,15 +213,14 @@ export default async function ClientesPage({
                 : "bg-emerald-400/10 text-emerald-300"
             }`}
           >
-            {params.error ??
-              params.ok}
+            {params.error ?? params.ok}
           </p>
         )}
 
         <div className="mt-8 grid gap-8 xl:grid-cols-[380px_1fr]">
           <section className="h-fit rounded-3xl border border-white/10 bg-slate-900 p-6">
             <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-300">
-              Alta rápida
+              Alta rÃƒÂ¡pida
             </p>
 
             <h2 className="mt-2 text-2xl font-black">
@@ -192,12 +233,12 @@ export default async function ClientesPage({
             >
               <Campo
                 name="nombre"
-                label="Nombre o razón social *"
+                label="Nombre o razÃƒÂ³n social *"
               />
 
               <Campo
                 name="telefono"
-                label="Teléfono o WhatsApp *"
+                label="TelÃƒÂ©fono o WhatsApp *"
               />
 
               <Campo
@@ -215,9 +256,7 @@ export default async function ClientesPage({
                   name="tipo"
                   className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
                 >
-                  {Object.entries(
-                    etiquetas,
-                  ).map(
+                  {Object.entries(etiquetas).map(
                     ([valor, etiqueta]) => (
                       <option
                         key={valor}
@@ -243,7 +282,7 @@ export default async function ClientesPage({
 
               <Campo
                 name="direccion"
-                label="Dirección"
+                label="DirecciÃƒÂ³n"
               />
 
               <label className="block">
@@ -277,380 +316,305 @@ export default async function ClientesPage({
               </p>
             ) : (
               <div className="divide-y divide-white/10">
-                {clientes.map(
-                  (cliente) => (
-                    <article
-                      key={cliente.id}
-                      className="p-6"
-                    >
-                      <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-center">
-                        <div>
-                          <p className="text-lg font-black text-cyan-300">
-                            {cliente.nombre}
-                          </p>
+                {clientes.map((cliente) => (
+                  <article
+                    key={cliente.id}
+                    className="p-6"
+                  >
+                    <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-center">
+                      <div>
+                        <p className="text-lg font-black text-cyan-300">
+                          {cliente.nombre}
+                        </p>
 
-                          <p className="mt-1 text-sm text-slate-400">
-                            {cliente.telefono ??
-                              "Sin teléfono"}
-                          </p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {cliente.telefono ??
+                            "Sin telÃƒÂ©fono"}
+                        </p>
 
-                          <p className="text-sm text-slate-500">
-                            {cliente.correo ??
-                              "Sin correo"}
-                          </p>
-                        </div>
+                        <p className="text-sm text-slate-500">
+                          {cliente.correo ??
+                            "Sin correo"}
+                        </p>
+                      </div>
 
-                        <div>
-                          <span className="rounded-full bg-white/5 px-3 py-2 text-xs font-black">
-                            {
-                              etiquetas[
-                                cliente.tipo
-                              ]
-                            }
+                      <div>
+                        <span className="rounded-full bg-white/5 px-3 py-2 text-xs font-black">
+                          {etiquetas[cliente.tipo]}
+                        </span>
+
+                        <p className="mt-3 text-sm text-slate-400">
+                          {cliente.ciudad ??
+                            "Sin ciudad"}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
+                          <span className="text-emerald-300">
+                            {cliente._count.inspecciones}{" "}
+                            inspecciÃƒÂ³n(es)
                           </span>
 
-                          <p className="mt-3 text-sm text-slate-400">
-                            {cliente.ciudad ??
-                              "Sin ciudad"}
-                          </p>
+                          <span className="text-cyan-300">
+                            {cliente._count.inmuebles}{" "}
+                            inmueble(s)
+                          </span>
 
-                          <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
-                            <span className="text-emerald-300">
-                              {
-                                cliente._count
-                                  .inspecciones
-                              }{" "}
-                              inspección(es)
-                            </span>
-
-                            <span className="text-cyan-300">
-                              {
-                                cliente._count
-                                  .inmuebles
-                              }{" "}
-                              inmueble(s)
-                            </span>
-
-                            <span className="text-amber-300">
-                              {
-                                cliente._count
-                                  .cotizaciones
-                              }{" "}
-                              cotización(es)
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="md:text-right">
-                          {cliente.usuario ? (
-                            <span className="inline-flex rounded-full bg-emerald-400/10 px-3 py-2 text-xs font-black text-emerald-300">
-                              Con acceso al portal
-                            </span>
-                          ) : (
-                            <span className="inline-flex rounded-full bg-amber-400/10 px-3 py-2 text-xs font-black text-amber-300">
-                              Sin acceso al portal
-                            </span>
-                          )}
+                          <span className="text-amber-300">
+                            {cliente._count.cotizaciones}{" "}
+                            cotizaciÃƒÂ³n(es)
+                          </span>
                         </div>
                       </div>
 
-                      {cliente.usuario && (
-                        <div className="mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-4 text-sm">
-                          <p className="font-black text-emerald-300">
-                            Usuario vinculado
-                          </p>
+                      <div className="md:text-right">
+                        {cliente.usuario ? (
+                          <span className="inline-flex rounded-full bg-emerald-400/10 px-3 py-2 text-xs font-black text-emerald-300">
+                            Con acceso al portal
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-amber-400/10 px-3 py-2 text-xs font-black text-amber-300">
+                            Sin acceso al portal
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                          <p className="mt-1 text-slate-300">
-                            {
-                              cliente.usuario
-                                .nombre
-                            }{" "}
-                            —{" "}
-                            {
-                              cliente.usuario
-                                .email
+                    {cliente.usuario && (
+                      <div className="mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-4 text-sm">
+                        <p className="font-black text-emerald-300">
+                          Usuario vinculado
+                        </p>
+
+                        <p className="mt-1 text-slate-300">
+                          {cliente.usuario.nombre} Ã¢â‚¬â€{" "}
+                          {cliente.usuario.email}
+                        </p>
+
+                        {!cliente.usuario.activo && (
+                          <p className="mt-1 font-bold text-rose-300">
+                            Usuario inactivo
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <details className="mt-5 rounded-2xl border border-white/10 bg-slate-950/60">
+                      <summary className="cursor-pointer px-5 py-4 font-black text-cyan-300">
+                        Editar cliente y acceso
+                      </summary>
+
+                      <div className="border-t border-white/10 p-5">
+                        <form
+                          action={actualizarCliente}
+                          className="grid gap-4 md:grid-cols-2"
+                        >
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={cliente.id}
+                          />
+
+                          <Campo
+                            name="nombre"
+                            label="Nombre o razÃƒÂ³n social *"
+                            defaultValue={cliente.nombre}
+                          />
+
+                          <Campo
+                            name="telefono"
+                            label="TelÃƒÂ©fono o WhatsApp *"
+                            defaultValue={
+                              cliente.telefono ?? ""
                             }
+                          />
+
+                          <Campo
+                            name="correo"
+                            label="Correo"
+                            type="email"
+                            defaultValue={
+                              cliente.correo ?? ""
+                            }
+                          />
+
+                          <label className="block">
+                            <span className="mb-2 block text-sm font-bold text-slate-300">
+                              Tipo
+                            </span>
+
+                            <select
+                              name="tipo"
+                              defaultValue={cliente.tipo}
+                              className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
+                            >
+                              {Object.entries(
+                                etiquetas,
+                              ).map(
+                                ([valor, etiqueta]) => (
+                                  <option
+                                    key={valor}
+                                    value={valor}
+                                  >
+                                    {etiqueta}
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                          </label>
+
+                          <Campo
+                            name="empresa"
+                            label="Empresa"
+                            defaultValue={
+                              cliente.empresa ?? ""
+                            }
+                          />
+
+                          <Campo
+                            name="ciudad"
+                            label="Ciudad"
+                            defaultValue={
+                              cliente.ciudad ?? ""
+                            }
+                          />
+
+                          <div className="md:col-span-2">
+                            <Campo
+                              name="direccion"
+                              label="DirecciÃƒÂ³n"
+                              defaultValue={
+                                cliente.direccion ?? ""
+                              }
+                            />
+                          </div>
+
+                          <label className="block md:col-span-2">
+                            <span className="mb-2 block text-sm font-bold text-slate-300">
+                              Notas
+                            </span>
+
+                            <textarea
+                              name="notas"
+                              rows={3}
+                              defaultValue={
+                                cliente.notas ?? ""
+                              }
+                              className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
+                            />
+                          </label>
+
+                          <div className="md:col-span-2">
+                            <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950">
+                              Guardar cambios
+                            </button>
+                          </div>
+                        </form>
+
+                        <div className="mt-7 border-t border-white/10 pt-6">
+                          <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
+                            Acceso al portal
                           </p>
 
-                          {!cliente.usuario
-                            .activo && (
-                            <p className="mt-1 font-bold text-rose-300">
-                              Usuario inactivo
-                            </p>
-                          )}
-                        </div>
-                      )}
+                          <p className="mt-2 text-sm text-slate-400">
+                            Puedes vincular un usuario CLIENTE
+                            existente. Si ese usuario estÃƒÂ¡ asociado
+                            actualmente a otro registro de cliente,
+                            el acceso se moverÃƒÂ¡ a este cliente. Sus
+                            inmuebles, cotizaciones e inspecciones
+                            no se mueven.
+                          </p>
 
-                      <details className="mt-5 rounded-2xl border border-white/10 bg-slate-950/60">
-                        <summary className="cursor-pointer px-5 py-4 font-black text-cyan-300">
-                          Editar cliente y acceso
-                        </summary>
-
-                        <div className="border-t border-white/10 p-5">
                           <form
-                            action={
-                              actualizarCliente
-                            }
-                            className="grid gap-4 md:grid-cols-2"
+                            action={vincularUsuarioCliente}
+                            className="mt-4 flex flex-col gap-3 lg:flex-row"
                           >
                             <input
                               type="hidden"
-                              name="id"
-                              value={
-                                cliente.id
-                              }
+                              name="clienteId"
+                              value={cliente.id}
                             />
 
-                            <Campo
-                              name="nombre"
-                              label="Nombre o razón social *"
+                            <select
+                              name="usuarioId"
                               defaultValue={
-                                cliente.nombre
+                                cliente.usuario?.id ?? ""
                               }
-                            />
+                              required
+                              className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
+                            >
+                              <option value="">
+                                Selecciona un usuario CLIENTE
+                              </option>
 
-                            <Campo
-                              name="telefono"
-                              label="Teléfono o WhatsApp *"
-                              defaultValue={
-                                cliente.telefono ??
-                                ""
-                              }
-                            />
+                              {usuariosCliente.map(
+                                (usuario) => (
+                                  <option
+                                    key={usuario.id}
+                                    value={usuario.id}
+                                    disabled={!usuario.activo}
+                                  >
+                                    {usuario.nombre} Ã¢â‚¬â€{" "}
+                                    {usuario.email}
+                                    {usuario.cliente
+                                      ? usuario.cliente.id ===
+                                        cliente.id
+                                        ? " Ã¢â‚¬â€ vinculado aquÃƒÂ­"
+                                        : ` Ã¢â‚¬â€ actualmente en ${usuario.cliente.nombre}`
+                                      : " Ã¢â‚¬â€ disponible"}
+                                    {!usuario.activo
+                                      ? " Ã¢â‚¬â€ INACTIVO"
+                                      : ""}
+                                  </option>
+                                ),
+                              )}
+                            </select>
 
-                            <Campo
-                              name="correo"
-                              label="Correo"
-                              type="email"
-                              defaultValue={
-                                cliente.correo ??
-                                ""
-                              }
-                            />
-
-                            <label className="block">
-                              <span className="mb-2 block text-sm font-bold text-slate-300">
-                                Tipo
-                              </span>
-
-                              <select
-                                name="tipo"
-                                defaultValue={
-                                  cliente.tipo
-                                }
-                                className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
-                              >
-                                {Object.entries(
-                                  etiquetas,
-                                ).map(
-                                  ([
-                                    valor,
-                                    etiqueta,
-                                  ]) => (
-                                    <option
-                                      key={
-                                        valor
-                                      }
-                                      value={
-                                        valor
-                                      }
-                                    >
-                                      {
-                                        etiqueta
-                                      }
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-                            </label>
-
-                            <Campo
-                              name="empresa"
-                              label="Empresa"
-                              defaultValue={
-                                cliente.empresa ??
-                                ""
-                              }
-                            />
-
-                            <Campo
-                              name="ciudad"
-                              label="Ciudad"
-                              defaultValue={
-                                cliente.ciudad ??
-                                ""
-                              }
-                            />
-
-                            <div className="md:col-span-2">
-                              <Campo
-                                name="direccion"
-                                label="Dirección"
-                                defaultValue={
-                                  cliente.direccion ??
-                                  ""
-                                }
-                              />
-                            </div>
-
-                            <label className="block md:col-span-2">
-                              <span className="mb-2 block text-sm font-bold text-slate-300">
-                                Notas
-                              </span>
-
-                              <textarea
-                                name="notas"
-                                rows={3}
-                                defaultValue={
-                                  cliente.notas ??
-                                  ""
-                                }
-                                className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
-                              />
-                            </label>
-
-                            <div className="md:col-span-2">
-                              <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950">
-                                Guardar cambios
-                              </button>
-                            </div>
+                            <button className="rounded-full bg-emerald-300 px-5 py-3 font-black text-slate-950">
+                              Vincular acceso
+                            </button>
                           </form>
 
-                          <div className="mt-7 border-t border-white/10 pt-6">
-                            <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
-                              Acceso al portal
-                            </p>
-
-                            <p className="mt-2 text-sm text-slate-400">
-                              Puedes vincular un
-                              usuario CLIENTE existente.
-                              Si ese usuario está
-                              asociado actualmente a
-                              otro registro de cliente,
-                              el acceso se moverá a este
-                              cliente. Sus inmuebles,
-                              cotizaciones e
-                              inspecciones no se mueven.
-                            </p>
-
+                          {cliente.usuario && (
                             <form
                               action={
-                                vincularUsuarioCliente
+                                desvincularUsuarioCliente
                               }
-                              className="mt-4 flex flex-col gap-3 lg:flex-row"
+                              className="mt-3"
                             >
                               <input
                                 type="hidden"
                                 name="clienteId"
-                                value={
-                                  cliente.id
-                                }
+                                value={cliente.id}
                               />
 
-                              <select
-                                name="usuarioId"
-                                defaultValue={
-                                  cliente
-                                    .usuario
-                                    ?.id ?? ""
-                                }
-                                required
-                                className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
-                              >
-                                <option value="">
-                                  Selecciona un
-                                  usuario CLIENTE
-                                </option>
-
-                                {usuariosCliente.map(
-                                  (usuario) => (
-                                    <option
-                                      key={
-                                        usuario.id
-                                      }
-                                      value={
-                                        usuario.id
-                                      }
-                                      disabled={
-                                        !usuario.activo
-                                      }
-                                    >
-                                      {
-                                        usuario.nombre
-                                      }{" "}
-                                      —{" "}
-                                      {
-                                        usuario.email
-                                      }
-                                      {usuario.cliente
-                                        ? usuario
-                                            .cliente
-                                            .id ===
-                                          cliente.id
-                                          ? " — vinculado aquí"
-                                          : ` — actualmente en ${usuario.cliente.nombre}`
-                                        : " — disponible"}
-                                      {!usuario.activo
-                                        ? " — INACTIVO"
-                                        : ""}
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-
-                              <button className="rounded-full bg-emerald-300 px-5 py-3 font-black text-slate-950">
-                                Vincular acceso
+                              <button className="rounded-full border border-amber-300/30 px-5 py-3 text-sm font-black text-amber-300">
+                                Desvincular acceso
                               </button>
                             </form>
+                          )}
+                        </div>
 
-                            {cliente.usuario && (
-                              <form
-                                action={
-                                  desvincularUsuarioCliente
-                                }
-                                className="mt-3"
-                              >
-                                <input
-                                  type="hidden"
-                                  name="clienteId"
-                                  value={
-                                    cliente.id
-                                  }
-                                />
-
-                                <button className="rounded-full border border-amber-300/30 px-5 py-3 text-sm font-black text-amber-300">
-                                  Desvincular acceso
-                                </button>
-                              </form>
-                            )}
-                          </div>
-
+                        {esDirector && (
                           <div className="mt-7 border-t border-white/10 pt-6">
                             <p className="text-xs font-black uppercase tracking-[0.2em] text-rose-300">
-                              Eliminación
+                              EliminaciÃƒÂ³n
                             </p>
 
                             <p className="mt-2 text-sm text-slate-500">
-                              Solo se permite
-                              eliminar un cliente sin
-                              usuario vinculado y sin
-                              inmuebles,
-                              cotizaciones ni
-                              inspecciones.
+                              Solo DirecciÃƒÂ³n puede eliminar
+                              fÃƒÂ­sicamente un registro sin usuario,
+                              inmuebles, cotizaciones, inspecciones
+                              ni historial asociado.
                             </p>
 
                             <form
-                              action={
-                                eliminarCliente
-                              }
+                              action={eliminarCliente}
                               className="mt-4"
                             >
                               <input
                                 type="hidden"
                                 name="id"
-                                value={
-                                  cliente.id
-                                }
+                                value={cliente.id}
                               />
 
                               <button className="rounded-full border border-rose-400/20 px-4 py-2 text-sm font-bold text-rose-300">
@@ -658,11 +622,11 @@ export default async function ClientesPage({
                               </button>
                             </form>
                           </div>
-                        </div>
-                      </details>
-                    </article>
-                  ),
-                )}
+                        )}
+                      </div>
+                    </details>
+                  </article>
+                ))}
               </div>
             )}
           </section>
@@ -698,3 +662,4 @@ function Campo({
     </label>
   );
 }
+

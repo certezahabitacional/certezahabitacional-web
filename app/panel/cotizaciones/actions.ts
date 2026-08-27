@@ -20,15 +20,32 @@ async function verificarPermiso() {
     redirect("/login");
   }
 
+  const usuario = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+    },
+  });
+
+  if (!usuario || !usuario.activo) {
+    redirect("/acceso");
+  }
+
   if (
-    session.user.role !== "DIRECTOR" &&
-    session.user.role !== "ADMINISTRADOR" &&
-    session.user.role !== "COORDINADOR"
+    usuario.rol !== "DIRECTOR" &&
+    usuario.rol !== "ADMINISTRADOR"
   ) {
     redirect("/acceso");
   }
 
-  return session;
+  return {
+    session,
+    usuario,
+  };
 }
 
 function texto(
@@ -176,8 +193,10 @@ function calcularPrecio({
 export async function crearCotizacion(
   formData: FormData,
 ) {
-  const session =
-    await verificarPermiso();
+  const {
+    session,
+    usuario,
+  } = await verificarPermiso();
 
   const clienteId = texto(
     formData,
@@ -335,7 +354,7 @@ export async function crearCotizacion(
       paqueteId,
 
       creadaPorId:
-        session.user.id,
+        usuario.id,
 
       superficieM2,
 
@@ -395,8 +414,9 @@ export async function crearCotizacion(
 export async function cambiarEstadoCotizacion(
   formData: FormData,
 ) {
-  const session =
-    await verificarPermiso();
+  const {
+    usuario,
+  } = await verificarPermiso();
 
   const id = texto(
     formData,
@@ -437,10 +457,6 @@ export async function cambiarEstadoCotizacion(
 
   const estadoActual =
     cotizacion.estado;
-
-  const esDirector =
-    session.user.role ===
-    "DIRECTOR";
 
   if (
     estadoActual ===
@@ -497,12 +513,6 @@ export async function cambiarEstadoCotizacion(
     estadoActual ===
     EstadoCotizacion.PENDIENTE_AUTORIZACION
   ) {
-    if (!esDirector) {
-      redirigirError(
-        "Solo un director puede autorizar o rechazar una cotización.",
-      );
-    }
-
     if (
       nuevoEstado ===
       EstadoCotizacion.AUTORIZADA
@@ -516,7 +526,7 @@ export async function cambiarEstadoCotizacion(
             EstadoCotizacion.AUTORIZADA,
 
           autorizadaPorId:
-            session.user.id,
+            usuario.id,
 
           autorizadaEn:
             new Date(),
@@ -555,7 +565,7 @@ export async function cambiarEstadoCotizacion(
             EstadoCotizacion.RECHAZADA,
 
           rechazadaPorId:
-            session.user.id,
+            usuario.id,
 
           rechazadaEn:
             new Date(),
@@ -574,7 +584,7 @@ export async function cambiarEstadoCotizacion(
     }
 
     redirigirError(
-      "La cotización pendiente únicamente puede ser autorizada o rechazada por un director.",
+      "La cotización pendiente únicamente puede ser autorizada o rechazada por Administración o Dirección.",
     );
   }
 
@@ -737,7 +747,7 @@ export async function registrarPrimerPago50(
         style: "currency",
         currency: "MXN",
       },
-    )}. La cotización ya puede pasar a Agenda.`,
+    )}. La cotización ya cumple la condición de pago para que Gerencia o Dirección puedan programar la inspecciÃ³n mediante el flujo vigente.`,
   );
 }
 
@@ -815,7 +825,7 @@ export async function registrarSegundoPago50(
   );
 
   redirigirOk(
-    "Segundo 50% registrado. La cotización quedó liquidada al 100%.",
+    "Segundo 50% registrado. La cotización quedÃ³ liquidada al 100%.",
   );
 }
 
@@ -884,6 +894,6 @@ export async function registrarPagoTotal(
   );
 
   redirigirOk(
-    "Pago total registrado. La cotización quedó liquidada al 100%.",
+    "Pago total registrado. La cotización quedÃ³ liquidada al 100%.",
   );
 }

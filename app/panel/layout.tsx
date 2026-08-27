@@ -1,7 +1,11 @@
-import type { ReactNode } from "react";
-import { signOut } from "@/auth";
-import { auth } from "@/auth";
+﻿import type { ReactNode } from "react";
+
+import { RolUsuario } from "@prisma/client";
+import { redirect } from "next/navigation";
+
+import { auth, signOut } from "@/auth";
 import PlatformHeader from "@/components/branding/PlatformHeader";
+import { prisma } from "@/lib/prisma";
 
 export default async function PanelLayout({
   children,
@@ -10,39 +14,110 @@ export default async function PanelLayout({
 }) {
   const session = await auth();
 
-  const rol = session?.user?.role ?? "";
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const usuarioActual =
+    await prisma.usuario.findUnique({
+      where: {
+        id: session.user.id,
+      },
+      select: {
+        nombre: true,
+        email: true,
+        rol: true,
+        activo: true,
+      },
+    });
+
+  if (
+    !usuarioActual ||
+    !usuarioActual.activo
+  ) {
+    redirect("/acceso");
+  }
+
+  /*
+   * CLIENTE
+   *
+   * El Cliente utiliza exclusivamente
+   * su portal.
+   */
+  if (
+    usuarioActual.rol ===
+    RolUsuario.CLIENTE
+  ) {
+    redirect("/portal");
+  }
+
+  /*
+   * Acceso general al árbol /panel.
+   *
+   * IMPORTANTE:
+   * INSPECTOR necesita entrar aquí porque
+   * sus expedientes técnicos viven bajo:
+   *
+   * /panel/inspecciones/[id]
+   * /panel/inspecciones/[id]/captura
+   * /panel/inspecciones/[id]/evidencias
+   * /panel/inspecciones/[id]/firmas
+   * /panel/inspecciones/[id]/reporte
+   * /panel/inspecciones/[id]/certificado
+   *
+   * Cada módulo debe aplicar además
+   * su propia validación de rol y alcance.
+   */
+  const accesoPanel =
+    usuarioActual.rol ===
+      RolUsuario.DIRECTOR ||
+    usuarioActual.rol ===
+      RolUsuario.ADMINISTRADOR ||
+    usuarioActual.rol ===
+      RolUsuario.GERENTE ||
+    usuarioActual.rol ===
+      RolUsuario.COORDINADOR ||
+    usuarioActual.rol ===
+      RolUsuario.INSPECTOR;
+
+  if (!accesoPanel) {
+    redirect("/acceso");
+  }
+
   const nombreUsuario =
-    session?.user?.name?.trim() || "Usuario";
+    usuarioActual.nombre?.trim() ||
+    usuarioActual.email ||
+    "Usuario";
 
   const area =
-    rol === "DIRECTOR"
+    usuarioActual.rol ===
+    RolUsuario.DIRECTOR
       ? "Dirección"
-      : rol === "ADMINISTRADOR"
+      : usuarioActual.rol ===
+          RolUsuario.ADMINISTRADOR
         ? "Administración"
-        : rol === "GERENTE"
+        : usuarioActual.rol ===
+            RolUsuario.GERENTE
           ? "Gerencia"
-          : rol === "COORDINADOR"
+          : usuarioActual.rol ===
+              RolUsuario.COORDINADOR
             ? "Coordinación"
-            : rol === "SUPERVISOR"
-              ? "Supervisión"
-              : rol === "INSPECTOR"
-                ? "Portal del inspector"
-                : "Plataforma operativa";
+            : "Portal del Inspector";
 
   const subtitle =
-    rol === "DIRECTOR"
+    usuarioActual.rol ===
+    RolUsuario.DIRECTOR
       ? `Sesión iniciada como ${nombreUsuario} · Control ejecutivo, auditoría y liberación`
-      : rol === "ADMINISTRADOR"
+      : usuarioActual.rol ===
+          RolUsuario.ADMINISTRADOR
         ? `Sesión iniciada como ${nombreUsuario} · Operación administrativa y comercial`
-        : rol === "GERENTE"
-          ? `Sesión iniciada como ${nombreUsuario} · Aprobación y control operativo`
-          : rol === "COORDINADOR"
-            ? `Sesión iniciada como ${nombreUsuario} · Revisión técnica y visto bueno`
-            : rol === "SUPERVISOR"
-              ? `Sesión iniciada como ${nombreUsuario} · Seguimiento de campo`
-              : rol === "INSPECTOR"
-                ? `Sesión iniciada como ${nombreUsuario}`
-                : `Sesión iniciada como ${nombreUsuario} · Control, operación y trazabilidad`;
+        : usuarioActual.rol ===
+            RolUsuario.GERENTE
+          ? `Sesión iniciada como ${nombreUsuario} · Control operativo, asignación y aprobación`
+          : usuarioActual.rol ===
+              RolUsuario.COORDINADOR
+            ? `Sesión iniciada como ${nombreUsuario} · Revisión técnica y seguimiento de Inspectores`
+            : `Sesión iniciada como ${nombreUsuario} · Captura y seguimiento de tus inspecciones asignadas`;
 
   const logout = (
     <form

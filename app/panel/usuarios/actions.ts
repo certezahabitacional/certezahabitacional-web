@@ -8,30 +8,45 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { registrarAuditoria } from "@/lib/auditoria";
+
 import { obtenerAdministradorActual } from "@/lib/administrador-actual";
+import { registrarAuditoria } from "@/lib/auditoria";
+import {
+  puedeActivarDesactivarUsuario,
+  puedeCambiarPasswordDeUsuario,
+  puedeCrearUsuario,
+} from "@/lib/permisos";
+import { prisma } from "@/lib/prisma";
 
 const crearUsuarioSchema = z.object({
   nombre: z
     .string()
     .trim()
-    .min(3, "El nombre debe tener al menos 3 caracteres."),
+    .min(
+      3,
+      "El nombre debe tener al menos 3 caracteres.",
+    ),
 
   email: z
     .string()
     .trim()
-    .email("El correo electrónico no es válido."),
+    .email(
+      "El correo electrónico no es válido.",
+    ),
 
   password: z
     .string()
-    .min(8, "La contraseña debe tener al menos 8 caracteres."),
+    .min(
+      8,
+      "La contraseña debe tener al menos 8 caracteres.",
+    ),
 
   rol: z.nativeEnum(RolUsuario),
 });
 
 const cambiarPasswordSchema = z.object({
-  usuarioId: z.string().trim().min(1),
+  usuarioId:
+    z.string().trim().min(1),
 
   password: z
     .string()
@@ -71,11 +86,14 @@ function regresarConExito(
 }
 
 async function obtenerGestorActual() {
-  const gestor = await obtenerAdministradorActual();
+  const gestor =
+    await obtenerAdministradorActual();
 
   if (
-    gestor.rol !== RolUsuario.DIRECTOR &&
-    gestor.rol !== RolUsuario.ADMINISTRADOR
+    gestor.rol !==
+      RolUsuario.DIRECTOR &&
+    gestor.rol !==
+      RolUsuario.ADMINISTRADOR
   ) {
     regresarConError(
       "Solo Dirección y Administración pueden gestionar usuarios.",
@@ -85,37 +103,74 @@ async function obtenerGestorActual() {
   return gestor;
 }
 
+/**
+ * Reglas:
+ *
+ * DIRECTOR:
+ * - puede crear y gestionar todos los roles, excepto que INSPECTOR
+ *   se crea exclusivamente desde /panel/inspectores.
+ *
+ * ADMINISTRADOR:
+ * - puede crear y gestionar GERENTE, COORDINADOR, INSPECTOR y CLIENTE,
+ *   pero INSPECTOR también se crea exclusivamente desde /panel/inspectores.
+ * - no puede crear ni modificar DIRECTOR o ADMINISTRADOR.
+ *
+ * Nadie puede ver contraseñas existentes; únicamente se permite
+ * establecer o restablecer una nueva contraseña.
+ */
 function validarRolCreable(
   rolGestor: RolUsuario,
   rolNuevo: RolUsuario,
 ) {
-  if (rolGestor === RolUsuario.DIRECTOR) {
-    return;
+  if (
+    rolNuevo ===
+    RolUsuario.INSPECTOR
+  ) {
+    regresarConError(
+      "Las cuentas de Inspector deben crearse desde el módulo de Inspectores para garantizar su zona, Coordinación y Gerencia.",
+    );
   }
 
   if (
-    rolNuevo === RolUsuario.DIRECTOR ||
-    rolNuevo === RolUsuario.ADMINISTRADOR
+    !puedeCrearUsuario(
+      rolGestor,
+      rolNuevo,
+    )
   ) {
     regresarConError(
-      "Administración no puede crear cuentas de Director ni de Administrador. Esa facultad corresponde exclusivamente a Dirección.",
+      "No tienes facultad para crear un usuario con ese rol.",
     );
   }
 }
 
-function validarUsuarioObjetivo(
+function validarUsuarioObjetivoParaEstado(
   rolGestor: RolUsuario,
-  usuarioObjetivo: {
-    id: string;
-    rol: RolUsuario;
-  },
+  rolObjetivo: RolUsuario,
 ) {
   if (
-    rolGestor === RolUsuario.ADMINISTRADOR &&
-    usuarioObjetivo.rol === RolUsuario.DIRECTOR
+    !puedeActivarDesactivarUsuario(
+      rolGestor,
+      rolObjetivo,
+    )
   ) {
     regresarConError(
-      "Administración no puede modificar, desactivar ni restablecer la contraseña de una cuenta de Dirección.",
+      "No tienes facultad para activar o desactivar esa cuenta.",
+    );
+  }
+}
+
+function validarUsuarioObjetivoParaPassword(
+  rolGestor: RolUsuario,
+  rolObjetivo: RolUsuario,
+) {
+  if (
+    !puedeCambiarPasswordDeUsuario(
+      rolGestor,
+      rolObjetivo,
+    )
+  ) {
+    regresarConError(
+      "No tienes facultad para restablecer la contraseña de esa cuenta.",
     );
   }
 }
@@ -123,25 +178,37 @@ function validarUsuarioObjetivo(
 export async function crearUsuario(
   formData: FormData,
 ) {
-  const gestor = await obtenerGestorActual();
+  const gestor =
+    await obtenerGestorActual();
 
   const resultado =
     crearUsuarioSchema.safeParse({
-      nombre: texto(formData, "nombre"),
-      email: texto(
-        formData,
-        "email",
-      ).toLowerCase(),
-      password: texto(
-        formData,
-        "password",
-      ),
-      rol: texto(formData, "rol"),
+      nombre:
+        texto(
+          formData,
+          "nombre",
+        ),
+      email:
+        texto(
+          formData,
+          "email",
+        ).toLowerCase(),
+      password:
+        texto(
+          formData,
+          "password",
+        ),
+      rol:
+        texto(
+          formData,
+          "rol",
+        ),
     });
 
   if (!resultado.success) {
     regresarConError(
-      resultado.error.issues[0]?.message ??
+      resultado.error
+        .issues[0]?.message ??
         "Los datos del usuario no son válidos.",
     );
   }
@@ -153,7 +220,10 @@ export async function crearUsuario(
     rol,
   } = resultado.data;
 
-  validarRolCreable(gestor.rol, rol);
+  validarRolCreable(
+    gestor.rol,
+    rol,
+  );
 
   const usuarioExistente =
     await prisma.usuario.findUnique({
@@ -172,7 +242,10 @@ export async function crearUsuario(
   }
 
   const passwordHash =
-    await bcrypt.hash(password, 12);
+    await bcrypt.hash(
+      password,
+      12,
+    );
 
   try {
     const usuario =
@@ -190,24 +263,16 @@ export async function crearUsuario(
             });
 
           if (
-            rol === RolUsuario.CLIENTE
+            rol ===
+            RolUsuario.CLIENTE
           ) {
             await tx.cliente.create({
               data: {
-                usuarioId: creado.id,
+                usuarioId:
+                  creado.id,
                 nombre,
-                correo: email,
-              },
-            });
-          }
-
-          if (
-            rol === RolUsuario.INSPECTOR
-          ) {
-            await tx.inspector.create({
-              data: {
-                usuarioId: creado.id,
-                activo: true,
+                correo:
+                  email,
               },
             });
           }
@@ -217,10 +282,14 @@ export async function crearUsuario(
       );
 
     await registrarAuditoria({
-      tipo: TipoEvento.CREAR,
-      entidad: "Usuario",
-      entidadId: usuario.id,
-      usuarioId: gestor.id,
+      tipo:
+        TipoEvento.CREAR,
+      entidad:
+        "Usuario",
+      entidadId:
+        usuario.id,
+      usuarioId:
+        gestor.id,
       descripcion:
         `${gestor.rol} creó el usuario ${usuario.email} ` +
         `con rol ${usuario.rol}.`,
@@ -236,9 +305,18 @@ export async function crearUsuario(
     );
   }
 
-  revalidatePath("/panel/usuarios");
-  revalidatePath("/panel/inspectores");
-  revalidatePath("/panel");
+  revalidatePath(
+    "/panel/usuarios",
+  );
+  revalidatePath(
+    "/panel/inspectores",
+  );
+  revalidatePath(
+    "/panel/clientes",
+  );
+  revalidatePath(
+    "/panel",
+  );
 
   regresarConExito(
     "Usuario creado correctamente.",
@@ -248,17 +326,20 @@ export async function crearUsuario(
 export async function cambiarEstadoUsuario(
   formData: FormData,
 ) {
-  const gestor = await obtenerGestorActual();
+  const gestor =
+    await obtenerGestorActual();
 
-  const usuarioId = texto(
-    formData,
-    "usuarioId",
-  );
+  const usuarioId =
+    texto(
+      formData,
+      "usuarioId",
+    );
 
-  const activoTexto = texto(
-    formData,
-    "activo",
-  );
+  const activoTexto =
+    texto(
+      formData,
+      "activo",
+    );
 
   if (!usuarioId) {
     regresarConError(
@@ -267,7 +348,8 @@ export async function cambiarEstadoUsuario(
   }
 
   if (
-    usuarioId === gestor.id
+    usuarioId ===
+    gestor.id
   ) {
     regresarConError(
       "No puedes desactivar tu propia cuenta.",
@@ -284,6 +366,7 @@ export async function cambiarEstadoUsuario(
       },
       select: {
         id: true,
+        nombre: true,
         email: true,
         rol: true,
       },
@@ -295,25 +378,31 @@ export async function cambiarEstadoUsuario(
     );
   }
 
-  validarUsuarioObjetivo(
+  validarUsuarioObjetivoParaEstado(
     gestor.rol,
-    usuarioActual,
+    usuarioActual.rol,
   );
 
   if (
-    gestor.rol === RolUsuario.DIRECTOR &&
-    usuarioActual.rol === RolUsuario.DIRECTOR &&
+    gestor.rol ===
+      RolUsuario.DIRECTOR &&
+    usuarioActual.rol ===
+      RolUsuario.DIRECTOR &&
     !nuevoEstado
   ) {
     const directoresActivos =
       await prisma.usuario.count({
         where: {
-          rol: RolUsuario.DIRECTOR,
-          activo: true,
+          rol:
+            RolUsuario.DIRECTOR,
+          activo:
+            true,
         },
       });
 
-    if (directoresActivos <= 1) {
+    if (
+      directoresActivos <= 1
+    ) {
       regresarConError(
         "No puedes desactivar al único Director activo de la plataforma.",
       );
@@ -321,48 +410,70 @@ export async function cambiarEstadoUsuario(
   }
 
   const usuario =
-    await prisma.usuario.update({
-      where: {
-        id: usuarioId,
-      },
-      data: {
-        activo: nuevoEstado,
-      },
-      select: {
-        id: true,
-        email: true,
-        rol: true,
-        activo: true,
-      },
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        const actualizado =
+          await tx.usuario.update({
+            where: {
+              id:
+                usuarioId,
+            },
+            data: {
+              activo:
+                nuevoEstado,
+            },
+            select: {
+              id: true,
+              email: true,
+              rol: true,
+              activo: true,
+            },
+          });
 
-  if (
-    usuario.rol ===
-    RolUsuario.INSPECTOR
-  ) {
-    await prisma.inspector.updateMany({
-      where: {
-        usuarioId: usuario.id,
+        if (
+          actualizado.rol ===
+          RolUsuario.INSPECTOR
+        ) {
+          await tx.inspector.updateMany({
+            where: {
+              usuarioId:
+                actualizado.id,
+            },
+            data: {
+              activo:
+                nuevoEstado,
+            },
+          });
+        }
+
+        return actualizado;
       },
-      data: {
-        activo: nuevoEstado,
-      },
-    });
-  }
+    );
 
   await registrarAuditoria({
-    tipo: TipoEvento.EDITAR,
-    entidad: "Usuario",
-    entidadId: usuario.id,
-    usuarioId: gestor.id,
-    descripcion: nuevoEstado
-      ? `${gestor.rol} activó la cuenta ${usuario.email}.`
-      : `${gestor.rol} desactivó la cuenta ${usuario.email}.`,
+    tipo:
+      TipoEvento.EDITAR,
+    entidad:
+      "Usuario",
+    entidadId:
+      usuario.id,
+    usuarioId:
+      gestor.id,
+    descripcion:
+      nuevoEstado
+        ? `${gestor.rol} activó la cuenta ${usuario.email}.`
+        : `${gestor.rol} desactivó la cuenta ${usuario.email}.`,
   });
 
-  revalidatePath("/panel/usuarios");
-  revalidatePath("/panel/inspectores");
-  revalidatePath("/panel");
+  revalidatePath(
+    "/panel/usuarios",
+  );
+  revalidatePath(
+    "/panel/inspectores",
+  );
+  revalidatePath(
+    "/panel",
+  );
 
   regresarConExito(
     nuevoEstado
@@ -374,23 +485,27 @@ export async function cambiarEstadoUsuario(
 export async function cambiarPasswordUsuario(
   formData: FormData,
 ) {
-  const gestor = await obtenerGestorActual();
+  const gestor =
+    await obtenerGestorActual();
 
   const resultado =
     cambiarPasswordSchema.safeParse({
-      usuarioId: texto(
-        formData,
-        "usuarioId",
-      ),
-      password: texto(
-        formData,
-        "password",
-      ),
+      usuarioId:
+        texto(
+          formData,
+          "usuarioId",
+        ),
+      password:
+        texto(
+          formData,
+          "password",
+        ),
     });
 
   if (!resultado.success) {
     regresarConError(
-      resultado.error.issues[0]?.message ??
+      resultado.error
+        .issues[0]?.message ??
         "La nueva contraseña no es válida.",
     );
   }
@@ -403,7 +518,8 @@ export async function cambiarPasswordUsuario(
   const usuario =
     await prisma.usuario.findUnique({
       where: {
-        id: usuarioId,
+        id:
+          usuarioId,
       },
       select: {
         id: true,
@@ -418,17 +534,21 @@ export async function cambiarPasswordUsuario(
     );
   }
 
-  validarUsuarioObjetivo(
+  validarUsuarioObjetivoParaPassword(
     gestor.rol,
-    usuario,
+    usuario.rol,
   );
 
   const passwordHash =
-    await bcrypt.hash(password, 12);
+    await bcrypt.hash(
+      password,
+      12,
+    );
 
   await prisma.usuario.update({
     where: {
-      id: usuario.id,
+      id:
+        usuario.id,
     },
     data: {
       passwordHash,
@@ -436,16 +556,21 @@ export async function cambiarPasswordUsuario(
   });
 
   await registrarAuditoria({
-    tipo: TipoEvento.EDITAR,
-    entidad: "Usuario",
-    entidadId: usuario.id,
-    usuarioId: gestor.id,
+    tipo:
+      TipoEvento.EDITAR,
+    entidad:
+      "Usuario",
+    entidadId:
+      usuario.id,
+    usuarioId:
+      gestor.id,
     descripcion:
-      `${gestor.rol} restableció la contraseña de ` +
-      `${usuario.email}.`,
+      `${gestor.rol} restableció la contraseña de ${usuario.email}.`,
   });
 
-  revalidatePath("/panel/usuarios");
+  revalidatePath(
+    "/panel/usuarios",
+  );
 
   regresarConExito(
     "Contraseña actualizada correctamente.",

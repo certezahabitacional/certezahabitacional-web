@@ -1,33 +1,56 @@
 "use server";
 
-import { TipoCalculoPrecio } from "@prisma/client";
+import {
+  RolUsuario,
+  TipoCalculoPrecio,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-async function verificarPermiso() {
+async function verificarPermisoGestion() {
   const session = await auth();
 
   if (!session?.user) {
     redirect("/login");
   }
 
-  const rol = session.user.role;
+  const usuario = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      rol: true,
+      activo: true,
+    },
+  });
+
+  if (!usuario || !usuario.activo) {
+    redirect("/acceso");
+  }
 
   if (
-    rol !== "ADMINISTRADOR" &&
-    rol !== "COORDINADOR"
+    usuario.rol !== RolUsuario.ADMINISTRADOR &&
+    usuario.rol !== RolUsuario.DIRECTOR
   ) {
     redirect("/acceso");
   }
 
-  return session;
+  return {
+    session,
+    usuario,
+  };
 }
 
-function texto(formData: FormData, campo: string) {
-  return String(formData.get(campo) ?? "").trim();
+function texto(
+  formData: FormData,
+  campo: string,
+) {
+  return String(
+    formData.get(campo) ?? "",
+  ).trim();
 }
 
 function numero(
@@ -72,7 +95,7 @@ function normalizarCodigo(valor: string) {
 export async function crearPaquete(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  await verificarPermisoGestion();
 
   const nombre = texto(formData, "nombre");
   const codigo = normalizarCodigo(
@@ -142,14 +165,15 @@ export async function crearPaquete(
     );
   }
 
-  const ultimo = await prisma.paqueteServicio.findFirst({
-    orderBy: {
-      orden: "desc",
-    },
-    select: {
-      orden: true,
-    },
-  });
+  const ultimo =
+    await prisma.paqueteServicio.findFirst({
+      orderBy: {
+        orden: "desc",
+      },
+      select: {
+        orden: true,
+      },
+    });
 
   await prisma.paqueteServicio.create({
     data: {
@@ -168,12 +192,13 @@ export async function crearPaquete(
   });
 
   revalidatePath("/panel/paquetes");
+  revalidatePath("/panel/cotizaciones");
 }
 
 export async function actualizarPaquete(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  await verificarPermisoGestion();
 
   const id = texto(formData, "id");
 
@@ -244,8 +269,11 @@ export async function actualizarPaquete(
       tipoCalculo,
 
       precioBase:
-        numero(formData, "precioBase", true) ??
-        0,
+        numero(
+          formData,
+          "precioBase",
+          true,
+        ) ?? 0,
 
       superficieIncluidaM2: numero(
         formData,
@@ -264,12 +292,13 @@ export async function actualizarPaquete(
   });
 
   revalidatePath("/panel/paquetes");
+  revalidatePath("/panel/cotizaciones");
 }
 
 export async function cambiarEstadoPaquete(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  await verificarPermisoGestion();
 
   const id = texto(formData, "id");
 
@@ -305,4 +334,5 @@ export async function cambiarEstadoPaquete(
   });
 
   revalidatePath("/panel/paquetes");
+  revalidatePath("/panel/cotizaciones");
 }

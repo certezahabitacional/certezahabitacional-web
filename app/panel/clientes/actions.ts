@@ -1,30 +1,73 @@
-"use server";
+
 
 import {
   RolUsuario,
   TipoCliente,
+  TipoEvento,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { registrarAuditoria } from "@/lib/auditoria";
+import { puede } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
 
-async function verificarPermiso() {
+type AccionClientes =
+  | "CLIENTE_CREAR"
+  | "CLIENTE_EDITAR_ADMIN"
+  | "REGISTRO_ELIMINAR_FISICO";
+
+async function verificarPermisoAdministrativo(
+  accion: AccionClientes,
+) {
   const session = await auth();
 
   if (!session?.user) {
     redirect("/login");
   }
 
+  const usuario =
+    await prisma.usuario.findUnique({
+      where: {
+        id: session.user.id,
+      },
+      select: {
+        id: true,
+        rol: true,
+        activo: true,
+      },
+    });
+
   if (
-    session.user.role !== "ADMINISTRADOR" &&
-    session.user.role !== "COORDINADOR"
+    !usuario ||
+    !usuario.activo
   ) {
     redirect("/acceso");
   }
 
-  return session;
+  if (
+    usuario.rol !==
+      RolUsuario.ADMINISTRADOR &&
+    usuario.rol !==
+      RolUsuario.DIRECTOR
+  ) {
+    redirect("/acceso");
+  }
+
+  if (
+    !puede(
+      usuario.rol,
+      accion,
+    )
+  ) {
+    redirect("/acceso");
+  }
+
+  return {
+    session,
+    usuario,
+  };
 }
 
 function texto(
@@ -36,41 +79,80 @@ function texto(
   ).trim();
 }
 
-function tipoClienteValido(valor: string) {
-  return Object.values(TipoCliente).includes(
+function tipoClienteValido(
+  valor: string,
+) {
+  return Object.values(
+    TipoCliente,
+  ).includes(
     valor as TipoCliente,
   )
     ? (valor as TipoCliente)
     : TipoCliente.PARTICULAR;
 }
 
+function regresarConError(
+  mensaje: string,
+): never {
+  redirect(
+    `/panel/clientes?error=${encodeURIComponent(
+      mensaje,
+    )}`,
+  );
+}
+
+function regresarConExito(
+  mensaje: string,
+): never {
+  redirect(
+    `/panel/clientes?ok=${encodeURIComponent(
+      mensaje,
+    )}`,
+  );
+}
+
 export async function crearCliente(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  const {
+    usuario,
+  } =
+    await verificarPermisoAdministrativo(
+      "CLIENTE_CREAR",
+    );
 
-  const nombre = texto(
-    formData,
-    "nombre",
-  );
+  const nombre =
+    texto(
+      formData,
+      "nombre",
+    );
 
-  const telefono = texto(
-    formData,
-    "telefono",
-  );
+  const telefono =
+    texto(
+      formData,
+      "telefono",
+    );
 
-  const correo = texto(
-    formData,
-    "correo",
-  ).toLowerCase();
+  const correo =
+    texto(
+      formData,
+      "correo",
+    ).toLowerCase();
 
-  const tipo = tipoClienteValido(
-    texto(formData, "tipo"),
-  );
+  const tipo =
+    tipoClienteValido(
+      texto(
+        formData,
+        "tipo",
+      ),
+    );
 
-  if (!nombre || !telefono) {
-    redirect(
-      "/panel/clientes?error=Completa%20nombre%20y%20tel%C3%A9fono",
+  if (
+    !nombre ||
+    !telefono
+  ) {
+    regresarConError(
+      "Completa nombre y teléfono.",
     );
   }
 
@@ -78,9 +160,15 @@ export async function crearCliente(
     await prisma.cliente.findFirst({
       where: {
         OR: [
-          { telefono },
+          {
+            telefono,
+          },
           ...(correo
-            ? [{ correo }]
+            ? [
+                {
+                  correo,
+                },
+              ]
             : []),
         ],
       },
@@ -90,86 +178,121 @@ export async function crearCliente(
     });
 
   if (duplicado) {
-    redirect(
-      "/panel/clientes?error=Ya%20existe%20un%20cliente%20con%20ese%20tel%C3%A9fono%20o%20correo",
+    regresarConError(
+      "Ya existe un cliente con ese teléfono o correo.",
     );
   }
 
-  await prisma.cliente.create({
-    data: {
-      nombre,
-      telefono,
-      correo: correo || null,
-      tipo,
-      empresa:
-        texto(
-          formData,
-          "empresa",
-        ) || null,
-      direccion:
-        texto(
-          formData,
-          "direccion",
-        ) || null,
-      ciudad:
-        texto(
-          formData,
-          "ciudad",
-        ) || null,
-      notas:
-        texto(
-          formData,
-          "notas",
-        ) || null,
-    },
+  const cliente =
+    await prisma.cliente.create({
+      data: {
+        nombre,
+        telefono,
+        correo:
+          correo || null,
+        tipo,
+        empresa:
+          texto(
+            formData,
+            "empresa",
+          ) || null,
+        direccion:
+          texto(
+            formData,
+            "direccion",
+          ) || null,
+        ciudad:
+          texto(
+            formData,
+            "ciudad",
+          ) || null,
+        notas:
+          texto(
+            formData,
+            "notas",
+          ) || null,
+      },
+      select: {
+        id: true,
+        nombre: true,
+      },
+    });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.CREAR,
+    entidad: "Cliente",
+    entidadId:
+      cliente.id,
+    usuarioId:
+      usuario.id,
+    descripcion:
+      `${usuario.rol} creó el cliente ${cliente.nombre}.`,
   });
 
   revalidatePath("/panel");
-  revalidatePath("/panel/clientes");
+  revalidatePath(
+    "/panel/clientes",
+  );
 
-  redirect(
-    "/panel/clientes?ok=Cliente%20registrado",
+  regresarConExito(
+    "Cliente registrado.",
   );
 }
 
 export async function actualizarCliente(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  const {
+    usuario,
+  } =
+    await verificarPermisoAdministrativo(
+      "CLIENTE_EDITAR_ADMIN",
+    );
 
-  const id = texto(
-    formData,
-    "id",
-  );
+  const id =
+    texto(
+      formData,
+      "id",
+    );
 
-  const nombre = texto(
-    formData,
-    "nombre",
-  );
+  const nombre =
+    texto(
+      formData,
+      "nombre",
+    );
 
-  const telefono = texto(
-    formData,
-    "telefono",
-  );
+  const telefono =
+    texto(
+      formData,
+      "telefono",
+    );
 
-  const correo = texto(
-    formData,
-    "correo",
-  ).toLowerCase();
+  const correo =
+    texto(
+      formData,
+      "correo",
+    ).toLowerCase();
 
-  const tipo = tipoClienteValido(
-    texto(formData, "tipo"),
-  );
+  const tipo =
+    tipoClienteValido(
+      texto(
+        formData,
+        "tipo",
+      ),
+    );
 
   if (!id) {
-    redirect(
-      "/panel/clientes?error=Cliente%20inv%C3%A1lido",
+    regresarConError(
+      "Cliente inválido.",
     );
   }
 
-  if (!nombre || !telefono) {
-    redirect(
-      "/panel/clientes?error=Completa%20nombre%20y%20tel%C3%A9fono",
+  if (
+    !nombre ||
+    !telefono
+  ) {
+    regresarConError(
+      "Completa nombre y teléfono.",
     );
   }
 
@@ -180,12 +303,13 @@ export async function actualizarCliente(
       },
       select: {
         id: true,
+        nombre: true,
       },
     });
 
   if (!existente) {
-    redirect(
-      "/panel/clientes?error=El%20cliente%20no%20existe",
+    regresarConError(
+      "El cliente no existe.",
     );
   }
 
@@ -196,9 +320,15 @@ export async function actualizarCliente(
           not: id,
         },
         OR: [
-          { telefono },
+          {
+            telefono,
+          },
           ...(correo
-            ? [{ correo }]
+            ? [
+                {
+                  correo,
+                },
+              ]
             : []),
         ],
       },
@@ -208,123 +338,165 @@ export async function actualizarCliente(
     });
 
   if (duplicado) {
-    redirect(
-      "/panel/clientes?error=Otro%20cliente%20ya%20usa%20ese%20tel%C3%A9fono%20o%20correo",
+    regresarConError(
+      "Otro cliente ya usa ese teléfono o correo.",
     );
   }
 
-  await prisma.cliente.update({
-    where: {
-      id,
-    },
-    data: {
-      nombre,
-      telefono,
-      correo: correo || null,
-      tipo,
-      empresa:
-        texto(
-          formData,
-          "empresa",
-        ) || null,
-      ciudad:
-        texto(
-          formData,
-          "ciudad",
-        ) || null,
-      direccion:
-        texto(
-          formData,
-          "direccion",
-        ) || null,
-      notas:
-        texto(
-          formData,
-          "notas",
-        ) || null,
-    },
+  const cliente =
+    await prisma.cliente.update({
+      where: {
+        id,
+      },
+      data: {
+        nombre,
+        telefono,
+        correo:
+          correo || null,
+        tipo,
+        empresa:
+          texto(
+            formData,
+            "empresa",
+          ) || null,
+        ciudad:
+          texto(
+            formData,
+            "ciudad",
+          ) || null,
+        direccion:
+          texto(
+            formData,
+            "direccion",
+          ) || null,
+        notas:
+          texto(
+            formData,
+            "notas",
+          ) || null,
+      },
+      select: {
+        id: true,
+        nombre: true,
+      },
+    });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "Cliente",
+    entidadId:
+      cliente.id,
+    usuarioId:
+      usuario.id,
+    descripcion:
+      `${usuario.rol} actualizó los datos administrativos del cliente ${cliente.nombre}.`,
   });
 
   revalidatePath("/panel");
-  revalidatePath("/panel/clientes");
+  revalidatePath(
+    "/panel/clientes",
+  );
   revalidatePath("/portal");
 
-  redirect(
-    "/panel/clientes?ok=Datos%20del%20cliente%20actualizados",
+  regresarConExito(
+    "Datos del cliente actualizados.",
   );
 }
 
 export async function vincularUsuarioCliente(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  const {
+    usuario: gestor,
+  } =
+    await verificarPermisoAdministrativo(
+      "CLIENTE_EDITAR_ADMIN",
+    );
 
-  const clienteId = texto(
-    formData,
-    "clienteId",
-  );
+  const clienteId =
+    texto(
+      formData,
+      "clienteId",
+    );
 
-  const usuarioId = texto(
-    formData,
-    "usuarioId",
-  );
+  const usuarioId =
+    texto(
+      formData,
+      "usuarioId",
+    );
 
-  if (!clienteId || !usuarioId) {
-    redirect(
-      "/panel/clientes?error=Selecciona%20un%20usuario%20de%20cliente",
+  if (
+    !clienteId ||
+    !usuarioId
+  ) {
+    regresarConError(
+      "Selecciona un usuario de cliente.",
     );
   }
 
-  const [cliente, usuario] =
-    await Promise.all([
-      prisma.cliente.findUnique({
-        where: {
-          id: clienteId,
-        },
-        select: {
-          id: true,
-          nombre: true,
-        },
-      }),
+  const [
+    cliente,
+    usuario,
+  ] = await Promise.all([
+    prisma.cliente.findUnique({
+      where: {
+        id: clienteId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        usuarioId: true,
+      },
+    }),
 
-      prisma.usuario.findUnique({
-        where: {
-          id: usuarioId,
-        },
-        select: {
-          id: true,
-          nombre: true,
-          email: true,
-          rol: true,
-          activo: true,
-          cliente: {
-            select: {
-              id: true,
-              nombre: true,
-            },
+    prisma.usuario.findUnique({
+      where: {
+        id: usuarioId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        activo: true,
+        cliente: {
+          select: {
+            id: true,
+            nombre: true,
           },
         },
-      }),
-    ]);
+      },
+    }),
+  ]);
 
   if (!cliente) {
-    redirect(
-      "/panel/clientes?error=El%20cliente%20no%20existe",
+    regresarConError(
+      "El cliente no existe.",
     );
   }
 
   if (
     !usuario ||
-    usuario.rol !== RolUsuario.CLIENTE
+    usuario.rol !==
+      RolUsuario.CLIENTE
   ) {
-    redirect(
-      "/panel/clientes?error=El%20usuario%20seleccionado%20no%20es%20un%20usuario%20CLIENTE",
+    regresarConError(
+      "El usuario seleccionado no es un usuario CLIENTE.",
     );
   }
 
   if (!usuario.activo) {
-    redirect(
-      "/panel/clientes?error=El%20usuario%20seleccionado%20est%C3%A1%20inactivo",
+    regresarConError(
+      "El usuario seleccionado está inactivo.",
+    );
+  }
+
+  if (
+    cliente.usuarioId ===
+    usuario.id
+  ) {
+    regresarConExito(
+      "Ese usuario ya está vinculado al cliente.",
     );
   }
 
@@ -337,7 +509,8 @@ export async function vincularUsuarioCliente(
       ) {
         await tx.cliente.update({
           where: {
-            id: usuario.cliente.id,
+            id:
+              usuario.cliente.id,
           },
           data: {
             usuarioId: null,
@@ -356,28 +529,77 @@ export async function vincularUsuarioCliente(
     },
   );
 
-  revalidatePath("/panel/clientes");
-  revalidatePath("/portal");
-  revalidatePath("/portal/cotizaciones");
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "Cliente",
+    entidadId:
+      cliente.id,
+    usuarioId:
+      gestor.id,
+    descripcion:
+      `${gestor.rol} vinculó el usuario ${usuario.email} al cliente ${cliente.nombre}.`,
+  });
 
-  redirect(
-    "/panel/clientes?ok=Acceso%20al%20portal%20vinculado%20correctamente",
+  revalidatePath(
+    "/panel/clientes",
+  );
+  revalidatePath("/portal");
+  revalidatePath(
+    "/portal/cotizaciones",
+  );
+
+  regresarConExito(
+    "Acceso al portal vinculado correctamente.",
   );
 }
 
 export async function desvincularUsuarioCliente(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  const {
+    usuario: gestor,
+  } =
+    await verificarPermisoAdministrativo(
+      "CLIENTE_EDITAR_ADMIN",
+    );
 
-  const clienteId = texto(
-    formData,
-    "clienteId",
-  );
+  const clienteId =
+    texto(
+      formData,
+      "clienteId",
+    );
 
   if (!clienteId) {
-    redirect(
-      "/panel/clientes?error=Cliente%20inv%C3%A1lido",
+    regresarConError(
+      "Cliente inválido.",
+    );
+  }
+
+  const cliente =
+    await prisma.cliente.findUnique({
+      where: {
+        id: clienteId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        usuario: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+  if (!cliente) {
+    regresarConError(
+      "El cliente no existe.",
+    );
+  }
+
+  if (!cliente.usuario) {
+    regresarConExito(
+      "El cliente ya se encuentra sin usuario vinculado.",
     );
   }
 
@@ -390,27 +612,57 @@ export async function desvincularUsuarioCliente(
     },
   });
 
-  revalidatePath("/panel/clientes");
-  revalidatePath("/portal");
-  revalidatePath("/portal/cotizaciones");
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "Cliente",
+    entidadId:
+      cliente.id,
+    usuarioId:
+      gestor.id,
+    descripcion:
+      `${gestor.rol} desvinculó el usuario ${cliente.usuario.email} del cliente ${cliente.nombre}.`,
+  });
 
-  redirect(
-    "/panel/clientes?ok=Acceso%20al%20portal%20desvinculado",
+  revalidatePath(
+    "/panel/clientes",
+  );
+  revalidatePath("/portal");
+  revalidatePath(
+    "/portal/cotizaciones",
+  );
+
+  regresarConExito(
+    "Acceso al portal desvinculado.",
   );
 }
 
 export async function eliminarCliente(
   formData: FormData,
 ) {
-  await verificarPermiso();
+  const {
+    usuario,
+  } =
+    await verificarPermisoAdministrativo(
+      "REGISTRO_ELIMINAR_FISICO",
+    );
 
-  const id = texto(
-    formData,
-    "id",
-  );
+  if (
+    usuario.rol !==
+    RolUsuario.DIRECTOR
+  ) {
+    redirect("/acceso");
+  }
+
+  const id =
+    texto(
+      formData,
+      "id",
+    );
 
   if (!id) {
-    return;
+    regresarConError(
+      "Cliente inválido.",
+    );
   }
 
   const cliente =
@@ -419,6 +671,7 @@ export async function eliminarCliente(
         id,
       },
       select: {
+        nombre: true,
         usuarioId: true,
         _count: {
           select: {
@@ -431,24 +684,27 @@ export async function eliminarCliente(
     });
 
   if (!cliente) {
-    redirect(
-      "/panel/clientes?error=El%20cliente%20no%20existe",
+    regresarConError(
+      "El cliente no existe.",
     );
   }
 
   if (cliente.usuarioId) {
-    redirect(
-      "/panel/clientes?error=Desvincula%20primero%20el%20acceso%20al%20portal%20antes%20de%20eliminar",
+    regresarConError(
+      "No puede eliminarse un cliente con usuario vinculado.",
     );
   }
 
   if (
-    cliente._count.inspecciones > 0 ||
-    cliente._count.inmuebles > 0 ||
-    cliente._count.cotizaciones > 0
+    cliente._count.inspecciones >
+      0 ||
+    cliente._count.inmuebles >
+      0 ||
+    cliente._count.cotizaciones >
+      0
   ) {
-    redirect(
-      "/panel/clientes?error=No%20se%20puede%20eliminar%20un%20cliente%20con%20inmuebles%2C%20cotizaciones%20o%20inspecciones",
+    regresarConError(
+      "No puede eliminarse un cliente con historial o relaciones existentes.",
     );
   }
 
@@ -458,10 +714,22 @@ export async function eliminarCliente(
     },
   });
 
-  revalidatePath("/panel");
-  revalidatePath("/panel/clientes");
+  await registrarAuditoria({
+    tipo: TipoEvento.ELIMINAR,
+    entidad: "Cliente",
+    entidadId: id,
+    usuarioId:
+      usuario.id,
+    descripcion:
+      `Dirección eliminó físicamente el registro vacío del cliente ${cliente.nombre}.`,
+  });
 
-  redirect(
-    "/panel/clientes?ok=Cliente%20eliminado",
+  revalidatePath("/panel");
+  revalidatePath(
+    "/panel/clientes",
+  );
+
+  regresarConExito(
+    "Registro vacío eliminado por Dirección.",
   );
 }

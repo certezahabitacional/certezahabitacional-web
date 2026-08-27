@@ -1,12 +1,18 @@
 import Link from "next/link";
-import { EstadoInspeccion, EstadoPago } from "@prisma/client";
-import { notFound } from "next/navigation";
+import {
+  EstadoInspeccion,
+  EstadoPago,
+  EstadoReasignacionInspector,
+  RolUsuario,
+} from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import {
   aprobarDireccion,
-  asignarInspector,
   aprobarGerencia,
+  asignarInspector,
+  autorizarReasignacionInspector,
   devolverACoordinacion,
   devolverAInspector,
   cambiarEstado,
@@ -18,6 +24,7 @@ import {
   levantarBloqueoYAprobar,
   liberarInicioSinPago,
   noAprobarDireccion,
+  rechazarReasignacionInspector,
   retenerParaAuditoria,
 } from "./actions";
 
@@ -49,6 +56,121 @@ export default async function ExpedientePage({
   const { id } = await params;
   const query = await searchParams;
   const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  /*
+   * Seguridad del expediente técnico.
+   *
+   * La base de datos es la fuente de verdad para rol, zona y relaciones
+   * organizacionales. No basta con ocultar botones: el acceso se valida
+   * antes de consultar hallazgos, evidencias, firmas, revisiones o reporte.
+   */
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      zonaId: true,
+      gerenteId: true,
+      coordinadorId: true,
+      inspector: {
+        select: { id: true },
+      },
+    },
+  });
+
+  if (!usuarioActual || !usuarioActual.activo) {
+    redirect("/acceso");
+  }
+
+  const rolActual = usuarioActual.rol;
+
+  // El Cliente usa exclusivamente su portal.
+  if (rolActual === RolUsuario.CLIENTE) {
+    redirect(`/portal/inspecciones/${id}`);
+  }
+
+  /*
+   * Administración no puede consultar el expediente técnico.
+   * Sin embargo, sí debe resolver las solicitudes de reasignación de Inspector.
+   * Por eso se devuelve una vista administrativa limitada antes de consultar
+   * hallazgos, evidencias, firmas, revisiones o cualquier otro contenido técnico.
+   */
+  if (rolActual === RolUsuario.ADMINISTRADOR) {
+    return (
+      <VistaAdministrativaReasignacion
+        inspeccionId={id}
+        query={query}
+      />
+    );
+  }
+
+  /*
+   * Alcance técnico:
+   * DIRECTOR     -> acceso global.
+   * GERENTE      -> inspecciones de Inspectores adscritos a su Gerencia.
+   * COORDINADOR  -> inspecciones de Inspectores bajo su coordinación.
+   * INSPECTOR    -> únicamente inspecciones asignadas a él.
+   */
+  const inspeccionAlcance = await prisma.inspeccion.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      zonaId: true,
+      inspectorId: true,
+      inspector: {
+        select: {
+          usuarioId: true,
+          usuario: {
+            select: {
+              zonaId: true,
+              gerenteId: true,
+              coordinadorId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!inspeccionAlcance) {
+    notFound();
+  }
+
+  let accesoAutorizado = false;
+
+  switch (rolActual) {
+    case RolUsuario.DIRECTOR:
+      accesoAutorizado = true;
+      break;
+
+    case RolUsuario.GERENTE:
+      accesoAutorizado =
+        inspeccionAlcance.inspector?.usuario.gerenteId ===
+        usuarioActual.id;
+      break;
+
+    case RolUsuario.COORDINADOR:
+      accesoAutorizado =
+        inspeccionAlcance.inspector?.usuario.coordinadorId ===
+        usuarioActual.id;
+      break;
+
+    case RolUsuario.INSPECTOR:
+      accesoAutorizado =
+        Boolean(usuarioActual.inspector?.id) &&
+        inspeccionAlcance.inspectorId === usuarioActual.inspector?.id &&
+        inspeccionAlcance.inspector?.usuarioId === usuarioActual.id;
+      break;
+  }
+
+  if (!accesoAutorizado) {
+    redirect("/acceso");
+  }
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },
@@ -83,6 +205,47 @@ export default async function ExpedientePage({
         orderBy: { creadaEn: "desc" },
         include: {
           usuario: {
+            select: {
+              nombre: true,
+              email: true,
+              rol: true,
+            },
+          },
+        },
+      },
+      reasignaciones: {
+        orderBy: {
+          solicitadaEn: "desc",
+        },
+        include: {
+          inspectorAnterior: {
+            select: {
+              usuario: {
+                select: {
+                  nombre: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          inspectorPropuesto: {
+            select: {
+              usuario: {
+                select: {
+                  nombre: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          solicitadaPor: {
+            select: {
+              nombre: true,
+              email: true,
+              rol: true,
+            },
+          },
+          resueltaPor: {
             select: {
               nombre: true,
               email: true,
@@ -147,26 +310,42 @@ export default async function ExpedientePage({
   const capturaSoloLectura = expedienteFinalizado || expedienteCancelado;
   const certificadoFinancieramenteLiberado = pagoLiquidado;
 
-  const rolesAutorizanExcepcionPago = ["DIRECTOR", "ADMINISTRADOR"];
-  const puedeAutorizarExcepcionPago = session?.user?.role
-    ? rolesAutorizanExcepcionPago.includes(session.user.role)
-    : false;
+  /*
+   * La excepción de pago es una facultad especial de Dirección.
+   * Administración gestiona y verifica el pago, pero no invade el
+   * expediente técnico desde esta pantalla.
+   */
+  const puedeAutorizarExcepcionPago =
+    rolActual === RolUsuario.DIRECTOR;
 
-  const rolActual = session?.user?.role ?? "";
+  /*
+   * Prohibición de suplantación de funciones:
+   * cada rol ejecuta con su propio usuario las funciones que le corresponden.
+   * Dirección puede auditar y ejercer sus facultades extraordinarias, pero
+   * no se presenta como Inspector ni como Coordinación.
+   */
   const puedeIniciarInspeccion =
-    rolActual === "INSPECTOR" || rolActual === "DIRECTOR";
-  const puedeFinalizarCaptura = [
-    "INSPECTOR",
-    "SUPERVISOR",
-    "COORDINADOR",
-    "GERENTE",
-    "DIRECTOR",
-    "ADMINISTRADOR",
-  ].includes(rolActual);
-  const esCoordinador = rolActual === "COORDINADOR";
-  const esGerente = rolActual === "GERENTE";
-  const esDirector = rolActual === "DIRECTOR";
-  const puedeAsignarInspector = esGerente || esDirector;
+    rolActual === RolUsuario.INSPECTOR;
+  const puedeFinalizarCaptura =
+    rolActual === RolUsuario.INSPECTOR;
+
+  const esCoordinador =
+    rolActual === RolUsuario.COORDINADOR;
+  const esGerente =
+    rolActual === RolUsuario.GERENTE;
+  const esDirector =
+    rolActual === RolUsuario.DIRECTOR;
+
+  const puedeAsignarInspector =
+    esGerente || esDirector;
+
+  const ultimaInspeccionDelHistorial = historialInspecciones.at(-1);
+  const esUltimaInspeccionDelInmueble =
+    ultimaInspeccionDelHistorial?.id === inspeccion.id;
+  const puedeCrearSeguimiento =
+    expedienteFinalizado &&
+    esUltimaInspeccionDelInmueble &&
+    (esDirector || esGerente);
 
   const inspectoresDisponibles = puedeAsignarInspector
     ? await prisma.inspector.findMany({
@@ -174,6 +353,12 @@ export default async function ExpedientePage({
           activo: true,
           usuario: {
             activo: true,
+            rol: RolUsuario.INSPECTOR,
+            ...(esGerente
+              ? {
+                  gerenteId: usuarioActual.id,
+                }
+              : {}),
           },
         },
         select: {
@@ -216,6 +401,13 @@ export default async function ExpedientePage({
       "es-MX",
     );
   });
+
+  const reasignacionPendiente = inspeccion.reasignaciones.find(
+    (reasignacion) =>
+      reasignacion.estado === EstadoReasignacionInspector.PENDIENTE,
+  );
+
+  const historialReasignaciones = inspeccion.reasignaciones.slice(0, 8);
 
   const ultimaDevolucion = inspeccion.revisiones.find(
     (revision) =>
@@ -408,6 +600,15 @@ export default async function ExpedientePage({
                   Editar
                 </Link>
               )}
+
+              {puedeCrearSeguimiento && (
+                <Link
+                  href={`/panel/inspecciones/nueva?antecedenteId=${inspeccion.id}`}
+                  className="rounded-full bg-violet-300 px-5 py-3 font-black text-slate-950 transition hover:bg-violet-200"
+                >
+                  + Crear inspección de seguimiento · V{inspeccion.numeroInspeccion + 1}
+                </Link>
+              )}
               {expedienteFinalizado ? null : operacionBloqueada ? (
                 <span className="cursor-not-allowed rounded-full border border-amber-300/30 bg-amber-300/10 px-5 py-3 font-black text-amber-300">
                   Saldo pendiente — {dinero(saldoPendiente)}
@@ -552,9 +753,10 @@ export default async function ExpedientePage({
                     : "Asignar inspector"}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Gerencia y Dirección pueden asignar al inspector responsable.
-                  La lista se ordena por carga operativa actual: inspecciones
-                  programadas, en proceso o con reporte pendiente.
+                  La primera asignación puede realizarla Gerencia o Dirección.
+                  Si ya existe un Inspector, Gerencia solicita la reasignación para
+                  autorización administrativa; Dirección puede ejecutarla directamente.
+                  La lista se ordena por carga operativa actual.
                 </p>
 
                 <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
@@ -579,6 +781,27 @@ export default async function ExpedientePage({
                     {inspeccion.estado.replaceAll("_", " ")}
                   </strong>. Un expediente cerrado no puede reasignarse por el
                   flujo ordinario.
+                </div>
+              ) : esGerente &&
+                inspeccion.inspector &&
+                reasignacionPendiente ? (
+                <div className="w-full max-w-xl rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
+                  <p className="font-black text-amber-300">
+                    Reasignación pendiente de autorización
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    El Inspector actual permanece asignado hasta que Administración
+                    o Dirección resuelvan la solicitud vigente.
+                  </p>
+                  <p className="mt-3 text-sm text-slate-400">
+                    Propuesto:{" "}
+                    <strong className="text-white">
+                      {reasignacionPendiente.inspectorPropuesto.usuario.nombre}
+                    </strong>
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Motivo: {reasignacionPendiente.motivo}
+                  </p>
                 </div>
               ) : (
                 <form
@@ -615,7 +838,9 @@ export default async function ExpedientePage({
                   <label className="mt-4 block">
                     <span className="mb-2 block text-sm font-bold text-slate-300">
                       {inspeccion.inspector
-                        ? "Motivo de la reasignación *"
+                        ? esGerente
+                          ? "Motivo de la solicitud de reasignación *"
+                          : "Motivo de la reasignación *"
                         : "Comentario de asignación"}
                     </span>
                     <textarea
@@ -634,7 +859,9 @@ export default async function ExpedientePage({
 
                   <button className="mt-4 w-full rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300">
                     {inspeccion.inspector
-                      ? "Confirmar reasignación"
+                      ? esGerente
+                        ? "Solicitar reasignación"
+                        : "Reasignar inspector"
                       : "Asignar inspector"}
                   </button>
                 </form>
@@ -642,6 +869,149 @@ export default async function ExpedientePage({
             </div>
           </section>
         )}
+
+        {(esDirector || esGerente) &&
+          historialReasignaciones.length > 0 && (
+            <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
+                    Control de reasignaciones
+                  </p>
+                  <h2 className="mt-2 text-xl font-black">
+                    Historial de cambios de Inspector
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Las reasignaciones conservan Inspector anterior, propuesto,
+                    solicitante, resolución y fechas para trazabilidad.
+                  </p>
+                </div>
+
+                {reasignacionPendiente && (
+                  <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-300">
+                    Solicitud pendiente
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {historialReasignaciones.map((reasignacion) => (
+                  <article
+                    key={reasignacion.id}
+                    className="rounded-2xl border border-white/10 bg-slate-950 p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-black ${
+                          reasignacion.estado ===
+                          EstadoReasignacionInspector.PENDIENTE
+                            ? "bg-amber-300/10 text-amber-300"
+                            : reasignacion.estado ===
+                                EstadoReasignacionInspector.AUTORIZADA
+                              ? "bg-emerald-300/10 text-emerald-300"
+                              : "bg-rose-300/10 text-rose-300"
+                        }`}
+                      >
+                        {reasignacion.estado}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {formatoFecha(
+                          reasignacion.solicitadaEn,
+                          inspeccion.zonaHoraria,
+                        )}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 font-black">
+                      {reasignacion.inspectorAnterior?.usuario.nombre ??
+                        "Sin asignar"}{" "}
+                      → {reasignacion.inspectorPropuesto.usuario.nombre}
+                    </p>
+
+                    <p className="mt-2 text-sm text-slate-400">
+                      Solicitó: {reasignacion.solicitadaPor.nombre} ·{" "}
+                      {reasignacion.solicitadaPor.rol}
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      Motivo: {reasignacion.motivo}
+                    </p>
+
+                    {reasignacion.resueltaPor && (
+                      <p className="mt-2 text-sm text-slate-400">
+                        Resolvió: {reasignacion.resueltaPor.nombre} ·{" "}
+                        {reasignacion.resueltaPor.rol}
+                      </p>
+                    )}
+
+                    {reasignacion.comentarioResolucion && (
+                      <p className="mt-2 text-sm leading-6 text-slate-300">
+                        Resolución: {reasignacion.comentarioResolucion}
+                      </p>
+                    )}
+
+                    {esDirector &&
+                      reasignacion.estado ===
+                        EstadoReasignacionInspector.PENDIENTE && (
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          <form
+                            action={autorizarReasignacionInspector}
+                            className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-4"
+                          >
+                            <input
+                              type="hidden"
+                              name="inspeccionId"
+                              value={inspeccion.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="reasignacionId"
+                              value={reasignacion.id}
+                            />
+                            <textarea
+                              name="comentarioResolucion"
+                              rows={2}
+                              placeholder="Comentario opcional de autorización"
+                              className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
+                            />
+                            <button className="mt-3 w-full rounded-full bg-emerald-300 px-4 py-3 font-black text-slate-950">
+                              Autorizar reasignación
+                            </button>
+                          </form>
+
+                          <form
+                            action={rechazarReasignacionInspector}
+                            className="rounded-2xl border border-rose-300/20 bg-rose-300/5 p-4"
+                          >
+                            <input
+                              type="hidden"
+                              name="inspeccionId"
+                              value={inspeccion.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="reasignacionId"
+                              value={reasignacion.id}
+                            />
+                            <textarea
+                              name="comentarioResolucion"
+                              required
+                              minLength={10}
+                              rows={2}
+                              placeholder="Motivo obligatorio del rechazo (mínimo 10 caracteres)"
+                              className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
+                            />
+                            <button className="mt-3 w-full rounded-full bg-rose-300 px-4 py-3 font-black text-slate-950">
+                              Rechazar reasignación
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
 
         {devolucionActiva && (
           <section className="mt-5 rounded-3xl border border-rose-400/30 bg-rose-400/10 p-6">
@@ -731,7 +1101,7 @@ export default async function ExpedientePage({
                   {pagoLiquidado
                     ? "La inspección está habilitada para iniciar."
                     : excepcionAdministrativa
-                      ? "Dirección, Gerencia o Administración autorizó iniciar esta inspección aun con saldo pendiente."
+                      ? "Dirección autorizó iniciar esta inspección aun con saldo pendiente."
                       : "La inspección puede estar programada, pero no puede iniciar con saldo pendiente."}
                 </p>
 
@@ -978,7 +1348,7 @@ export default async function ExpedientePage({
                     <div className="mt-4 space-y-2 text-sm">
                       {requisitosPendientes.map((requisito) => (
                         <p key={requisito.nombre} className="text-amber-200">
-                          â€¢ {requisito.nombre}
+                          • {requisito.nombre}
                         </p>
                       ))}
                     </div>
@@ -1365,6 +1735,16 @@ export default async function ExpedientePage({
                     Capturar Método Certeza
                   </Link>
                 )}
+
+                {puedeCrearSeguimiento && (
+                  <Link
+                    href={`/panel/inspecciones/nueva?antecedenteId=${inspeccion.id}`}
+                    className="rounded-2xl bg-violet-300 px-4 py-3 text-center font-black text-slate-950 transition hover:bg-violet-200"
+                  >
+                    + Crear seguimiento · V{inspeccion.numeroInspeccion + 1}
+                  </Link>
+                )}
+
                 {capturaSoloLectura ? (
                   <Link
                     href={`/panel/inspecciones/${inspeccion.id}/evidencias`}
@@ -1652,6 +2032,322 @@ function RevisionEstado({
     </span>
   );
 }
+
+async function VistaAdministrativaReasignacion({
+  inspeccionId,
+  query,
+}: {
+  inspeccionId: string;
+  query: { ok?: string; error?: string };
+}) {
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: {
+      id: inspeccionId,
+    },
+    select: {
+      id: true,
+      folio: true,
+      estado: true,
+      fechaProgramada: true,
+      zonaHoraria: true,
+      direccion: true,
+      ciudad: true,
+      cliente: {
+        select: {
+          nombre: true,
+        },
+      },
+      inspector: {
+        select: {
+          usuario: {
+            select: {
+              nombre: true,
+              email: true,
+            },
+          },
+        },
+      },
+      reasignaciones: {
+        orderBy: {
+          solicitadaEn: "desc",
+        },
+        take: 20,
+        include: {
+          inspectorAnterior: {
+            select: {
+              usuario: {
+                select: {
+                  nombre: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          inspectorPropuesto: {
+            select: {
+              usuario: {
+                select: {
+                  nombre: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          solicitadaPor: {
+            select: {
+              nombre: true,
+              email: true,
+              rol: true,
+            },
+          },
+          resueltaPor: {
+            select: {
+              nombre: true,
+              email: true,
+              rol: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!inspeccion) {
+    notFound();
+  }
+
+  const pendientes = inspeccion.reasignaciones.filter(
+    (reasignacion) =>
+      reasignacion.estado === EstadoReasignacionInspector.PENDIENTE,
+  );
+
+  return (
+    <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
+      <div className="mx-auto max-w-5xl">
+        <Link
+          href="/panel/inspecciones"
+          className="text-sm font-bold text-cyan-300"
+        >
+          ← Volver a inspecciones
+        </Link>
+
+        <header className="mt-6 rounded-3xl border border-white/10 bg-slate-900 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
+            Vista administrativa limitada
+          </p>
+          <h1 className="mt-2 text-3xl font-black">
+            Autorización de reasignación
+          </h1>
+          <p className="mt-3 text-slate-400">
+            Administración puede resolver solicitudes de reasignación sin
+            acceder a hallazgos, evidencias, firmas, revisiones ni reporte técnico.
+          </p>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl bg-slate-950 p-4">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+                Inspección
+              </p>
+              <p className="mt-2 font-black text-cyan-300">
+                {inspeccion.folio}
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                {inspeccion.cliente.nombre}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-slate-950 p-4">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+                Inspector actual
+              </p>
+              <p className="mt-2 font-black">
+                {inspeccion.inspector?.usuario.nombre ?? "Sin asignar"}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {inspeccion.inspector?.usuario.email ?? "Sin correo"}
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm text-slate-500">
+            {inspeccion.direccion}, {inspeccion.ciudad} ·{" "}
+            {formatoFecha(
+              inspeccion.fechaProgramada,
+              inspeccion.zonaHoraria,
+            )}{" "}
+            · {inspeccion.estado.replaceAll("_", " ")}
+          </p>
+        </header>
+
+        {query.ok && (
+          <p className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-5 py-4 font-bold text-emerald-300">
+            {query.ok}
+          </p>
+        )}
+
+        {query.error && (
+          <p className="mt-5 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-5 py-4 font-bold text-rose-300">
+            {query.error}
+          </p>
+        )}
+
+        <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">
+                Solicitudes pendientes
+              </p>
+              <h2 className="mt-2 text-xl font-black">
+                {pendientes.length} pendiente(s)
+              </h2>
+            </div>
+          </div>
+
+          {pendientes.length === 0 ? (
+            <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-slate-400">
+              No existen solicitudes de reasignación pendientes para esta inspección.
+            </p>
+          ) : (
+            <div className="mt-5 space-y-4">
+              {pendientes.map((reasignacion) => (
+                <article
+                  key={reasignacion.id}
+                  className="rounded-2xl border border-white/10 bg-slate-950 p-5"
+                >
+                  <p className="font-black">
+                    {reasignacion.inspectorAnterior?.usuario.nombre ??
+                      "Sin asignar"}{" "}
+                    → {reasignacion.inspectorPropuesto.usuario.nombre}
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-400">
+                    Solicitó: {reasignacion.solicitadaPor.nombre} ·{" "}
+                    {reasignacion.solicitadaPor.rol}
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    Motivo: {reasignacion.motivo}
+                  </p>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    Solicitada:{" "}
+                    {formatoFecha(
+                      reasignacion.solicitadaEn,
+                      inspeccion.zonaHoraria,
+                    )}
+                  </p>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <form
+                      action={autorizarReasignacionInspector}
+                      className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-4"
+                    >
+                      <input
+                        type="hidden"
+                        name="inspeccionId"
+                        value={inspeccion.id}
+                      />
+                      <input
+                        type="hidden"
+                        name="reasignacionId"
+                        value={reasignacion.id}
+                      />
+                      <textarea
+                        name="comentarioResolucion"
+                        rows={3}
+                        placeholder="Comentario opcional de autorización"
+                        className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
+                      />
+                      <button className="mt-3 w-full rounded-full bg-emerald-300 px-4 py-3 font-black text-slate-950">
+                        Autorizar reasignación
+                      </button>
+                    </form>
+
+                    <form
+                      action={rechazarReasignacionInspector}
+                      className="rounded-2xl border border-rose-300/20 bg-rose-300/5 p-4"
+                    >
+                      <input
+                        type="hidden"
+                        name="inspeccionId"
+                        value={inspeccion.id}
+                      />
+                      <input
+                        type="hidden"
+                        name="reasignacionId"
+                        value={reasignacion.id}
+                      />
+                      <textarea
+                        name="comentarioResolucion"
+                        required
+                        minLength={10}
+                        rows={3}
+                        placeholder="Motivo obligatorio del rechazo (mínimo 10 caracteres)"
+                        className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
+                      />
+                      <button className="mt-3 w-full rounded-full bg-rose-300 px-4 py-3 font-black text-slate-950">
+                        Rechazar reasignación
+                      </button>
+                    </form>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {inspeccion.reasignaciones.length > 0 && (
+          <section className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-6">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">
+              Historial administrativo
+            </p>
+
+            <div className="mt-5 space-y-3">
+              {inspeccion.reasignaciones.map((reasignacion) => (
+                <article
+                  key={reasignacion.id}
+                  className="rounded-2xl bg-slate-950 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-black text-slate-300">
+                      {reasignacion.estado}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {formatoFecha(
+                        reasignacion.solicitadaEn,
+                        inspeccion.zonaHoraria,
+                      )}
+                    </span>
+                  </div>
+
+                  <p className="mt-3 font-bold">
+                    {reasignacion.inspectorAnterior?.usuario.nombre ??
+                      "Sin asignar"}{" "}
+                    → {reasignacion.inspectorPropuesto.usuario.nombre}
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-400">
+                    Solicitó: {reasignacion.solicitadaPor.nombre}
+                    {reasignacion.resueltaPor
+                      ? ` · Resolvió: ${reasignacion.resueltaPor.nombre}`
+                      : ""}
+                  </p>
+
+                  {reasignacion.comentarioResolucion && (
+                    <p className="mt-2 text-sm text-slate-300">
+                      Resolución: {reasignacion.comentarioResolucion}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}
+
 
 function DatoMini({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (

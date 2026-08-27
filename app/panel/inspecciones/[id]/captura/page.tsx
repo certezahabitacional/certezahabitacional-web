@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { EstadoInspeccion, RolUsuario } from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { actualizarHallazgo, crearHallazgo, registrarSeguimientoHallazgo } from "../actions";
 
@@ -10,6 +13,30 @@ type SearchParams = Promise<{
   error?: string;
 }>;
 
+type FotoComparativa = {
+  id: string;
+  descripcion: string | null;
+  imagenUrl: string | null;
+};
+
+function obtenerSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error(
+      "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local",
+    );
+  }
+
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
 export default async function CapturaPage({
   params,
   searchParams,
@@ -19,6 +46,75 @@ export default async function CapturaPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      inspector: {
+        select: {
+          id: true,
+          activo: true,
+        },
+      },
+    },
+  });
+
+  if (
+    !usuarioActual ||
+    !usuarioActual.activo ||
+    usuarioActual.rol !== RolUsuario.INSPECTOR ||
+    !usuarioActual.inspector ||
+    !usuarioActual.inspector.activo
+  ) {
+    redirect("/acceso");
+  }
+
+  const inspeccionAlcance = await prisma.inspeccion.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      estado: true,
+      inspectorId: true,
+      inspector: {
+        select: {
+          usuarioId: true,
+        },
+      },
+    },
+  });
+
+  if (!inspeccionAlcance) {
+    notFound();
+  }
+
+  if (
+    inspeccionAlcance.inspectorId !== usuarioActual.inspector.id ||
+    inspeccionAlcance.inspector?.usuarioId !== usuarioActual.id
+  ) {
+    redirect("/acceso");
+  }
+
+  if (
+    inspeccionAlcance.estado !== EstadoInspeccion.EN_PROCESO
+  ) {
+    redirect(
+      `/panel/inspecciones/${id}?error=${encodeURIComponent(
+        "La captura solo está disponible mientras la inspección está EN PROCESO.",
+      )}`,
+    );
+  }
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: {
@@ -39,6 +135,8 @@ export default async function CapturaPage({
           fotografias: {
             select: {
               id: true,
+              url: true,
+              descripcion: true,
             },
           },
         },
@@ -62,7 +160,11 @@ export default async function CapturaPage({
           ],
           include: {
             fotografias: {
-              select: { id: true },
+              select: {
+                id: true,
+                url: true,
+                descripcion: true,
+              },
             },
             hallazgosSiguientes: {
               where: {
@@ -73,7 +175,11 @@ export default async function CapturaPage({
                 estadoSeguimiento: true,
                 observacionSeguimiento: true,
                 fotografias: {
-                  select: { id: true },
+                  select: {
+                    id: true,
+                    url: true,
+                    descripcion: true,
+                  },
                 },
               },
               take: 1,
@@ -81,6 +187,48 @@ export default async function CapturaPage({
           },
         })
       : [];
+
+  const supabase = hallazgosAntecedentes.length > 0 ? obtenerSupabase() : null;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+
+  async function resolverImagenUrl(url: string): Promise<string | null> {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
+    }
+
+    if (!supabase) {
+      return null;
+    }
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(url, 60 * 60);
+
+    return error ? null : data.signedUrl;
+  }
+
+  const hallazgosAntecedentesConImagenes = await Promise.all(
+    hallazgosAntecedentes.map(async (anterior) => ({
+      ...anterior,
+      fotografias: await Promise.all(
+        anterior.fotografias.map(async (foto) => ({
+          ...foto,
+          imagenUrl: await resolverImagenUrl(foto.url),
+        })),
+      ),
+      hallazgosSiguientes: await Promise.all(
+        anterior.hallazgosSiguientes.map(async (seguimiento) => ({
+          ...seguimiento,
+          fotografias: await Promise.all(
+            seguimiento.fotografias.map(async (foto) => ({
+              ...foto,
+              imagenUrl: await resolverImagenUrl(foto.url),
+            })),
+          ),
+        })),
+      ),
+    })),
+  );
 
   const totalHallazgos = inspeccion.hallazgos.length;
   const totalEvidencias = inspeccion.hallazgos.reduce(
@@ -100,6 +248,10 @@ export default async function CapturaPage({
       )
     : undefined;
 
+  const editandoSeguimiento = Boolean(
+    hallazgoEnEdicion?.hallazgoAnteriorId,
+  );
+
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-5xl">
@@ -108,7 +260,7 @@ export default async function CapturaPage({
             href={`/panel/inspecciones/${id}`}
             className="text-sm font-bold text-cyan-300"
           >
-            ← Volver al expediente
+            â† Volver al expediente
           </Link>
 
           <Link
@@ -154,7 +306,7 @@ export default async function CapturaPage({
             </h2>
 
             <p className="mt-2 text-sm text-slate-400">
-              Elige qué quieres hacer antes de continuar con el siguiente hallazgo.
+              Elige quÃ© quieres hacer antes de continuar con el siguiente hallazgo.
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -162,7 +314,7 @@ export default async function CapturaPage({
                 href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgoRecienCreado.id}`}
                 className="rounded-2xl bg-cyan-400 px-4 py-3 text-center font-black text-slate-950"
               >
-                📷 Tomar / agregar evidencia
+                ðŸ“· Tomar / agregar evidencia
               </Link>
 
               <Link
@@ -181,16 +333,16 @@ export default async function CapturaPage({
               {inspeccion.folio}
             </p>
             <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-black text-cyan-300">
-              INSPECCIÓN {String(inspeccion.numeroInspeccion).padStart(2, "0")} · V{inspeccion.numeroInspeccion}
+              INSPECCIÃ“N {String(inspeccion.numeroInspeccion).padStart(2, "0")} Â· V{inspeccion.numeroInspeccion}
             </span>
           </div>
 
           <h1 className="mt-2 text-3xl font-black">
-            Captura Método Certeza®
+            Captura MÃ©todo CertezaÂ®
           </h1>
 
           <p className="mt-2 text-slate-400">
-            {inspeccion.cliente.nombre} ·{" "}
+            {inspeccion.cliente.nombre} Â·{" "}
             {inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}
           </p>
 
@@ -206,20 +358,20 @@ export default async function CapturaPage({
           </div>
         </header>
 
-        {hallazgosAntecedentes.length > 0 && (
+        {hallazgosAntecedentesConImagenes.length > 0 && (
           <section className="mt-7 rounded-3xl border border-violet-400/20 bg-slate-900 p-5 sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-300">
-              Seguimiento de la inspección anterior
+              Seguimiento de la inspecciÃ³n anterior
             </p>
             <h2 className="mt-2 text-2xl font-black">
-              Verificación de hallazgos V{inspeccion.numeroInspeccion - 1}
+              VerificaciÃ³n de hallazgos V{inspeccion.numeroInspeccion - 1}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Revisa cada antecedente y registra su evolución. El expediente anterior permanece intacto.
+              Revisa cada antecedente y registra su evoluciÃ³n. El expediente anterior permanece intacto.
             </p>
 
             <div className="mt-6 space-y-4">
-              {hallazgosAntecedentes.map((anterior, index) => {
+              {hallazgosAntecedentesConImagenes.map((anterior, index) => {
                 const seguimiento = anterior.hallazgosSiguientes[0];
 
                 return (
@@ -229,7 +381,7 @@ export default async function CapturaPage({
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs font-black">
                       <span className="rounded-full bg-violet-400/10 px-3 py-1 text-violet-300">
-                        V{inspeccion.numeroInspeccion - 1} · #{index + 1}
+                        V{inspeccion.numeroInspeccion - 1} Â· #{index + 1}
                       </span>
                       <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-cyan-300">
                         {anterior.clasificacion}
@@ -247,13 +399,29 @@ export default async function CapturaPage({
 
                     {anterior.ubicacion && (
                       <p className="mt-2 text-sm text-slate-500">
-                        Ubicación: {anterior.ubicacion}
+                        UbicaciÃ³n: {anterior.ubicacion}
                       </p>
                     )}
 
-                    <p className="mt-2 text-xs text-slate-500">
-                      Evidencia anterior: {anterior.fotografias.length} foto(s)
-                    </p>
+                    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                      <EvidenciaComparativa
+                        titulo={`ANTES Â· V${inspeccion.numeroInspeccion - 1}`}
+                        subtitulo="Evidencia antecedente"
+                        fotografias={anterior.fotografias}
+                        vacio="Sin evidencia fotogrÃ¡fica antecedente"
+                      />
+
+                      <EvidenciaComparativa
+                        titulo={`ACTUAL Â· V${inspeccion.numeroInspeccion}`}
+                        subtitulo="Evidencia de seguimiento"
+                        fotografias={seguimiento?.fotografias ?? []}
+                        vacio={
+                          seguimiento
+                            ? "AÃºn no se ha agregado evidencia actual"
+                            : "Registra primero el seguimiento para agregar evidencia actual"
+                        }
+                      />
+                    </div>
 
                     {seguimiento ? (
                       <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4">
@@ -270,7 +438,7 @@ export default async function CapturaPage({
                             href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${seguimiento.id}`}
                             className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-black text-slate-950"
                           >
-                            📷 Evidencia actual ({seguimiento.fotografias.length})
+                            ðŸ“· Agregar / ver evidencia actual ({seguimiento.fotografias.length})
                           </Link>
                           <Link
                             href={`/panel/inspecciones/${id}/captura?editar=${seguimiento.id}#nuevo-hallazgo`}
@@ -290,7 +458,7 @@ export default async function CapturaPage({
 
                         <label className="block">
                           <span className="mb-2 block text-sm font-bold">
-                            Resultado de la verificación *
+                            Resultado de la verificaciÃ³n *
                           </span>
                           <select
                             name="estadoSeguimiento"
@@ -302,19 +470,19 @@ export default async function CapturaPage({
                             <option value="CORREGIDO">Corregido satisfactoriamente</option>
                             <option value="PARCIALMENTE_CORREGIDO">Parcialmente corregido</option>
                             <option value="NO_CORREGIDO">No corregido</option>
-                            <option value="CORRECCION_NO_SATISFACTORIA">Corrección no satisfactoria</option>
+                            <option value="CORRECCION_NO_SATISFACTORIA">CorrecciÃ³n no satisfactoria</option>
                             <option value="NO_VERIFICABLE">No verificable</option>
                           </select>
                         </label>
 
                         <label className="block">
                           <span className="mb-2 block text-sm font-bold">
-                            Observación de seguimiento
+                            ObservaciÃ³n de seguimiento
                           </span>
                           <textarea
                             name="observacionSeguimiento"
                             rows={3}
-                            placeholder="Describe lo observado durante la reinspección."
+                            placeholder="Describe lo observado durante la reinspecciÃ³n."
                             className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3"
                           />
                         </label>
@@ -346,24 +514,36 @@ export default async function CapturaPage({
                   hallazgoEnEdicion ? "text-amber-300" : "text-cyan-300"
                 }`}
               >
-                {hallazgoEnEdicion ? "Corrección del expediente" : "Captura en campo"}
+                {editandoSeguimiento
+                  ? "EdiciÃ³n de seguimiento"
+                  : hallazgoEnEdicion
+                    ? "CorrecciÃ³n del expediente"
+                    : "Captura en campo"}
               </p>
 
               <h2 className="mt-2 text-2xl font-black">
-                {hallazgoEnEdicion ? "Editar hallazgo" : "Nuevo hallazgo"}
+                {editandoSeguimiento
+                  ? "Editar seguimiento"
+                  : hallazgoEnEdicion
+                    ? "Editar hallazgo"
+                    : "Nuevo hallazgo"}
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                {hallazgoEnEdicion
-                  ? "Corrige la información del hallazgo y guarda los cambios. Las evidencias existentes se conservarán."
-                  : "Guarda el hallazgo y decide inmediatamente si agregas evidencia o continúas con el siguiente."}
+                {editandoSeguimiento
+                  ? "Actualiza el resultado de la verificaciÃ³n y, si es necesario, corrige la informaciÃ³n tÃ©cnica del hallazgo. Las evidencias existentes se conservarÃ¡n."
+                  : hallazgoEnEdicion
+                    ? "Corrige la informaciÃ³n del hallazgo y guarda los cambios. Las evidencias existentes se conservarÃ¡n."
+                    : "Guarda el hallazgo y decide inmediatamente si agregas evidencia o continÃºas con el siguiente."}
               </p>
             </div>
 
             <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-bold text-slate-400">
-              {hallazgoEnEdicion
-                ? "Edición"
-                : `#${totalHallazgos + 1}`}
+              {editandoSeguimiento
+                ? "Seguimiento"
+                : hallazgoEnEdicion
+                  ? "EdiciÃ³n"
+                  : `#${totalHallazgos + 1}`}
             </span>
           </div>
 
@@ -390,30 +570,78 @@ export default async function CapturaPage({
               />
             )}
 
+            {editandoSeguimiento && hallazgoEnEdicion && (
+              <>
+                <div className="md:col-span-2 rounded-2xl border border-violet-400/20 bg-violet-400/5 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-300">
+                    EvoluciÃ³n del hallazgo
+                  </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Este hallazgo procede de la inspecciÃ³n anterior. La ediciÃ³n
+                    conserva intacto el expediente histÃ³rico antecedente.
+                  </p>
+                </div>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold">
+                    Resultado de la verificaciÃ³n *
+                  </span>
+                  <select
+                    name="estadoSeguimiento"
+                    required
+                    defaultValue={hallazgoEnEdicion.estadoSeguimiento ?? ""}
+                    className="w-full rounded-2xl border border-violet-400/20 bg-slate-950 px-4 py-3 text-base"
+                  >
+                    <option value="" disabled>
+                      Selecciona el resultado
+                    </option>
+                    <option value="CORREGIDO">Corregido satisfactoriamente</option>
+                    <option value="PARCIALMENTE_CORREGIDO">Parcialmente corregido</option>
+                    <option value="NO_CORREGIDO">No corregido</option>
+                    <option value="CORRECCION_NO_SATISFACTORIA">CorrecciÃ³n no satisfactoria</option>
+                    <option value="NO_VERIFICABLE">No verificable</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold">
+                    ObservaciÃ³n de seguimiento
+                  </span>
+                  <textarea
+                    name="observacionSeguimiento"
+                    rows={3}
+                    defaultValue={hallazgoEnEdicion.observacionSeguimiento ?? ""}
+                    placeholder="Describe lo observado durante la reinspecciÃ³n."
+                    className="w-full rounded-2xl border border-violet-400/20 bg-slate-950 px-4 py-3 text-base"
+                  />
+                </label>
+              </>
+            )}
+
             <Campo
               name="area"
-              label="Área *"
-              placeholder="Instalación eléctrica"
+              label="Ãrea *"
+              placeholder="InstalaciÃ³n elÃ©ctrica"
               defaultValue={hallazgoEnEdicion?.area ?? ""}
             />
 
             <Campo
               name="titulo"
-              label="Título *"
-              placeholder="Contacto sin tierra física"
+              label="TÃ­tulo *"
+              placeholder="Contacto sin tierra fÃ­sica"
               defaultValue={hallazgoEnEdicion?.titulo ?? ""}
             />
 
             <Campo
               name="ubicacion"
-              label="Ubicación"
-              placeholder="Recámara principal"
+              label="UbicaciÃ³n"
+              placeholder="RecÃ¡mara principal"
               defaultValue={hallazgoEnEdicion?.ubicacion ?? ""}
             />
 
             <label className="block">
               <span className="mb-2 block text-sm font-bold">
-                Clasificación
+                ClasificaciÃ³n
               </span>
 
               <select
@@ -422,16 +650,16 @@ export default async function CapturaPage({
                 className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-base"
               >
                 <option value="C">Conforme</option>
-                <option value="O">Observación</option>
+                <option value="O">ObservaciÃ³n</option>
                 <option value="NC">No conforme</option>
-                <option value="CR">Crítico</option>
+                <option value="CR">CrÃ­tico</option>
                 <option value="NA">No aplica</option>
               </select>
             </label>
 
             <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold">
-                Descripción *
+                DescripciÃ³n *
               </span>
 
               <textarea
@@ -476,13 +704,13 @@ export default async function CapturaPage({
 
             <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-bold">
-                Recomendación
+                RecomendaciÃ³n
               </span>
 
               <textarea
                 name="recomendacion"
                 rows={3}
-                placeholder="Acción correctiva o recomendación sugerida."
+                placeholder="AcciÃ³n correctiva o recomendaciÃ³n sugerida."
                 defaultValue={hallazgoEnEdicion?.recomendacion ?? ""}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-base"
               />
@@ -493,9 +721,11 @@ export default async function CapturaPage({
                 hallazgoEnEdicion ? "bg-amber-300" : "bg-cyan-400"
               }`}
             >
-              {hallazgoEnEdicion
-                ? "Guardar cambios del hallazgo"
-                : "Guardar hallazgo"}
+              {editandoSeguimiento
+                ? "Guardar cambios del seguimiento"
+                : hallazgoEnEdicion
+                  ? "Guardar cambios del hallazgo"
+                  : "Guardar hallazgo"}
             </button>
 
             {hallazgoEnEdicion && (
@@ -503,7 +733,7 @@ export default async function CapturaPage({
                 href={`/panel/inspecciones/${id}/captura`}
                 className="md:col-span-2 rounded-full border border-white/15 px-5 py-3 text-center font-black text-slate-300"
               >
-                Cancelar edición
+                Cancelar ediciÃ³n
               </Link>
             )}
           </form>
@@ -531,7 +761,7 @@ export default async function CapturaPage({
 
           {inspeccion.hallazgos.length === 0 ? (
             <div className="mt-6 rounded-2xl bg-slate-950 p-6 text-center text-slate-400">
-              Aún no hay hallazgos registrados.
+              AÃºn no hay hallazgos registrados.
             </div>
           ) : (
             <div className="mt-5 divide-y divide-white/10">
@@ -577,8 +807,19 @@ export default async function CapturaPage({
 
                     {hallazgo.ubicacion && (
                       <p className="mt-2 text-sm text-slate-500">
-                        Ubicación: {hallazgo.ubicacion}
+                        UbicaciÃ³n: {hallazgo.ubicacion}
                       </p>
+                    )}
+
+                    {hallazgo.observacionSeguimiento && (
+                      <div className="mt-3 rounded-2xl border border-violet-400/10 bg-violet-400/5 p-4">
+                        <p className="text-xs font-black uppercase tracking-wider text-violet-300">
+                          Seguimiento
+                        </p>
+                        <p className="mt-2 text-sm text-slate-300">
+                          {hallazgo.observacionSeguimiento}
+                        </p>
+                      </div>
                     )}
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -586,14 +827,16 @@ export default async function CapturaPage({
                         href={`/panel/inspecciones/${id}/captura?editar=${hallazgo.id}#nuevo-hallazgo`}
                         className="min-h-11 rounded-2xl border border-amber-300/30 px-4 py-3 text-center text-sm font-black text-amber-300"
                       >
-                        Editar hallazgo
+                        {hallazgo.hallazgoAnteriorId
+                          ? "Editar seguimiento"
+                          : "Editar hallazgo"}
                       </Link>
 
                       <Link
                         href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgo.id}`}
                         className="min-h-11 rounded-2xl bg-cyan-400 px-4 py-3 text-center text-sm font-black text-slate-950"
                       >
-                        📷{" "}
+                        ðŸ“·{" "}
                         {fotos > 0
                           ? `Agregar otra evidencia (${fotos})`
                           : "Tomar / agregar evidencia"}
@@ -609,7 +852,7 @@ export default async function CapturaPage({
                         </Link>
                       ) : (
                         <div className="min-h-11 rounded-2xl border border-white/10 px-4 py-3 text-center text-sm font-bold text-slate-600">
-                          Sin fotografías
+                          Sin fotografÃ­as
                         </div>
                       )}
                     </div>
@@ -648,12 +891,82 @@ function etiquetaSeguimiento(valor: string | null) {
     CORREGIDO: "Corregido satisfactoriamente",
     PARCIALMENTE_CORREGIDO: "Parcialmente corregido",
     NO_CORREGIDO: "No corregido",
-    CORRECCION_NO_SATISFACTORIA: "Corrección no satisfactoria",
+    CORRECCION_NO_SATISFACTORIA: "CorrecciÃ³n no satisfactoria",
     NO_VERIFICABLE: "No verificable",
     NUEVO_HALLAZGO: "Nuevo hallazgo",
   };
 
   return etiquetas[valor] ?? valor.replaceAll("_", " ");
+}
+
+function EvidenciaComparativa({
+  titulo,
+  subtitulo,
+  fotografias,
+  vacio,
+}: {
+  titulo: string;
+  subtitulo: string;
+  fotografias: FotoComparativa[];
+  vacio: string;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70">
+      <div className="border-b border-white/10 px-4 py-3">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-300">
+          {titulo}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">{subtitulo}</p>
+      </div>
+
+      {fotografias.length === 0 ? (
+        <div className="grid min-h-48 place-items-center p-5 text-center text-sm text-slate-500">
+          {vacio}
+        </div>
+      ) : (
+        <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          {fotografias.map((foto, index) => (
+            <div
+              key={foto.id}
+              className="overflow-hidden rounded-xl border border-white/10 bg-slate-950"
+            >
+              {foto.imagenUrl ? (
+                <a
+                  href={foto.imagenUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block"
+                  title="Abrir fotografÃ­a en tamaÃ±o completo"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={foto.imagenUrl}
+                    alt={foto.descripcion ?? `${subtitulo} ${index + 1}`}
+                    className="h-48 w-full object-cover transition hover:opacity-90"
+                  />
+                </a>
+              ) : (
+                <div className="grid h-48 place-items-center px-4 text-center text-sm text-slate-500">
+                  No se pudo cargar la imagen
+                </div>
+              )}
+
+              <div className="px-3 py-3">
+                <p className="text-xs font-bold text-slate-300">
+                  Foto {index + 1}
+                </p>
+                {foto.descripcion && (
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {foto.descripcion}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Resumen({

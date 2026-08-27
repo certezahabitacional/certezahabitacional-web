@@ -72,12 +72,19 @@ export default async function CotizacionClientePage({
   return (
     <main className="px-6 py-10">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/portal/cotizaciones"
             className="text-sm font-bold text-cyan-300 transition hover:text-cyan-200"
           >
             ← Volver a cotizaciones
+          </Link>
+
+          <Link
+            href={`/portal/cotizaciones/${cotizacion.id}/imprimir`}
+            className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
+          >
+            Ver / imprimir cotización oficial
           </Link>
         </div>
 
@@ -235,7 +242,7 @@ export default async function CotizacionClientePage({
               </section>
             )}
 
-            {/* COTIZACIÓN ENVIADA */}
+            {/* COTIZACIÃ“N ENVIADA */}
             {cotizacion.estado ===
               EstadoCotizacion.ENVIADA && (
               <section className="mt-8 rounded-3xl border border-cyan-400/30 bg-cyan-400/5 p-6">

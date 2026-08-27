@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import {
+  EstadoInspeccion,
+  RolUsuario,
+} from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   eliminarEvidencia,
@@ -39,6 +44,102 @@ export default async function EvidenciasPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const usuarioActual = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      zonaId: true,
+      gerenteId: true,
+      inspector: {
+        select: {
+          id: true,
+          activo: true,
+        },
+      },
+    },
+  });
+
+  if (!usuarioActual || !usuarioActual.activo) {
+    redirect("/acceso");
+  }
+
+  if (usuarioActual.rol === RolUsuario.CLIENTE) {
+    redirect("/portal");
+  }
+
+  if (usuarioActual.rol === RolUsuario.ADMINISTRADOR) {
+    redirect("/acceso");
+  }
+
+  const alcance = await prisma.inspeccion.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      estado: true,
+      zonaId: true,
+      inspectorId: true,
+      inspector: {
+        select: {
+          usuarioId: true,
+          usuario: {
+            select: {
+              zonaId: true,
+              gerenteId: true,
+              coordinadorId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!alcance) {
+    notFound();
+  }
+
+  if (usuarioActual.rol === RolUsuario.GERENTE) {
+    if (
+      alcance.inspector?.usuario.gerenteId !== usuarioActual.id
+    ) {
+      redirect("/acceso");
+    }
+  }
+
+  if (usuarioActual.rol === RolUsuario.COORDINADOR) {
+    if (
+      alcance.inspector?.usuario.coordinadorId !== usuarioActual.id
+    ) {
+      redirect("/acceso");
+    }
+  }
+
+  if (usuarioActual.rol === RolUsuario.INSPECTOR) {
+    if (
+      !usuarioActual.inspector ||
+      !usuarioActual.inspector.activo ||
+      alcance.inspectorId !== usuarioActual.inspector.id ||
+      alcance.inspector?.usuarioId !== usuarioActual.id
+    ) {
+      redirect("/acceso");
+    }
+  }
+
+  const puedeModificar =
+    usuarioActual.rol === RolUsuario.DIRECTOR ||
+    (usuarioActual.rol === RolUsuario.INSPECTOR &&
+      alcance.estado === EstadoInspeccion.EN_PROCESO);
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },
@@ -185,6 +286,7 @@ export default async function EvidenciasPage({
           </section>
         )}
 
+        {puedeModificar ? (
         <form
           action={registrarEvidencia}
           className="mt-7 grid gap-4 rounded-3xl border border-white/10 bg-slate-900 p-6 md:grid-cols-2"
@@ -245,6 +347,12 @@ export default async function EvidenciasPage({
             Subir y registrar evidencia
           </button>
         </form>
+
+        ) : (
+          <div className="mt-7 rounded-3xl border border-white/10 bg-slate-900 p-5 text-sm text-slate-400">
+            Evidencias en modo solo lectura para tu rol o para el estado actual del expediente.
+          </div>
+        )}
 
         {fotografiasMostradas.length === 0 ? (
           <div className="mt-7 rounded-3xl border border-white/10 bg-slate-900 p-10 text-center text-slate-400">
@@ -341,6 +449,7 @@ export default async function EvidenciasPage({
                         </a>
                       )}
 
+                      {puedeModificar && (
                       <details className="mt-4 border-t border-white/10 pt-4">
                         <summary className="cursor-pointer text-sm font-bold text-rose-300">
                           Eliminar evidencia
@@ -388,6 +497,7 @@ export default async function EvidenciasPage({
                           </form>
                         </div>
                       </details>
+                      )}
                     </div>
                   </article>
                 ),

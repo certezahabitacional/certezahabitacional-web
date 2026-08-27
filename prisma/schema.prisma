@@ -13,7 +13,6 @@ enum RolUsuario {
   ADMINISTRADOR
   GERENTE
   COORDINADOR
-  SUPERVISOR
   INSPECTOR
   CLIENTE
 }
@@ -40,6 +39,13 @@ enum EstadoDecisionRevision {
   VIGENTE
   INVALIDADA
   SUPERADA
+}
+
+enum EstadoReasignacionInspector {
+  PENDIENTE
+  AUTORIZADA
+  RECHAZADA
+  CANCELADA
 }
 
 enum TipoCliente {
@@ -123,6 +129,26 @@ enum TipoEvento {
   DESBLOQUEAR_LIBERACION
 }
 
+model Zona {
+  id String @id @default(cuid())
+
+  nombre      String
+  codigo      String  @unique
+  ciudad      String?
+  estado      String?
+  zonaHoraria String  @default("America/Ciudad_Juarez")
+  activa      Boolean @default(true)
+
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  usuarios     Usuario[]
+  inspecciones Inspeccion[]
+
+  @@index([nombre])
+  @@index([activa])
+}
+
 model Usuario {
   id               String     @id @default(cuid())
   nombre           String
@@ -136,6 +162,17 @@ model Usuario {
   ultimoFalloLogin DateTime?
   creadoEn         DateTime   @default(now())
   actualizadoEn    DateTime   @updatedAt
+
+  zonaId String?
+  zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
+
+  gerenteId           String?
+  gerente             Usuario?  @relation("GerenteCoordinadores", fields: [gerenteId], references: [id], onDelete: SetNull)
+  coordinadoresACargo Usuario[] @relation("GerenteCoordinadores")
+
+  coordinadorId     String?
+  coordinador       Usuario?  @relation("CoordinadorInspectores", fields: [coordinadorId], references: [id], onDelete: SetNull)
+  inspectoresACargo Usuario[] @relation("CoordinadorInspectores")
 
   inspector Inspector?
   cliente   Cliente?
@@ -152,7 +189,13 @@ model Usuario {
   revisionesInspeccion RevisionInspeccion[] @relation("RevisionUsuario")
   bloqueosLiberacion   Inspeccion[]         @relation("InspeccionBloqueadaPor")
 
+  reasignacionesSolicitadas ReasignacionInspector[] @relation("ReasignacionSolicitadaPor")
+  reasignacionesResueltas   ReasignacionInspector[] @relation("ReasignacionResueltaPor")
+
   @@index([bloqueadoHasta])
+  @@index([zonaId])
+  @@index([gerenteId])
+  @@index([coordinadorId])
 }
 
 model Cliente {
@@ -237,11 +280,17 @@ model Inspector {
   actualizadoEn DateTime @updatedAt
 
   inspecciones Inspeccion[]
+
+  reasignacionesComoAnterior  ReasignacionInspector[] @relation("ReasignacionInspectorAnterior")
+  reasignacionesComoPropuesto ReasignacionInspector[] @relation("ReasignacionInspectorPropuesto")
 }
 
 model Inspeccion {
   id    String @id @default(cuid())
   folio String @unique
+
+  zonaId String?
+  zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
 
   clienteId String
   cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
@@ -293,15 +342,17 @@ model Inspeccion {
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
-  hallazgos   Hallazgo[]
-  fotografias Fotografia[]
-  firmas      Firma[]
-  certificado Certificado?
-  eventos     EventoAuditoria[]
-  revisiones  RevisionInspeccion[]
+  hallazgos      Hallazgo[]
+  fotografias    Fotografia[]
+  firmas         Firma[]
+  certificado    Certificado?
+  eventos        EventoAuditoria[]
+  revisiones     RevisionInspeccion[]
+  reasignaciones ReasignacionInspector[]
 
   @@index([fechaProgramada])
   @@index([estado])
+  @@index([zonaId])
   @@index([clienteId])
   @@index([inmuebleId])
   @@index([numeroInspeccion])
@@ -311,6 +362,41 @@ model Inspeccion {
   @@index([inicioLiberadoPorId])
   @@index([liberacionBloqueada])
   @@index([bloqueadaPorId])
+}
+
+model ReasignacionInspector {
+  id String @id @default(cuid())
+
+  inspeccionId String
+  inspeccion   Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+
+  inspectorAnteriorId String?
+  inspectorAnterior   Inspector? @relation("ReasignacionInspectorAnterior", fields: [inspectorAnteriorId], references: [id], onDelete: SetNull)
+
+  inspectorPropuestoId String
+  inspectorPropuesto   Inspector @relation("ReasignacionInspectorPropuesto", fields: [inspectorPropuestoId], references: [id], onDelete: Restrict)
+
+  solicitadaPorId String
+  solicitadaPor   Usuario @relation("ReasignacionSolicitadaPor", fields: [solicitadaPorId], references: [id], onDelete: Restrict)
+
+  resueltaPorId String?
+  resueltaPor   Usuario? @relation("ReasignacionResueltaPor", fields: [resueltaPorId], references: [id], onDelete: SetNull)
+
+  estado EstadoReasignacionInspector @default(PENDIENTE)
+
+  motivo               String
+  comentarioResolucion String?
+
+  solicitadaEn DateTime  @default(now())
+  resueltaEn   DateTime?
+
+  @@index([inspeccionId])
+  @@index([inspectorAnteriorId])
+  @@index([inspectorPropuestoId])
+  @@index([solicitadaPorId])
+  @@index([resueltaPorId])
+  @@index([estado])
+  @@index([solicitadaEn])
 }
 
 model RevisionInspeccion {

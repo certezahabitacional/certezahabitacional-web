@@ -1,11 +1,11 @@
-
-
+"use server";
 
 import {
   ClasificacionHallazgo,
   EstadoDecisionRevision,
   EstadoInspeccion,
   EstadoPago,
+  EstadoReasignacionInspector,
   EstadoSeguimientoHallazgo,
   PrioridadHallazgo,
   RolUsuario,
@@ -61,6 +61,170 @@ function exigirRol(
   }
 
   return rol;
+}
+
+
+type AlcanceAccion = "TECNICO" | "ADMINISTRATIVO" | "MIXTO";
+
+async function exigirAlcanceInspeccion(
+  session: Session | null,
+  inspeccionId: string,
+  alcance: AlcanceAccion = "TECNICO",
+): Promise<RolUsuario> {
+  if (!session?.user) exigirSesion();
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      zonaId: true,
+      gerenteId: true,
+      coordinadorId: true,
+      inspector: { select: { id: true } },
+    },
+  });
+
+  if (!usuario || !usuario.activo) {
+    redirigirError(inspeccionId, "Tu usuario no está activo.");
+  }
+
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id: inspeccionId },
+    select: {
+      zonaId: true,
+      inspectorId: true,
+      inspector: {
+        select: {
+          usuarioId: true,
+          usuario: {
+            select: {
+              zonaId: true,
+              gerenteId: true,
+              coordinadorId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!inspeccion) redirigirError(inspeccionId, "La inspección no existe.");
+
+  if (usuario.rol === RolUsuario.CLIENTE) {
+    redirigirError(inspeccionId, "El Cliente debe operar desde su portal.");
+  }
+
+  if (alcance === "ADMINISTRATIVO") {
+    if (
+      usuario.rol !== RolUsuario.ADMINISTRADOR &&
+      usuario.rol !== RolUsuario.DIRECTOR
+    ) {
+      redirigirError(
+        inspeccionId,
+        "Esta acción administrativa está reservada para Administración o Dirección.",
+      );
+    }
+    return usuario.rol;
+  }
+
+  if (alcance === "TECNICO" && usuario.rol === RolUsuario.ADMINISTRADOR) {
+    redirigirError(
+      inspeccionId,
+      "Administración no tiene acceso al expediente técnico.",
+    );
+  }
+
+  if (usuario.rol === RolUsuario.DIRECTOR) return usuario.rol;
+  if (alcance === "MIXTO" && usuario.rol === RolUsuario.ADMINISTRADOR) {
+    return usuario.rol;
+  }
+
+  if (usuario.rol === RolUsuario.GERENTE) {
+    if (inspeccion.inspector?.usuario.gerenteId !== usuario.id) {
+      redirigirError(
+        inspeccionId,
+        "La inspección no pertenece a un Inspector bajo esta Gerencia.",
+      );
+    }
+
+    return usuario.rol;
+  }
+
+  if (usuario.rol === RolUsuario.COORDINADOR) {
+    if (inspeccion.inspector?.usuario.coordinadorId !== usuario.id) {
+      redirigirError(
+        inspeccionId,
+        "La inspección no pertenece a un Inspector bajo tu Coordinación.",
+      );
+    }
+    return usuario.rol;
+  }
+
+  if (usuario.rol === RolUsuario.INSPECTOR) {
+    if (
+      !usuario.inspector?.id ||
+      inspeccion.inspectorId !== usuario.inspector.id ||
+      inspeccion.inspector?.usuarioId !== usuario.id
+    ) {
+      redirigirError(
+        inspeccionId,
+        "Esta inspección no está asignada a tu usuario.",
+      );
+    }
+    return usuario.rol;
+  }
+
+  redirigirError(inspeccionId, "No tienes alcance sobre esta inspección.");
+}
+
+async function exigirRolYAlcance(
+  session: Session | null,
+  rolesPermitidos: RolUsuario[],
+  inspeccionId: string,
+  alcance: AlcanceAccion = "TECNICO",
+): Promise<RolUsuario> {
+  const rol = exigirRol(session, rolesPermitidos, inspeccionId);
+  await exigirAlcanceInspeccion(session, inspeccionId, alcance);
+  return rol;
+}
+
+async function exigirExpedienteEditable(inspeccionId: string) {
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id: inspeccionId },
+    select: {
+      estado: true,
+      liberacionBloqueada: true,
+      certificado: { select: { id: true } },
+    },
+  });
+
+  if (!inspeccion) redirigirError(inspeccionId, "La inspección no existe.");
+
+  if (inspeccion.certificado) {
+    redirigirError(
+      inspeccionId,
+      "El certificado ya fue liberado. El expediente quedó cerrado.",
+    );
+  }
+
+  if (
+    inspeccion.estado === EstadoInspeccion.FINALIZADA ||
+    inspeccion.estado === EstadoInspeccion.CANCELADA
+  ) {
+    redirigirError(
+      inspeccionId,
+      "El expediente está cerrado y no admite cambios ordinarios.",
+    );
+  }
+
+  if (inspeccion.liberacionBloqueada) {
+    redirigirError(
+      inspeccionId,
+      "La liberación está bloqueada por Dirección.",
+    );
+  }
 }
 
 function revalidarInspeccion(inspeccionId: string) {
@@ -179,7 +343,7 @@ async function validarLiquidacionParaCertificado(inspeccionId: string) {
     redirigirError(inspeccionId, "La inspección no existe.");
   }
 
-  // Compatibilidad con expedientes históricos sin cotización asociada.
+  // Compatibilidad con expedientes histÃƒÂ³ricos sin cotización asociada.
   if (!inspeccion.cotizacion) {
     return inspeccion;
   }
@@ -225,15 +389,33 @@ export async function asignarInspector(formData: FormData) {
   if (!inspectorId) {
     redirigirError(
       inspeccionId,
-      "Selecciona un inspector para continuar.",
+      "Selecciona un Inspector para continuar.",
     );
   }
 
-  exigirRol(
+  const rol = exigirRol(
     session,
     [RolUsuario.GERENTE, RolUsuario.DIRECTOR],
     inspeccionId,
   );
+
+  const usuarioGestor = await prisma.usuario.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+    },
+  });
+
+  if (!usuarioGestor || !usuarioGestor.activo) {
+    redirigirError(
+      inspeccionId,
+      "Tu usuario no está activo.",
+    );
+  }
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id: inspeccionId },
@@ -248,6 +430,7 @@ export async function asignarInspector(formData: FormData) {
             select: {
               nombre: true,
               email: true,
+              gerenteId: true,
             },
           },
         },
@@ -257,6 +440,17 @@ export async function asignarInspector(formData: FormData) {
 
   if (!inspeccion) {
     redirigirError(inspeccionId, "La inspección no existe.");
+  }
+
+  if (
+    rol === RolUsuario.GERENTE &&
+    inspeccion.inspectorId &&
+    inspeccion.inspector?.usuario.gerenteId !== usuarioGestor.id
+  ) {
+    redirigirError(
+      inspeccionId,
+      "La inspección actual no pertenece a un Inspector bajo tu Gerencia.",
+    );
   }
 
   if (
@@ -272,14 +466,7 @@ export async function asignarInspector(formData: FormData) {
   if (inspeccion.inspectorId === inspectorId) {
     redirigirOk(
       inspeccionId,
-      "El inspector seleccionado ya está asignado a esta inspección.",
-    );
-  }
-
-  if (inspeccion.inspectorId && motivo.length < 10) {
-    redirigirError(
-      inspeccionId,
-      "Indica un motivo de al menos 10 caracteres para reasignar al inspector.",
+      "El Inspector seleccionado ya está asignado a esta inspección.",
     );
   }
 
@@ -289,6 +476,12 @@ export async function asignarInspector(formData: FormData) {
       activo: true,
       usuario: {
         activo: true,
+        rol: RolUsuario.INSPECTOR,
+        ...(rol === RolUsuario.GERENTE
+          ? {
+              gerenteId: session.user.id,
+            }
+          : {}),
       },
     },
     select: {
@@ -297,6 +490,8 @@ export async function asignarInspector(formData: FormData) {
         select: {
           nombre: true,
           email: true,
+          gerenteId: true,
+          coordinadorId: true,
         },
       },
     },
@@ -305,7 +500,9 @@ export async function asignarInspector(formData: FormData) {
   if (!inspectorNuevo) {
     redirigirError(
       inspeccionId,
-      "El inspector seleccionado no existe o no está activo.",
+      rol === RolUsuario.GERENTE
+        ? "El Inspector seleccionado no pertenece a tu Gerencia o no está activo."
+        : "El Inspector seleccionado no existe o no está activo.",
     );
   }
 
@@ -313,24 +510,290 @@ export async function asignarInspector(formData: FormData) {
     inspeccion.inspector?.usuario.nombre ?? "Sin asignar";
   const nombreNuevo = inspectorNuevo.usuario.nombre;
 
-  await prisma.inspeccion.update({
-    where: { id: inspeccionId },
+  /*
+   * Primera asignaciÃ³n:
+   * Gerencia o Dirección pueden asignar directamente.
+   */
+  if (!inspeccion.inspectorId) {
+    await prisma.inspeccion.update({
+      where: { id: inspeccionId },
+      data: {
+        inspectorId: inspectorNuevo.id,
+      },
+    });
+
+    await registrarAuditoria({
+      tipo: TipoEvento.EDITAR,
+      entidad: "Inspeccion",
+      entidadId: inspeccion.id,
+      inspeccionId: inspeccion.id,
+      usuarioId: session.user.id,
+      descripcion:
+        `${session.user.role} asignó la inspección ${inspeccion.folio} ` +
+        `al Inspector ${nombreNuevo}${motivo ? `. Comentario: ${motivo}` : "."}`,
+    });
+
+    revalidarInspeccion(inspeccionId);
+    revalidatePath("/panel/inspectores");
+
+    redirigirOk(
+      inspeccionId,
+      `Inspector asignado correctamente: ${nombreNuevo}.`,
+    );
+  }
+
+  /*
+   * ReasignaciÃ³n:
+   * GERENTE solicita y ADMINISTRADOR/DIRECTOR resuelven.
+   * DIRECTOR, por facultad global, puede reasignar directamente,
+   * dejando tambiÃ©n trazabilidad formal en ReasignacionInspector.
+   */
+  if (motivo.length < 10) {
+    redirigirError(
+      inspeccionId,
+      "Indica un motivo de al menos 10 caracteres para solicitar o realizar la reasignación.",
+    );
+  }
+
+  const pendienteExistente =
+    await prisma.reasignacionInspector.findFirst({
+      where: {
+        inspeccionId,
+        estado: EstadoReasignacionInspector.PENDIENTE,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  if (pendienteExistente) {
+    redirigirError(
+      inspeccionId,
+      "Ya existe una solicitud de reasignación pendiente para esta inspección.",
+    );
+  }
+
+  if (rol === RolUsuario.DIRECTOR) {
+    await prisma.$transaction(async (tx) => {
+      await tx.reasignacionInspector.create({
+        data: {
+          inspeccionId,
+          inspectorAnteriorId: inspeccion.inspectorId,
+          inspectorPropuestoId: inspectorNuevo.id,
+          solicitadaPorId: session.user.id,
+          resueltaPorId: session.user.id,
+          estado: EstadoReasignacionInspector.AUTORIZADA,
+          motivo,
+          comentarioResolucion:
+            "ReasignaciÃ³n autorizada y ejecutada directamente por Dirección.",
+          resueltaEn: new Date(),
+        },
+      });
+
+      await tx.inspeccion.update({
+        where: { id: inspeccionId },
+        data: {
+          inspectorId: inspectorNuevo.id,
+        },
+      });
+    });
+
+    await registrarAuditoria({
+      tipo: TipoEvento.EDITAR,
+      entidad: "Inspeccion",
+      entidadId: inspeccion.id,
+      inspeccionId: inspeccion.id,
+      usuarioId: session.user.id,
+      descripcion:
+        `Dirección reasignó la inspección ${inspeccion.folio} ` +
+        `de ${nombreAnterior} a ${nombreNuevo}. Motivo: ${motivo}`,
+    });
+
+    revalidarInspeccion(inspeccionId);
+    revalidatePath("/panel/inspectores");
+
+    redirigirOk(
+      inspeccionId,
+      `Inspector reasignado por Dirección: ${nombreNuevo}.`,
+    );
+  }
+
+  const solicitud = await prisma.reasignacionInspector.create({
     data: {
-      inspectorId: inspectorNuevo.id,
+      inspeccionId,
+      inspectorAnteriorId: inspeccion.inspectorId,
+      inspectorPropuestoId: inspectorNuevo.id,
+      solicitadaPorId: session.user.id,
+      estado: EstadoReasignacionInspector.PENDIENTE,
+      motivo,
     },
   });
 
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,
-    entidad: "Inspeccion",
-    entidadId: inspeccion.id,
-    inspeccionId: inspeccion.id,
+    entidad: "ReasignacionInspector",
+    entidadId: solicitud.id,
+    inspeccionId,
     usuarioId: session.user.id,
-    descripcion: inspeccion.inspectorId
-      ? `${session.user.role} reasignó la inspección ${inspeccion.folio} de ${nombreAnterior} a ${nombreNuevo}. Motivo: ${motivo}`
-      : `${session.user.role} asignó la inspección ${inspeccion.folio} a ${nombreNuevo}${
-          motivo ? `. Comentario: ${motivo}` : "."
-        }`,
+    descripcion:
+      `Gerencia solicitÃ³ reasignar la inspección ${inspeccion.folio} ` +
+      `de ${nombreAnterior} a ${nombreNuevo}. Motivo: ${motivo}`,
+  });
+
+  revalidarInspeccion(inspeccionId);
+
+  redirigirOk(
+    inspeccionId,
+    `Solicitud de reasignación enviada a Administración. El Inspector actual continúa asignado hasta que la solicitud sea autorizada.`,
+  );
+}
+
+export async function autorizarReasignacionInspector(
+  formData: FormData,
+) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const inspeccionId = texto(formData, "inspeccionId");
+  const reasignacionId = texto(formData, "reasignacionId");
+  const comentarioResolucion = texto(
+    formData,
+    "comentarioResolucion",
+  );
+
+  if (!inspeccionId || !reasignacionId) {
+    redirect("/panel/inspecciones?error=Reasignacion%20no%20valida");
+  }
+
+  await exigirRolYAlcance(
+    session,
+    [RolUsuario.ADMINISTRADOR, RolUsuario.DIRECTOR],
+    inspeccionId,
+    "ADMINISTRATIVO",
+  );
+
+  const solicitud = await prisma.reasignacionInspector.findFirst({
+    where: {
+      id: reasignacionId,
+      inspeccionId,
+      estado: EstadoReasignacionInspector.PENDIENTE,
+    },
+    select: {
+      id: true,
+      motivo: true,
+      inspectorAnteriorId: true,
+      inspectorPropuestoId: true,
+      inspectorAnterior: {
+        select: {
+          usuario: {
+            select: {
+              nombre: true,
+            },
+          },
+        },
+      },
+      inspectorPropuesto: {
+        select: {
+          id: true,
+          activo: true,
+          usuario: {
+            select: {
+              nombre: true,
+              activo: true,
+              rol: true,
+            },
+          },
+        },
+      },
+      inspeccion: {
+        select: {
+          folio: true,
+          estado: true,
+          inspectorId: true,
+        },
+      },
+    },
+  });
+
+  if (!solicitud) {
+    redirigirError(
+      inspeccionId,
+      "La solicitud de reasignación no existe o ya fue resuelta.",
+    );
+  }
+
+  if (
+    solicitud.inspeccion.estado === EstadoInspeccion.FINALIZADA ||
+    solicitud.inspeccion.estado === EstadoInspeccion.CANCELADA
+  ) {
+    redirigirError(
+      inspeccionId,
+      "La inspección ya está cerrada y no admite una reasignación ordinaria.",
+    );
+  }
+
+  if (
+    solicitud.inspeccion.inspectorId !== solicitud.inspectorAnteriorId
+  ) {
+    redirigirError(
+      inspeccionId,
+      "El Inspector actual cambió después de crear la solicitud. Rechaza esta solicitud y genera una nueva.",
+    );
+  }
+
+  if (
+    !solicitud.inspectorPropuesto.activo ||
+    !solicitud.inspectorPropuesto.usuario.activo ||
+    solicitud.inspectorPropuesto.usuario.rol !== RolUsuario.INSPECTOR
+  ) {
+    redirigirError(
+      inspeccionId,
+      "El Inspector propuesto ya no está activo o dejó de ser un usuario Inspector.",
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.reasignacionInspector.update({
+      where: {
+        id: solicitud.id,
+      },
+      data: {
+        estado: EstadoReasignacionInspector.AUTORIZADA,
+        resueltaPorId: session.user.id,
+        resueltaEn: new Date(),
+        comentarioResolucion:
+          comentarioResolucion || "ReasignaciÃ³n autorizada.",
+      },
+    });
+
+    await tx.inspeccion.update({
+      where: {
+        id: inspeccionId,
+      },
+      data: {
+        inspectorId: solicitud.inspectorPropuestoId,
+      },
+    });
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "ReasignacionInspector",
+    entidadId: solicitud.id,
+    inspeccionId,
+    usuarioId: session.user.id,
+    descripcion:
+      `${session.user.role} autorizó la reasignación de ${solicitud.inspeccion.folio} ` +
+      `de ${solicitud.inspectorAnterior?.usuario.nombre ?? "Sin asignar"} ` +
+      `a ${solicitud.inspectorPropuesto.usuario.nombre}. ` +
+      `Motivo original: ${solicitud.motivo}${
+        comentarioResolucion
+          ? `. Comentario de resolución: ${comentarioResolucion}`
+          : "."
+      }`,
   });
 
   revalidarInspeccion(inspeccionId);
@@ -338,9 +801,117 @@ export async function asignarInspector(formData: FormData) {
 
   redirigirOk(
     inspeccionId,
-    inspeccion.inspectorId
-      ? `Inspector reasignado correctamente: ${nombreNuevo}.`
-      : `Inspector asignado correctamente: ${nombreNuevo}.`,
+    `ReasignaciÃ³n autorizada. Nuevo Inspector: ${solicitud.inspectorPropuesto.usuario.nombre}.`,
+  );
+}
+
+export async function rechazarReasignacionInspector(
+  formData: FormData,
+) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const inspeccionId = texto(formData, "inspeccionId");
+  const reasignacionId = texto(formData, "reasignacionId");
+  const comentarioResolucion = texto(
+    formData,
+    "comentarioResolucion",
+  );
+
+  if (!inspeccionId || !reasignacionId) {
+    redirect("/panel/inspecciones?error=Reasignacion%20no%20valida");
+  }
+
+  await exigirRolYAlcance(
+    session,
+    [RolUsuario.ADMINISTRADOR, RolUsuario.DIRECTOR],
+    inspeccionId,
+    "ADMINISTRATIVO",
+  );
+
+  if (comentarioResolucion.length < 10) {
+    redirigirError(
+      inspeccionId,
+      "Indica un motivo de al menos 10 caracteres para rechazar la reasignación.",
+    );
+  }
+
+  const solicitud = await prisma.reasignacionInspector.findFirst({
+    where: {
+      id: reasignacionId,
+      inspeccionId,
+      estado: EstadoReasignacionInspector.PENDIENTE,
+    },
+    select: {
+      id: true,
+      motivo: true,
+      inspeccion: {
+        select: {
+          folio: true,
+        },
+      },
+      inspectorAnterior: {
+        select: {
+          usuario: {
+            select: {
+              nombre: true,
+            },
+          },
+        },
+      },
+      inspectorPropuesto: {
+        select: {
+          usuario: {
+            select: {
+              nombre: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!solicitud) {
+    redirigirError(
+      inspeccionId,
+      "La solicitud de reasignación no existe o ya fue resuelta.",
+    );
+  }
+
+  await prisma.reasignacionInspector.update({
+    where: {
+      id: solicitud.id,
+    },
+    data: {
+      estado: EstadoReasignacionInspector.RECHAZADA,
+      resueltaPorId: session.user.id,
+      resueltaEn: new Date(),
+      comentarioResolucion,
+    },
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "ReasignacionInspector",
+    entidadId: solicitud.id,
+    inspeccionId,
+    usuarioId: session.user.id,
+    descripcion:
+      `${session.user.role} rechazó la reasignación de ${solicitud.inspeccion.folio} ` +
+      `de ${solicitud.inspectorAnterior?.usuario.nombre ?? "Sin asignar"} ` +
+      `a ${solicitud.inspectorPropuesto.usuario.nombre}. ` +
+      `Motivo original: ${solicitud.motivo}. ` +
+      `ResoluciÃ³n: ${comentarioResolucion}`,
+  });
+
+  revalidarInspeccion(inspeccionId);
+
+  redirigirOk(
+    inspeccionId,
+    "Solicitud de reasignación rechazada. Se conserva el Inspector actual.",
   );
 }
 
@@ -358,18 +929,11 @@ export async function liberarInicioSinPago(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  const rolesAutorizados = [
-    "DIRECTOR",
-    "GERENTE",
-    "ADMINISTRADOR",
-  ];
-
-  if (!rolesAutorizados.includes(session.user.role)) {
-    redirigirError(
-      id,
-      "Solo Dirección, Gerencia o Administración pueden autorizar el inicio con saldo pendiente.",
-    );
-  }
+  await exigirRolYAlcance(
+    session,
+    [RolUsuario.DIRECTOR],
+    id,
+  );
 
   if (motivo.length < 10) {
     redirigirError(
@@ -402,7 +966,7 @@ export async function liberarInicioSinPago(formData: FormData) {
   if (inspeccion.estado !== EstadoInspeccion.PROGRAMADA) {
     redirigirError(
       id,
-      "La excepción solo puede autorizarse mientras la inspección esté PROGRAMADA.",
+      "La excepción solo puede autorizarse mientras la inspección estÃƒÂ© PROGRAMADA.",
     );
   }
 
@@ -478,8 +1042,7 @@ export async function crearHallazgo(formData: FormData) {
   const titulo = texto(formData, "titulo");
   const descripcion = texto(formData, "descripcion");
   const clasificacionRecibida = texto(formData, "clasificacion");
-
-  console.log("CLASIFICACION RECIBIDA:", clasificacionRecibida);
+  const prioridadRecibida = texto(formData, "prioridad");
 
   if (!inspeccionId) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
@@ -489,17 +1052,36 @@ export async function crearHallazgo(formData: FormData) {
     redirect("/login");
   }
 
-  const rol = exigirRol(
+  const rol = await exigirRolYAlcance(
     session,
-    [
-      RolUsuario.INSPECTOR,
-      RolUsuario.DIRECTOR,
-    ],
+    [RolUsuario.INSPECTOR],
     inspeccionId,
   );
 
   if (!area || !titulo || !descripcion) {
     redirigirError(inspeccionId, "Completa los campos obligatorios.");
+  }
+
+  if (
+    !Object.values(ClasificacionHallazgo).includes(
+      clasificacionRecibida as ClasificacionHallazgo,
+    )
+  ) {
+    redirigirError(
+      inspeccionId,
+      "La clasificaciÃ³n seleccionada no es válida.",
+    );
+  }
+
+  if (
+    !Object.values(PrioridadHallazgo).includes(
+      prioridadRecibida as PrioridadHallazgo,
+    )
+  ) {
+    redirigirError(
+      inspeccionId,
+      "La prioridad seleccionada no es válida.",
+    );
   }
 
   await validarPagoCompleto(inspeccionId);
@@ -530,12 +1112,11 @@ export async function crearHallazgo(formData: FormData) {
   }
 
   if (
-    inspeccionActual.estado !== EstadoInspeccion.EN_PROCESO &&
-    inspeccionActual.estado !== EstadoInspeccion.REPORTE_PENDIENTE
+    inspeccionActual.estado !== EstadoInspeccion.EN_PROCESO
   ) {
     redirigirError(
       inspeccionId,
-      "Primero debes iniciar la inspección antes de registrar hallazgos.",
+      "Los hallazgos solo pueden registrarse mientras la inspección está EN PROCESO.",
     );
   }
 
@@ -556,11 +1137,12 @@ export async function crearHallazgo(formData: FormData) {
   const nuevoHallazgo = await prisma.hallazgo.create({
     data: {
       inspeccionId,
+      creadoPorId: session.user.id,
       area,
       titulo,
       descripcion,
       clasificacion: clasificacionRecibida as ClasificacionHallazgo,
-      prioridad: texto(formData, "prioridad") as PrioridadHallazgo,
+      prioridad: prioridadRecibida as PrioridadHallazgo,
       recomendacion: texto(formData, "recomendacion") || null,
       ubicacion: texto(formData, "ubicacion") || null,
       costoEstimado:
@@ -591,6 +1173,17 @@ export async function crearHallazgo(formData: FormData) {
       ish: indice,
       semaforo: semaforoDesdeIndice(indice),
     },
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.CREAR,
+    entidad: "Hallazgo",
+    entidadId: nuevoHallazgo.id,
+    inspeccionId,
+    usuarioId: session.user.id,
+    descripcion:
+      `Se creó el hallazgo "${nuevoHallazgo.titulo}" ` +
+      `en la inspección ${inspeccionId}.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
@@ -647,9 +1240,9 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
     );
   }
 
-  const rol = exigirRol(
+  const rol = await exigirRolYAlcance(
     session,
-    [RolUsuario.INSPECTOR, RolUsuario.DIRECTOR],
+    [RolUsuario.INSPECTOR],
     inspeccionId,
   );
 
@@ -811,6 +1404,14 @@ export async function actualizarHallazgo(formData: FormData) {
     formData,
     "prioridad",
   ) as PrioridadHallazgo;
+  const estadoSeguimientoTexto = texto(formData, "estadoSeguimiento");
+  const observacionSeguimiento = texto(
+    formData,
+    "observacionSeguimiento",
+  );
+  const estadoSeguimiento = estadoSeguimientoTexto
+    ? (estadoSeguimientoTexto as EstadoSeguimientoHallazgo)
+    : null;
 
   if (!inspeccionId || !hallazgoId) {
     redirect(
@@ -838,12 +1439,9 @@ export async function actualizarHallazgo(formData: FormData) {
     volverAEdicion("La prioridad seleccionada no es válida.");
   }
 
-  const rol = exigirRol(
+  const rol = await exigirRolYAlcance(
     session,
-    [
-      RolUsuario.INSPECTOR,
-      RolUsuario.DIRECTOR,
-    ],
+    [RolUsuario.INSPECTOR],
     inspeccionId,
   );
 
@@ -866,12 +1464,11 @@ export async function actualizarHallazgo(formData: FormData) {
   }
 
   if (
-    inspeccion.estado !== EstadoInspeccion.EN_PROCESO &&
-    inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE
+    inspeccion.estado !== EstadoInspeccion.EN_PROCESO
   ) {
     redirigirError(
       inspeccionId,
-      "Los hallazgos solo pueden editarse mientras la inspección esté EN PROCESO o REPORTE PENDIENTE.",
+      "Los hallazgos solo pueden editarse mientras la inspección está EN PROCESO.",
     );
   }
 
@@ -894,6 +1491,8 @@ export async function actualizarHallazgo(formData: FormData) {
     select: {
       id: true,
       titulo: true,
+      hallazgoAnteriorId: true,
+      estadoSeguimiento: true,
     },
   });
 
@@ -902,6 +1501,20 @@ export async function actualizarHallazgo(formData: FormData) {
       inspeccionId,
       "El hallazgo no existe o no pertenece a esta inspección.",
     );
+  }
+
+  if (hallazgo.hallazgoAnteriorId) {
+    const estadosPermitidos: EstadoSeguimientoHallazgo[] = [
+      EstadoSeguimientoHallazgo.CORREGIDO,
+      EstadoSeguimientoHallazgo.PARCIALMENTE_CORREGIDO,
+      EstadoSeguimientoHallazgo.NO_CORREGIDO,
+      EstadoSeguimientoHallazgo.CORRECCION_NO_SATISFACTORIA,
+      EstadoSeguimientoHallazgo.NO_VERIFICABLE,
+    ];
+
+    if (!estadoSeguimiento || !estadosPermitidos.includes(estadoSeguimiento)) {
+      volverAEdicion("Selecciona un estado de seguimiento válido.");
+    }
   }
 
   const costoTexto = texto(formData, "costoEstimado");
@@ -923,6 +1536,14 @@ export async function actualizarHallazgo(formData: FormData) {
           : null,
       tiempoReparacion: texto(formData, "tiempoReparacion") || null,
       responsable: texto(formData, "responsable") || null,
+      ...(hallazgo.hallazgoAnteriorId
+        ? {
+            estadoSeguimiento,
+            observacionSeguimiento: observacionSeguimiento || null,
+            resuelto:
+              estadoSeguimiento === EstadoSeguimientoHallazgo.CORREGIDO,
+          }
+        : {}),
     },
   });
 
@@ -948,16 +1569,18 @@ export async function actualizarHallazgo(formData: FormData) {
     entidad: "Hallazgo",
     entidadId: hallazgoId,
     inspeccionId,
-    descripcion:
-      `Se editó el hallazgo "${hallazgo.titulo}" ` +
-      `de la inspección ${inspeccion.folio}.`,
+    descripcion: hallazgo.hallazgoAnteriorId
+      ? `Se editó el seguimiento del hallazgo "${hallazgo.titulo}" de la inspección ${inspeccion.folio}.`
+      : `Se editó el hallazgo "${hallazgo.titulo}" de la inspección ${inspeccion.folio}.`,
   });
 
   revalidarInspeccion(inspeccionId);
 
   redirect(
     `/panel/inspecciones/${inspeccionId}/captura?ok=${encodeURIComponent(
-      "Hallazgo actualizado correctamente.",
+      hallazgo.hallazgoAnteriorId
+        ? "Seguimiento actualizado correctamente."
+        : "Hallazgo actualizado correctamente.",
     )}`,
   );
 }
@@ -975,12 +1598,9 @@ export async function finalizarCaptura(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  const rol = exigirRol(
+  const rol = await exigirRolYAlcance(
     session,
-    [
-      RolUsuario.INSPECTOR,
-      RolUsuario.DIRECTOR,
-    ],
+    [RolUsuario.INSPECTOR],
     inspeccionId,
   );
 
@@ -1167,7 +1787,7 @@ export async function darVistoBuenoCoordinador(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.COORDINADOR],
     inspeccionId,
@@ -1281,7 +1901,7 @@ export async function devolverAInspector(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.COORDINADOR],
     inspeccionId,
@@ -1326,7 +1946,7 @@ export async function devolverAInspector(formData: FormData) {
   if (!inspeccion.inspectorId) {
     redirigirError(
       inspeccionId,
-      "La inspección no tiene un inspector asignado. Asigna un inspector antes de devolverla para corrección.",
+      "La inspección no tiene un inspector asignado. Asigna un inspector antes de devolverla para correcciÃƒÂ³n.",
     );
   }
 
@@ -1365,7 +1985,7 @@ export async function devolverAInspector(formData: FormData) {
     inspeccionId,
     descripcion:
       `Coordinación devolvió al Inspector la inspección ${inspeccion.folio}. ` +
-      `El expediente regresó a EN PROCESO para corrección. Motivo: ${comentario}`,
+      `El expediente regresó a EN PROCESO para correcciÃƒÂ³n. Motivo: ${comentario}`,
   });
 
   revalidarInspeccion(inspeccionId);
@@ -1389,7 +2009,7 @@ export async function aprobarGerencia(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.GERENTE],
     inspeccionId,
@@ -1513,7 +2133,7 @@ export async function devolverACoordinacion(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.GERENTE],
     inspeccionId,
@@ -1644,7 +2264,7 @@ export async function aprobarDireccion(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.DIRECTOR],
     inspeccionId,
@@ -1677,7 +2297,15 @@ export async function aprobarDireccion(formData: FormData) {
   if (inspeccion.liberacionBloqueada) {
     redirigirError(
       inspeccionId,
-      "La inspección tiene un bloqueo directivo vigente. Usa la opción «Levantar bloqueo y aprobar».",
+      "La inspección tiene un bloqueo directivo vigente. Usa la opciÃƒÂ³n «Levantar bloqueo y aprobar».",
+    );
+  }
+
+  const estadoExpediente = await validarExpedienteParaRevision(inspeccionId);
+  if (!estadoExpediente.completo) {
+    redirigirError(
+      inspeccionId,
+      `Dirección no puede aprobar un expediente incompleto. Faltan: ${estadoExpediente.faltantes.join(", ")}.`,
     );
   }
 
@@ -1743,7 +2371,7 @@ export async function noAprobarDireccion(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.DIRECTOR],
     inspeccionId,
@@ -1843,7 +2471,7 @@ export async function retenerParaAuditoria(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.DIRECTOR],
     inspeccionId,
@@ -1876,7 +2504,7 @@ export async function retenerParaAuditoria(formData: FormData) {
   ) {
     redirigirError(
       inspeccionId,
-      "La auditoría directiva solo puede retener una inspección que ya terminó su captura.",
+      "La auditoría directiva solo puede retener una inspección que ya terminÃƒÂ³ su captura.",
     );
   }
 
@@ -1943,7 +2571,7 @@ export async function levantarBloqueoYAprobar(formData: FormData) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
     [RolUsuario.DIRECTOR],
     inspeccionId,
@@ -2029,7 +2657,7 @@ export async function levantarBloqueoYAprobar(formData: FormData) {
     entidadId: inspeccion.id,
     inspeccionId,
     descripcion:
-      `Dirección levantó el bloqueo y aprobó la inspección ${inspeccion.folio}. ` +
+      `Dirección levantÃƒÂ³ el bloqueo y aprobó la inspección ${inspeccion.folio}. ` +
       `Comentario: ${comentario}`,
   });
 
@@ -2037,7 +2665,7 @@ export async function levantarBloqueoYAprobar(formData: FormData) {
 
   redirigirOk(
     inspeccionId,
-    "Dirección levantó el bloqueo y aprobó la inspección. El expediente quedó FINALIZADO.",
+    "Dirección levantÃƒÂ³ el bloqueo y aprobó la inspección. El expediente quedó FINALIZADO.",
   );
 }
 
@@ -2054,15 +2682,9 @@ export async function cambiarEstado(formData: FormData) {
     redirect("/login");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
-    [
-      RolUsuario.SUPERVISOR,
-      RolUsuario.COORDINADOR,
-      RolUsuario.GERENTE,
-      RolUsuario.DIRECTOR,
-      RolUsuario.ADMINISTRADOR,
-    ],
+    [RolUsuario.DIRECTOR],
     id,
   );
 
@@ -2074,6 +2696,16 @@ export async function cambiarEstado(formData: FormData) {
     redirigirError(
       id,
       "La inspección solo puede pasar a FINALIZADA mediante aprobación de Gerencia o Dirección.",
+    );
+  }
+
+  if (
+    estado === EstadoInspeccion.EN_PROCESO ||
+    estado === EstadoInspeccion.CANCELADA
+  ) {
+    redirigirError(
+      id,
+      "Usa el flujo específico de inicio o cancelación; el estado no puede forzarse manualmente.",
     );
   }
 
@@ -2104,21 +2736,6 @@ export async function cambiarEstado(formData: FormData) {
     redirigirOk(id, "La inspección ya se encuentra en ese estado.");
   }
 
-  if (estado === EstadoInspeccion.EN_PROCESO) {
-    await validarPagoCompleto(id);
-  }
-
-  if (
-    inspeccion.estado === EstadoInspeccion.PROGRAMADA &&
-    estado !== EstadoInspeccion.EN_PROCESO &&
-    estado !== EstadoInspeccion.CANCELADA
-  ) {
-    redirigirError(
-      id,
-      "Una inspección programada debe iniciar antes de avanzar a etapas posteriores.",
-    );
-  }
-
   await prisma.inspeccion.update({
     where: { id },
     data: { estado },
@@ -2143,12 +2760,9 @@ export async function iniciarInspeccion(formData: FormData) {
     redirect("/login");
   }
 
-  const rol = exigirRol(
+  const rol = await exigirRolYAlcance(
     session,
-    [
-      RolUsuario.INSPECTOR,
-      RolUsuario.DIRECTOR,
-    ],
+    [RolUsuario.INSPECTOR],
     id,
   );
 
@@ -2198,6 +2812,7 @@ export async function iniciarInspeccion(formData: FormData) {
 export async function cancelarInspeccion(formData: FormData) {
   const session = await auth();
   const id = texto(formData, "id");
+  const motivo = texto(formData, "motivo");
 
   if (!id) {
     redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
@@ -2207,21 +2822,23 @@ export async function cancelarInspeccion(formData: FormData) {
     redirect("/login");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
-    [
-      RolUsuario.SUPERVISOR,
-      RolUsuario.COORDINADOR,
-      RolUsuario.GERENTE,
-      RolUsuario.DIRECTOR,
-      RolUsuario.ADMINISTRADOR,
-    ],
+    [RolUsuario.GERENTE, RolUsuario.DIRECTOR],
     id,
+    "TECNICO",
   );
+
+  if (motivo.length < 10) {
+    redirigirError(
+      id,
+      "Documenta el motivo de la cancelación con al menos 10 caracteres.",
+    );
+  }
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },
-    select: { estado: true },
+    select: { id: true, folio: true, estado: true },
   });
 
   if (!inspeccion) {
@@ -2235,6 +2852,15 @@ export async function cancelarInspeccion(formData: FormData) {
   await prisma.inspeccion.update({
     where: { id },
     data: { estado: EstadoInspeccion.CANCELADA },
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "Inspeccion",
+    entidadId: inspeccion.id,
+    inspeccionId: id,
+    usuarioId: session.user.id,
+    descripcion: `${session.user.role} cancelÃƒÂ³ la inspección ${inspeccion.folio}. Motivo: ${motivo}`,
   });
 
   revalidatePath(`/panel/inspecciones/${id}`);
@@ -2259,7 +2885,7 @@ function dictamenDesdeIndice(indice: number) {
   if (indice >= 60) {
     return "El inmueble requiere atención correctiva prioritaria. Se recomienda atender los hallazgos no conformes antes de su recepción, ocupación o inversión.";
   }
-  return "El inmueble presenta condiciones críticas o deficiencias relevantes. Se recomienda no cerrar la recepción o adquisición hasta contar con correcciones y evaluaciones especializadas.";
+  return "El inmueble presenta condiciones críticas o deficiencias relevantes. Se recomienda no cerrar la recepción o adquisiciÃƒÂ³n hasta contar con correcciones y evaluaciones especializadas.";
 }
 
 export async function emitirCertificado(formData: FormData) {
@@ -2274,15 +2900,9 @@ export async function emitirCertificado(formData: FormData) {
     redirect("/login");
   }
 
-  exigirRol(
+  await exigirRolYAlcance(
     session,
-    [
-      RolUsuario.SUPERVISOR,
-      RolUsuario.COORDINADOR,
-      RolUsuario.GERENTE,
-      RolUsuario.DIRECTOR,
-      RolUsuario.ADMINISTRADOR,
-    ],
+    [RolUsuario.GERENTE, RolUsuario.DIRECTOR],
     inspeccionId,
   );
 
@@ -2385,7 +3005,10 @@ export async function emitirCertificado(formData: FormData) {
     entidad: "Certificado",
     entidadId: certificado.id,
     inspeccionId,
-    descripcion: `Se emitió el certificado ${certificado.folio} para la inspección ${inspeccion.folio}.`,
+    usuarioId: session.user.id,
+    descripcion:
+      `${session.user.role} emitió el certificado ${certificado.folio} ` +
+      `para la inspección ${inspeccion.folio}.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);

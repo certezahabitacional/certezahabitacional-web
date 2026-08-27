@@ -24,6 +24,8 @@ type Firmas = {
   cliente: string;
   fechaInspector: string;
   fechaCliente: string;
+  puedeModificar: boolean;
+  motivoSoloLectura?: string;
 };
 
 const firmasIniciales: Firmas = {
@@ -31,6 +33,8 @@ const firmasIniciales: Firmas = {
   cliente: "",
   fechaInspector: "",
   fechaCliente: "",
+  puedeModificar: false,
+  motivoSoloLectura: "",
 };
 
 const TIPOS_IMAGEN_PERMITIDOS = [
@@ -45,10 +49,12 @@ function FirmaCanvas({
   titulo,
   valor,
   onChange,
+  disabled = false,
 }: {
   titulo: string;
   valor: string;
   onChange: (firma: string) => void;
+  disabled?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const inputArchivoRef = useRef<HTMLInputElement | null>(null);
@@ -105,6 +111,8 @@ function FirmaCanvas({
   }
 
   function iniciar(evento: PointerEvent<HTMLCanvasElement>) {
+    if (disabled) return;
+
     const contexto = canvasRef.current?.getContext("2d");
     if (!contexto) return;
 
@@ -119,7 +127,7 @@ function FirmaCanvas({
   }
 
   function dibujar(evento: PointerEvent<HTMLCanvasElement>) {
-    if (!dibujandoRef.current) return;
+    if (disabled || !dibujandoRef.current) return;
 
     const contexto = canvasRef.current?.getContext("2d");
     if (!contexto) return;
@@ -131,7 +139,7 @@ function FirmaCanvas({
   }
 
   function finalizar() {
-    if (!dibujandoRef.current) return;
+    if (disabled || !dibujandoRef.current) return;
 
     dibujandoRef.current = false;
 
@@ -143,6 +151,8 @@ function FirmaCanvas({
   }
 
   function limpiar() {
+    if (disabled) return;
+
     const canvas = canvasRef.current;
     const contexto = canvas?.getContext("2d");
 
@@ -160,11 +170,18 @@ function FirmaCanvas({
   }
 
   function abrirSelectorArchivo() {
+    if (disabled) return;
+
     setErrorArchivo("");
     inputArchivoRef.current?.click();
   }
 
   function insertarFirmaDigital(evento: ChangeEvent<HTMLInputElement>) {
+    if (disabled) {
+      evento.target.value = "";
+      return;
+    }
+
     const archivo = evento.target.files?.[0];
 
     if (!archivo) return;
@@ -248,41 +265,46 @@ function FirmaCanvas({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-black">{titulo}</h2>
 
-        <div className="flex flex-wrap gap-2">
-          <input
-            ref={inputArchivoRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={insertarFirmaDigital}
-            className="hidden"
-          />
+        {!disabled && (
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={inputArchivoRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={insertarFirmaDigital}
+              className="hidden"
+            />
 
-          <button
-            type="button"
-            onClick={abrirSelectorArchivo}
-            className="rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-300 transition hover:bg-cyan-400 hover:text-slate-950"
-          >
-            Insertar firma digital
-          </button>
+            <button
+              type="button"
+              onClick={abrirSelectorArchivo}
+              className="rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-300 transition hover:bg-cyan-400 hover:text-slate-950"
+            >
+              Insertar firma digital
+            </button>
 
-          <button
-            type="button"
-            onClick={limpiar}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/5"
-          >
-            Limpiar
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={limpiar}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/5"
+            >
+              Limpiar
+            </button>
+          </div>
+        )}
       </div>
 
       <p className="mt-2 text-sm text-slate-400">
-        Firma dentro del recuadro usando el mouse o la pantalla táctil,
-        o inserta una imagen de firma digital.
+        {disabled
+          ? "Firma registrada en el expediente. Esta vista es de solo lectura."
+          : "Firma dentro del recuadro usando el mouse o la pantalla táctil, o inserta una imagen de firma digital."}
       </p>
 
-      <p className="mt-1 text-xs text-slate-500">
-        Formatos permitidos: PNG, JPG, JPEG o WEBP. Tamaño máximo: 5 MB.
-      </p>
+      {!disabled && (
+        <p className="mt-1 text-xs text-slate-500">
+          Formatos permitidos: PNG, JPG, JPEG o WEBP. Tamaño mÃ¡ximo: 5 MB.
+        </p>
+      )}
 
       {errorArchivo && (
         <p className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-bold text-rose-300">
@@ -299,10 +321,12 @@ function FirmaCanvas({
         onPointerUp={finalizar}
         onPointerCancel={finalizar}
         onPointerLeave={finalizar}
-        className="mt-5 h-56 w-full touch-none rounded-2xl bg-white"
+        className={`mt-5 h-56 w-full rounded-2xl bg-white ${
+          disabled ? "cursor-not-allowed opacity-90" : "touch-none"
+        }`}
       />
 
-      {valor && (
+      {valor && !disabled && (
         <p className="mt-3 text-xs font-bold text-emerald-300">
           Firma preparada para guardar.
         </p>
@@ -338,17 +362,26 @@ export default function FirmasPage() {
           }),
         ]);
 
-        if (!respuestaInspeccion.ok) {
-          if (activo) setInspeccion(null);
+        if (!respuestaInspeccion.ok || !respuestaFirmas.ok) {
+          if (activo) {
+            setInspeccion(null);
+
+            const error = (await respuestaFirmas.json().catch(() => null)) as
+              | { error?: string }
+              | null;
+
+            setMensaje(
+              error?.error ||
+                "No tienes acceso a las firmas de este expediente.",
+            );
+          }
           return;
         }
 
         const datosInspeccion =
           (await respuestaInspeccion.json()) as Inspeccion;
 
-        const datosFirmas = respuestaFirmas.ok
-          ? ((await respuestaFirmas.json()) as Firmas)
-          : firmasIniciales;
+        const datosFirmas = (await respuestaFirmas.json()) as Firmas;
 
         if (activo) {
           setInspeccion(datosInspeccion);
@@ -372,11 +405,11 @@ export default function FirmasPage() {
   }, [inspeccionId]);
 
   async function guardar() {
-    if (!inspeccion) return;
+    if (!inspeccion || !firmas.puedeModificar) return;
 
     if (!firmas.inspector || !firmas.cliente) {
       setMensaje(
-        "Debes registrar la firma del inspector y la firma del cliente antes de guardar.",
+        "Debes registrar la firma del Inspector y la firma del Cliente antes de guardar.",
       );
       return;
     }
@@ -395,11 +428,9 @@ export default function FirmasPage() {
           body: JSON.stringify({
             inspector: {
               imagen: firmas.inspector,
-              nombre: inspeccion.inspector,
             },
             cliente: {
               imagen: firmas.cliente,
-              nombre: inspeccion.cliente,
             },
           }),
         },
@@ -416,20 +447,22 @@ export default function FirmasPage() {
         return;
       }
 
-      const ahora = new Date().toISOString();
+      const respuestaActualizada = await fetch(
+        `/api/inspecciones/${inspeccionId}/firmas`,
+        {
+          cache: "no-store",
+        },
+      );
 
-      setFirmas((actuales) => ({
-        ...actuales,
-        fechaInspector: actuales.inspector
-          ? actuales.fechaInspector || ahora
-          : "",
-        fechaCliente: actuales.cliente
-          ? actuales.fechaCliente || ahora
-          : "",
-      }));
+      if (respuestaActualizada.ok) {
+        const datosFirmas =
+          (await respuestaActualizada.json()) as Firmas;
+
+        setFirmas(datosFirmas);
+      }
 
       setMensaje(
-        "Firmas guardadas permanentemente en Supabase.",
+        "Firmas guardadas correctamente en el expediente.",
       );
     } catch {
       setMensaje("No fue posible guardar las firmas.");
@@ -448,15 +481,15 @@ export default function FirmasPage() {
 
   if (!inspeccion) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 text-white">
+      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-center text-white">
         {mensaje || "Expediente no encontrado."}
       </main>
     );
   }
 
   const mensajeEsError =
-    mensaje &&
-    mensaje !== "Firmas guardadas permanentemente en Supabase.";
+    Boolean(mensaje) &&
+    mensaje !== "Firmas guardadas correctamente en el expediente.";
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -479,18 +512,27 @@ export default function FirmasPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={guardando}
-            className="rounded-full bg-cyan-400 px-7 py-4 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {guardando ? "Guardando..." : "Guardar firmas"}
-          </button>
+          {firmas.puedeModificar && (
+            <button
+              type="button"
+              onClick={guardar}
+              disabled={guardando}
+              className="rounded-full bg-cyan-400 px-7 py-4 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {guardando ? "Guardando..." : "Guardar firmas"}
+            </button>
+          )}
         </div>
       </header>
 
       <div className="mx-auto max-w-6xl px-6 py-8">
+        {!firmas.puedeModificar && (
+          <div className="mb-7 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm text-amber-100">
+            {firmas.motivoSoloLectura ||
+              "Las firmas se encuentran en modo solo lectura."}
+          </div>
+        )}
+
         <div className="mb-7 rounded-3xl border border-white/10 bg-slate-900 p-6">
           <p className="text-sm font-bold text-slate-400">
             Inmueble
@@ -505,6 +547,7 @@ export default function FirmasPage() {
           <FirmaCanvas
             titulo={`Inspector: ${inspeccion.inspector}`}
             valor={firmas.inspector}
+            disabled={!firmas.puedeModificar}
             onChange={(firma) =>
               setFirmas((actual) => ({
                 ...actual,
@@ -517,6 +560,7 @@ export default function FirmasPage() {
           <FirmaCanvas
             titulo={`Cliente: ${inspeccion.cliente}`}
             valor={firmas.cliente}
+            disabled={!firmas.puedeModificar}
             onChange={(firma) =>
               setFirmas((actual) => ({
                 ...actual,
@@ -541,8 +585,8 @@ export default function FirmasPage() {
 
         <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-6 text-sm leading-7 text-cyan-100">
           Las firmas quedan asociadas al expediente y pueden consultarse
-          desde cualquier equipo autorizado. Puedes capturarlas
-          manuscritamente o insertar una imagen de firma digital.
+          desde los perfiles autorizados. La modificación queda restringida
+          al Inspector asignado mientras la inspecciÃ³n se encuentre EN PROCESO.
         </div>
       </div>
     </main>

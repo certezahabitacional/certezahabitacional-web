@@ -1,4 +1,5 @@
-import Link from "next/link";
+﻿import Link from "next/link";
+
 import {
   EsquemaPago,
   EstadoCotizacion,
@@ -31,7 +32,7 @@ function dinero(valor: unknown) {
 
 function fecha(valor: Date | null) {
   if (!valor) {
-    return "—";
+    return "â€”";
   }
 
   return new Intl.DateTimeFormat(
@@ -58,14 +59,55 @@ export default async function CotizacionesPage({
     redirect("/login");
   }
 
+  const usuarioActual =
+    await prisma.usuario.findUnique({
+      where: {
+        id: session.user.id,
+      },
+      select: {
+        id: true,
+        rol: true,
+        activo: true,
+      },
+    });
+
   if (
-    session.user.role !== "DIRECTOR" &&
-    session.user.role !== "ADMINISTRADOR" &&
-    session.user.role !== "GERENTE" &&
-    session.user.role !== "COORDINADOR"
+    !usuarioActual ||
+    !usuarioActual.activo
   ) {
     redirect("/acceso");
   }
+
+  if (
+    usuarioActual.rol !== "DIRECTOR" &&
+    usuarioActual.rol !== "ADMINISTRADOR" &&
+    usuarioActual.rol !== "GERENTE"
+  ) {
+    redirect("/acceso");
+  }
+
+  const esDirector =
+    usuarioActual.rol === "DIRECTOR";
+
+  const esAdministrador =
+    usuarioActual.rol === "ADMINISTRADOR";
+
+  const esGerente =
+    usuarioActual.rol === "GERENTE";
+
+  const puedeGestionarCotizaciones =
+    esDirector || esAdministrador;
+
+  /*
+   * Gerencia puede consultar la cotizaciÃ³n completa en modo
+   * solo lectura, incluidos importe, esquema de pago, monto
+   * pagado y saldo, para saber si el servicio cumple la
+   * condiciÃ³n administrativa necesaria para programarse.
+   */
+  const puedeVerDatosAdministrativos =
+    esDirector ||
+    esAdministrador ||
+    esGerente;
 
   const params =
     await searchParams;
@@ -262,7 +304,7 @@ export default async function CotizacionesPage({
               href="/panel"
               className="text-sm font-black text-cyan-300 transition hover:text-cyan-200"
             >
-              ← Volver al panel
+              â† Volver al panel
             </Link>
 
             <p className="mt-7 text-sm font-black uppercase tracking-[0.3em] text-amber-300">
@@ -274,33 +316,37 @@ export default async function CotizacionesPage({
             </h1>
 
             <p className="mt-3 max-w-3xl text-slate-400">
-              Calcula, registra y controla el
-              precio de cada servicio antes de
-              programar la inspección.
+              {esGerente
+                ? "Consulta el estado comercial de las cotizaciones en modo solo lectura."
+                : "Calcula, registra y controla el precio de cada servicio antes de programar la inspecciÃ³n."}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              href="/panel/clientes"
-              className="rounded-full border border-white/15 px-5 py-3 text-sm font-black transition hover:border-cyan-300 hover:text-cyan-300"
-            >
-              Clientes
-            </Link>
+            {puedeGestionarCotizaciones && (
+              <>
+                <Link
+                  href="/panel/clientes"
+                  className="rounded-full border border-white/15 px-5 py-3 text-sm font-black transition hover:border-cyan-300 hover:text-cyan-300"
+                >
+                  Clientes
+                </Link>
 
-            <Link
-              href="/panel/inmuebles"
-              className="rounded-full border border-white/15 px-5 py-3 text-sm font-black transition hover:border-cyan-300 hover:text-cyan-300"
-            >
-              Inmuebles
-            </Link>
+                <Link
+                  href="/panel/inmuebles"
+                  className="rounded-full border border-white/15 px-5 py-3 text-sm font-black transition hover:border-cyan-300 hover:text-cyan-300"
+                >
+                  Inmuebles
+                </Link>
 
-            <Link
-              href="/panel/paquetes"
-              className="rounded-full border border-white/15 px-5 py-3 text-sm font-black transition hover:border-cyan-300 hover:text-cyan-300"
-            >
-              Paquetes
-            </Link>
+                <Link
+                  href="/panel/paquetes"
+                  className="rounded-full border border-white/15 px-5 py-3 text-sm font-black transition hover:border-cyan-300 hover:text-cyan-300"
+                >
+                  Paquetes
+                </Link>
+              </>
+            )}
 
             <Link
               href="/panel/agenda"
@@ -328,8 +374,8 @@ export default async function CotizacionesPage({
               }`}
             >
               {params.error
-                ? "Acción no disponible"
-                : "Operación completada"}
+                ? "AcciÃ³n no disponible"
+                : "OperaciÃ³n completada"}
             </p>
 
             <p className="mt-2 font-bold text-slate-200">
@@ -361,32 +407,39 @@ export default async function CotizacionesPage({
             valor={String(
               totalPendientes,
             ).padStart(2, "0")}
-            detalle="En elaboración, autorización o envío"
+            detalle="En elaboraciÃ³n, autorizaciÃ³n o envÃ­o"
           />
 
           <Indicador
-            titulo="Valor cotizado"
-            valor={dinero(
-              valorCotizado,
-            )}
-            detalle="Importe acumulado"
+            titulo={puedeVerDatosAdministrativos ? "Valor cotizado" : "Modo"}
+            valor={
+              puedeVerDatosAdministrativos
+                ? dinero(valorCotizado)
+                : "LECTURA"
+            }
+            detalle={
+              puedeVerDatosAdministrativos
+                ? "Importe acumulado"
+                : "Sin datos financieros"
+            }
           />
         </section>
 
-        <section className="mt-10 rounded-3xl border border-cyan-400/20 bg-slate-900 p-7">
+        {puedeGestionarCotizaciones && (
+          <section className="mt-10 rounded-3xl border border-cyan-400/20 bg-slate-900 p-7">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-300">
-              Operación comercial
+              OperaciÃ³n comercial
             </p>
 
             <h2 className="mt-2 text-2xl font-black">
-              Nueva cotización
+              Nueva cotizaciÃ³n
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
               Selecciona cliente, inmueble,
               superficie, paquete y forma de pago.
-              El sistema calculará automáticamente
+              El sistema calcularÃ¡ automÃ¡ticamente
               el importe.
             </p>
           </div>
@@ -399,7 +452,7 @@ export default async function CotizacionesPage({
 
               <p className="mt-2 text-sm text-slate-400">
                 Debes registrar un cliente antes
-                de generar una cotización.
+                de generar una cotizaciÃ³n.
               </p>
 
               <Link
@@ -438,6 +491,7 @@ export default async function CotizacionesPage({
             </div>
           )}
         </section>
+        )}
 
         <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -464,12 +518,12 @@ export default async function CotizacionesPage({
           0 ? (
             <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-slate-900/50 p-12 text-center">
               <p className="text-xl font-black">
-                Todavía no hay cotizaciones.
+                TodavÃ­a no hay cotizaciones.
               </p>
 
               <p className="mt-2 text-slate-500">
-                La primera cotización aparecerá
-                aquí después de guardarla.
+                La primera cotizaciÃ³n aparecerÃƒÂ¡
+                aquÃ­ despuÃ©s de guardarla.
               </p>
             </div>
           ) : (
@@ -535,14 +589,16 @@ export default async function CotizacionesPage({
                               }
                             />
 
-                            <EstadoPagoBadge
-                              estado={
-                                cotizacion.estadoPago
-                              }
-                              esquemaPago={
-                                cotizacion.esquemaPago
-                              }
-                            />
+                            {puedeVerDatosAdministrativos && (
+                              <EstadoPagoBadge
+                                estado={
+                                  cotizacion.estadoPago
+                                }
+                                esquemaPago={
+                                  cotizacion.esquemaPago
+                                }
+                              />
+                            )}
                           </div>
 
                           <h3 className="mt-3 text-2xl font-black">
@@ -559,7 +615,7 @@ export default async function CotizacionesPage({
                                 Inmueble:
                               </span>{" "}
                               {cotizacion.inmueble
-                                ? `${cotizacion.inmueble.alias} — ${cotizacion.inmueble.direccion}`
+                                ? `${cotizacion.inmueble.alias} â€” ${cotizacion.inmueble.direccion}`
                                 : "Sin inmueble asociado"}
                             </p>
 
@@ -572,19 +628,15 @@ export default async function CotizacionesPage({
                                 "Sin paquete"}
                             </p>
 
-                            {cotizacion.creadaPor
-                              ?.nombre && (
-                              <p>
-                                <span className="font-bold text-slate-300">
-                                  Elaboró:
-                                </span>{" "}
-                                {
-                                  cotizacion
-                                    .creadaPor
-                                    .nombre
-                                }
-                              </p>
-                            )}
+                            {puedeVerDatosAdministrativos &&
+                              cotizacion.creadaPor?.nombre && (
+                                <p>
+                                  <span className="font-bold text-slate-300">
+                                    ElaborÃ³:
+                                  </span>{" "}
+                                  {cotizacion.creadaPor.nombre}
+                                </p>
+                              )}
 
                             <p>
                               <span className="font-bold text-slate-300">
@@ -595,59 +647,68 @@ export default async function CotizacionesPage({
                               )}
                             </p>
 
-                            {cotizacion.solicitudAutorizacionEn && (
-                              <p>
-                                <span className="font-bold text-slate-300">
-                                  Autorización solicitada:
-                                </span>{" "}
-                                {fecha(
-                                  cotizacion.solicitudAutorizacionEn,
-                                )}
-                              </p>
-                            )}
+                            {puedeVerDatosAdministrativos &&
+                              cotizacion.solicitudAutorizacionEn && (
+                                <p>
+                                  <span className="font-bold text-slate-300">
+                                    AutorizaciÃ³n solicitada:
+                                  </span>{" "}
+                                  {fecha(cotizacion.solicitudAutorizacionEn)}
+                                </p>
+                              )}
 
-                            {cotizacion.autorizadaEn && (
-                              <p>
-                                <span className="font-bold text-emerald-300">
-                                  Autorizada:
-                                </span>{" "}
-                                {fecha(
-                                  cotizacion.autorizadaEn,
-                                )}
-                                {cotizacion.autorizadaPor
-                                  ?.nombre
-                                  ? ` por ${cotizacion.autorizadaPor.nombre}`
-                                  : ""}
-                              </p>
-                            )}
+                            {puedeVerDatosAdministrativos &&
+                              cotizacion.autorizadaEn && (
+                                <p>
+                                  <span className="font-bold text-emerald-300">
+                                    Autorizada:
+                                  </span>{" "}
+                                  {fecha(cotizacion.autorizadaEn)}
+                                  {cotizacion.autorizadaPor?.nombre
+                                    ? ` por ${cotizacion.autorizadaPor.nombre}`
+                                    : ""}
+                                </p>
+                              )}
 
-                            {cotizacion.rechazadaEn && (
-                              <p>
-                                <span className="font-bold text-rose-300">
-                                  Rechazada:
-                                </span>{" "}
-                                {fecha(
-                                  cotizacion.rechazadaEn,
-                                )}
-                                {cotizacion.rechazadaPor
-                                  ?.nombre
-                                  ? ` por ${cotizacion.rechazadaPor.nombre}`
-                                  : ""}
-                              </p>
-                            )}
+                            {puedeVerDatosAdministrativos &&
+                              cotizacion.rechazadaEn && (
+                                <p>
+                                  <span className="font-bold text-rose-300">
+                                    Rechazada:
+                                  </span>{" "}
+                                  {fecha(cotizacion.rechazadaEn)}
+                                  {cotizacion.rechazadaPor?.nombre
+                                    ? ` por ${cotizacion.rechazadaPor.nombre}`
+                                    : ""}
+                                </p>
+                              )}
                           </div>
                         </div>
 
                         <div className="xl:text-right">
-                          <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                            Total cotizado
-                          </p>
+                          {puedeVerDatosAdministrativos ? (
+                            <>
+                              <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+                                Total cotizado
+                              </p>
 
-                          <p className="mt-1 text-4xl font-black text-cyan-300">
-                            {dinero(
-                              cotizacion.total,
-                            )}
-                          </p>
+                              <p className="mt-1 text-4xl font-black text-cyan-300">
+                                {dinero(
+                                  cotizacion.total,
+                                )}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+                                Acceso
+                              </p>
+
+                              <p className="mt-1 text-lg font-black text-emerald-300">
+                                SOLO LECTURA
+                              </p>
+                            </>
+                          )}
 
                           <p className="mt-2 text-xs text-slate-500">
                             Vigencia hasta:{" "}
@@ -658,6 +719,8 @@ export default async function CotizacionesPage({
                         </div>
                       </div>
 
+                      {puedeVerDatosAdministrativos && (
+                        <>
                       <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                         <Dato
                           titulo="Superficie"
@@ -666,7 +729,7 @@ export default async function CotizacionesPage({
                               0,
                           ).toLocaleString(
                             "es-MX",
-                          )} m²`}
+                          )} mÂ²`}
                         />
 
                         <Dato
@@ -677,16 +740,16 @@ export default async function CotizacionesPage({
                         />
 
                         <Dato
-                          titulo="m² adicionales"
+                          titulo="mÂ² adicionales"
                           valor={`${Number(
                             cotizacion.metrosAdicionales,
                           ).toLocaleString(
                             "es-MX",
-                          )} m²`}
+                          )} mÂ²`}
                         />
 
                         <Dato
-                          titulo="Cargo m²"
+                          titulo="Cargo mÂ²"
                           valor={dinero(
                             cotizacion.cargoMetrosAdicionales,
                           )}
@@ -739,7 +802,7 @@ export default async function CotizacionesPage({
                           valor={
                             es5050
                               ? "Dos exhibiciones 50/50"
-                              : "Una exhibición"
+                              : "Una exhibiciÃ³n"
                           }
                         />
 
@@ -761,7 +824,7 @@ export default async function CotizacionesPage({
                       {es5050 && (
                         <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-5">
                           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
-                            Condición 50/50
+                            CondiciÃ³n 50/50
                           </p>
 
                           <p className="mt-2 text-sm text-slate-300">
@@ -770,14 +833,14 @@ export default async function CotizacionesPage({
                               primer50,
                             )}
                             . Con este 50% la
-                            inspección puede
+                            inspecciÃ³n puede
                             agendarse. El saldo de{" "}
                             {dinero(
                               primer50,
                             )}{" "}
                             debe quedar liquidado
                             antes de iniciar la
-                            inspección.
+                            inspecciÃ³n.
                           </p>
                         </div>
                       )}
@@ -829,6 +892,11 @@ export default async function CotizacionesPage({
                         </div>
                       )}
 
+                        </>
+                      )}
+
+                      {puedeGestionarCotizaciones && (
+                        <>
                       <div className="mt-7 flex flex-col gap-4 border-t border-white/10 pt-6">
                         <div className="flex flex-wrap items-center gap-4">
                           {cotizacion.estado ===
@@ -858,15 +926,14 @@ export default async function CotizacionesPage({
                                 type="submit"
                                 className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
                               >
-                                Solicitar autorización
+                                Solicitar autorizaciÃ³n
                               </button>
                             </form>
                           )}
 
                           {cotizacion.estado ===
                             EstadoCotizacion.PENDIENTE_AUTORIZACION &&
-                            session.user.role ===
-                              "DIRECTOR" && (
+                            puedeGestionarCotizaciones && (
                               <>
                                 <form
                                   action={
@@ -893,7 +960,7 @@ export default async function CotizacionesPage({
                                     type="submit"
                                     className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-200"
                                   >
-                                    Autorizar cotización
+                                    Autorizar cotizaciÃ³n
                                   </button>
                                 </form>
 
@@ -930,23 +997,10 @@ export default async function CotizacionesPage({
                                     type="submit"
                                     className="rounded-full bg-rose-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-rose-200"
                                   >
-                                    Rechazar cotización
+                                    Rechazar cotizaciÃ³n
                                   </button>
                                 </form>
                               </>
-                            )}
-
-                          {cotizacion.estado ===
-                            EstadoCotizacion.PENDIENTE_AUTORIZACION &&
-                            session.user.role !==
-                              "DIRECTOR" && (
-                              <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 px-5 py-4">
-                                <p className="text-sm font-black text-amber-300">
-                                  Pendiente de
-                                  autorización del
-                                  director.
-                                </p>
-                              </div>
                             )}
 
                           {cotizacion.estado ===
@@ -987,7 +1041,7 @@ export default async function CotizacionesPage({
                               <p className="text-sm font-black text-cyan-300">
                                 Enviada al cliente.
                                 Pendiente de
-                                aceptación.
+                                aceptaciÃ³n.
                               </p>
                             </div>
                           )}
@@ -996,7 +1050,7 @@ export default async function CotizacionesPage({
                             EstadoCotizacion.RECHAZADA && (
                             <div className="rounded-2xl border border-rose-300/20 bg-rose-300/5 px-5 py-4">
                               <p className="text-sm font-black text-rose-300">
-                                Cotización rechazada.
+                                CotizaciÃ³n rechazada.
                               </p>
                             </div>
                           )}
@@ -1005,7 +1059,7 @@ export default async function CotizacionesPage({
                             EstadoCotizacion.VENCIDA && (
                             <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 px-5 py-4">
                               <p className="text-sm font-black text-amber-300">
-                                Cotización vencida.
+                                CotizaciÃ³n vencida.
                               </p>
                             </div>
                           )}
@@ -1014,7 +1068,7 @@ export default async function CotizacionesPage({
                             EstadoCotizacion.CANCELADA && (
                             <div className="rounded-2xl border border-slate-400/20 bg-slate-400/5 px-5 py-4">
                               <p className="text-sm font-black text-slate-300">
-                                Cotización cancelada.
+                                CotizaciÃ³n cancelada.
                               </p>
                             </div>
                           )}
@@ -1029,15 +1083,14 @@ export default async function CotizacionesPage({
                             es5050 && (
                               <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
                                 <p className="font-black text-amber-300">
-                                  Cotización aceptada
-                                  — primer pago
+                                  CotizaciÃ³n aceptada
+                                  â€” primer pago
                                   pendiente
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-400">
                                   Registra el primer
-                                  50% para habilitar
-                                  Agenda.
+                                  50% para habilitar la programaciÃ³n por Gerencia o DirecciÃ³n.
                                 </p>
 
                                 <form
@@ -1056,7 +1109,7 @@ export default async function CotizacionesPage({
 
                                   <button className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">
                                     Registrar primer
-                                    50% —{" "}
+                                    50% â€”{" "}
                                     {dinero(
                                       primer50,
                                     )}
@@ -1070,17 +1123,16 @@ export default async function CotizacionesPage({
                             !es5050 && (
                               <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
                                 <p className="font-black text-amber-300">
-                                  Cotización aceptada
-                                  — pago pendiente
+                                  CotizaciÃ³n aceptada
+                                  â€” pago pendiente
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-400">
-                                  Esta cotización es
+                                  Esta cotizaciÃ³n es
                                   de una sola
-                                  exhibición. Debe
+                                  exhibiciÃ³n. Debe
                                   liquidarse al 100%
-                                  para habilitar
-                                  Agenda.
+                                  para habilitar la programaciÃ³n por Gerencia o DirecciÃ³n.
                                 </p>
 
                                 <form
@@ -1099,7 +1151,7 @@ export default async function CotizacionesPage({
 
                                   <button className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">
                                     Registrar pago
-                                    total —{" "}
+                                    total â€”{" "}
                                     {dinero(
                                       total,
                                     )}
@@ -1116,8 +1168,8 @@ export default async function CotizacionesPage({
                                   <div>
                                     <p className="font-black text-emerald-300">
                                       Primer 50%
-                                      recibido —
-                                      Agenda habilitada
+                                      recibido â€”
+                                      ProgramaciÃ³n habilitada
                                     </p>
 
                                     <p className="mt-1 text-sm text-slate-400">
@@ -1133,7 +1185,7 @@ export default async function CotizacionesPage({
                                       50% debe
                                       liquidarse antes
                                       de iniciar la
-                                      inspección.
+                                      inspecciÃ³n.
                                     </p>
                                   </div>
 
@@ -1142,7 +1194,7 @@ export default async function CotizacionesPage({
                                       href="/panel/agenda"
                                       className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950"
                                     >
-                                      Ir a Agenda
+                                      Ver Agenda
                                     </Link>
 
                                     <form
@@ -1160,7 +1212,7 @@ export default async function CotizacionesPage({
 
                                       <button className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300">
                                         Registrar
-                                        segundo 50% —{" "}
+                                        segundo 50% â€”{" "}
                                         {dinero(
                                           saldo,
                                         )}
@@ -1177,18 +1229,17 @@ export default async function CotizacionesPage({
                                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                                   <div>
                                     <p className="font-black text-emerald-300">
-                                      Cotización
+                                      CotizaciÃ³n
                                       liquidada al
                                       100%
                                     </p>
 
                                     <p className="mt-1 text-sm text-slate-400">
-                                      El pago está
+                                      El pago estÃ¡
                                       completo. La
-                                      cotización puede
-                                      pasar a Agenda y
-                                      la inspección
-                                      podrá iniciar
+                                      cotizaciÃ³n ya cumple la condiciÃƒÂ³n administrativa de pago y
+                                      la inspecciÃ³n
+                                      podrÃ¡ iniciar
                                       cuando llegue su
                                       fecha programada.
                                     </p>
@@ -1198,7 +1249,7 @@ export default async function CotizacionesPage({
                                     href="/panel/agenda"
                                     className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950"
                                   >
-                                    Ir a Agenda
+                                    Ver Agenda
                                   </Link>
                                 </div>
                               </div>
@@ -1212,9 +1263,8 @@ export default async function CotizacionesPage({
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-400">
-                                  La cotización no
-                                  puede avanzar a
-                                  Agenda mientras el
+                                  La cotizaciÃ³n no
+                                  puede avanzar a programaciÃ³n mientras el
                                   pago permanezca
                                   cancelado.
                                 </p>
@@ -1233,11 +1283,27 @@ export default async function CotizacionesPage({
                             ) && (
                               <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5">
                                 <p className="font-black text-amber-300">
-                                  Agenda todavía no
-                                  habilitada
+                                  ProgramaciÃ³n todavÃƒÂ­a no habilitada
                                 </p>
                               </div>
                             )}
+                        </div>
+                      )}
+                        </>
+                      )}
+
+                      {esGerente && (
+                        <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
+                          <p className="font-black text-emerald-300">
+                            Consulta Ãºnicamente
+                          </p>
+                          <p className="mt-1 text-sm text-slate-400">
+                            Gerencia puede consultar el importe, esquema de pago,
+                            monto pagado y saldo para verificar si el servicio estÃ¡
+                            administrativamente habilitado, pero no puede crear,
+                            autorizar, enviar, rechazar ni registrar pagos de
+                            cotizaciones.
+                          </p>
                         </div>
                       )}
                     </article>
