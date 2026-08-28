@@ -17,29 +17,38 @@ export default async function PanelPage() {
     redirect("/login");
   }
 
-  const usuarioActual = await prisma.usuario.findUnique({
-    where: {
-      id: session.user.id,
-    },
-    select: {
-      id: true,
-      nombre: true,
-      rol: true,
-      activo: true,
-      zonaId: true,
-    },
-  });
+  const usuarioActual =
+    await prisma.usuario.findUnique({
+      where: {
+        id: session.user.id,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        rol: true,
+        activo: true,
+        zonaId: true,
+      },
+    });
 
-  if (!usuarioActual || !usuarioActual.activo) {
+  if (
+    !usuarioActual ||
+    !usuarioActual.activo
+  ) {
     redirect("/acceso");
   }
 
   const rol = usuarioActual.rol;
 
-  const esDirector = rol === RolUsuario.DIRECTOR;
+  const esDirector =
+    rol === RolUsuario.DIRECTOR;
+
   const esAdministrador =
     rol === RolUsuario.ADMINISTRADOR;
-  const esGerente = rol === RolUsuario.GERENTE;
+
+  const esGerente =
+    rol === RolUsuario.GERENTE;
+
   const esCoordinador =
     rol === RolUsuario.COORDINADOR;
 
@@ -53,7 +62,8 @@ export default async function PanelPage() {
     redirect("/acceso");
   }
 
-  let alcanceInspecciones: Prisma.InspeccionWhereInput = {};
+  let alcanceInspecciones:
+    Prisma.InspeccionWhereInput = {};
 
   if (esGerente) {
     if (!usuarioActual.zonaId) {
@@ -64,13 +74,15 @@ export default async function PanelPage() {
       alcanceInspecciones = {
         OR: [
           {
-            zonaId: usuarioActual.zonaId,
+            zonaId:
+              usuarioActual.zonaId,
           },
           {
             zonaId: null,
             inspector: {
               usuario: {
-                zonaId: usuarioActual.zonaId,
+                zonaId:
+                  usuarioActual.zonaId,
               },
             },
           },
@@ -83,16 +95,30 @@ export default async function PanelPage() {
     alcanceInspecciones = {
       inspector: {
         usuario: {
-          coordinadorId: usuarioActual.id,
+          coordinadorId:
+            usuarioActual.id,
         },
       },
     };
   }
 
+  /*
+   * Todas las consultas independientes
+   * se ejecutan de manera concurrente.
+   *
+   * Para roles que no requieren los
+   * indicadores directivos resolvemos null
+   * en lugar de consultar la base de datos.
+   */
   const [
     inspeccionesPorEstado,
     recientes,
     clientes,
+    criticosResultado,
+    certificadosPorVigencia,
+    ish,
+    hallazgosPorClasificacion,
+    inspeccionesConSemaforo,
   ] = await Promise.all([
     prisma.inspeccion.groupBy({
       by: ["estado"],
@@ -104,22 +130,90 @@ export default async function PanelPage() {
 
     prisma.inspeccion.findMany({
       where: alcanceInspecciones,
-      include: {
+
+      select: {
+        id: true,
+        folio: true,
+        tipoInmueble: true,
+        ciudad: true,
+        estado: true,
+        ish: true,
+
         cliente: {
           select: {
             nombre: true,
           },
         },
       },
+
       orderBy: {
         actualizadoEn: "desc",
       },
-      take: esAdministrador ? 4 : 6,
+
+      take:
+        esAdministrador
+          ? 4
+          : 6,
     }),
 
     esDirector || esAdministrador
       ? prisma.cliente.count()
       : Promise.resolve(0),
+
+    esDirector
+      ? prisma.hallazgo.count({
+          where: {
+            clasificacion:
+              ClasificacionHallazgo.CR,
+            resuelto: false,
+          },
+        })
+      : Promise.resolve(null),
+
+    esDirector
+      ? prisma.certificado.groupBy({
+          by: ["vigente"],
+          _count: {
+            _all: true,
+          },
+        })
+      : Promise.resolve(null),
+
+    esDirector
+      ? prisma.inspeccion.aggregate({
+          _avg: {
+            ish: true,
+          },
+          where: {
+            ish: {
+              not: null,
+            },
+          },
+        })
+      : Promise.resolve(null),
+
+    esDirector
+      ? prisma.hallazgo.groupBy({
+          by: ["clasificacion"],
+          _count: {
+            _all: true,
+          },
+        })
+      : Promise.resolve(null),
+
+    esDirector
+      ? prisma.inspeccion.groupBy({
+          by: ["semaforo"],
+          where: {
+            semaforo: {
+              not: null,
+            },
+          },
+          _count: {
+            _all: true,
+          },
+        })
+      : Promise.resolve(null),
   ]);
 
   function obtenerCantidadEstado(
@@ -127,18 +221,21 @@ export default async function PanelPage() {
   ) {
     return (
       inspeccionesPorEstado.find(
-        (item) => item.estado === estado,
+        (item) =>
+          item.estado === estado,
       )?._count._all ?? 0
     );
   }
 
-  const activas = obtenerCantidadEstado(
-    EstadoInspeccion.EN_PROCESO,
-  );
+  const activas =
+    obtenerCantidadEstado(
+      EstadoInspeccion.EN_PROCESO,
+    );
 
-  const programadas = obtenerCantidadEstado(
-    EstadoInspeccion.PROGRAMADA,
-  );
+  const programadas =
+    obtenerCantidadEstado(
+      EstadoInspeccion.PROGRAMADA,
+    );
 
   const reportesPendientes =
     obtenerCantidadEstado(
@@ -163,92 +260,53 @@ export default async function PanelPage() {
   }> = [];
 
   if (esDirector) {
-    const [
-      criticosResultado,
-      certificadosPorVigencia,
-      ish,
-      hallazgosPorClasificacion,
-      inspeccionesConSemaforo,
-    ] = await Promise.all([
-      prisma.hallazgo.count({
-        where: {
-          clasificacion:
-            ClasificacionHallazgo.CR,
-          resuelto: false,
-        },
-      }),
+    criticos =
+      criticosResultado ?? 0;
 
-      prisma.certificado.groupBy({
-        by: ["vigente"],
-        _count: {
-          _all: true,
-        },
-      }),
-
-      prisma.inspeccion.aggregate({
-        _avg: {
-          ish: true,
-        },
-        where: {
-          ish: {
-            not: null,
-          },
-        },
-      }),
-
-      prisma.hallazgo.groupBy({
-        by: ["clasificacion"],
-        _count: {
-          _all: true,
-        },
-      }),
-
-      prisma.inspeccion.groupBy({
-        by: ["semaforo"],
-        where: {
-          semaforo: {
-            not: null,
-          },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-    ]);
-
-    criticos = criticosResultado;
+    const certificados =
+      certificadosPorVigencia ?? [];
 
     certificadosEmitidos =
-      certificadosPorVigencia.reduce(
+      certificados.reduce(
         (total, item) =>
-          total + item._count._all,
+          total +
+          item._count._all,
         0,
       );
 
     certificadosRevocados =
-      certificadosPorVigencia.find(
+      certificados.find(
         (item) =>
           item.vigente === false,
       )?._count._all ?? 0;
 
     ishPromedio = Number(
-      ish._avg.ish ?? 0,
+      ish?._avg.ish ?? 0,
     ).toFixed(1);
 
+    const hallazgos =
+      hallazgosPorClasificacion ??
+      [];
+
     const totalClasificaciones =
-      hallazgosPorClasificacion.reduce(
+      hallazgos.reduce(
         (total, item) =>
-          total + item._count._all,
+          total +
+          item._count._all,
         0,
       );
 
     distribucionHallazgos =
-      hallazgosPorClasificacion.map(
+      hallazgos.map(
         (item) => ({
-          etiqueta: etiquetaClasificacion(
-            item.clasificacion,
-          ),
-          valor: item._count._all,
+          etiqueta:
+            etiquetaClasificacion(
+              item.clasificacion,
+            ),
+
+          valor:
+            item._count._all,
+
           porcentaje:
             totalClasificaciones > 0
               ? Math.round(
@@ -260,20 +318,28 @@ export default async function PanelPage() {
         }),
       );
 
+    const semaforos =
+      inspeccionesConSemaforo ??
+      [];
+
     const totalSemaforos =
-      inspeccionesConSemaforo.reduce(
+      semaforos.reduce(
         (total, item) =>
-          total + item._count._all,
+          total +
+          item._count._all,
         0,
       );
 
     distribucionSemaforo =
-      inspeccionesConSemaforo.map(
+      semaforos.map(
         (item) => ({
           etiqueta:
             item.semaforo ??
             "SIN EVALUAR",
-          valor: item._count._all,
+
+          valor:
+            item._count._all,
+
           porcentaje:
             totalSemaforos > 0
               ? Math.round(
@@ -289,18 +355,23 @@ export default async function PanelPage() {
   const totalEstados =
     inspeccionesPorEstado.reduce(
       (total, item) =>
-        total + item._count._all,
+        total +
+        item._count._all,
       0,
     );
 
   const distribucionEstados =
     inspeccionesPorEstado.map(
       (item) => ({
-        etiqueta: item.estado.replaceAll(
-          "_",
-          " ",
-        ),
-        valor: item._count._all,
+        etiqueta:
+          item.estado.replaceAll(
+            "_",
+            " ",
+          ),
+
+        valor:
+          item._count._all,
+
         porcentaje:
           totalEstados > 0
             ? Math.round(
@@ -316,76 +387,110 @@ export default async function PanelPage() {
     esDirector
       ? [
           {
-            titulo: "Inspecciones activas",
+            titulo:
+              "Inspecciones activas",
             valor: activas,
-            detalle: "Actualmente en proceso",
+            detalle:
+              "Actualmente en proceso",
           },
           {
-            titulo: "Programadas",
+            titulo:
+              "Programadas",
             valor: programadas,
-            detalle: "Pendientes de iniciar",
+            detalle:
+              "Pendientes de iniciar",
           },
           {
-            titulo: "Reportes pendientes",
-            valor: reportesPendientes,
-            detalle: "Por completar o emitir",
+            titulo:
+              "Reportes pendientes",
+            valor:
+              reportesPendientes,
+            detalle:
+              "Por completar o emitir",
           },
           {
-            titulo: "Clientes registrados",
+            titulo:
+              "Clientes registrados",
             valor: clientes,
-            detalle: "Base total de clientes",
+            detalle:
+              "Base total de clientes",
           },
           {
-            titulo: "Hallazgos críticos",
+            titulo:
+              "Hallazgos críticos",
             valor: criticos,
-            detalle: "Críticos sin resolver",
+            detalle:
+              "Críticos sin resolver",
           },
           {
-            titulo: "Certificados emitidos",
-            valor: certificadosEmitidos,
-            detalle: "Total histórico",
+            titulo:
+              "Certificados emitidos",
+            valor:
+              certificadosEmitidos,
+            detalle:
+              "Total histórico",
           },
         ]
       : esAdministrador
         ? [
             {
-              titulo: "Inspecciones activas",
+              titulo:
+                "Inspecciones activas",
               valor: activas,
-              detalle: "Seguimiento administrativo",
+              detalle:
+                "Seguimiento administrativo",
             },
             {
-              titulo: "Programadas",
-              valor: programadas,
-              detalle: "Servicios agendados",
+              titulo:
+                "Programadas",
+              valor:
+                programadas,
+              detalle:
+                "Servicios agendados",
             },
             {
-              titulo: "Reportes pendientes",
-              valor: reportesPendientes,
-              detalle: "Seguimiento del proceso",
+              titulo:
+                "Reportes pendientes",
+              valor:
+                reportesPendientes,
+              detalle:
+                "Seguimiento del proceso",
             },
             {
-              titulo: "Clientes registrados",
-              valor: clientes,
-              detalle: "Base total de clientes",
+              titulo:
+                "Clientes registrados",
+              valor:
+                clientes,
+              detalle:
+                "Base total de clientes",
             },
           ]
         : [
             {
-              titulo: "Inspecciones activas",
-              valor: activas,
-              detalle: "Dentro de tu alcance",
+              titulo:
+                "Inspecciones activas",
+              valor:
+                activas,
+              detalle:
+                "Dentro de tu alcance",
             },
             {
-              titulo: "Programadas",
-              valor: programadas,
-              detalle: "Dentro de tu alcance",
+              titulo:
+                "Programadas",
+              valor:
+                programadas,
+              detalle:
+                "Dentro de tu alcance",
             },
             {
-              titulo: "Reportes pendientes",
-              valor: reportesPendientes,
-              detalle: esGerente
-                ? "Pendientes de control o aprobación"
-                : "Pendientes de revisión técnica",
+              titulo:
+                "Reportes pendientes",
+              valor:
+                reportesPendientes,
+              detalle:
+                esGerente
+                  ? "Pendientes de control o aprobación"
+                  : "Pendientes de revisión técnica",
             },
           ];
 
@@ -436,30 +541,37 @@ export default async function PanelPage() {
                   href="/panel/clientes"
                   texto="Clientes"
                 />
+
                 <BotonNavegacion
                   href="/panel/inmuebles"
                   texto="Inmuebles"
                 />
+
                 <BotonNavegacion
                   href="/panel/agenda"
                   texto="Agenda"
                 />
+
                 <BotonNavegacion
                   href="/panel/paquetes"
                   texto="Paquetes"
                 />
+
                 <BotonNavegacion
                   href="/panel/cotizaciones"
                   texto="Cotizaciones"
                 />
+
                 <BotonNavegacion
                   href="/panel/inspecciones"
                   texto="Inspecciones"
                 />
+
                 <BotonNavegacion
                   href="/panel/inspectores"
                   texto="Inspectores"
                 />
+
                 <BotonNavegacion
                   href="/panel/usuarios"
                   texto="Usuarios"
@@ -473,26 +585,32 @@ export default async function PanelPage() {
                   href="/panel/inspecciones"
                   texto="Inspecciones"
                 />
+
                 <BotonNavegacion
                   href="/panel/agenda"
                   texto="Agenda"
                 />
+
                 <BotonNavegacion
                   href="/panel/inspectores"
                   texto="Inspectores"
                 />
+
                 <BotonNavegacion
                   href="/panel/paquetes"
                   texto="Paquetes"
                 />
+
                 <BotonNavegacion
                   href="/panel/cotizaciones"
                   texto="Cotizaciones"
                 />
+
                 <BotonNavegacion
                   href="/panel/auditoria"
                   texto="Auditoría"
                 />
+
                 <Link
                   href="/panel/inspecciones/nueva"
                   className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
@@ -508,10 +626,12 @@ export default async function PanelPage() {
                   href="/panel/inspecciones"
                   texto="Inspecciones"
                 />
+
                 <BotonNavegacion
                   href="/panel/agenda"
                   texto="Agenda"
                 />
+
                 <BotonNavegacion
                   href="/panel/inspectores"
                   texto="Inspectores"
@@ -525,42 +645,52 @@ export default async function PanelPage() {
                   href="/panel/inspecciones"
                   texto="Inspecciones"
                 />
+
                 <BotonNavegacion
                   href="/panel/clientes"
                   texto="Clientes"
                 />
+
                 <BotonNavegacion
                   href="/panel/inmuebles"
                   texto="Inmuebles"
                 />
+
                 <BotonNavegacion
                   href="/panel/agenda"
                   texto="Agenda"
                 />
+
                 <BotonNavegacion
                   href="/panel/paquetes"
                   texto="Paquetes"
                 />
+
                 <BotonNavegacion
                   href="/panel/cotizaciones"
                   texto="Cotizaciones"
                 />
+
                 <BotonNavegacion
                   href="/panel/inspectores"
                   texto="Inspectores"
                 />
+
                 <BotonNavegacion
                   href="/panel/auditoria"
                   texto="Auditoría"
                 />
+
                 <BotonNavegacion
                   href="/panel/usuarios"
                   texto="Usuarios"
                 />
+
                 <BotonNavegacion
                   href="/panel/configuracion"
                   texto="Configuración"
                 />
+
                 <Link
                   href="/panel/inspecciones/nueva"
                   className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
@@ -587,7 +717,9 @@ export default async function PanelPage() {
                 key={indicador.titulo}
                 titulo={indicador.titulo}
                 valor={indicador.valor}
-                detalle={indicador.detalle}
+                detalle={
+                  indicador.detalle
+                }
               />
             ),
           )}
@@ -602,7 +734,9 @@ export default async function PanelPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Últimas inspecciones actualizadas dentro de tu alcance.
+                  Últimas inspecciones
+                  actualizadas dentro
+                  de tu alcance.
                 </p>
               </div>
 
@@ -616,7 +750,9 @@ export default async function PanelPage() {
 
             {recientes.length === 0 ? (
               <p className="p-12 text-center text-slate-400">
-                Aún no hay inspecciones registradas dentro de tu alcance.
+                Aún no hay
+                inspecciones registradas
+                dentro de tu alcance.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -628,7 +764,8 @@ export default async function PanelPage() {
                       </th>
 
                       <th className="px-6 py-4">
-                        {esDirector || esAdministrador
+                        {esDirector ||
+                        esAdministrador
                           ? "Cliente"
                           : "Referencia"}
                       </th>
@@ -651,7 +788,9 @@ export default async function PanelPage() {
                     {recientes.map(
                       (inspeccion) => (
                         <tr
-                          key={inspeccion.id}
+                          key={
+                            inspeccion.id
+                          }
                           className="border-t border-white/10"
                         >
                           <td className="px-6 py-5">
@@ -659,24 +798,32 @@ export default async function PanelPage() {
                               href={`/panel/inspecciones/${inspeccion.id}`}
                               className="font-black text-cyan-300"
                             >
-                              {inspeccion.folio}
+                              {
+                                inspeccion.folio
+                              }
                             </Link>
                           </td>
 
                           <td className="px-6 py-5 font-bold">
                             {esDirector ||
                             esAdministrador
-                              ? inspeccion.cliente.nombre
+                              ? inspeccion
+                                  .cliente
+                                  .nombre
                               : "Expediente operativo"}
                           </td>
 
                           <td className="px-6 py-5 text-slate-400">
                             <p>
-                              {inspeccion.tipoInmueble}
+                              {
+                                inspeccion.tipoInmueble
+                              }
                             </p>
 
                             <p className="mt-1 text-xs text-slate-600">
-                              {inspeccion.ciudad}
+                              {
+                                inspeccion.ciudad
+                              }
                             </p>
                           </td>
 
@@ -694,7 +841,9 @@ export default async function PanelPage() {
                             null
                               ? Number(
                                   inspeccion.ish,
-                                ).toFixed(0)
+                                ).toFixed(
+                                  0,
+                                )
                               : "—"}
                           </td>
                         </tr>
@@ -719,17 +868,25 @@ export default async function PanelPage() {
                   </p>
 
                   <p className="mt-2 font-black">
-                    inspecciones programadas
+                    inspecciones
+                    programadas
                   </p>
 
                   <p className="mt-4 text-sm font-semibold text-slate-800">
-                    Gestiona la operación comercial y administrativa sin sustituir las funciones técnicas u operativas de otros roles.
+                    Gestiona la
+                    operación comercial
+                    y administrativa sin
+                    sustituir las
+                    funciones técnicas u
+                    operativas de otros
+                    roles.
                   </p>
                 </section>
 
                 <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
                   <h2 className="text-lg font-black">
-                    Operación administrativa
+                    Operación
+                    administrativa
                   </h2>
 
                   <div className="mt-5 space-y-3">
@@ -737,22 +894,27 @@ export default async function PanelPage() {
                       href="/panel/clientes"
                       texto="Gestionar clientes"
                     />
+
                     <Acceso
                       href="/panel/inmuebles"
                       texto="Gestionar inmuebles"
                     />
+
                     <Acceso
                       href="/panel/paquetes"
                       texto="Paquetes y precios"
                     />
+
                     <Acceso
                       href="/panel/cotizaciones"
                       texto="Cotizaciones"
                     />
+
                     <Acceso
                       href="/panel/usuarios"
                       texto="Gestionar usuarios"
                     />
+
                     <Acceso
                       href="/panel/inspectores"
                       texto="Administrar Inspectores"
@@ -770,15 +932,24 @@ export default async function PanelPage() {
                   </p>
 
                   <p className="mt-6 text-4xl font-black">
-                    {reportesPendientes}
+                    {
+                      reportesPendientes
+                    }
                   </p>
 
                   <p className="mt-2 font-black">
-                    reporte(s) pendiente(s)
+                    reporte(s)
+                    pendiente(s)
                   </p>
 
                   <p className="mt-4 text-sm font-semibold text-slate-800">
-                    Controla la operación de su zona, asigna cuando corresponda y participa en el flujo de revisión y aprobación.
+                    Controla la
+                    operación de su zona,
+                    asigna cuando
+                    corresponda y
+                    participa en el flujo
+                    de revisión y
+                    aprobación.
                   </p>
                 </section>
 
@@ -792,14 +963,17 @@ export default async function PanelPage() {
                       href="/panel/inspecciones"
                       texto="Revisar inspecciones"
                     />
+
                     <Acceso
                       href="/panel/agenda"
                       texto="Consultar agenda"
                     />
+
                     <Acceso
                       href="/panel/inspectores"
                       texto="Inspectores de la zona"
                     />
+
                     <Acceso
                       href="/panel/auditoria"
                       texto="Auditar Coordinadores e Inspectores"
@@ -817,15 +991,24 @@ export default async function PanelPage() {
                   </p>
 
                   <p className="mt-6 text-4xl font-black">
-                    {reportesPendientes}
+                    {
+                      reportesPendientes
+                    }
                   </p>
 
                   <p className="mt-2 font-black">
-                    reporte(s) pendiente(s) de revisión
+                    reporte(s)
+                    pendiente(s) de
+                    revisión
                   </p>
 
                   <p className="mt-4 text-sm font-semibold text-slate-800">
-                    Revisa expedientes de los Inspectores bajo tu coordinación y registra el visto bueno técnico cuando corresponda.
+                    Revisa expedientes
+                    de los Inspectores
+                    bajo tu coordinación
+                    y registra el visto
+                    bueno técnico cuando
+                    corresponda.
                   </p>
                 </section>
 
@@ -839,10 +1022,12 @@ export default async function PanelPage() {
                       href="/panel/inspecciones"
                       texto="Revisar inspecciones"
                     />
+
                     <Acceso
                       href="/panel/agenda"
                       texto="Consultar agenda"
                     />
+
                     <Acceso
                       href="/panel/inspectores"
                       texto="Mis Inspectores"
@@ -875,7 +1060,9 @@ export default async function PanelPage() {
                           100,
                           Math.max(
                             0,
-                            Number(ishPromedio),
+                            Number(
+                              ishPromedio,
+                            ),
                           ),
                         )}%`,
                       }}
@@ -885,18 +1072,22 @@ export default async function PanelPage() {
 
                 <section className="rounded-3xl border border-white/10 bg-slate-900 p-7">
                   <p className="text-sm font-bold text-slate-400">
-                    Certificados revocados
+                    Certificados
+                    revocados
                   </p>
 
                   <p className="mt-3 text-4xl font-black text-rose-300">
-                    {certificadosRevocados}
+                    {
+                      certificadosRevocados
+                    }
                   </p>
 
                   <Link
                     href="/certificados"
                     className="mt-5 inline-block text-sm font-bold text-cyan-300"
                   >
-                    Revisar certificados →
+                    Revisar certificados
+                    →
                   </Link>
                 </section>
 
@@ -910,26 +1101,32 @@ export default async function PanelPage() {
                       href="/panel/inspecciones"
                       texto="Ver inspecciones"
                     />
+
                     <Acceso
                       href="/panel/agenda"
                       texto="Consultar agenda"
                     />
+
                     <Acceso
                       href="/panel/paquetes"
                       texto="Paquetes y precios"
                     />
+
                     <Acceso
                       href="/panel/cotizaciones"
                       texto="Cotizaciones"
                     />
+
                     <Acceso
                       href="/panel/auditoria"
                       texto="Revisar auditoría"
                     />
+
                     <Acceso
                       href="/panel/usuarios"
                       texto="Gestionar usuarios"
                     />
+
                     <Acceso
                       href="/panel/configuracion"
                       texto="Configuración"
@@ -950,19 +1147,25 @@ export default async function PanelPage() {
         >
           <Distribucion
             titulo="Inspecciones por estado"
-            items={distribucionEstados}
+            items={
+              distribucionEstados
+            }
           />
 
           {esDirector && (
             <>
               <Distribucion
                 titulo="Hallazgos por clasificación"
-                items={distribucionHallazgos}
+                items={
+                  distribucionHallazgos
+                }
               />
 
               <Distribucion
                 titulo="Semáforo habitacional"
-                items={distribucionSemaforo}
+                items={
+                  distribucionSemaforo
+                }
               />
             </>
           )}
@@ -973,7 +1176,8 @@ export default async function PanelPage() {
 }
 
 function etiquetaClasificacion(
-  clasificacion: ClasificacionHallazgo,
+  clasificacion:
+    ClasificacionHallazgo,
 ) {
   switch (clasificacion) {
     case ClasificacionHallazgo.C:
@@ -1078,42 +1282,56 @@ function Distribucion({
 
       {items.length === 0 ? (
         <p className="mt-6 text-sm text-slate-500">
-          No hay información disponible.
+          No hay información
+          disponible.
         </p>
       ) : (
         <div className="mt-7 space-y-5">
-          {items.map((item) => (
-            <div key={item.etiqueta}>
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <span className="font-bold text-slate-300">
-                  {item.etiqueta}
-                </span>
+          {items.map(
+            (item) => (
+              <div
+                key={
+                  item.etiqueta
+                }
+              >
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="font-bold text-slate-300">
+                    {
+                      item.etiqueta
+                    }
+                  </span>
 
-                <span className="font-black text-cyan-300">
-                  {item.valor}
-                </span>
+                  <span className="font-black text-cyan-300">
+                    {
+                      item.valor
+                    }
+                  </span>
+                </div>
+
+                <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-950">
+                  <div
+                    className="h-full rounded-full bg-cyan-400"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.max(
+                          0,
+                          item.porcentaje,
+                        ),
+                      )}%`,
+                    }}
+                  />
+                </div>
+
+                <p className="mt-1 text-right text-xs text-slate-600">
+                  {
+                    item.porcentaje
+                  }
+                  %
+                </p>
               </div>
-
-              <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-950">
-                <div
-                  className="h-full rounded-full bg-cyan-400"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(
-                        0,
-                        item.porcentaje,
-                      ),
-                    )}%`,
-                  }}
-                />
-              </div>
-
-              <p className="mt-1 text-right text-xs text-slate-600">
-                {item.porcentaje}%
-              </p>
-            </div>
-          ))}
+            ),
+          )}
         </div>
       )}
     </article>

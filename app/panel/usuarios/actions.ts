@@ -42,11 +42,24 @@ const crearUsuarioSchema = z.object({
     ),
 
   rol: z.nativeEnum(RolUsuario),
+
+  zonaId: z
+    .string()
+    .trim()
+    .optional(),
+
+  alcanceAdministrador: z
+    .enum(["GLOBAL", "ZONA"])
+    .optional(),
+
+  gerenteId: z
+    .string()
+    .trim()
+    .optional(),
 });
 
 const cambiarPasswordSchema = z.object({
-  usuarioId:
-    z.string().trim().min(1),
+  usuarioId: z.string().trim().min(1),
 
   password: z
     .string()
@@ -103,21 +116,6 @@ async function obtenerGestorActual() {
   return gestor;
 }
 
-/**
- * Reglas:
- *
- * DIRECTOR:
- * - puede crear y gestionar todos los roles, excepto que INSPECTOR
- *   se crea exclusivamente desde /panel/inspectores.
- *
- * ADMINISTRADOR:
- * - puede crear y gestionar GERENTE, COORDINADOR, INSPECTOR y CLIENTE,
- *   pero INSPECTOR también se crea exclusivamente desde /panel/inspectores.
- * - no puede crear ni modificar DIRECTOR o ADMINISTRADOR.
- *
- * Nadie puede ver contraseñas existentes; únicamente se permite
- * establecer o restablecer una nueva contraseña.
- */
 function validarRolCreable(
   rolGestor: RolUsuario,
   rolNuevo: RolUsuario,
@@ -175,6 +173,84 @@ function validarUsuarioObjetivoParaPassword(
   }
 }
 
+async function validarZona(
+  zonaId: string,
+) {
+  const zona =
+    await prisma.zona.findUnique({
+      where: {
+        id: zonaId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        activa: true,
+      },
+    });
+
+  if (
+    !zona ||
+    !zona.activa
+  ) {
+    regresarConError(
+      "La zona seleccionada no existe o está inactiva.",
+    );
+  }
+
+  return zona;
+}
+
+async function validarGerenteDeZona(
+  gerenteId: string,
+  zonaId: string,
+) {
+  const gerente =
+    await prisma.usuario.findUnique({
+      where: {
+        id: gerenteId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        rol: true,
+        activo: true,
+        zonaId: true,
+      },
+    });
+
+  if (!gerente) {
+    regresarConError(
+      "El Gerente seleccionado no existe.",
+    );
+  }
+
+  if (
+    gerente.rol !==
+    RolUsuario.GERENTE
+  ) {
+    regresarConError(
+      "El usuario seleccionado no tiene rol de Gerente.",
+    );
+  }
+
+  if (!gerente.activo) {
+    regresarConError(
+      "El Gerente seleccionado está inactivo.",
+    );
+  }
+
+  if (
+    gerente.zonaId !==
+    zonaId
+  ) {
+    regresarConError(
+      "El Gerente seleccionado no pertenece a la misma zona del Coordinador.",
+    );
+  }
+
+  return gerente;
+}
+
 export async function crearUsuario(
   formData: FormData,
 ) {
@@ -188,21 +264,42 @@ export async function crearUsuario(
           formData,
           "nombre",
         ),
+
       email:
         texto(
           formData,
           "email",
         ).toLowerCase(),
+
       password:
         texto(
           formData,
           "password",
         ),
+
       rol:
         texto(
           formData,
           "rol",
         ),
+
+      zonaId:
+        texto(
+          formData,
+          "zonaId",
+        ) || undefined,
+
+      alcanceAdministrador:
+        texto(
+          formData,
+          "alcanceAdministrador",
+        ) || undefined,
+
+      gerenteId:
+        texto(
+          formData,
+          "gerenteId",
+        ) || undefined,
     });
 
   if (!resultado.success) {
@@ -218,12 +315,156 @@ export async function crearUsuario(
     email,
     password,
     rol,
+    zonaId,
+    alcanceAdministrador,
+    gerenteId,
   } = resultado.data;
 
   validarRolCreable(
     gestor.rol,
     rol,
   );
+
+  let zonaFinalId:
+    | string
+    | null = null;
+
+  let gerenteFinalId:
+    | string
+    | null = null;
+
+  /*
+   * DIRECTOR
+   * Alcance global.
+   */
+  if (
+    rol ===
+    RolUsuario.DIRECTOR
+  ) {
+    zonaFinalId = null;
+    gerenteFinalId = null;
+  }
+
+  /*
+   * ADMINISTRADOR
+   * Puede ser GLOBAL o POR ZONA.
+   *
+   * GLOBAL:
+   * zonaId = null
+   *
+   * ZONA:
+   * zonaId obligatorio
+   */
+  if (
+    rol ===
+    RolUsuario.ADMINISTRADOR
+  ) {
+    const alcance =
+      alcanceAdministrador ??
+      "GLOBAL";
+
+    if (
+      alcance === "ZONA"
+    ) {
+      if (!zonaId) {
+        regresarConError(
+          "Debes seleccionar una zona para el Administrador con alcance por zona.",
+        );
+      }
+
+      await validarZona(
+        zonaId,
+      );
+
+      zonaFinalId =
+        zonaId;
+    } else {
+      zonaFinalId =
+        null;
+    }
+
+    gerenteFinalId =
+      null;
+  }
+
+  /*
+   * GERENTE
+   * Debe pertenecer obligatoriamente a una zona.
+   */
+  if (
+    rol ===
+    RolUsuario.GERENTE
+  ) {
+    if (!zonaId) {
+      regresarConError(
+        "Debes seleccionar una zona para el Gerente.",
+      );
+    }
+
+    await validarZona(
+      zonaId,
+    );
+
+    zonaFinalId =
+      zonaId;
+
+    gerenteFinalId =
+      null;
+  }
+
+  /*
+   * COORDINADOR
+   * Debe tener:
+   * - zona obligatoria
+   * - Gerente obligatorio
+   * - ambos deben pertenecer a la misma zona
+   */
+  if (
+    rol ===
+    RolUsuario.COORDINADOR
+  ) {
+    if (!zonaId) {
+      regresarConError(
+        "Debes seleccionar una zona para el Coordinador.",
+      );
+    }
+
+    if (!gerenteId) {
+      regresarConError(
+        "Debes seleccionar el Gerente responsable del Coordinador.",
+      );
+    }
+
+    await validarZona(
+      zonaId,
+    );
+
+    await validarGerenteDeZona(
+      gerenteId,
+      zonaId,
+    );
+
+    zonaFinalId =
+      zonaId;
+
+    gerenteFinalId =
+      gerenteId;
+  }
+
+  /*
+   * CLIENTE
+   * No forma parte de la jerarquía interna.
+   */
+  if (
+    rol ===
+    RolUsuario.CLIENTE
+  ) {
+    zonaFinalId =
+      null;
+
+    gerenteFinalId =
+      null;
+  }
 
   const usuarioExistente =
     await prisma.usuario.findUnique({
@@ -259,6 +500,15 @@ export async function crearUsuario(
                 passwordHash,
                 rol,
                 activo: true,
+
+                zonaId:
+                  zonaFinalId,
+
+                gerenteId:
+                  gerenteFinalId,
+
+                coordinadorId:
+                  null,
               },
             });
 
@@ -281,18 +531,37 @@ export async function crearUsuario(
         },
       );
 
+    const descripcionZona =
+      zonaFinalId
+        ? ` Zona asignada: ${zonaFinalId}.`
+        : rol ===
+            RolUsuario.ADMINISTRADOR
+          ? " Alcance administrativo: GLOBAL."
+          : "";
+
+    const descripcionGerente =
+      gerenteFinalId
+        ? ` Gerente responsable: ${gerenteFinalId}.`
+        : "";
+
     await registrarAuditoria({
       tipo:
         TipoEvento.CREAR,
+
       entidad:
         "Usuario",
+
       entidadId:
         usuario.id,
+
       usuarioId:
         gestor.id,
+
       descripcion:
         `${gestor.rol} creó el usuario ${usuario.email} ` +
-        `con rol ${usuario.rol}.`,
+        `con rol ${usuario.rol}.` +
+        descripcionZona +
+        descripcionGerente,
     });
   } catch (error) {
     console.error(
@@ -308,12 +577,15 @@ export async function crearUsuario(
   revalidatePath(
     "/panel/usuarios",
   );
+
   revalidatePath(
     "/panel/inspectores",
   );
+
   revalidatePath(
     "/panel/clientes",
   );
+
   revalidatePath(
     "/panel",
   );
@@ -418,10 +690,12 @@ export async function cambiarEstadoUsuario(
               id:
                 usuarioId,
             },
+
             data: {
               activo:
                 nuevoEstado,
             },
+
             select: {
               id: true,
               email: true,
@@ -439,6 +713,7 @@ export async function cambiarEstadoUsuario(
               usuarioId:
                 actualizado.id,
             },
+
             data: {
               activo:
                 nuevoEstado,
@@ -453,12 +728,16 @@ export async function cambiarEstadoUsuario(
   await registrarAuditoria({
     tipo:
       TipoEvento.EDITAR,
+
     entidad:
       "Usuario",
+
     entidadId:
       usuario.id,
+
     usuarioId:
       gestor.id,
+
     descripcion:
       nuevoEstado
         ? `${gestor.rol} activó la cuenta ${usuario.email}.`
@@ -468,9 +747,11 @@ export async function cambiarEstadoUsuario(
   revalidatePath(
     "/panel/usuarios",
   );
+
   revalidatePath(
     "/panel/inspectores",
   );
+
   revalidatePath(
     "/panel",
   );
@@ -495,6 +776,7 @@ export async function cambiarPasswordUsuario(
           formData,
           "usuarioId",
         ),
+
       password:
         texto(
           formData,
@@ -521,6 +803,7 @@ export async function cambiarPasswordUsuario(
         id:
           usuarioId,
       },
+
       select: {
         id: true,
         email: true,
@@ -550,6 +833,7 @@ export async function cambiarPasswordUsuario(
       id:
         usuario.id,
     },
+
     data: {
       passwordHash,
     },
@@ -558,12 +842,16 @@ export async function cambiarPasswordUsuario(
   await registrarAuditoria({
     tipo:
       TipoEvento.EDITAR,
+
     entidad:
       "Usuario",
+
     entidadId:
       usuario.id,
+
     usuarioId:
       gestor.id,
+
     descripcion:
       `${gestor.rol} restableció la contraseña de ${usuario.email}.`,
   });
