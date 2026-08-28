@@ -1,17 +1,15 @@
 import Link from "next/link";
 import { RolUsuario } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
-import { obtenerAdministradorActual } from "@/lib/administrador-actual";
-import {
-  puedeAdministrarUsuario,
-  puedeCrearUsuario,
-} from "@/lib/permisos";
+
 import PasswordField from "@/components/forms/PasswordField";
+import { obtenerAdministradorActual } from "@/lib/administrador-actual";
+import { prisma } from "@/lib/prisma";
+
 import {
   cambiarEstadoUsuario,
   cambiarPasswordUsuario,
-  crearUsuario,
 } from "./actions";
+import FormularioCrearUsuario from "./FormularioCrearUsuario";
 
 type PageProps = {
   searchParams: Promise<{
@@ -25,32 +23,47 @@ type PageProps = {
 export default async function UsuariosPage({
   searchParams,
 }: PageProps) {
-  const administrador = await obtenerAdministradorActual();
+  const administrador =
+    await obtenerAdministradorActual();
+
   const parametros = await searchParams;
 
-  const busqueda = parametros.q?.trim() ?? "";
-  const rolFiltro = parametros.rol?.trim() ?? "";
+  const busqueda =
+    parametros.q?.trim() ?? "";
 
-  const rolValido = Object.values(RolUsuario).includes(
-    rolFiltro as RolUsuario,
-  )
-    ? (rolFiltro as RolUsuario)
-    : undefined;
+  const rolFiltro =
+    parametros.rol?.trim() ?? "";
 
-  const esDirector = administrador.rol === RolUsuario.DIRECTOR;
+  const rolValido =
+    Object.values(RolUsuario).includes(
+      rolFiltro as RolUsuario,
+    )
+      ? (rolFiltro as RolUsuario)
+      : undefined;
+
+  const esDirector =
+    administrador.rol === RolUsuario.DIRECTOR;
+
   const esAdministrador =
-    administrador.rol === RolUsuario.ADMINISTRADOR;
+    administrador.rol ===
+    RolUsuario.ADMINISTRADOR;
 
-  if (!esDirector && !esAdministrador) {
+  if (
+    !esDirector &&
+    !esAdministrador
+  ) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-white">
         <div className="max-w-xl rounded-3xl border border-rose-400/20 bg-rose-400/5 p-8 text-center">
           <h1 className="text-2xl font-black text-rose-300">
             Acceso restringido
           </h1>
+
           <p className="mt-3 text-slate-300">
-            Solo Dirección y Administración pueden gestionar usuarios.
+            Solo Dirección y Administración
+            pueden gestionar usuarios.
           </p>
+
           <Link
             href="/panel"
             className="mt-6 inline-flex rounded-full border border-white/10 px-5 py-3 font-bold text-cyan-300"
@@ -62,77 +75,226 @@ export default async function UsuariosPage({
     );
   }
 
-  const usuarios = await prisma.usuario.findMany({
-    where: {
-      AND: [
-        busqueda
-          ? {
-              OR: [
-                {
-                  nombre: {
-                    contains: busqueda,
-                    mode: "insensitive",
+  const [
+    usuariosBase,
+    zonas,
+    gerentes,
+    perfilesCliente,
+    perfilesInspector,
+  ] = await Promise.all([
+    prisma.usuario.findMany({
+      where: {
+        AND: [
+          busqueda
+            ? {
+                OR: [
+                  {
+                    nombre: {
+                      contains: busqueda,
+                      mode: "insensitive",
+                    },
                   },
-                },
-                {
-                  email: {
-                    contains: busqueda,
-                    mode: "insensitive",
+                  {
+                    email: {
+                      contains: busqueda,
+                      mode: "insensitive",
+                    },
                   },
-                },
-              ],
-            }
-          : {},
-        rolValido
-          ? {
-              rol: rolValido,
-            }
-          : {},
-      ],
-    },
-    include: {
-      cliente: {
-        select: {
-          id: true,
+                ],
+              }
+            : {},
+          rolValido
+            ? {
+                rol: rolValido,
+              }
+            : {},
+        ],
+      },
+
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        activo: true,
+        creadoEn: true,
+        ultimoAcceso: true,
+        zonaId: true,
+        gerenteId: true,
+      },
+
+      orderBy: {
+        creadoEn: "desc",
+      },
+    }),
+
+    prisma.zona.findMany({
+      where: {
+        activa: true,
+      },
+
+      select: {
+        id: true,
+        nombre: true,
+      },
+
+      orderBy: {
+        nombre: "asc",
+      },
+    }),
+
+    prisma.usuario.findMany({
+      where: {
+        rol: RolUsuario.GERENTE,
+        activo: true,
+        zonaId: {
+          not: null,
         },
       },
-      inspector: {
-        select: {
-          id: true,
+
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        zonaId: true,
+      },
+
+      orderBy: {
+        nombre: "asc",
+      },
+    }),
+
+    prisma.cliente.findMany({
+      where: {
+        usuarioId: {
+          not: null,
         },
       },
-    },
-    orderBy: {
-      creadoEn: "desc",
-    },
-  });
 
-  const rolesDisponibles = [
-    RolUsuario.DIRECTOR,
-    RolUsuario.ADMINISTRADOR,
-    RolUsuario.GERENTE,
-    RolUsuario.COORDINADOR,
-    RolUsuario.CLIENTE,
-  ];
+      select: {
+        usuarioId: true,
+      },
+    }),
 
-  const rolesCreables =
-    rolesDisponibles.filter(
-      (rol) =>
-        puedeCrearUsuario(
-          administrador.rol,
-          rol,
+    prisma.inspector.findMany({
+      select: {
+        usuarioId: true,
+      },
+    }),
+  ]);
+
+  const zonaPorId = new Map(
+    zonas.map((zona) => [
+      zona.id,
+      zona,
+    ]),
+  );
+
+  const gerentePorId = new Map(
+    gerentes.map((gerente) => [
+      gerente.id,
+      gerente,
+    ]),
+  );
+
+  const clientesPorUsuario =
+    new Set(
+      perfilesCliente
+        .map(
+          (perfil) =>
+            perfil.usuarioId,
+        )
+        .filter(
+          (
+            usuarioId,
+          ): usuarioId is string =>
+            Boolean(usuarioId),
         ),
     );
 
-  function puedeModificar(usuario: {
-    id: string;
-    rol: RolUsuario;
-  }) {
-    if (usuario.id === administrador.id) return false;
+  const inspectoresPorUsuario =
+    new Set(
+      perfilesInspector.map(
+        (perfil) =>
+          perfil.usuarioId,
+      ),
+    );
 
-    return puedeAdministrarUsuario(
-      administrador.rol,
-      usuario.rol,
+  const usuarios =
+    usuariosBase.map(
+      (usuario) => ({
+        ...usuario,
+
+        zona: usuario.zonaId
+          ? zonaPorId.get(
+              usuario.zonaId,
+            ) ?? null
+          : null,
+
+        gerente:
+          usuario.gerenteId
+            ? gerentePorId.get(
+                usuario.gerenteId,
+              ) ?? null
+            : null,
+
+        cliente:
+          clientesPorUsuario.has(
+            usuario.id,
+          )
+            ? {
+                id: usuario.id,
+              }
+            : null,
+
+        inspector:
+          inspectoresPorUsuario.has(
+            usuario.id,
+          )
+            ? {
+                id: usuario.id,
+              }
+            : null,
+      }),
+    );
+
+  const rolesCreables =
+    esDirector
+      ? [
+          RolUsuario.DIRECTOR,
+          RolUsuario.ADMINISTRADOR,
+          RolUsuario.GERENTE,
+          RolUsuario.COORDINADOR,
+          RolUsuario.CLIENTE,
+        ]
+      : [
+          RolUsuario.GERENTE,
+          RolUsuario.COORDINADOR,
+          RolUsuario.CLIENTE,
+        ];
+
+  function puedeModificar(
+    usuario: {
+      id: string;
+      rol: RolUsuario;
+    },
+  ) {
+    if (
+      usuario.id ===
+      administrador.id
+    ) {
+      return false;
+    }
+
+    if (esDirector) {
+      return true;
+    }
+
+    return (
+      usuario.rol !==
+        RolUsuario.DIRECTOR &&
+      usuario.rol !==
+        RolUsuario.ADMINISTRADOR
     );
   }
 
@@ -142,7 +304,9 @@ export default async function UsuariosPage({
         <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">
-              {esDirector ? "Dirección" : "Administración"}
+              {esDirector
+                ? "Dirección"
+                : "Administración"}
             </p>
 
             <h1 className="mt-2 text-4xl font-black">
@@ -150,8 +314,10 @@ export default async function UsuariosPage({
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Crea cuentas, asigna roles, restablece contraseñas y controla
-              el acceso a la plataforma.
+              Crea cuentas, asigna roles,
+              zonas y jerarquías, restablece
+              contraseñas y controla el
+              acceso a la plataforma.
             </p>
 
             <p className="mt-2 text-sm text-slate-600">
@@ -162,12 +328,21 @@ export default async function UsuariosPage({
             </p>
           </div>
 
-          <Link
-            href="/panel"
-            className="rounded-full border border-white/10 px-5 py-3 text-sm font-bold transition hover:border-cyan-300 hover:text-cyan-300"
-          >
-            Volver al panel
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/panel/inspectores"
+              className="rounded-full border border-amber-300/30 px-5 py-3 text-sm font-bold text-amber-300 transition hover:bg-amber-300/10"
+            >
+              Ir al módulo de Inspectores
+            </Link>
+
+            <Link
+              href="/panel"
+              className="rounded-full border border-white/10 px-5 py-3 text-sm font-bold transition hover:border-cyan-300 hover:text-cyan-300"
+            >
+              Volver al panel
+            </Link>
+          </div>
         </header>
 
         {parametros.ok && (
@@ -189,81 +364,74 @@ export default async function UsuariosPage({
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              El perfil de Cliente se crea automáticamente al seleccionar ese rol.
-              Los Inspectores deben darse de alta desde el módulo de Inspectores.
+              Desde este módulo se crean las
+              cuentas administrativas,
+              directivas, de coordinación,
+              gerencia y cliente que
+              correspondan a las facultades
+              del usuario actual.
             </p>
 
+            <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
+              <p className="text-sm font-black text-amber-300">
+                Alta de Inspectores
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-amber-100/80">
+                Los Inspectores no deben
+                crearse como una cuenta
+                genérica. Su alta requiere
+                perfil operativo, zona,
+                Coordinador, Gerencia y
+                datos profesionales.
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-amber-100/80">
+                Dirección y Administración
+                deben realizar el alta desde
+                el módulo de Inspectores.
+              </p>
+
+              <Link
+                href="/panel/inspectores"
+                className="mt-4 inline-flex rounded-full bg-amber-300 px-5 py-2.5 text-sm font-black text-slate-950 transition hover:bg-amber-200"
+              >
+                Crear Inspector
+              </Link>
+            </div>
+
             {!esDirector && (
-              <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-sm leading-6 text-amber-100">
-                Administración puede crear Gerentes, Coordinadores y Clientes.
-                Solo Dirección puede crear Administradores o Directores.
-                Los Inspectores se crean desde el módulo de Inspectores.
+              <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm leading-6 text-cyan-100">
+                Administración puede crear
+                Gerentes, Coordinadores y
+                Clientes desde este módulo.
+                Los Inspectores se crean
+                desde el módulo de
+                Inspectores. Solo Dirección
+                puede crear Administradores
+                o Directores.
               </div>
             )}
 
-            <Link
-              href="/panel/inspectores"
-              className="mt-5 inline-flex rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
-            >
-              Ir al módulo de Inspectores
-            </Link>
+            {esDirector && (
+              <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm leading-6 text-cyan-100">
+                Dirección puede crear
+                Directores, Administradores,
+                Gerentes, Coordinadores y
+                Clientes desde este módulo.
+                Los Inspectores se crean
+                desde el módulo de
+                Inspectores.
+              </div>
+            )}
 
-            <form
-              action={crearUsuario}
-              className="mt-7 space-y-5"
-            >
-              <Campo
-                nombre="nombre"
-                etiqueta="Nombre completo"
-                tipo="text"
-                autocompletar="name"
-              />
-
-              <Campo
-                nombre="email"
-                etiqueta="Correo electrónico"
-                tipo="email"
-                autocompletar="email"
-              />
-
-              <PasswordField
-                name="password"
-                label="Contraseña inicial"
-                autoComplete="new-password"
-                minLength={8}
-                inputClassName="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
-              />
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-300">
-                  Rol
-                </span>
-
-                <select
-                  name="rol"
-                  required
-                  defaultValue=""
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
-                >
-                  <option value="" disabled>
-                    Selecciona un rol
-                  </option>
-
-                  {rolesCreables.map((rol) => (
-                    <option key={rol} value={rol}>
-                      {etiquetaRol(rol)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                type="submit"
-                className="w-full rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-300"
-              >
-                Crear usuario
-              </button>
-            </form>
+            <FormularioCrearUsuario
+              rolesCreables={
+                rolesCreables
+              }
+              zonas={zonas}
+              gerentes={gerentes}
+            />
           </article>
 
           <section>
@@ -271,23 +439,47 @@ export default async function UsuariosPage({
               <input
                 type="search"
                 name="q"
-                defaultValue={busqueda}
+                defaultValue={
+                  busqueda
+                }
                 placeholder="Buscar por nombre o correo..."
                 className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
               />
 
               <select
                 name="rol"
-                defaultValue={rolFiltro}
+                defaultValue={
+                  rolFiltro
+                }
                 className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
               >
-                <option value="">Todos los roles</option>
-                <option value="DIRECTOR">Directores</option>
-                <option value="ADMINISTRADOR">Administradores</option>
-                <option value="GERENTE">Gerentes</option>
-                <option value="COORDINADOR">Coordinadores</option>
-                <option value="INSPECTOR">Inspectores</option>
-                <option value="CLIENTE">Clientes</option>
+                <option value="">
+                  Todos los roles
+                </option>
+
+                <option value="DIRECTOR">
+                  Directores
+                </option>
+
+                <option value="ADMINISTRADOR">
+                  Administradores
+                </option>
+
+                <option value="GERENTE">
+                  Gerentes
+                </option>
+
+                <option value="COORDINADOR">
+                  Coordinadores
+                </option>
+
+                <option value="INSPECTOR">
+                  Inspectores
+                </option>
+
+                <option value="CLIENTE">
+                  Clientes
+                </option>
               </select>
 
               <button
@@ -306,156 +498,235 @@ export default async function UsuariosPage({
                   </h2>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    {usuarios.length} resultado(s)
+                    {usuarios.length}{" "}
+                    resultado(s)
                   </p>
                 </div>
               </header>
 
-              {usuarios.length === 0 ? (
+              {usuarios.length ===
+              0 ? (
                 <p className="p-10 text-center text-slate-500">
-                  No se encontraron usuarios.
+                  No se encontraron
+                  usuarios.
                 </p>
               ) : (
                 <div className="divide-y divide-white/10">
-                  {usuarios.map((usuario) => {
-                    const modificable = puedeModificar(usuario);
-                    const esCuentaActual = usuario.id === administrador.id;
+                  {usuarios.map(
+                    (usuario) => {
+                      const modificable =
+                        puedeModificar(
+                          usuario,
+                        );
 
-                    return (
-                      <article
-                        key={usuario.id}
-                        className="p-6"
-                      >
-                        <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-start">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-3">
-                              <h3 className="font-black">
-                                {usuario.nombre}
-                              </h3>
+                      const esCuentaActual =
+                        usuario.id ===
+                        administrador.id;
 
-                              <Rol rol={usuario.rol} />
-                              <Estado activo={usuario.activo} />
+                      return (
+                        <article
+                          key={
+                            usuario.id
+                          }
+                          className="p-6"
+                        >
+                          <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-start">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <h3 className="font-black">
+                                  {
+                                    usuario.nombre
+                                  }
+                                </h3>
 
-                              {esCuentaActual && (
-                                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">
-                                  TU CUENTA
-                                </span>
-                              )}
+                                <Rol
+                                  rol={
+                                    usuario.rol
+                                  }
+                                />
 
-                              {!esDirector &&
-                                (
-                                  usuario.rol === RolUsuario.DIRECTOR ||
-                                  usuario.rol === RolUsuario.ADMINISTRADOR
-                                ) && (
-                                  <span className="rounded-full bg-rose-400/10 px-3 py-1 text-xs font-black text-rose-300">
-                                    PROTEGIDA
+                                <Estado
+                                  activo={
+                                    usuario.activo
+                                  }
+                                />
+
+                                {esCuentaActual && (
+                                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">
+                                    TU CUENTA
                                   </span>
                                 )}
-                            </div>
 
-                            <p className="mt-2 text-sm text-slate-400">
-                              {usuario.email}
-                            </p>
+                                {!esDirector &&
+                                  (usuario.rol ===
+                                    RolUsuario.DIRECTOR ||
+                                    usuario.rol ===
+                                      RolUsuario.ADMINISTRADOR) && (
+                                    <span className="rounded-full bg-rose-400/10 px-3 py-1 text-xs font-black text-rose-300">
+                                      PROTEGIDA
+                                    </span>
+                                  )}
+                              </div>
 
-                            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
-                              <span>
-                                Creado:{" "}
-                                {usuario.creadoEn.toLocaleDateString("es-MX")}
-                              </span>
+                              <p className="mt-2 text-sm text-slate-400">
+                                {
+                                  usuario.email
+                                }
+                              </p>
 
-                              <span>
-                                Último acceso:{" "}
-                                {usuario.ultimoAcceso
-                                  ? usuario.ultimoAcceso.toLocaleString("es-MX")
-                                  : "Nunca"}
-                              </span>
-
-                              {usuario.cliente && (
-                                <span className="text-cyan-300">
-                                  Perfil de cliente vinculado
-                                </span>
-                              )}
-
-                              {usuario.inspector && (
-                                <span className="text-cyan-300">
-                                  Perfil de inspector vinculado
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {modificable && (
-                            <form action={cambiarEstadoUsuario}>
-                              <input
-                                type="hidden"
-                                name="usuarioId"
-                                value={usuario.id}
+                              <InformacionOrganizacional
+                                rol={
+                                  usuario.rol
+                                }
+                                zona={
+                                  usuario.zona
+                                }
+                                gerente={
+                                  usuario.gerente
+                                }
                               />
 
-                              <input
-                                type="hidden"
-                                name="activo"
-                                value={usuario.activo ? "false" : "true"}
-                              />
+                              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+                                <span>
+                                  Creado:{" "}
+                                  {usuario.creadoEn.toLocaleDateString(
+                                    "es-MX",
+                                  )}
+                                </span>
 
-                              <button
-                                type="submit"
-                                className={
-                                  usuario.activo
-                                    ? "rounded-full border border-rose-400/30 px-4 py-2 text-sm font-black text-rose-300 transition hover:bg-rose-400/10"
-                                    : "rounded-full border border-emerald-400/30 px-4 py-2 text-sm font-black text-emerald-300 transition hover:bg-emerald-400/10"
+                                <span>
+                                  Último acceso:{" "}
+                                  {usuario.ultimoAcceso
+                                    ? usuario.ultimoAcceso.toLocaleString(
+                                        "es-MX",
+                                      )
+                                    : "Nunca"}
+                                </span>
+
+                                {usuario.cliente && (
+                                  <span className="text-cyan-300">
+                                    Perfil de
+                                    cliente
+                                    vinculado
+                                  </span>
+                                )}
+
+                                {usuario.inspector && (
+                                  <span className="text-amber-300">
+                                    Perfil de
+                                    Inspector
+                                    vinculado
+                                  </span>
+                                )}
+                              </div>
+
+                              {usuario.rol ===
+                                RolUsuario.INSPECTOR && (
+                                <div className="mt-4">
+                                  <Link
+                                    href="/panel/inspectores"
+                                    className="text-sm font-bold text-amber-300 transition hover:text-amber-200"
+                                  >
+                                    Administrar
+                                    perfil de
+                                    Inspector →
+                                  </Link>
+                                </div>
+                              )}
+                            </div>
+
+                            {modificable && (
+                              <form
+                                action={
+                                  cambiarEstadoUsuario
                                 }
                               >
-                                {usuario.activo ? "Desactivar" : "Activar"}
-                              </button>
-                            </form>
-                          )}
-                        </div>
+                                <input
+                                  type="hidden"
+                                  name="usuarioId"
+                                  value={
+                                    usuario.id
+                                  }
+                                />
 
-                        {modificable ? (
-                          <details className="mt-5 rounded-2xl bg-slate-950">
-                            <summary className="cursor-pointer px-5 py-4 text-sm font-black text-cyan-300">
-                              Cambiar contraseña
-                            </summary>
+                                <input
+                                  type="hidden"
+                                  name="activo"
+                                  value={
+                                    usuario.activo
+                                      ? "false"
+                                      : "true"
+                                  }
+                                />
 
-                            <form
-                              action={cambiarPasswordUsuario}
-                              className="flex flex-col gap-3 border-t border-white/10 p-5 sm:flex-row"
-                            >
-                              <input
-                                type="hidden"
-                                name="usuarioId"
-                                value={usuario.id}
-                              />
-
-                              <PasswordField
-                                name="password"
-                                label=""
-                                autoComplete="new-password"
-                                minLength={8}
-                                placeholder="Nueva contraseña"
-                                wrapperClassName="min-w-0 flex-1"
-                                inputClassName="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
-                              />
-
-                              <button
-                                type="submit"
-                                className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
-                              >
-                                Actualizar
-                              </button>
-                            </form>
-                          </details>
-                        ) : (
-                          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-sm text-slate-500">
-                            {esCuentaActual
-                              ? "Tu propia cuenta no puede desactivarse desde este módulo."
-                              : "Esta cuenta está protegida y no puede ser modificada por Administración."}
+                                <button
+                                  type="submit"
+                                  className={
+                                    usuario.activo
+                                      ? "rounded-full border border-rose-400/30 px-4 py-2 text-sm font-black text-rose-300 transition hover:bg-rose-400/10"
+                                      : "rounded-full border border-emerald-400/30 px-4 py-2 text-sm font-black text-emerald-300 transition hover:bg-emerald-400/10"
+                                  }
+                                >
+                                  {usuario.activo
+                                    ? "Desactivar"
+                                    : "Activar"}
+                                </button>
+                              </form>
+                            )}
                           </div>
-                        )}
-                      </article>
-                    );
-                  })}
+
+                          {modificable ? (
+                            <details className="mt-5 rounded-2xl bg-slate-950">
+                              <summary className="cursor-pointer px-5 py-4 text-sm font-black text-cyan-300">
+                                Cambiar
+                                contraseña
+                              </summary>
+
+                              <form
+                                action={
+                                  cambiarPasswordUsuario
+                                }
+                                className="flex flex-col gap-3 border-t border-white/10 p-5 sm:flex-row"
+                              >
+                                <input
+                                  type="hidden"
+                                  name="usuarioId"
+                                  value={
+                                    usuario.id
+                                  }
+                                />
+
+                                <PasswordField
+                                  name="password"
+                                  label=""
+                                  autoComplete="new-password"
+                                  minLength={
+                                    8
+                                  }
+                                  placeholder="Nueva contraseña"
+                                  wrapperClassName="min-w-0 flex-1"
+                                  inputClassName="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 pr-24 outline-none focus:border-cyan-300"
+                                />
+
+                                <button
+                                  type="submit"
+                                  className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300 transition hover:bg-cyan-300/10"
+                                >
+                                  Actualizar
+                                </button>
+                              </form>
+                            </details>
+                          ) : (
+                            <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-sm text-slate-500">
+                              {esCuentaActual
+                                ? "Tu propia cuenta no puede desactivarse desde este módulo."
+                                : "Esta cuenta está protegida y no puede ser modificada por Administración."}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    },
+                  )}
                 </div>
               )}
             </div>
@@ -466,70 +737,131 @@ export default async function UsuariosPage({
   );
 }
 
-function etiquetaRol(rol: RolUsuario) {
-  switch (rol) {
-    case RolUsuario.DIRECTOR:
-      return "Director";
-    case RolUsuario.ADMINISTRADOR:
-      return "Administrador";
-    case RolUsuario.GERENTE:
-      return "Gerente";
-    case RolUsuario.COORDINADOR:
-      return "Coordinador";
-    case RolUsuario.INSPECTOR:
-      return "Inspector";
-    case RolUsuario.CLIENTE:
-      return "Cliente";
-    default:
-      return rol;
-  }
-}
-
-function Campo({
-  nombre,
-  etiqueta,
-  tipo,
-  autocompletar,
-  minimo,
+function InformacionOrganizacional({
+  rol,
+  zona,
+  gerente,
 }: {
-  nombre: string;
-  etiqueta: string;
-  tipo: string;
-  autocompletar: string;
-  minimo?: number;
+  rol: RolUsuario;
+  zona: {
+    id: string;
+    nombre: string;
+  } | null;
+  gerente: {
+    id: string;
+    nombre: string;
+    email: string;
+    zonaId: string | null;
+  } | null;
 }) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-bold text-slate-300">
-        {etiqueta}
-      </span>
+  if (
+    rol === RolUsuario.DIRECTOR
+  ) {
+    return (
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full border border-rose-300/20 bg-rose-300/5 px-3 py-1 text-rose-200">
+          Alcance global
+        </span>
+      </div>
+    );
+  }
 
-      <input
-        type={tipo}
-        name={nombre}
-        required
-        minLength={minimo}
-        autoComplete={autocompletar}
-        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
-      />
-    </label>
-  );
+  if (
+    rol ===
+    RolUsuario.ADMINISTRADOR
+  ) {
+    return (
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        {zona ? (
+          <>
+            <span className="rounded-full border border-violet-300/20 bg-violet-300/5 px-3 py-1 text-violet-200">
+              Alcance por zona
+            </span>
+
+            <span className="rounded-full border border-white/10 bg-slate-950 px-3 py-1 text-slate-300">
+              Zona: {zona.nombre}
+            </span>
+          </>
+        ) : (
+          <span className="rounded-full border border-violet-300/20 bg-violet-300/5 px-3 py-1 text-violet-200">
+            Alcance global
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (
+    rol ===
+      RolUsuario.GERENTE ||
+    rol ===
+      RolUsuario.COORDINADOR ||
+    rol ===
+      RolUsuario.INSPECTOR
+  ) {
+    return (
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <span
+          className={
+            zona
+              ? "rounded-full border border-white/10 bg-slate-950 px-3 py-1 text-slate-300"
+              : "rounded-full border border-amber-300/20 bg-amber-300/5 px-3 py-1 text-amber-300"
+          }
+        >
+          {zona
+            ? `Zona: ${zona.nombre}`
+            : "Zona sin asignar"}
+        </span>
+
+        {rol ===
+          RolUsuario.COORDINADOR && (
+          <span
+            className={
+              gerente
+                ? "rounded-full border border-indigo-300/20 bg-indigo-300/5 px-3 py-1 text-indigo-200"
+                : "rounded-full border border-amber-300/20 bg-amber-300/5 px-3 py-1 text-amber-300"
+            }
+          >
+            {gerente
+              ? `Gerente: ${gerente.nombre}`
+              : "Gerente sin asignar"}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return null;
 }
 
-function Rol({ rol }: { rol: string }) {
-  const estilos: Record<string, string> = {
-    DIRECTOR: "bg-rose-400/10 text-rose-300",
-    ADMINISTRADOR: "bg-violet-400/10 text-violet-300",
-    GERENTE: "bg-emerald-400/10 text-emerald-300",
-    COORDINADOR: "bg-indigo-400/10 text-indigo-300",
-    INSPECTOR: "bg-amber-400/10 text-amber-300",
-    CLIENTE: "bg-cyan-400/10 text-cyan-300",
+function Rol({
+  rol,
+}: {
+  rol: string;
+}) {
+  const estilos: Record<
+    string,
+    string
+  > = {
+    DIRECTOR:
+      "bg-rose-400/10 text-rose-300",
+    ADMINISTRADOR:
+      "bg-violet-400/10 text-violet-300",
+    GERENTE:
+      "bg-emerald-400/10 text-emerald-300",
+    COORDINADOR:
+      "bg-indigo-400/10 text-indigo-300",
+    INSPECTOR:
+      "bg-amber-400/10 text-amber-300",
+    CLIENTE:
+      "bg-cyan-400/10 text-cyan-300",
   };
 
   return (
     <span
       className={`rounded-full px-3 py-1 text-xs font-black ${
-        estilos[rol] ?? "bg-white/10 text-slate-300"
+        estilos[rol] ??
+        "bg-white/10 text-slate-300"
       }`}
     >
       {rol}
@@ -537,7 +869,11 @@ function Rol({ rol }: { rol: string }) {
   );
 }
 
-function Estado({ activo }: { activo: boolean }) {
+function Estado({
+  activo,
+}: {
+  activo: boolean;
+}) {
   return (
     <span
       className={
@@ -546,7 +882,9 @@ function Estado({ activo }: { activo: boolean }) {
           : "rounded-full bg-rose-400/10 px-3 py-1 text-xs font-black text-rose-300"
       }
     >
-      {activo ? "ACTIVO" : "INACTIVO"}
+      {activo
+        ? "ACTIVO"
+        : "INACTIVO"}
     </span>
   );
 }
