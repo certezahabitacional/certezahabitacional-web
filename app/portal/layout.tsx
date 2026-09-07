@@ -12,12 +12,53 @@ export default async function PortalLayout({
 
   const actions = (
     <>
-      <Link href="/portal" className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300">Inicio</Link>
-      <Link href="/portal/inspecciones" className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300">Inspecciones</Link>
-      <Link href="/portal/inmuebles" className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300">Inmuebles</Link>
-      <Link href="/portal/perfil" className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300">Perfil</Link>
-      <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
-        <button type="submit" className="rounded-full bg-rose-400 px-4 py-2 text-sm font-black text-slate-950">Cerrar sesión</button>
+      <Link
+        href="/"
+        className="rounded-full border border-[#D6A23D]/60 px-4 py-2 text-sm font-bold text-[#D6A23D] transition hover:border-[#D6A23D] hover:bg-[#D6A23D]/10"
+      >
+        ← Volver a Certeza Habitacional
+      </Link>
+
+      <Link
+        href="/portal"
+        className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300"
+      >
+        Inicio
+      </Link>
+
+      <Link
+        href="/portal/inspecciones"
+        className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300"
+      >
+        Inspecciones
+      </Link>
+
+      <Link
+        href="/portal/inmuebles"
+        className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300"
+      >
+        Inmuebles
+      </Link>
+
+      <Link
+        href="/portal/perfil"
+        className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300"
+      >
+        Perfil
+      </Link>
+
+      <form
+        action={async () => {
+          "use server";
+          await signOut({ redirectTo: "/login" });
+        }}
+      >
+        <button
+          type="submit"
+          className="rounded-full bg-rose-400 px-4 py-2 text-sm font-black text-slate-950"
+        >
+          Cerrar sesión
+        </button>
       </form>
     </>
   );
@@ -30,6 +71,7 @@ export default async function PortalLayout({
         homeHref="/portal"
         actions={actions}
       />
+
       {children}
     </div>
   );
