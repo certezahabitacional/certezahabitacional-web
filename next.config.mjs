@@ -4,6 +4,12 @@ const nextConfig = {
 
   allowedDevOrigins: ["192.168.1.4"],
 
+  outputFileTracingIncludes: {
+    "/api/solicitudes-cotizacion": [
+      "./lib/plantilla-cotizacion-ch-f-002.b64",
+    ],
+  },
+
   experimental: {
     serverActions: {
       bodySizeLimit: "12mb",
