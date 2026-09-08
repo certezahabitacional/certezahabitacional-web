@@ -1,4 +1,5 @@
 import { readFileSync } from "fs";
+import path from "path";
 import { deflateRawSync, inflateRawSync } from "zlib";
 
 type DatosCotizacionWord = {
@@ -199,7 +200,11 @@ function textoBanos(valor: string) {
 }
 
 function cargarPlantillaBase() {
-  const ruta = new URL("./plantilla-cotizacion-ch-f-002.b64", import.meta.url);
+  const ruta = path.join(
+    process.cwd(),
+    "lib",
+    "plantilla-cotizacion-ch-f-002.b64",
+  );
   const base64 = readFileSync(ruta, "utf8").trim();
   return Buffer.from(base64, "base64");
 }
