@@ -200,13 +200,21 @@ function textoBanos(valor: string) {
 }
 
 function cargarPlantillaBase() {
-  const ruta = path.join(
-    process.cwd(),
-    "lib",
-    "plantilla-cotizacion-ch-f-002.b64",
-  );
-  const base64 = readFileSync(ruta, "utf8").trim();
-  return Buffer.from(base64, "base64");
+  const partes = [0, 1, 2, 3, 4].map((indice) => {
+    const ruta = path.join(
+      process.cwd(),
+      "lib",
+      `plantilla-cotizacion-ch-f-002.part${indice}.b64`,
+    );
+    return readFileSync(ruta, "utf8").trim();
+  });
+
+  const base64 = partes.join("");
+  const plantilla = Buffer.from(base64, "base64");
+
+  // Un DOCX válido es un ZIP y debe contener el registro EOCD.
+  encontrarEocd(plantilla);
+  return plantilla;
 }
 
 export function crearCotizacionWordEditable(data: DatosCotizacionWord) {
