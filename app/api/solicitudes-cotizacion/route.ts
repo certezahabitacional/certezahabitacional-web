@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 
 import { crearCotizacionWordEditable } from "@/lib/cotizacion-word";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type SolicitudCotizacion = {
   nombre?: string;
   telefono?: string;
@@ -206,32 +209,40 @@ export async function POST(request: Request) {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-      timeZone: "America/Ciudad_Juarez",
+      timeZone: "America/Chihuahua",
     }).format(new Date());
 
-    const docx = crearCotizacionWordEditable({
-      folio,
-      fecha: fechaEmision,
-      vigenciaDias: 15,
-      cliente: texto(data.nombre),
-      telefono: texto(data.telefono),
-      correo: texto(data.correo),
-      tipoCliente: texto(data.tipoCliente),
-      direccion: texto(data.direccionInmueble),
-      ciudad: texto(data.ciudadInmueble),
-      terrenoM2: texto(data.m2Terreno),
-      construccionM2: texto(data.m2Construccion),
-      niveles: texto(data.niveles) || "1",
-      recamaras: texto(data.recamaras),
-      banos: texto(data.banos),
-      espacios: areasDeclaradas,
-      otrosEspacios: texto(data.otrosEspacios),
-      comentarios: texto(data.comentarios),
-      total: cotizacion.totalPropuesto,
-      pago50: cotizacion.pago50,
-    });
-
     const nombreArchivo = `Cotizacion_${folio}.docx`;
+    let docx: Buffer | null = null;
+    let errorDocumento = "";
+
+    try {
+      docx = crearCotizacionWordEditable({
+        folio,
+        fecha: fechaEmision,
+        vigenciaDias: 15,
+        cliente: texto(data.nombre),
+        telefono: texto(data.telefono),
+        correo: texto(data.correo),
+        tipoCliente: texto(data.tipoCliente),
+        direccion: texto(data.direccionInmueble),
+        ciudad: texto(data.ciudadInmueble),
+        terrenoM2: texto(data.m2Terreno),
+        construccionM2: texto(data.m2Construccion),
+        niveles: texto(data.niveles) || "1",
+        recamaras: texto(data.recamaras),
+        banos: texto(data.banos),
+        espacios: areasDeclaradas,
+        otrosEspacios: texto(data.otrosEspacios),
+        comentarios: texto(data.comentarios),
+        total: cotizacion.totalPropuesto,
+        pago50: cotizacion.pago50,
+      });
+    } catch (error) {
+      errorDocumento = error instanceof Error ? error.message : "Error desconocido";
+      console.error("No fue posible generar el DOCX CH-F-002:", error);
+    }
+
     const desglose = cotizacion.conceptos
       .map((item) => `- ${item.concepto}: ${dinero(item.importe)}`)
       .join("\n");
@@ -239,6 +250,10 @@ export async function POST(request: Request) {
     const asunto = `Nueva solicitud de cotización - ${texto(data.nombre)} - ${texto(
       data.ciudadInmueble,
     )}`;
+
+    const avisoDocumento = docx
+      ? `Se adjunta ${nombreArchivo}, en formato Word DOCX editable y con el formato autorizado CH-F-002. Debe revisarse internamente antes de enviarse al cliente.`
+      : `ATENCIÓN INTERNA: la solicitud sí fue recibida, pero el archivo DOCX no pudo generarse automáticamente. Diagnóstico: ${errorDocumento || "DOCX no disponible"}. Preparar la cotización manualmente antes de responder al cliente.`;
 
     const cuerpoTexto = `
 NUEVA SOLICITUD DE COTIZACIÓN
@@ -278,7 +293,7 @@ TOTAL PROPUESTO: ${dinero(cotizacion.totalPropuesto)}
 
 En caso de requerir factura, al importe anterior se adicionará el IVA correspondiente.
 
-Se adjunta ${nombreArchivo}, en formato Word DOCX editable y con el formato autorizado CH-F-002. Debe revisarse internamente antes de enviarse al cliente.
+${avisoDocumento}
 `.trim();
 
     const html = `
@@ -305,14 +320,35 @@ Se adjunta ${nombreArchivo}, en formato Word DOCX editable y con el formato auto
         cotizacion.totalPropuesto,
       )}</p>
       <p>En caso de requerir factura, al importe anterior se adicionará el IVA correspondiente.</p>
-      <div style="margin-top:20px;padding:14px;background:#fff8e5;border-left:5px solid #d9a72e">
-        <strong>Archivo editable adjunto:</strong> ${nombreArchivo}<br>
-        Es un archivo DOCX real basado en el formato autorizado CH-F-002. Revisar alcance, herramientas, forma de pago y cualquier ajuste antes de enviarlo al cliente.
+      <div style="margin-top:20px;padding:14px;background:${docx ? "#fff8e5" : "#fff0f0"};border-left:5px solid ${docx ? "#d9a72e" : "#b42318"}">
+        <strong>${docx ? "Archivo editable adjunto:" : "Atención interna:"}</strong> ${
+          docx
+            ? `${nombreArchivo}<br>Es un archivo DOCX real basado en el formato autorizado CH-F-002. Revisar alcance, herramientas, forma de pago y cualquier ajuste antes de enviarlo al cliente.`
+            : `La solicitud fue recibida correctamente, pero el DOCX no pudo generarse. Diagnóstico: ${escaparHtml(errorDocumento || "DOCX no disponible")}.`
+        }
       </div>
     </div>
     <div style="background:#071a2a;color:#fff;padding:14px 26px;text-align:center;font-size:11px">contacto@certezahabitacional.com · 656 287 12 18 · Monte Apeninos 6436, Col. La Cuesta, Ciudad Juárez, Chihuahua</div>
   </div>
 </div>`;
+
+    const payloadCorreo: Record<string, unknown> = {
+      from: remitente,
+      to: [adminEmail],
+      reply_to: texto(data.correo),
+      subject: asunto,
+      text: cuerpoTexto,
+      html,
+    };
+
+    if (docx) {
+      payloadCorreo.attachments = [
+        {
+          filename: nombreArchivo,
+          content: docx.toString("base64"),
+        },
+      ];
+    }
 
     const respuesta = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -320,27 +356,18 @@ Se adjunta ${nombreArchivo}, en formato Word DOCX editable y con el formato auto
         Authorization: `Bearer ${resendApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: remitente,
-        to: [adminEmail],
-        reply_to: texto(data.correo),
-        subject: asunto,
-        text: cuerpoTexto,
-        html,
-        attachments: [
-          {
-            filename: nombreArchivo,
-            content: docx.toString("base64"),
-          },
-        ],
-      }),
+      body: JSON.stringify(payloadCorreo),
     });
 
     if (!respuesta.ok) {
       const detalle = await respuesta.text();
       console.error("Resend rechazó el correo:", detalle);
       return NextResponse.json(
-        { ok: false, error: "No fue posible enviar el correo de la solicitud." },
+        {
+          ok: false,
+          error: "No fue posible enviar el correo de la solicitud.",
+          codigo: "RESEND_SEND_FAILED",
+        },
         { status: 502 },
       );
     }
@@ -353,13 +380,20 @@ Se adjunta ${nombreArchivo}, en formato Word DOCX editable y con el formato auto
       cotizacion: {
         folio,
         totalPropuesto: cotizacion.totalPropuesto,
-        archivoEditable: nombreArchivo,
+        archivoEditable: docx ? nombreArchivo : null,
       },
+      advertencia: docx
+        ? null
+        : "La solicitud fue enviada, pero la cotización DOCX requiere generación manual.",
     });
   } catch (error) {
     console.error("Error en /api/solicitudes-cotizacion:", error);
     return NextResponse.json(
-      { ok: false, error: "Ocurrió un error interno al enviar la solicitud." },
+      {
+        ok: false,
+        error: "Ocurrió un error interno al enviar la solicitud.",
+        codigo: "SOLICITUD_INTERNAL_ERROR",
+      },
       { status: 500 },
     );
   }
