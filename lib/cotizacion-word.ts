@@ -212,9 +212,38 @@ function cargarPlantillaBase() {
   const base64 = partes.join("");
   const plantilla = Buffer.from(base64, "base64");
 
-  // Un DOCX válido es un ZIP y debe contener el registro EOCD.
   encontrarEocd(plantilla);
   return plantilla;
+}
+
+function uniformarTamanoCeldas(xml: string) {
+  const tamanoMedioPunto = "18"; // 9 pt
+
+  return xml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (celda) =>
+    celda.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, (run) => {
+      if (!/<w:t\b|<w:instrText\b|<w:tab\b|<w:br\b/.test(run)) {
+        return run;
+      }
+
+      if (/<w:rPr\b[^>]*>/.test(run)) {
+        return run.replace(
+          /<w:rPr([^>]*)>([\s\S]*?)<\/w:rPr>/,
+          (_coincidencia, atributos: string, contenido: string) => {
+            const limpio = contenido
+              .replace(/<w:sz\b[^>]*\/>/g, "")
+              .replace(/<w:szCs\b[^>]*\/>/g, "");
+
+            return `<w:rPr${atributos}>${limpio}<w:sz w:val="${tamanoMedioPunto}"/><w:szCs w:val="${tamanoMedioPunto}"/></w:rPr>`;
+          },
+        );
+      }
+
+      return run.replace(
+        /^(<w:r\b[^>]*>)/,
+        `$1<w:rPr><w:sz w:val="${tamanoMedioPunto}"/><w:szCs w:val="${tamanoMedioPunto}"/></w:rPr>`,
+      );
+    }),
+  );
 }
 
 export function crearCotizacionWordEditable(data: DatosCotizacionWord) {
@@ -257,6 +286,10 @@ export function crearCotizacionWordEditable(data: DatosCotizacionWord) {
     let xml = entrada.data.toString("utf8");
     for (const [clave, valor] of Object.entries(reemplazos)) {
       xml = xml.replaceAll(`{{${clave}}}`, escaparXml(valor));
+    }
+
+    if (entrada.name === "word/document.xml") {
+      xml = uniformarTamanoCeldas(xml);
     }
 
     if (entrada.name === "word/footer1.xml") {
