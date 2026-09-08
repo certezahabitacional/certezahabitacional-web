@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
+import { crearCotizacionWordEditable } from "@/lib/cotizacion-word";
+
 type SolicitudCotizacion = {
   nombre?: string;
   telefono?: string;
@@ -209,6 +211,38 @@ export async function POST(request: Request) {
     const folioCotizacion = generarFolioCotizacion();
     const asunto = `Nueva solicitud de cotización - ${data.nombre} - ${data.ciudadInmueble}`;
 
+    const fechaEmision = new Intl.DateTimeFormat("es-MX", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "America/Chihuahua",
+    }).format(new Date());
+
+    const documentoWord = crearCotizacionWordEditable({
+      folio: folioCotizacion,
+      fecha: fechaEmision,
+      vigenciaDias: 15,
+      cliente: data.nombre || "",
+      telefono: data.telefono || "",
+      correo: data.correo || "",
+      tipoCliente: data.tipoCliente || "",
+      direccion: data.direccionInmueble || "",
+      ciudad: data.ciudadInmueble || "",
+      terrenoM2: data.m2Terreno || "",
+      construccionM2: data.m2Construccion || "",
+      niveles: data.niveles || "No indicado",
+      recamaras: data.recamaras || "",
+      banos: data.banos || "",
+      espacios: seleccionados,
+      otrosEspacios: data.otrosEspacios || "",
+      comentarios: data.comentarios || "",
+      total: cotizacion.totalPropuesto,
+      pago50: cotizacion.pago50,
+    });
+
+    const adjuntoWordBase64 = Buffer.from(documentoWord, "utf8").toString("base64");
+    const nombreArchivoWord = `Cotizacion_${folioCotizacion}.doc`;
+
     const desgloseTexto = cotizacion.conceptos
       .map((item) => `- ${item.concepto}: ${dinero(item.importe)}`)
       .join("\n");
@@ -269,22 +303,8 @@ Modalidades de pago:
 1) Pago único de ${dinero(cotizacion.totalPropuesto)} al contratar la inspección.
 2) Dos pagos del 50%: ${dinero(cotizacion.pago50)} al contratar y ${dinero(cotizacion.pago50)} antes de iniciar la inspección.
 
-Servicios instrumentales preliminares sujetos a revisión:
-- Cámara térmica.
-- Probador de contactos GFCI/RCD.
-- Detector de voltaje sin contacto.
-- Multímetro profesional.
-- Nivel láser autonivelante.
-- Medidor láser de distancia.
-- Martillo/rodillo de auscultación.
-- Linterna LED profesional.
-- Manómetro para agua.
-- Detector de gas combustible.
-- Prueba de hermeticidad hidráulica, cuando las condiciones del inmueble permitan realizarla de forma segura.
-- Prueba de hermeticidad de gas, cuando las condiciones del inmueble permitan realizarla de forma segura.
-
 IMPORTANTE
-Esta cotización es una propuesta automática para revisión interna. No debe enviarse al cliente como definitiva hasta confirmar alcance, disponibilidad de equipo, modalidad de pago y cualquier ajuste o descuento comercial.
+Se adjunta la cotización en formato Word editable para revisión interna. Antes de enviarla al cliente deben confirmarse alcance, servicios instrumentales, modalidad de pago, vigencia y cualquier ajuste o descuento comercial.
 `.trim();
 
     const filasDesgloseHtml = cotizacion.conceptos
@@ -316,8 +336,6 @@ Esta cotización es una propuesta automática para revisión interna. No debe en
         <tr><td style="padding:6px 0;font-weight:700;">Recámaras</td><td>${escaparHtml(data.recamaras)}</td></tr>
         <tr><td style="padding:6px 0;font-weight:700;">Baños</td><td>${escaparHtml(data.banos)}</td></tr>
         <tr><td style="padding:6px 0;font-weight:700;">Espacios declarados</td><td>${escaparHtml(seleccionados.length ? seleccionados.join(", ") : "No se seleccionaron espacios")}</td></tr>
-        <tr><td style="padding:6px 0;font-weight:700;">Otros espacios</td><td>${escaparHtml(data.otrosEspacios || "Ninguno")}</td></tr>
-        <tr><td style="padding:6px 0;font-weight:700;">Comentarios</td><td>${escaparHtml(data.comentarios || "Sin comentarios adicionales")}</td></tr>
       </table>
 
       <div style="height:1px;background:#d8d8d8;margin:24px 0;"></div>
@@ -336,13 +354,7 @@ Esta cotización es una propuesta automática para revisión interna. No debe en
         <div style="margin-top:8px;font-size:12px;line-height:1.45;">En caso de requerir factura, al importe anterior se adicionará el IVA correspondiente.</div>
       </div>
 
-      <h3 style="margin:22px 0 8px;font-size:15px;color:#071a2a;">Modalidades de pago</h3>
-      <div style="font-size:13px;line-height:1.6;"><div>1. Pago único de <strong>${dinero(cotizacion.totalPropuesto)}</strong> al contratar la inspección.</div><div>2. Dos pagos del 50%: <strong>${dinero(cotizacion.pago50)}</strong> al contratar y <strong>${dinero(cotizacion.pago50)}</strong> antes de iniciar la inspección.</div></div>
-
-      <h3 style="margin:22px 0 8px;font-size:15px;color:#071a2a;">Servicios instrumentales preliminares</h3>
-      <div style="font-size:13px;line-height:1.6;color:#344054;">Cámara térmica · Probador GFCI/RCD · Detector de voltaje · Multímetro · Nivel láser · Medidor láser · Martillo/rodillo de auscultación · Linterna profesional · Manómetro para agua · Detector de gas combustible · Prueba de hermeticidad hidráulica · Prueba de hermeticidad de gas.</div>
-
-      <div style="margin-top:22px;padding:13px 15px;background:#f2f4f7;font-size:12px;line-height:1.5;color:#475467;"><strong>Revisión interna obligatoria:</strong> esta propuesta automática no se envía al cliente como cotización definitiva. Antes de enviarla deben confirmarse alcance, disponibilidad de equipo, modalidad de pago y cualquier ajuste o descuento comercial.</div>
+      <div style="margin-top:22px;padding:13px 15px;background:#f2f4f7;font-size:12px;line-height:1.5;color:#475467;"><strong>Archivo editable adjunto:</strong> ${nombreArchivoWord}. Ábrelo en Microsoft Word para revisar servicios incluidos, modalidad de pago, vigencia, total y cualquier ajuste comercial antes de enviarlo al cliente.</div>
     </div>
 
     <div style="background:#071a2a;color:#ffffff;padding:14px 26px;text-align:center;font-size:11px;line-height:1.5;">contacto@certezahabitacional.com · 656 287 12 18 · Monte Apeninos 6436, Col. La Cuesta, Ciudad Juárez, Chihuahua</div>
@@ -362,6 +374,12 @@ Esta cotización es una propuesta automática para revisión interna. No debe en
         subject: asunto,
         text: texto,
         html,
+        attachments: [
+          {
+            filename: nombreArchivoWord,
+            content: adjuntoWordBase64,
+          },
+        ],
       }),
     });
 
@@ -382,6 +400,7 @@ Esta cotización es una propuesta automática para revisión interna. No debe en
       cotizacion: {
         folio: folioCotizacion,
         totalPropuesto: cotizacion.totalPropuesto,
+        archivoEditable: nombreArchivoWord,
       },
     });
   } catch (error) {
