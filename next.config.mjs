@@ -6,7 +6,11 @@ const nextConfig = {
 
   outputFileTracingIncludes: {
     "/api/solicitudes-cotizacion": [
-      "./lib/plantilla-cotizacion-ch-f-002.b64",
+      "./lib/plantilla-cotizacion-ch-f-002.part0.b64",
+      "./lib/plantilla-cotizacion-ch-f-002.part1.b64",
+      "./lib/plantilla-cotizacion-ch-f-002.part2.b64",
+      "./lib/plantilla-cotizacion-ch-f-002.part3.b64",
+      "./lib/plantilla-cotizacion-ch-f-002.part4.b64",
     ],
   },
 
