@@ -121,6 +121,8 @@ export async function GET(
         ciudad: true,
         zonaId: true,
         inspectorId: true,
+        requiereGerenteZona: true,
+        requiereCoordinador: true,
 
         cliente: {
           select: {
@@ -181,6 +183,7 @@ export async function GET(
     RolUsuario.GERENTE
   ) {
     tieneAcceso =
+      inspeccion.requiereGerenteZona &&
       Boolean(
         usuarioActual.zonaId,
       ) &&
@@ -207,6 +210,7 @@ export async function GET(
     RolUsuario.COORDINADOR
   ) {
     tieneAcceso =
+      inspeccion.requiereCoordinador &&
       inspeccion.inspector?.usuario
         .coordinadorId ===
       usuarioActual.id;

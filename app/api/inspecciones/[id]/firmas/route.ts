@@ -1,4 +1,4 @@
-﻿import {
+import {
   EstadoInspeccion,
   RolUsuario,
   TipoEvento,
@@ -147,6 +147,8 @@ async function obtenerAcceso(
         folio: true,
         estado: true,
         inspectorId: true,
+        requiereGerenteZona: true,
+        requiereCoordinador: true,
         cliente: {
           select: {
             nombre: true,
@@ -195,6 +197,7 @@ async function obtenerAcceso(
     RolUsuario.GERENTE
   ) {
     puedeConsultar =
+      inspeccion.requiereGerenteZona &&
       inspeccion.inspector?.usuario
         .gerenteId === usuario.id;
   }
@@ -204,6 +207,7 @@ async function obtenerAcceso(
     RolUsuario.COORDINADOR
   ) {
     puedeConsultar =
+      inspeccion.requiereCoordinador &&
       inspeccion.inspector?.usuario
         .coordinadorId ===
       usuario.id;

@@ -187,6 +187,7 @@ export default async function AgendaPage({
 
   const puedeCrear =
     usuarioActual.rol === RolUsuario.GERENTE ||
+    usuarioActual.rol === RolUsuario.ADMINISTRADOR ||
     usuarioActual.rol === RolUsuario.DIRECTOR;
 
   return (
@@ -216,9 +217,9 @@ export default async function AgendaPage({
             </h1>
 
             <p className="mt-2 text-slate-400">
-              {alcanceTexto}. La programación y asignación corresponden a
-              Gerencia o Dirección; los demás roles consultan la agenda dentro
-              de su alcance.
+              {alcanceTexto}. La programación y asignación pueden realizarse desde Dirección o Administración.
+              Gerencia interviene únicamente cuando la plantilla de inspección así lo requiere;
+              los demás roles consultan la agenda dentro de su alcance.
             </p>
           </div>
 

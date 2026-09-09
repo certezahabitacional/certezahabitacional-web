@@ -69,6 +69,8 @@ export default async function EditarInspeccionPage({
     usuarioActual.rol !==
       RolUsuario.GERENTE &&
     usuarioActual.rol !==
+      RolUsuario.ADMINISTRADOR &&
+    usuarioActual.rol !==
       RolUsuario.DIRECTOR
   ) {
     redirect("/acceso");
@@ -130,10 +132,9 @@ export default async function EditarInspeccionPage({
   }
 
   if (
-    usuarioActual.rol ===
-      RolUsuario.DIRECTOR &&
-    inspeccion.estado ===
-      EstadoInspeccion.CANCELADA
+    (usuarioActual.rol === RolUsuario.DIRECTOR ||
+      usuarioActual.rol === RolUsuario.ADMINISTRADOR) &&
+    inspeccion.estado === EstadoInspeccion.CANCELADA
   ) {
     redirect(
       `/panel/inspecciones/${inspeccion.id}?error=${encodeURIComponent(
@@ -143,8 +144,8 @@ export default async function EditarInspeccionPage({
   }
 
   if (
-    usuarioActual.rol ===
-      RolUsuario.DIRECTOR &&
+    (usuarioActual.rol === RolUsuario.DIRECTOR ||
+      usuarioActual.rol === RolUsuario.ADMINISTRADOR) &&
     inspeccion.certificado?.vigente
   ) {
     redirect(

@@ -99,12 +99,6 @@ export default function FormularioCrearUsuario({
       rolSeleccionado,
     );
 
-    /*
-     * Cada cambio de rol limpia
-     * la selección organizacional
-     * anterior para evitar enviar
-     * datos que pertenecían a otro rol.
-     */
     setZonaId("");
 
     setAlcanceAdministrador(
@@ -224,8 +218,7 @@ export default function FormularioCrearUsuario({
               }
               onChange={(event) =>
                 cambiarAlcance(
-                  event.target
-                    .value,
+                  event.target.value,
                 )
               }
               className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-violet-300"

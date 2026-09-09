@@ -247,7 +247,18 @@ export const MATRIZ_PERMISOS: MatrizPermisos = {
     "PAGO_VER",
     "PAGO_CAPTURAR",
     "LIBERACION_ADMINISTRATIVA",
+    "INSPECCION_PROGRAMAR",
+    "INSPECCION_REPROGRAMAR",
+    "INSPECCION_ASIGNAR_INSPECTOR",
+    "INSPECCION_REASIGNAR_PROPONER",
     "INSPECCION_REASIGNAR_RESOLVER",
+    "INSPECCION_CREAR_SEGUIMIENTO",
+    "EXPEDIENTE_VER_TECNICO",
+    "REPORTE_VER",
+    "REPORTE_IMPRIMIR",
+    "REPORTE_DESCARGAR",
+    "CERTIFICADO_VER",
+    "CERTIFICADO_IMPRIMIR",
     "OBSERVACION_CLIENTE_REVISAR",
     "USUARIO_CREAR_BASICO",
     "USUARIO_ACTIVAR_DESACTIVAR_BASICO",
@@ -460,7 +471,7 @@ export function estaDentroDelAlcanceDeInspeccion(
       return true;
 
     case RolUsuario.ADMINISTRADOR:
-      return false;
+      return true;
 
     case RolUsuario.GERENTE:
       return Boolean(
@@ -499,7 +510,7 @@ export function estaDentroDelAlcanceDeInspeccion(
 
 /**
  * Acceso técnico al expediente.
- * ADMINISTRADOR queda expresamente excluido.
+ * DIRECTOR y ADMINISTRADOR tienen alcance operativo global.
  */
 export function puedeAbrirExpedienteTecnico(
   usuario: ContextoUsuario,

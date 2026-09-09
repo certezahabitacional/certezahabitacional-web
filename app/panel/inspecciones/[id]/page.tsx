@@ -122,6 +122,8 @@ export default async function ExpedientePage({
       id: true,
       zonaId: true,
       inspectorId: true,
+      requiereGerenteZona: true,
+      requiereCoordinador: true,
       inspector: {
         select: {
           usuarioId: true,
@@ -150,14 +152,16 @@ export default async function ExpedientePage({
 
     case RolUsuario.GERENTE:
       accesoAutorizado =
+        inspeccionAlcance.requiereGerenteZona &&
         inspeccionAlcance.inspector?.usuario.gerenteId ===
-        usuarioActual.id;
+          usuarioActual.id;
       break;
 
     case RolUsuario.COORDINADOR:
       accesoAutorizado =
+        inspeccionAlcance.requiereCoordinador &&
         inspeccionAlcance.inspector?.usuario.coordinadorId ===
-        usuarioActual.id;
+          usuarioActual.id;
       break;
 
     case RolUsuario.INSPECTOR:
@@ -2052,6 +2056,9 @@ async function VistaAdministrativaReasignacion({
       zonaHoraria: true,
       direccion: true,
       ciudad: true,
+      zonaId: true,
+      requiereGerenteZona: true,
+      requiereCoordinador: true,
       cliente: {
         select: {
           nombre: true,
@@ -2121,6 +2128,30 @@ async function VistaAdministrativaReasignacion({
       reasignacion.estado === EstadoReasignacionInspector.PENDIENTE,
   );
 
+  const inspectoresDisponibles = await prisma.inspector.findMany({
+    where: {
+      activo: true,
+      usuario: {
+        activo: true,
+        rol: RolUsuario.INSPECTOR,
+        ...(inspeccion.zonaId ? { zonaId: inspeccion.zonaId } : {}),
+      },
+    },
+    select: {
+      id: true,
+      ciudad: true,
+      usuario: {
+        select: {
+          nombre: true,
+          gerenteId: true,
+          coordinadorId: true,
+          zona: { select: { nombre: true } },
+        },
+      },
+    },
+    orderBy: { creadoEn: "asc" },
+  });
+
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
       <div className="mx-auto max-w-5xl">
@@ -2177,7 +2208,59 @@ async function VistaAdministrativaReasignacion({
             )}{" "}
             · {inspeccion.estado.replaceAll("_", " ")}
           </p>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href={`/panel/inspecciones/${inspeccion.id}/editar`}
+              className="rounded-full border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-300"
+            >
+              Editar programación
+            </Link>
+          </div>
         </header>
+
+        {inspeccion.estado !== EstadoInspeccion.FINALIZADA &&
+          inspeccion.estado !== EstadoInspeccion.CANCELADA && (
+          <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">
+              Asignación operativa
+            </p>
+            <h2 className="mt-2 text-xl font-black">Asignar o reasignar Inspector</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Administración puede realizar la asignación directamente. La lista se limita a la zona de la inspección.
+            </p>
+            <p className="mt-2 text-xs font-bold text-amber-300">
+              Gerente requerido: {inspeccion.requiereGerenteZona ? "Sí" : "No"} · Coordinador requerido: {inspeccion.requiereCoordinador ? "Sí" : "No"}
+            </p>
+
+            <form action={asignarInspector} className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
+              <input type="hidden" name="inspeccionId" value={inspeccion.id} />
+              <select
+                name="inspectorId"
+                required
+                defaultValue=""
+                className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
+              >
+                <option value="" disabled>Selecciona Inspector</option>
+                {inspectoresDisponibles.map((inspector) => (
+                  <option key={inspector.id} value={inspector.id}>
+                    {inspector.usuario.nombre} · {inspector.usuario.zona?.nombre ?? "Sin zona"} · G:{inspector.usuario.gerenteId ? "Sí" : "No"} · C:{inspector.usuario.coordinadorId ? "Sí" : "No"}
+                  </option>
+                ))}
+              </select>
+              <input
+                name="motivo"
+                placeholder={inspeccion.inspector ? "Motivo de reasignación (mín. 10 caracteres)" : "Comentario opcional"}
+                minLength={inspeccion.inspector ? 10 : undefined}
+                required={Boolean(inspeccion.inspector)}
+                className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
+              />
+              <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950">
+                {inspeccion.inspector ? "Reasignar" : "Asignar"}
+              </button>
+            </form>
+          </section>
+        )}
 
         {query.ok && (
           <p className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-5 py-4 font-bold text-emerald-300">

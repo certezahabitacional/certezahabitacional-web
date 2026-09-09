@@ -129,6 +129,27 @@ enum TipoEvento {
   DESBLOQUEAR_LIBERACION
 }
 
+model PlantillaInspeccion {
+  id String @id @default(cuid())
+
+  nombre      String
+  codigo      String  @unique
+  descripcion String?
+  tipoServicio String
+  activa       Boolean @default(true)
+
+  requiereGerenteZona Boolean @default(false)
+  requiereCoordinador Boolean @default(false)
+
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  inspecciones Inspeccion[]
+
+  @@index([activa])
+  @@index([tipoServicio])
+}
+
 model Zona {
   id String @id @default(cuid())
 
@@ -156,6 +177,7 @@ model Usuario {
   passwordHash     String
   rol              RolUsuario @default(INSPECTOR)
   activo           Boolean    @default(true)
+  requiereCambioPassword Boolean @default(false)
   ultimoAcceso     DateTime?
   intentosFallidos Int        @default(0)
   bloqueadoHasta   DateTime?
@@ -289,6 +311,13 @@ model Inspeccion {
   id    String @id @default(cuid())
   folio String @unique
 
+  plantillaId String?
+  plantilla   PlantillaInspeccion? @relation(fields: [plantillaId], references: [id], onDelete: SetNull)
+
+  // Copia histórica de la configuración de la plantilla al crear la inspección.
+  requiereGerenteZona Boolean @default(false)
+  requiereCoordinador Boolean @default(false)
+
   zonaId String?
   zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
 
@@ -350,6 +379,7 @@ model Inspeccion {
   revisiones     RevisionInspeccion[]
   reasignaciones ReasignacionInspector[]
 
+  @@index([plantillaId])
   @@index([fechaProgramada])
   @@index([estado])
   @@index([zonaId])

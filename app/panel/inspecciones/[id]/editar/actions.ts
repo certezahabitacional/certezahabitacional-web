@@ -116,6 +116,8 @@ export async function actualizarInspeccion(
     usuario.rol !==
       RolUsuario.GERENTE &&
     usuario.rol !==
+      RolUsuario.ADMINISTRADOR &&
+    usuario.rol !==
       RolUsuario.DIRECTOR
   ) {
     redirect("/acceso");
@@ -184,10 +186,9 @@ export async function actualizarInspeccion(
   }
 
   if (
-    usuario.rol ===
-      RolUsuario.DIRECTOR &&
-    inspeccion.estado ===
-      EstadoInspeccion.CANCELADA
+    (usuario.rol === RolUsuario.DIRECTOR ||
+      usuario.rol === RolUsuario.ADMINISTRADOR) &&
+    inspeccion.estado === EstadoInspeccion.CANCELADA
   ) {
     redirigirError(
       id,
@@ -196,8 +197,8 @@ export async function actualizarInspeccion(
   }
 
   if (
-    usuario.rol ===
-      RolUsuario.DIRECTOR &&
+    (usuario.rol === RolUsuario.DIRECTOR ||
+      usuario.rol === RolUsuario.ADMINISTRADOR) &&
     inspeccion.certificado?.vigente
   ) {
     redirigirError(
