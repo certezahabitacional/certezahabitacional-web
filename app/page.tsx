@@ -416,13 +416,13 @@ export default function Home() {
           </div>
 
           <div>
-            <h4>AYUDA</h4>
+            <h4>ZONAS DE COBERTURA</h4>
             <a
               href="https://wa.me/526562871218"
               target="_blank"
               rel="noopener noreferrer"
               className="footer-whatsapp"
-              aria-label="Abrir WhatsApp al 656 287 12 18"
+              aria-label="Contactar Certeza Habitacional Ciudad Juárez por WhatsApp"
             >
               <svg
                 className="whatsapp-svg"
@@ -434,10 +434,29 @@ export default function Home() {
                   d="M12 2a9.8 9.8 0 0 0-8.38 14.89L2.2 22l5.23-1.37A9.94 9.94 0 1 0 12 2Zm0 17.9a8 8 0 0 1-4.08-1.12l-.29-.17-3.1.81.83-3.02-.19-.31A7.91 7.91 0 1 1 12 19.9Zm4.35-5.92c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.58 4.1 3.62.57.25 1.02.4 1.37.51.58.18 1.1.16 1.51.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"
                 />
               </svg>
-              <span>WhatsApp 656 287 12 18</span>
+              <span>Ciudad Juárez — 656 287 12 18</span>
             </a>
-            <Link href="/portal">Acceso clientes</Link>
-            <Link href={cotizarHref}>Cotizar inspección</Link>
+            <a
+              href="https://wa.me/526647599923"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="footer-whatsapp"
+              aria-label="Contactar Certeza Habitacional Tijuana por WhatsApp"
+            >
+              <svg
+                className="whatsapp-svg"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  fill="currentColor"
+                  d="M12 2a9.8 9.8 0 0 0-8.38 14.89L2.2 22l5.23-1.37A9.94 9.94 0 1 0 12 2Zm0 17.9a8 8 0 0 1-4.08-1.12l-.29-.17-3.1.81.83-3.02-.19-.31A7.91 7.91 0 1 1 12 19.9Zm4.35-5.92c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.58 4.1 3.62.57.25 1.02.4 1.37.51.58.18 1.1.16 1.51.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"
+                />
+              </svg>
+              <span>Tijuana — 664 759 9923</span>
+            </a>
+            <span>Guadalajara — Próximamente</span>
+            <span>Hermosillo — Próximamente</span>
             <a href="mailto:contacto@certezahabitacional.com">contacto@certezahabitacional.com</a>
           </div>
 
@@ -1069,7 +1088,7 @@ export default function Home() {
 
         .footer-grid {
           display: grid;
-          grid-template-columns: 1.15fr .8fr .95fr .95fr .9fr;
+          grid-template-columns: 1.05fr .72fr .9fr 1.18fr .82fr;
           gap: 34px;
         }
 
@@ -1400,6 +1419,7 @@ export default function Home() {
           gap: 9px;
           color: #ffffff;
           font-weight: 700;
+          white-space: nowrap;
         }
         .home-footer .whatsapp-svg {
           width: 21px;

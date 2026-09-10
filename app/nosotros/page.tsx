@@ -593,12 +593,29 @@ export default function NosotrosPage() {
           </div>
 
           <div>
-            <p className="text-xs font-black text-[#D79A21]">CONTÁCTANOS</p>
+            <p className="text-xs font-black text-[#D79A21]">ZONAS DE COBERTURA</p>
 
             <div className="mt-3 space-y-1.5 text-xs text-slate-400">
-              <a href="tel:+526562871218" className="block hover:text-white">
-                ☎ 656 287 12 18
+              <a
+                href="https://wa.me/526562871218"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block whitespace-nowrap hover:text-white"
+              >
+                Ciudad Juárez — WhatsApp 656 287 12 18
               </a>
+
+              <a
+                href="https://wa.me/526647599923"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block whitespace-nowrap hover:text-white"
+              >
+                Tijuana — WhatsApp 664 759 9923
+              </a>
+
+              <p>Guadalajara — Próximamente</p>
+              <p>Hermosillo — Próximamente</p>
 
               <a
                 href="mailto:contacto@certezahabitacional.com"
@@ -608,7 +625,6 @@ export default function NosotrosPage() {
               </a>
 
               <p>◎ www.certezahabitacional.com</p>
-              <p>⌖ Ciudad Juárez, Chihuahua, México</p>
             </div>
           </div>
 
