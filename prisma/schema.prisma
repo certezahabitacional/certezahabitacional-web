@@ -132,9 +132,9 @@ enum TipoEvento {
 model PlantillaInspeccion {
   id String @id @default(cuid())
 
-  nombre      String
-  codigo      String  @unique
-  descripcion String?
+  nombre       String
+  codigo       String  @unique
+  descripcion  String?
   tipoServicio String
   activa       Boolean @default(true)
 
@@ -165,25 +165,26 @@ model Zona {
 
   usuarios     Usuario[]
   inspecciones Inspeccion[]
+  cotizaciones Cotizacion[]
 
   @@index([nombre])
   @@index([activa])
 }
 
 model Usuario {
-  id               String     @id @default(cuid())
-  nombre           String
-  email            String     @unique
-  passwordHash     String
-  rol              RolUsuario @default(INSPECTOR)
-  activo           Boolean    @default(true)
-  requiereCambioPassword Boolean @default(false)
-  ultimoAcceso     DateTime?
-  intentosFallidos Int        @default(0)
-  bloqueadoHasta   DateTime?
-  ultimoFalloLogin DateTime?
-  creadoEn         DateTime   @default(now())
-  actualizadoEn    DateTime   @updatedAt
+  id                     String     @id @default(cuid())
+  nombre                 String
+  email                  String     @unique
+  passwordHash           String
+  rol                    RolUsuario @default(INSPECTOR)
+  activo                 Boolean    @default(true)
+  requiereCambioPassword Boolean    @default(false)
+  ultimoAcceso           DateTime?
+  intentosFallidos       Int        @default(0)
+  bloqueadoHasta         DateTime?
+  ultimoFalloLogin       DateTime?
+  creadoEn               DateTime   @default(now())
+  actualizadoEn          DateTime   @updatedAt
 
   zonaId String?
   zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
@@ -616,6 +617,14 @@ model Cotizacion {
   id    String @id @default(cuid())
   folio String @unique
 
+  // Origen y control de la pre-cotización pública.
+  origenPublico   Boolean @default(false)
+  editablePublica Boolean @default(true)
+  versionActual   Int     @default(1)
+
+  zonaId String?
+  zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
+
   clienteId String
   cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
 
@@ -662,6 +671,7 @@ model Cotizacion {
   observacionesInternas String?
 
   inspeccion Inspeccion?
+  versiones  CotizacionVersion[]
 
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -670,7 +680,27 @@ model Cotizacion {
   @@index([inmuebleId])
   @@index([paqueteId])
   @@index([creadaPorId])
+  @@index([zonaId])
+  @@index([origenPublico])
+  @@index([editablePublica])
   @@index([estado])
   @@index([estadoPago])
   @@index([creadoEn])
+}
+
+model CotizacionVersion {
+  id String @id @default(cuid())
+
+  cotizacionId String
+  cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  version Int
+  datos   Json
+  total   Decimal @default(0) @db.Decimal(12, 2)
+
+  creadaEn DateTime @default(now())
+
+  @@unique([cotizacionId, version])
+  @@index([cotizacionId])
+  @@index([creadaEn])
 }

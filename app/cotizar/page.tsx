@@ -5,6 +5,7 @@ import Link from "next/link";
 import PublicHeader from "@/components/public/PublicHeader";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import "./cotizar.css";
+import { ZONAS_SERVICIO, type ZonaServicio } from "@/lib/configuracion-zonas";
 
 type TipoCliente =
   | "PARTICULAR"
@@ -20,6 +21,7 @@ type DatosFormulario = {
   empresa: string;
   ciudadCliente: string;
 
+  zonaServicio: ZonaServicio | "";
   direccionInmueble: string;
   ciudadInmueble: string;
   m2Terreno: string;
@@ -58,6 +60,7 @@ const estadoInicial: DatosFormulario = {
   empresa: "",
   ciudadCliente: "",
 
+  zonaServicio: "",
   direccionInmueble: "",
   ciudadInmueble: "",
   m2Terreno: "",
@@ -111,6 +114,12 @@ export default function CotizarPage() {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [error, setError] = useState("");
+  const [resultado, setResultado] = useState<{ folio: string; version?: number; totalPropuesto: number; pdfBase64: string; zona: string } | null>(null);
+  const [modoCotizacion, setModoCotizacion] = useState<"nueva" | "editar">("nueva");
+  const [folioEditar, setFolioEditar] = useState("");
+  const [correoEditar, setCorreoEditar] = useState("");
+  const [versionActual, setVersionActual] = useState<number | null>(null);
+  const [recuperando, setRecuperando] = useState(false);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") {
@@ -171,7 +180,8 @@ export default function CotizarPage() {
 
   function validarPaso2() {
     return Boolean(
-      datos.direccionInmueble.trim() &&
+      datos.zonaServicio &&
+        datos.direccionInmueble.trim() &&
         datos.ciudadInmueble.trim() &&
         datos.m2Terreno.trim() &&
         datos.m2Construccion.trim() &&
@@ -203,6 +213,55 @@ export default function CotizarPage() {
     window.scrollTo({ top: 390, behavior: "smooth" });
   }
 
+
+  async function recuperarPreCotizacion() {
+    const folio = folioEditar.trim().toUpperCase();
+    const correo = correoEditar.trim();
+
+    if (!folio || !correo) {
+      setError("Captura el folio y el correo utilizado en la solicitud original.");
+      return;
+    }
+
+    setError("");
+    setRecuperando(true);
+
+    try {
+      const respuesta = await fetch("/api/solicitudes-cotizacion/recuperar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folio, correo }),
+      });
+
+      const payload = await respuesta.json();
+
+      if (!respuesta.ok || !payload?.cotizacion?.datos) {
+        throw new Error(payload?.error || "No fue posible recuperar la pre-cotización.");
+      }
+
+      setDatos({
+        ...estadoInicial,
+        ...payload.cotizacion.datos,
+        avisoPrivacidad: false,
+        sitioWeb: "",
+      });
+      setFolioEditar(payload.cotizacion.folio);
+      setCorreoEditar(payload.cotizacion.datos.correo || correo);
+      setVersionActual(payload.cotizacion.version);
+      setPaso(1);
+      window.scrollTo({ top: 390, behavior: "smooth" });
+    } catch (err) {
+      setVersionActual(null);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible recuperar la pre-cotización.",
+      );
+    } finally {
+      setRecuperando(false);
+    }
+  }
+
   async function enviarSolicitud(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -218,13 +277,19 @@ export default function CotizarPage() {
       const respuesta = await fetch("/api/solicitudes-cotizacion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datos),
+        body: JSON.stringify({
+          ...datos,
+          folioExistente:
+            modoCotizacion === "editar" && versionActual ? folioEditar : undefined,
+        }),
       });
 
       if (!respuesta.ok) {
         throw new Error("No fue posible enviar la solicitud.");
       }
 
+      const payload = await respuesta.json();
+      setResultado(payload.cotizacion ?? null);
       setEnviado(true);
       window.scrollTo({ top: 360, behavior: "smooth" });
     } catch {
@@ -248,7 +313,7 @@ export default function CotizarPage() {
             </div>
 
             <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-[#D79A21]">
-              Solicitud recibida
+              Pre cotización generada
             </p>
 
             <h1 className="mt-3 text-3xl font-black md:text-4xl">
@@ -256,10 +321,22 @@ export default function CotizarPage() {
             </h1>
 
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-300">
-              Revisaremos la información de tu vivienda para preparar tu
-              cotización. Nuestro equipo se pondrá en contacto contigo a través
-              de los datos proporcionados.
+              Generamos una pre cotización con base en la información que proporcionaste.
+              También la enviamos a tu correo. El importe y alcance están sujetos a revisión
+              y validación por Certeza Habitacional.
             </p>
+
+            {resultado && (
+              <div className="mx-auto mt-6 max-w-xl rounded-xl border border-white/10 bg-[#030B16] p-5">
+                <p className="text-sm text-slate-400">Folio: <strong className="text-white">{resultado.folio}</strong></p>
+                <p className="mt-2 text-2xl font-black text-[#D79A21]">{new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(resultado.totalPropuesto)}</p>
+                <p className="mt-1 text-xs text-slate-400">Importe preliminar sujeto a validación de información y alcance.</p>
+                <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+                  <button type="button" onClick={() => abrirPdf(resultado.pdfBase64, resultado.folio)} className="rounded-md border border-[#D79A21] px-5 py-3 text-sm font-black">ABRIR PRE COTIZACIÓN</button>
+                  <button type="button" onClick={() => descargarPdf(resultado.pdfBase64, resultado.folio)} className="rounded-md bg-[#D79A21] px-5 py-3 text-sm font-black text-[#020B14]">DESCARGAR PDF</button>
+                </div>
+              </div>
+            )}
 
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link
@@ -275,6 +352,11 @@ export default function CotizarPage() {
                   setDatos(estadoInicial);
                   setPaso(1);
                   setEnviado(false);
+                  setResultado(null);
+                  setModoCotizacion("nueva");
+                  setFolioEditar("");
+                  setCorreoEditar("");
+                  setVersionActual(null);
                 }}
                 className="rounded-md bg-[#D79A21] px-7 py-3 text-sm font-black text-[#020B14]"
               >
@@ -284,7 +366,7 @@ export default function CotizarPage() {
           </div>
         </section>
 
-        <Footer />
+        <Footer zona={datos.zonaServicio || undefined} />
       </main>
     );
   }
@@ -339,6 +421,102 @@ export default function CotizarPage() {
           CONTENIDO
       ========================================================== */}
       <section className="mx-auto max-w-[1500px] px-6 py-7 lg:px-8">
+
+        <section className="mb-7 rounded-2xl border border-white/10 bg-[#061422] p-5 md:p-6">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#D79A21]">
+            ¿Qué deseas hacer?
+          </p>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                setModoCotizacion("nueva");
+                setFolioEditar("");
+                setCorreoEditar("");
+                setVersionActual(null);
+                setDatos(estadoInicial);
+                setPaso(1);
+                setError("");
+              }}
+              className={`rounded-xl border px-5 py-4 text-left transition ${
+                modoCotizacion === "nueva"
+                  ? "border-[#D79A21] bg-[#D79A21]/10"
+                  : "border-white/10 bg-[#030B16]"
+              }`}
+            >
+              <strong className="block text-white">Nueva pre-cotización</strong>
+              <span className="mt-1 block text-sm text-slate-400">
+                Captura una nueva solicitud y genera un folio.
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setModoCotizacion("editar");
+                setVersionActual(null);
+                setDatos(estadoInicial);
+                setPaso(1);
+                setError("");
+              }}
+              className={`rounded-xl border px-5 py-4 text-left transition ${
+                modoCotizacion === "editar"
+                  ? "border-[#D79A21] bg-[#D79A21]/10"
+                  : "border-white/10 bg-[#030B16]"
+              }`}
+            >
+              <strong className="block text-white">Modificar pre-cotización existente</strong>
+              <span className="mt-1 block text-sm text-slate-400">
+                Conserva el mismo folio y genera una nueva versión.
+              </span>
+            </button>
+          </div>
+
+          {modoCotizacion === "editar" && !versionActual && (
+            <div className="mt-5 grid gap-4 border-t border-white/10 pt-5 md:grid-cols-[1fr_1fr_auto] md:items-end">
+              <Campo label="Folio de pre-cotización">
+                <input
+                  value={folioEditar}
+                  onChange={(e) => setFolioEditar(e.target.value.toUpperCase())}
+                  placeholder="CH-COT-2026-XXXXXXXX"
+                  className={inputClass}
+                />
+              </Campo>
+
+              <Campo label="Correo utilizado originalmente">
+                <input
+                  value={correoEditar}
+                  onChange={(e) => setCorreoEditar(e.target.value)}
+                  type="email"
+                  placeholder="correo@ejemplo.com"
+                  className={inputClass}
+                />
+              </Campo>
+
+              <button
+                type="button"
+                disabled={recuperando}
+                onClick={recuperarPreCotizacion}
+                className="min-h-[48px] rounded-md bg-[#D79A21] px-6 py-3 text-sm font-black text-[#020B14] disabled:opacity-60"
+              >
+                {recuperando ? "RECUPERANDO..." : "RECUPERAR"}
+              </button>
+            </div>
+          )}
+
+          {modoCotizacion === "editar" && versionActual && (
+            <div className="mt-5 rounded-xl border border-[#D79A21]/40 bg-[#D79A21]/10 px-4 py-3 text-sm text-slate-200">
+              Estás modificando <strong>{folioEditar}</strong>. Versión actual:{" "}
+              <strong>V{versionActual}</strong>. Al enviar se conservará el folio y se
+              generará la versión <strong>V{versionActual + 1}</strong>.
+            </div>
+          )}
+        </section>
+
+        <div className={
+          modoCotizacion === "editar" && !versionActual ? "hidden" : ""
+        }>
         <Progress paso={paso} />
 
         <div className="cotizar-main-stack">
@@ -403,6 +581,7 @@ export default function CotizarPage() {
 
           <Aside />
         </div>
+        </div>
 
         <Beneficios />
 
@@ -415,7 +594,7 @@ export default function CotizarPage() {
           </div>
 
           <a
-            href="https://wa.me/526562871218"
+            href={datos.zonaServicio && ZONAS_SERVICIO[datos.zonaServicio].whatsapp ? `https://wa.me/${ZONAS_SERVICIO[datos.zonaServicio].whatsapp}` : "https://wa.me/526562871218"}
             target="_blank"
             rel="noreferrer"
             className="cotizar-whatsapp-btn"
@@ -425,7 +604,7 @@ export default function CotizarPage() {
         </section>
       </section>
 
-      <Footer />
+      <Footer zona={datos.zonaServicio || undefined} />
     </main>
   );
 }
@@ -566,6 +745,15 @@ function PasoInmueble({
       </TituloPaso>
 
       <div className="mt-6 grid gap-5 md:grid-cols-2">
+        <Campo label="Zona donde solicita el servicio *" ancho>
+          <select value={datos.zonaServicio} onChange={(e) => actualizar("zonaServicio", e.target.value as ZonaServicio)} className={inputClass}>
+            <option value="">Selecciona una zona</option>
+            {Object.entries(ZONAS_SERVICIO).map(([clave, zona]) => (
+              <option key={clave} value={clave}>{zona.nombre}</option>
+            ))}
+          </select>
+        </Campo>
+
         <Campo label="Dirección completa del inmueble *" ancho>
           <input
             value={datos.direccionInmueble}
@@ -722,6 +910,7 @@ function PasoRevision({
         </Resumen>
 
         <Resumen titulo="Inmueble">
+          <Linea etiqueta="Zona de servicio" valor={datos.zonaServicio ? ZONAS_SERVICIO[datos.zonaServicio].nombre : ""} />
           <Linea etiqueta="Dirección" valor={datos.direccionInmueble} />
           <Linea etiqueta="Ciudad" valor={datos.ciudadInmueble} />
           <Linea etiqueta="Terreno" valor={`${datos.m2Terreno} m²`} />
@@ -858,7 +1047,8 @@ function Beneficios() {
   );
 }
 
-function Footer() {
+function Footer({ zona }: { zona?: ZonaServicio }) {
+  const contactoZona = zona ? ZONAS_SERVICIO[zona] : ZONAS_SERVICIO.CIUDAD_JUAREZ;
   return (
     <footer className="cotizar-site-footer">
       <div className="cotizar-footer-main">
@@ -897,9 +1087,14 @@ function Footer() {
         <div>
           <p className="cotizar-footer-title">AYUDA</p>
           <div className="cotizar-footer-links">
-            <a href="https://wa.me/526562871218" target="_blank" rel="noreferrer">
-              WhatsApp 656 287 12 18
-            </a>
+            {contactoZona.whatsapp && contactoZona.telefono ? (
+              <a href={`https://wa.me/${contactoZona.whatsapp}`} target="_blank" rel="noreferrer">
+                WhatsApp {contactoZona.telefono}
+              </a>
+            ) : (
+              <span>Contacto telefónico de zona: pendiente</span>
+            )}
+            <span>Zona: {contactoZona.nombre}</span>
             <Link href="/login">Acceso clientes</Link>
             <Link href="/cotizar">Cotizar inspección</Link>
             <a href="mailto:contacto@certezahabitacional.com">
@@ -1009,7 +1204,6 @@ function AsideItem({
   return (
     <article className="cotizar-trust-card">
       <div className="cotizar-trust-icon">{simbolo}</div>
-
       <div>
         <h3 className="cotizar-trust-title">{titulo}</h3>
         <p className="cotizar-trust-text">{children}</p>
@@ -1028,9 +1222,7 @@ function Resumen({
   className?: string;
 }) {
   return (
-    <div
-      className={`rounded-xl border border-white/10 bg-[#030B16] p-5 ${className}`}
-    >
+    <div className={`rounded-xl border border-white/10 bg-[#030B16] p-5 ${className}`}>
       <h3 className="font-black text-[#D79A21]">{titulo}</h3>
       <div className="mt-4 space-y-2">{children}</div>
     </div>
@@ -1052,7 +1244,39 @@ function Linea({
   );
 }
 
+function abrirPdf(base64: string, folio: string) {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
 
+  for (let i = 0; i < binario.length; i += 1) {
+    bytes[i] = binario.charCodeAt(i);
+  }
 
-const inputClass =
-  "cotizar-input";
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+function descargarPdf(base64: string, folio: string) {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+
+  for (let i = 0; i < binario.length; i += 1) {
+    bytes[i] = binario.charCodeAt(i);
+  }
+
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement("a");
+
+  enlace.href = url;
+  enlace.download = `${folio}-PRE-COTIZACION.pdf`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+const inputClass = "cotizar-input";
