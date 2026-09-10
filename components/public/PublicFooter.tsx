@@ -4,7 +4,7 @@ import Link from "next/link";
 export default function PublicFooter() {
   return (
     <footer className="border-t border-white/10 bg-[#02070D] text-white">
-      <div className="mx-auto grid max-w-[1536px] gap-8 px-7 py-10 md:grid-cols-2 lg:grid-cols-[1.08fr_0.82fr_0.92fr_1.05fr_0.78fr]">
+      <div className="mx-auto grid max-w-[1536px] gap-8 px-7 py-10 md:grid-cols-2 lg:grid-cols-[1.08fr_0.82fr_0.92fr_1.18fr_0.78fr]">
         <div>
           <Image
             src="/branding/logo-autorizado.png"
@@ -53,21 +53,38 @@ export default function PublicFooter() {
         </div>
 
         <div>
-          <p className="text-xs font-black text-[#D79A21]">AYUDA</p>
+          <p className="text-xs font-black text-[#D79A21]">ZONAS DE COBERTURA</p>
 
           <div className="mt-4 space-y-2 text-[13px] text-slate-300">
-            <a href="tel:+526562871218" className="block transition hover:text-white">
-              WhatsApp 656 287 12 18
+            <a
+              href="https://wa.me/526562871218"
+              target="_blank"
+              rel="noreferrer"
+              className="block transition hover:text-white"
+            >
+              Ciudad Juárez — WhatsApp 656 287 12 18
             </a>
-            <Link href="/login" className="block transition hover:text-white">
-              Acceso clientes
-            </Link>
-            <Link href="/cotizar" className="block transition hover:text-white">
-              Cotizar inspección
-            </Link>
+
+            <a
+              href="https://wa.me/526647599923"
+              target="_blank"
+              rel="noreferrer"
+              className="block transition hover:text-white"
+            >
+              Tijuana — WhatsApp 664 759 9923
+            </a>
+
+            <span className="block text-slate-500">
+              Guadalajara — Próximamente
+            </span>
+
+            <span className="block text-slate-500">
+              Hermosillo — Próximamente
+            </span>
+
             <a
               href="mailto:contacto@certezahabitacional.com"
-              className="block break-all transition hover:text-white"
+              className="block break-all pt-2 transition hover:text-white"
             >
               contacto@certezahabitacional.com
             </a>
