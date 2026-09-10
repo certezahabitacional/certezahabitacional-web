@@ -21,8 +21,11 @@ function redirigirError(mensaje: string): never {
  * Administración:
  *   cotización / requisitos / liberación administrativa
  *
- * Gerencia o Dirección:
+ * Dirección o Administración:
  *   /panel/inspecciones/nueva
+ *
+ * Gerencia:
+ *   solo cuando la plantilla requiere su intervención.
  *
  * Mantener esta Server Action exportada evita romper referencias
  * antiguas durante la transición, pero bloquea cualquier intento de
@@ -53,6 +56,7 @@ export async function agendarCotizacion(
 
   if (
     usuario.rol !== RolUsuario.GERENTE &&
+    usuario.rol !== RolUsuario.ADMINISTRADOR &&
     usuario.rol !== RolUsuario.DIRECTOR
   ) {
     redirigirError(

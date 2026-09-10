@@ -22,24 +22,46 @@ const crearUsuarioSchema = z.object({
   nombre: z
     .string()
     .trim()
-    .min(
-      3,
-      "El nombre debe tener al menos 3 caracteres.",
-    ),
+    .min(3, "El nombre debe tener al menos 3 caracteres."),
 
   email: z
     .string()
     .trim()
-    .email(
-      "El correo electrónico no es válido.",
-    ),
+    .email("El correo electrónico no es válido."),
 
   password: z
     .string()
-    .min(
-      8,
-      "La contraseña debe tener al menos 8 caracteres.",
-    ),
+    .min(8, "La contraseña debe tener al menos 8 caracteres."),
+
+  rol: z.nativeEnum(RolUsuario),
+
+  zonaId: z
+    .string()
+    .trim()
+    .optional(),
+
+  alcanceAdministrador: z
+    .enum(["GLOBAL", "ZONA"])
+    .optional(),
+
+  gerenteId: z
+    .string()
+    .trim()
+    .optional(),
+});
+
+const actualizarUsuarioSchema = z.object({
+  usuarioId: z.string().trim().min(1),
+
+  nombre: z
+    .string()
+    .trim()
+    .min(3, "El nombre debe tener al menos 3 caracteres."),
+
+  email: z
+    .string()
+    .trim()
+    .email("El correo electrónico no es válido."),
 
   rol: z.nativeEnum(RolUsuario),
 
@@ -63,10 +85,7 @@ const cambiarPasswordSchema = z.object({
 
   password: z
     .string()
-    .min(
-      8,
-      "La nueva contraseña debe tener al menos 8 caracteres.",
-    ),
+    .min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
 });
 
 function texto(
@@ -125,7 +144,7 @@ function validarRolCreable(
     RolUsuario.INSPECTOR
   ) {
     regresarConError(
-      "Las cuentas de Inspector deben crearse desde el módulo de Inspectores para garantizar su zona, Coordinación y Gerencia.",
+      "Las cuentas de Inspector deben crearse desde el módulo de Inspectores para garantizar su zona, Coordinación, Gerencia y perfil operativo.",
     );
   }
 
@@ -137,6 +156,55 @@ function validarRolCreable(
   ) {
     regresarConError(
       "No tienes facultad para crear un usuario con ese rol.",
+    );
+  }
+}
+
+function validarUsuarioObjetivoParaEdicion(
+  gestor: {
+    id: string;
+    rol: RolUsuario;
+  },
+  objetivo: {
+    id: string;
+    rol: RolUsuario;
+  },
+  nuevoRol: RolUsuario,
+) {
+  if (objetivo.id === gestor.id) {
+    regresarConError(
+      "Tu propia cuenta no puede editarse desde este módulo.",
+    );
+  }
+
+  if (
+    objetivo.rol === RolUsuario.INSPECTOR ||
+    nuevoRol === RolUsuario.INSPECTOR
+  ) {
+    regresarConError(
+      "Los Inspectores deben editarse desde el módulo de Inspectores para mantener sincronizado su perfil operativo.",
+    );
+  }
+
+  if (gestor.rol === RolUsuario.DIRECTOR) {
+    return;
+  }
+
+  if (
+    objetivo.rol === RolUsuario.DIRECTOR ||
+    objetivo.rol === RolUsuario.ADMINISTRADOR
+  ) {
+    regresarConError(
+      "Administración no puede modificar cuentas de Dirección ni de otros Administradores.",
+    );
+  }
+
+  if (
+    nuevoRol === RolUsuario.DIRECTOR ||
+    nuevoRol === RolUsuario.ADMINISTRADOR
+  ) {
+    regresarConError(
+      "Administración no puede asignar roles de Director o Administrador.",
     );
   }
 }
@@ -251,6 +319,136 @@ async function validarGerenteDeZona(
   return gerente;
 }
 
+async function resolverJerarquia({
+  rol,
+  zonaId,
+  alcanceAdministrador,
+  gerenteId,
+}: {
+  rol: RolUsuario;
+  zonaId?: string;
+  alcanceAdministrador?: "GLOBAL" | "ZONA";
+  gerenteId?: string;
+}) {
+  let zonaFinalId: string | null = null;
+  let gerenteFinalId: string | null = null;
+
+  if (
+    rol ===
+    RolUsuario.DIRECTOR
+  ) {
+    return {
+      zonaFinalId,
+      gerenteFinalId,
+    };
+  }
+
+  if (
+    rol ===
+    RolUsuario.ADMINISTRADOR
+  ) {
+    const alcance =
+      alcanceAdministrador ??
+      "GLOBAL";
+
+    if (
+      alcance === "ZONA"
+    ) {
+      if (!zonaId) {
+        regresarConError(
+          "Debes seleccionar una zona para el Administrador con alcance por zona.",
+        );
+      }
+
+      await validarZona(
+        zonaId,
+      );
+
+      zonaFinalId =
+        zonaId;
+    }
+
+    return {
+      zonaFinalId,
+      gerenteFinalId,
+    };
+  }
+
+  if (
+    rol ===
+    RolUsuario.GERENTE
+  ) {
+    if (!zonaId) {
+      regresarConError(
+        "Debes seleccionar una zona para el Gerente.",
+      );
+    }
+
+    await validarZona(
+      zonaId,
+    );
+
+    zonaFinalId =
+      zonaId;
+
+    return {
+      zonaFinalId,
+      gerenteFinalId,
+    };
+  }
+
+  if (
+    rol ===
+    RolUsuario.COORDINADOR
+  ) {
+    if (!zonaId) {
+      regresarConError(
+        "Debes seleccionar una zona para el Coordinador.",
+      );
+    }
+
+    if (!gerenteId) {
+      regresarConError(
+        "Debes seleccionar el Gerente responsable del Coordinador.",
+      );
+    }
+
+    await validarZona(
+      zonaId,
+    );
+
+    await validarGerenteDeZona(
+      gerenteId,
+      zonaId,
+    );
+
+    zonaFinalId =
+      zonaId;
+
+    gerenteFinalId =
+      gerenteId;
+
+    return {
+      zonaFinalId,
+      gerenteFinalId,
+    };
+  }
+
+  if (
+    rol ===
+    RolUsuario.CLIENTE
+  ) {
+    return {
+      zonaFinalId,
+      gerenteFinalId,
+    };
+  }
+
+  regresarConError(
+    "El rol seleccionado no puede administrarse desde este módulo.",
+  );
+}
+
 export async function crearUsuario(
   formData: FormData,
 ) {
@@ -325,146 +523,15 @@ export async function crearUsuario(
     rol,
   );
 
-  let zonaFinalId:
-    | string
-    | null = null;
-
-  let gerenteFinalId:
-    | string
-    | null = null;
-
-  /*
-   * DIRECTOR
-   * Alcance global.
-   */
-  if (
-    rol ===
-    RolUsuario.DIRECTOR
-  ) {
-    zonaFinalId = null;
-    gerenteFinalId = null;
-  }
-
-  /*
-   * ADMINISTRADOR
-   * Puede ser GLOBAL o POR ZONA.
-   *
-   * GLOBAL:
-   * zonaId = null
-   *
-   * ZONA:
-   * zonaId obligatorio
-   */
-  if (
-    rol ===
-    RolUsuario.ADMINISTRADOR
-  ) {
-    const alcance =
-      alcanceAdministrador ??
-      "GLOBAL";
-
-    if (
-      alcance === "ZONA"
-    ) {
-      if (!zonaId) {
-        regresarConError(
-          "Debes seleccionar una zona para el Administrador con alcance por zona.",
-        );
-      }
-
-      await validarZona(
-        zonaId,
-      );
-
-      zonaFinalId =
-        zonaId;
-    } else {
-      zonaFinalId =
-        null;
-    }
-
-    gerenteFinalId =
-      null;
-  }
-
-  /*
-   * GERENTE
-   * Debe pertenecer obligatoriamente a una zona.
-   */
-  if (
-    rol ===
-    RolUsuario.GERENTE
-  ) {
-    if (!zonaId) {
-      regresarConError(
-        "Debes seleccionar una zona para el Gerente.",
-      );
-    }
-
-    await validarZona(
-      zonaId,
-    );
-
-    zonaFinalId =
-      zonaId;
-
-    gerenteFinalId =
-      null;
-  }
-
-  /*
-   * COORDINADOR
-   * Debe tener:
-   * - zona obligatoria
-   * - Gerente obligatorio
-   * - ambos deben pertenecer a la misma zona
-   */
-  if (
-    rol ===
-    RolUsuario.COORDINADOR
-  ) {
-    if (!zonaId) {
-      regresarConError(
-        "Debes seleccionar una zona para el Coordinador.",
-      );
-    }
-
-    if (!gerenteId) {
-      regresarConError(
-        "Debes seleccionar el Gerente responsable del Coordinador.",
-      );
-    }
-
-    await validarZona(
-      zonaId,
-    );
-
-    await validarGerenteDeZona(
-      gerenteId,
-      zonaId,
-    );
-
-    zonaFinalId =
-      zonaId;
-
-    gerenteFinalId =
-      gerenteId;
-  }
-
-  /*
-   * CLIENTE
-   * No forma parte de la jerarquía interna.
-   */
-  if (
-    rol ===
-    RolUsuario.CLIENTE
-  ) {
-    zonaFinalId =
-      null;
-
-    gerenteFinalId =
-      null;
-  }
+  const {
+    zonaFinalId,
+    gerenteFinalId,
+  } = await resolverJerarquia({
+    rol,
+    zonaId,
+    alcanceAdministrador,
+    gerenteId,
+  });
 
   const usuarioExistente =
     await prisma.usuario.findUnique({
@@ -500,6 +567,7 @@ export async function crearUsuario(
                 passwordHash,
                 rol,
                 activo: true,
+                requiereCambioPassword: true,
 
                 zonaId:
                   zonaFinalId,
@@ -559,7 +627,7 @@ export async function crearUsuario(
 
       descripcion:
         `${gestor.rol} creó el usuario ${usuario.email} ` +
-        `con rol ${usuario.rol}.` +
+        `con rol ${usuario.rol}. Contraseña temporal: sí.` +
         descripcionZona +
         descripcionGerente,
     });
@@ -591,7 +659,292 @@ export async function crearUsuario(
   );
 
   regresarConExito(
-    "Usuario creado correctamente.",
+    "Usuario creado correctamente. Deberá cambiar su contraseña en el primer acceso.",
+  );
+}
+
+export async function actualizarUsuario(
+  formData: FormData,
+) {
+  const gestor =
+    await obtenerGestorActual();
+
+  const resultado =
+    actualizarUsuarioSchema.safeParse({
+      usuarioId:
+        texto(
+          formData,
+          "usuarioId",
+        ),
+
+      nombre:
+        texto(
+          formData,
+          "nombre",
+        ),
+
+      email:
+        texto(
+          formData,
+          "email",
+        ).toLowerCase(),
+
+      rol:
+        texto(
+          formData,
+          "rol",
+        ),
+
+      zonaId:
+        texto(
+          formData,
+          "zonaId",
+        ) || undefined,
+
+      alcanceAdministrador:
+        texto(
+          formData,
+          "alcanceAdministrador",
+        ) || undefined,
+
+      gerenteId:
+        texto(
+          formData,
+          "gerenteId",
+        ) || undefined,
+    });
+
+  if (!resultado.success) {
+    regresarConError(
+      resultado.error
+        .issues[0]?.message ??
+        "Los datos del usuario no son válidos.",
+    );
+  }
+
+  const {
+    usuarioId,
+    nombre,
+    email,
+    rol,
+    zonaId,
+    alcanceAdministrador,
+    gerenteId,
+  } = resultado.data;
+
+  const objetivo =
+    await prisma.usuario.findUnique({
+      where: {
+        id: usuarioId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        zonaId: true,
+        gerenteId: true,
+        coordinadorId: true,
+        coordinadoresACargo: {
+          select: {
+            id: true,
+          },
+          take: 1,
+        },
+        inspectoresACargo: {
+          select: {
+            id: true,
+          },
+          take: 1,
+        },
+      },
+    });
+
+  if (!objetivo) {
+    regresarConError(
+      "El usuario no fue encontrado.",
+    );
+  }
+
+  validarUsuarioObjetivoParaEdicion(
+    gestor,
+    objetivo,
+    rol,
+  );
+
+  if (
+    objetivo.rol === RolUsuario.GERENTE &&
+    rol !== RolUsuario.GERENTE &&
+    objetivo.coordinadoresACargo.length > 0
+  ) {
+    regresarConError(
+      "No puedes cambiar el rol de este Gerente mientras tenga Coordinadores asignados. Reasigna primero su estructura.",
+    );
+  }
+
+  if (
+    objetivo.rol === RolUsuario.COORDINADOR &&
+    rol !== RolUsuario.COORDINADOR &&
+    objetivo.inspectoresACargo.length > 0
+  ) {
+    regresarConError(
+      "No puedes cambiar el rol de este Coordinador mientras tenga Inspectores asignados. Reasigna primero su estructura.",
+    );
+  }
+
+  const correoDuplicado =
+    await prisma.usuario.findFirst({
+      where: {
+        email,
+        id: {
+          not: usuarioId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  if (correoDuplicado) {
+    regresarConError(
+      "Ya existe otra cuenta registrada con ese correo.",
+    );
+  }
+
+  const {
+    zonaFinalId,
+    gerenteFinalId,
+  } = await resolverJerarquia({
+    rol,
+    zonaId,
+    alcanceAdministrador,
+    gerenteId,
+  });
+
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.usuario.update({
+          where: {
+            id: usuarioId,
+          },
+          data: {
+            nombre,
+            email,
+            rol,
+            zonaId:
+              zonaFinalId,
+            gerenteId:
+              gerenteFinalId,
+            coordinadorId:
+              null,
+          },
+        });
+
+        const clienteVinculado =
+          await tx.cliente.findUnique({
+            where: {
+              usuarioId,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+        if (
+          rol === RolUsuario.CLIENTE
+        ) {
+          if (
+            clienteVinculado
+          ) {
+            await tx.cliente.update({
+              where: {
+                id:
+                  clienteVinculado.id,
+              },
+              data: {
+                nombre,
+                correo:
+                  email,
+              },
+            });
+          } else {
+            await tx.cliente.create({
+              data: {
+                usuarioId,
+                nombre,
+                correo:
+                  email,
+              },
+            });
+          }
+        } else if (
+          clienteVinculado
+        ) {
+          await tx.cliente.update({
+            where: {
+              id:
+                clienteVinculado.id,
+            },
+            data: {
+              usuarioId:
+                null,
+            },
+          });
+        }
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Error al actualizar usuario:",
+      error,
+    );
+
+    regresarConError(
+      "No fue posible actualizar el usuario.",
+    );
+  }
+
+  await registrarAuditoria({
+    tipo:
+      TipoEvento.EDITAR,
+
+    entidad:
+      "Usuario",
+
+    entidadId:
+      usuarioId,
+
+    usuarioId:
+      gestor.id,
+
+    descripcion:
+      `${gestor.rol} actualizó la cuenta ${objetivo.email}. ` +
+      `Nombre: ${objetivo.nombre} → ${nombre}. ` +
+      `Correo: ${objetivo.email} → ${email}. ` +
+      `Rol: ${objetivo.rol} → ${rol}. ` +
+      `Zona: ${objetivo.zonaId ?? "sin zona"} → ${zonaFinalId ?? "sin zona"}. ` +
+      `Gerente: ${objetivo.gerenteId ?? "sin gerente"} → ${gerenteFinalId ?? "sin gerente"}.`,
+  });
+
+  revalidatePath(
+    "/panel/usuarios",
+  );
+
+  revalidatePath(
+    "/panel/clientes",
+  );
+
+  revalidatePath(
+    "/panel/inspectores",
+  );
+
+  revalidatePath(
+    "/panel",
+  );
+
+  regresarConExito(
+    "Usuario actualizado correctamente.",
   );
 }
 
@@ -836,6 +1189,10 @@ export async function cambiarPasswordUsuario(
 
     data: {
       passwordHash,
+      requiereCambioPassword: true,
+      intentosFallidos: 0,
+      bloqueadoHasta: null,
+      ultimoFalloLogin: null,
     },
   });
 
@@ -853,7 +1210,8 @@ export async function cambiarPasswordUsuario(
       gestor.id,
 
     descripcion:
-      `${gestor.rol} restableció la contraseña de ${usuario.email}.`,
+      `${gestor.rol} restableció la contraseña temporal de ${usuario.email}. ` +
+      "El usuario deberá cambiarla en su siguiente acceso.",
   });
 
   revalidatePath(
@@ -861,6 +1219,6 @@ export async function cambiarPasswordUsuario(
   );
 
   regresarConExito(
-    "Contraseña actualizada correctamente.",
+    "Contraseña temporal actualizada. El usuario deberá cambiarla en su siguiente acceso.",
   );
 }

@@ -6,10 +6,12 @@ import { obtenerAdministradorActual } from "@/lib/administrador-actual";
 import { prisma } from "@/lib/prisma";
 
 import {
+  actualizarUsuario,
   cambiarEstadoUsuario,
   cambiarPasswordUsuario,
 } from "./actions";
 import FormularioCrearUsuario from "./FormularioCrearUsuario";
+import FormularioEditarUsuario from "./FormularioEditarUsuario";
 
 type PageProps = {
   searchParams: Promise<{
@@ -121,6 +123,7 @@ export default async function UsuariosPage({
         ultimoAcceso: true,
         zonaId: true,
         gerenteId: true,
+        coordinadorId: true,
       },
 
       orderBy: {
@@ -674,6 +677,45 @@ export default async function UsuariosPage({
                               </form>
                             )}
                           </div>
+
+                          {modificable && usuario.rol !== RolUsuario.INSPECTOR && (
+                            <details className="mt-5 rounded-2xl border border-cyan-300/10 bg-slate-950">
+                              <summary className="cursor-pointer px-5 py-4 text-sm font-black text-cyan-300">
+                                Editar usuario
+                              </summary>
+
+                              <div className="border-t border-white/10 p-5">
+                                <FormularioEditarUsuario
+                                  usuario={{
+                                    id: usuario.id,
+                                    nombre: usuario.nombre,
+                                    email: usuario.email,
+                                    rol: usuario.rol,
+                                    zonaId: usuario.zonaId,
+                                    gerenteId: usuario.gerenteId,
+                                  }}
+                                  rolesEditables={
+                                    esDirector
+                                      ? [
+                                          RolUsuario.DIRECTOR,
+                                          RolUsuario.ADMINISTRADOR,
+                                          RolUsuario.GERENTE,
+                                          RolUsuario.COORDINADOR,
+                                          RolUsuario.CLIENTE,
+                                        ]
+                                      : [
+                                          RolUsuario.GERENTE,
+                                          RolUsuario.COORDINADOR,
+                                          RolUsuario.CLIENTE,
+                                        ]
+                                  }
+                                  zonas={zonas}
+                                  gerentes={gerentes}
+                                  action={actualizarUsuario}
+                                />
+                              </div>
+                            </details>
+                          )}
 
                           {modificable ? (
                             <details className="mt-5 rounded-2xl bg-slate-950">

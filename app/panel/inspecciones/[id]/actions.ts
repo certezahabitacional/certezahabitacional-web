@@ -95,6 +95,8 @@ async function exigirAlcanceInspeccion(
     select: {
       zonaId: true,
       inspectorId: true,
+      requiereGerenteZona: true,
+      requiereCoordinador: true,
       inspector: {
         select: {
           usuarioId: true,
@@ -395,7 +397,7 @@ export async function asignarInspector(formData: FormData) {
 
   const rol = exigirRol(
     session,
-    [RolUsuario.GERENTE, RolUsuario.DIRECTOR],
+    [RolUsuario.GERENTE, RolUsuario.ADMINISTRADOR, RolUsuario.DIRECTOR],
     inspeccionId,
   );
 
@@ -424,6 +426,9 @@ export async function asignarInspector(formData: FormData) {
       folio: true,
       estado: true,
       inspectorId: true,
+      zonaId: true,
+      requiereGerenteZona: true,
+      requiereCoordinador: true,
       inspector: {
         select: {
           usuario: {
@@ -440,6 +445,13 @@ export async function asignarInspector(formData: FormData) {
 
   if (!inspeccion) {
     redirigirError(inspeccionId, "La inspección no existe.");
+  }
+
+  if (rol === RolUsuario.GERENTE && !inspeccion.requiereGerenteZona) {
+    redirigirError(
+      inspeccionId,
+      "Esta inspección no requiere intervención de Gerencia.",
+    );
   }
 
   if (
@@ -492,6 +504,7 @@ export async function asignarInspector(formData: FormData) {
           email: true,
           gerenteId: true,
           coordinadorId: true,
+          zonaId: true,
         },
       },
     },
@@ -506,13 +519,35 @@ export async function asignarInspector(formData: FormData) {
     );
   }
 
+  if (inspeccion.zonaId && inspectorNuevo.usuario.zonaId !== inspeccion.zonaId) {
+    redirigirError(
+      inspeccionId,
+      "El Inspector seleccionado no pertenece a la zona de la inspección.",
+    );
+  }
+
+  if (inspeccion.requiereGerenteZona && !inspectorNuevo.usuario.gerenteId) {
+    redirigirError(
+      inspeccionId,
+      "La plantilla de esta inspección requiere Gerente de Zona y el Inspector seleccionado no tiene uno asignado.",
+    );
+  }
+
+  if (inspeccion.requiereCoordinador && !inspectorNuevo.usuario.coordinadorId) {
+    redirigirError(
+      inspeccionId,
+      "La plantilla de esta inspección requiere Coordinador y el Inspector seleccionado no tiene uno asignado.",
+    );
+  }
+
   const nombreAnterior =
     inspeccion.inspector?.usuario.nombre ?? "Sin asignar";
   const nombreNuevo = inspectorNuevo.usuario.nombre;
 
   /*
    * Primera asignación:
-   * Gerencia o Dirección pueden asignar directamente.
+   * Dirección y Administración pueden asignar directamente.
+   * Gerencia solo participa cuando el flujo de la plantilla la requiere.
    */
   if (!inspeccion.inspectorId) {
     await prisma.inspeccion.update({
@@ -544,8 +579,8 @@ export async function asignarInspector(formData: FormData) {
 
   /*
    * Reasignación:
-   * GERENTE solicita y ADMINISTRADOR/DIRECTOR resuelven.
-   * DIRECTOR, por facultad global, puede reasignar directamente,
+   * GERENTE solicita cuando la plantilla requiere su intervención.
+   * ADMINISTRADOR/DIRECTOR pueden reasignar directamente,
    * dejando también trazabilidad formal en ReasignacionInspector.
    */
   if (motivo.length < 10) {
@@ -573,7 +608,7 @@ export async function asignarInspector(formData: FormData) {
     );
   }
 
-  if (rol === RolUsuario.DIRECTOR) {
+  if (rol === RolUsuario.DIRECTOR || rol === RolUsuario.ADMINISTRADOR) {
     await prisma.$transaction(async (tx) => {
       await tx.reasignacionInspector.create({
         data: {
@@ -585,7 +620,7 @@ export async function asignarInspector(formData: FormData) {
           estado: EstadoReasignacionInspector.AUTORIZADA,
           motivo,
           comentarioResolucion:
-            "Reasignación autorizada y ejecutada directamente por Dirección.",
+            `Reasignación autorizada y ejecutada directamente por ${rol === RolUsuario.DIRECTOR ? "Dirección" : "Administración"}.`,
           resueltaEn: new Date(),
         },
       });
@@ -605,7 +640,7 @@ export async function asignarInspector(formData: FormData) {
       inspeccionId: inspeccion.id,
       usuarioId: session.user.id,
       descripcion:
-        `Dirección reasignó la inspección ${inspeccion.folio} ` +
+        `${rol === RolUsuario.DIRECTOR ? "Dirección" : "Administración"} reasignó la inspección ${inspeccion.folio} ` +
         `de ${nombreAnterior} a ${nombreNuevo}. Motivo: ${motivo}`,
     });
 
@@ -614,7 +649,7 @@ export async function asignarInspector(formData: FormData) {
 
     redirigirOk(
       inspeccionId,
-      `Inspector reasignado por Dirección: ${nombreNuevo}.`,
+      `Inspector reasignado por ${rol === RolUsuario.DIRECTOR ? "Dirección" : "Administración"}: ${nombreNuevo}.`,
     );
   }
 
