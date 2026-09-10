@@ -117,7 +117,8 @@ export async function POST(request: Request) {
     const data = (await request.json()) as SolicitudCotizacion;
     if (
       !textoSeguro(data.nombre) || !textoSeguro(data.telefono) || !textoSeguro(data.correo) ||
-      !textoSeguro(data.tipoCliente) || !textoSeguro(data.ciudadCliente) || !esZonaServicio(data.zonaServicio) ||
+      !textoSeguro(data.tipoCliente) || !textoSeguro(data.ciudadCliente) ||
+      !data.zonaServicio || !esZonaServicio(data.zonaServicio) ||
       !textoSeguro(data.direccionInmueble) || !textoSeguro(data.ciudadInmueble) || !textoSeguro(data.m2Terreno) ||
       !textoSeguro(data.m2Construccion) || !textoSeguro(data.recamaras) || !textoSeguro(data.banos) || !data.avisoPrivacidad
     ) {
