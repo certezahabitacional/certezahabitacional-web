@@ -122,6 +122,10 @@ export const MATRIZ_PERMISOS: MatrizPermisos = {
     "EXPEDIENTE_REVISAR_GERENCIA","EXPEDIENTE_DEVOLVER_COORDINACION",
     "EXPEDIENTE_AUTORIZAR","OBSERVACION_CLIENTE_REVISAR","NOTIFICACIONES_VER",
   ]),
+  [RolUsuario.VENDEDOR]: new Set<AccionSistema>([
+    "PANEL_ACCEDER","AGENDA_VER_GENERAL","COTIZACION_VER",
+    "CLIENTE_EDITAR_ADMIN","NOTIFICACIONES_VER",
+  ]),
   [RolUsuario.ADMINISTRADOR]: new Set<AccionSistema>([
     "PANEL_ACCEDER","AGENDA_VER_GENERAL","COTIZACION_VER","COTIZACION_CREAR",
     "COTIZACION_EDITAR","COTIZACION_AUTORIZAR","COTIZACION_IMPRIMIR",
@@ -159,7 +163,8 @@ export function esRolTecnico(rol: RolUsuario): boolean {
 
 export const puedeVerDatosAdministrativos = (rol: RolUsuario) => puede(rol, "DATOS_ADMIN_VER");
 export const puedeVerCotizaciones = (rol: RolUsuario) => puede(rol, "COTIZACION_VER");
-export const cotizacionEsSoloLectura = (rol: RolUsuario) => rol === RolUsuario.GERENTE;
+export const cotizacionEsSoloLectura = (rol: RolUsuario) =>
+  rol === RolUsuario.GERENTE || rol === RolUsuario.VENDEDOR;
 export const puedeVerExpedienteTecnico = (rol: RolUsuario) => puede(rol, "EXPEDIENTE_VER_TECNICO");
 export const puedeManipularExpedienteAutorizado = (rol: RolUsuario) => rol === RolUsuario.DIRECTOR;
 export const puedeAutorizarExcepcion = (rol: RolUsuario) => rol === RolUsuario.DIRECTOR;
@@ -170,6 +175,7 @@ export function puedeAdministrarUsuario(actor: RolUsuario, objetivo: RolUsuario)
   if (actor !== RolUsuario.ADMINISTRADOR) return false;
   return (
     objetivo === RolUsuario.CLIENTE ||
+    objetivo === RolUsuario.VENDEDOR ||
     objetivo === RolUsuario.INSPECTOR ||
     objetivo === RolUsuario.COORDINADOR ||
     objetivo === RolUsuario.GERENTE
@@ -211,6 +217,7 @@ export function estaDentroDelAlcanceDeInspeccion(
     case RolUsuario.DIRECTOR:
       return true;
     case RolUsuario.ADMINISTRADOR:
+    case RolUsuario.VENDEDOR:
       return false;
     case RolUsuario.GERENTE:
       return Boolean(

@@ -467,6 +467,7 @@ function etiquetaEstado(
 const ETIQUETAS_ROL: Record<RolUsuario, string> = {
   [RolUsuario.DIRECTOR]: "DIRECTOR",
   [RolUsuario.ADMINISTRADOR]: "ADMINISTRADOR",
+  [RolUsuario.VENDEDOR]: "VENDEDOR",
   [RolUsuario.GERENTE]: "GERENTE",
   [RolUsuario.COORDINADOR]: "COORDINADOR",
   [RolUsuario.INSPECTOR]: "INSPECTOR",

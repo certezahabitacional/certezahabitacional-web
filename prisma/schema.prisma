@@ -11,6 +11,7 @@ datasource db {
 enum RolUsuario {
   DIRECTOR
   ADMINISTRADOR
+  VENDEDOR
   GERENTE
   COORDINADOR
   INSPECTOR
@@ -208,6 +209,10 @@ model Usuario {
   cotizacionesAutorizadas Cotizacion[] @relation("CotizacionAutorizadaPor")
   cotizacionesRechazadas  Cotizacion[] @relation("CotizacionRechazadaPor")
   inspeccionesAgendadas   Inspeccion[] @relation("InspeccionAgendadaPor")
+  pagosRegistrados       PagoCotizacion[] @relation("PagoCotizacionRegistradoPor")
+  excepcionesApertura    Cotizacion[] @relation("CotizacionExcepcionAperturaPor")
+  excepcionesInicio      Cotizacion[] @relation("CotizacionExcepcionInicioPor")
+  observacionesAgenda    ObservacionAgenda[] @relation("ObservacionAgendaRegistradaPor")
 
   revisionesInspeccion RevisionInspeccion[] @relation("RevisionUsuario")
   bloqueosLiberacion   Inspeccion[]         @relation("InspeccionBloqueadaPor")
@@ -647,6 +652,7 @@ model Cotizacion {
   motivoRechazo  String?
 
   solicitudAutorizacionEn DateTime?
+  aceptadaEn DateTime?
 
   zonaHoraria String @default("America/Ciudad_Juarez")
 
@@ -666,12 +672,26 @@ model Cotizacion {
   esquemaPago EsquemaPago      @default(UNA_EXHIBICION)
   montoPagado Decimal          @default(0) @db.Decimal(12, 2)
 
+  excepcionApertura       Boolean  @default(false)
+  excepcionAperturaPorId  String?
+  excepcionAperturaPor    Usuario? @relation("CotizacionExcepcionAperturaPor", fields: [excepcionAperturaPorId], references: [id], onDelete: SetNull)
+  excepcionAperturaEn     DateTime?
+  motivoExcepcionApertura String?
+
+  excepcionInicio       Boolean  @default(false)
+  excepcionInicioPorId  String?
+  excepcionInicioPor    Usuario? @relation("CotizacionExcepcionInicioPor", fields: [excepcionInicioPorId], references: [id], onDelete: SetNull)
+  excepcionInicioEn     DateTime?
+  motivoExcepcionInicio String?
+
   vigenciaHasta         DateTime?
   notas                 String?
   observacionesInternas String?
 
   inspeccion Inspeccion?
   versiones  CotizacionVersion[]
+  pagos PagoCotizacion[]
+  observacionesAgenda ObservacionAgenda[]
 
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -685,7 +705,42 @@ model Cotizacion {
   @@index([editablePublica])
   @@index([estado])
   @@index([estadoPago])
+  @@index([aceptadaEn])
+  @@index([autorizadaEn])
+  @@index([excepcionApertura])
+  @@index([excepcionInicio])
   @@index([creadoEn])
+}
+
+model PagoCotizacion {
+  id String @id @default(cuid())
+  cotizacionId String
+  cotizacion Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  monto Decimal @db.Decimal(12, 2)
+  fechaPago DateTime
+  referencia String?
+  metodoPago String?
+  notas String?
+  registradoPorId String
+  registradoPor Usuario @relation("PagoCotizacionRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  creadoEn DateTime @default(now())
+  @@index([cotizacionId])
+  @@index([fechaPago])
+  @@index([registradoPorId])
+}
+
+model ObservacionAgenda {
+  id String @id @default(cuid())
+  cotizacionId String
+  cotizacion Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  observacion String
+  registradaPorId String
+  registradaPor Usuario @relation("ObservacionAgendaRegistradaPor", fields: [registradaPorId], references: [id], onDelete: Restrict)
+  creadaEn DateTime @default(now())
+  actualizadaEn DateTime @updatedAt
+  @@index([cotizacionId])
+  @@index([registradaPorId])
+  @@index([creadaEn])
 }
 
 model CotizacionVersion {
