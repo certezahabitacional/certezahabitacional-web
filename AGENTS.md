@@ -20,6 +20,29 @@ Certeza Habitacional esta entrando en operacion real. La continuidad y estabilid
 - Antes de iniciar una tarea nueva, comprobar que la rama de trabajo parte del `develop` vigente, salvo instruccion expresa en contrario.
 - Si `main` contiene cambios que aun no estan en `develop`, no sobrescribir ni forzar ramas. Informar la divergencia y sincronizar de forma segura antes de desarrollar.
 
+## FUENTE DE VERDAD FUNCIONAL OBLIGATORIA
+Antes de analizar, modificar o crear comportamiento relacionado con cotizaciones, pre cotizaciones, clientes, inmuebles, usuarios, caja, pagos, agenda, inspecciones, proyectos PDF, hallazgos, evidencias, reportes, certificados o permisos, leer primero:
+
+`docs/ESPECIFICACION_FUNCIONAL_CERTEZA_HABITACIONAL.md`
+
+Ese documento contiene el flujo operativo objetivo aprobado para Certeza Habitacional, incluyendo:
+- Pre cotizacion -> cotizacion formal.
+- Creacion automatica de cliente e inmueble.
+- Aceptacion de cliente y aceptacion por excepcion.
+- Autorizacion de cotizacion.
+- Panel Caja.
+- Pagos parciales.
+- Regla del 50% para abrir Nueva Inspeccion.
+- Regla del 100% para iniciar inspeccion en campo.
+- Excepciones exclusivas del DIRECTOR.
+- Estados de cuenta de vendedor e inspector.
+- Nueva Inspeccion alimentada desde cotizacion.
+- Carga de proyectos PDF y guia estandarizada de inspeccion.
+- Evidencia fotografica por hallazgo.
+- Matriz vigente de facultades por rol.
+
+Cuando el codigo actual no cumpla esa especificacion, no asumir que el codigo existente representa la regla de negocio final. Identificar la brecha y proponer/implementar el cambio de forma incremental en desarrollo, sin afectar produccion.
+
 ## 1. Project purpose
 Certeza Habitacional is a web platform for managing residential inspection services end to end. The repository contains both the public-facing website and the operational system used to manage clients, quotations, payments, scheduling, inspections, findings, evidence, reviews, reports, certificates, users, zones and audit history.
 
@@ -60,18 +83,19 @@ Primary commands:
 - Promotion from `develop` to `main` is a separate release decision and requires explicit approval after testing.
 
 ## 4. Source of truth
-Use the repository itself as the primary technical source of truth.
+For technical implementation, inspect the repository. For approved business behavior, use `docs/ESPECIFICACION_FUNCIONAL_CERTEZA_HABITACIONAL.md` as the functional source of truth.
 
 Before modifying a feature, inspect at minimum:
-1. The relevant page/component/action/API route.
-2. `prisma/schema.prisma` if the task touches stored data.
-3. Existing authorization helpers and role checks.
-4. Related validation schemas.
-5. Existing business logic for the same entity.
+1. The functional specification relevant to the task.
+2. The relevant page/component/action/API route.
+3. `prisma/schema.prisma` if the task touches stored data.
+4. Existing authorization helpers and role checks.
+5. Related validation schemas.
+6. Existing business logic for the same entity.
 
 Do not invent tables, fields, statuses, routes, permissions or workflows when an existing implementation can be inspected first.
 
-If business intent and current code conflict, preserve data and existing production behavior until the requested change is explicit.
+If the approved functional specification and current code conflict, preserve production data and compatibility while implementing the approved behavior incrementally in development.
 
 ## 5. Roles
 The current Prisma enum defines these application roles:
@@ -85,7 +109,7 @@ The current Prisma enum defines these application roles:
 
 Role behavior must be implemented through explicit authorization checks. Hiding a button in the UI is not sufficient security; sensitive server actions and routes must also validate authorization.
 
-Do not assume permissions from role names alone. Inspect the existing permission matrix/helpers and preserve the currently defined scope unless the task explicitly changes it.
+The permission matrix in `docs/ESPECIFICACION_FUNCIONAL_CERTEZA_HABITACIONAL.md` is authoritative for the target behavior unless the project owner explicitly changes it.
 
 ## 6. Core business domains
 Treat these as interconnected modules, not isolated screens:
@@ -160,15 +184,16 @@ Inspect the schema and all usages before changing any of them.
 ## 11. Validation workflow for every coding task
 For any substantive code change:
 1. Confirm the task branch and its relationship to current `develop`.
-2. Inspect the affected files before editing.
-3. Make the smallest complete change that satisfies the requested behavior.
-4. Run `npm run lint` when feasible.
-5. Run `npm run build` before considering the coding task complete.
-6. Fix TypeScript/build errors caused by the change.
-7. Report clearly what changed, what was validated and any remaining limitation.
-8. Integrate into `develop` only through the agreed review process.
-9. Perform functional/manual tests in development/preproduction as applicable.
-10. Wait for explicit approval before any promotion to `main`/production.
+2. Read the applicable functional specification.
+3. Inspect the affected files before editing.
+4. Make the smallest complete change that satisfies the requested behavior.
+5. Run `npm run lint` when feasible.
+6. Run `npm run build` before considering the coding task complete.
+7. Fix TypeScript/build errors caused by the change.
+8. Report clearly what changed, what was validated and any remaining limitation.
+9. Integrate into `develop` only through the agreed review process.
+10. Perform functional/manual tests in development/preproduction as applicable.
+11. Wait for explicit approval before any promotion to `main`/production.
 
 Do not claim a production release is ready merely because the build passes.
 
@@ -206,6 +231,7 @@ Preserve branding and public content unless the task explicitly targets them.
 ## 15. Definition of done
 A development task is done only when:
 - The requested behavior is implemented in the task/development path.
+- It is consistent with the approved functional specification.
 - Related authorization is correct.
 - Stored data remains coherent.
 - Existing flows are not knowingly broken.
@@ -219,4 +245,4 @@ A PRODUCTION release is done only when, in addition:
 - The production deployment is intentionally performed from the approved state to `main`.
 
 ## 16. Project-specific working principle
-Certeza Habitacional is being developed incrementally while approaching/entering live operation. Preserve what already works. Prefer extending the current system over rebuilding modules from scratch. When historical sprint folders differ from the active application, treat the active application and current Prisma schema as authoritative unless instructed otherwise.
+Certeza Habitacional is being developed incrementally while approaching/entering live operation. Preserve what already works. Prefer extending the current system over rebuilding modules from scratch. When historical sprint folders differ from the active application, treat the active application, current Prisma schema and approved functional specification as the relevant sources of truth.
