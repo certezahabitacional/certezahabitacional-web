@@ -22,6 +22,7 @@ export async function validarCotizacionParaNuevaInspeccion({
       total: true,
       montoPagado: true,
       excepcionApertura: true,
+      excepcionInicio: true,
       inspeccion: { select: { id: true, folio: true } },
     },
   });
