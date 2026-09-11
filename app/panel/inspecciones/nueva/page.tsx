@@ -27,7 +27,7 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
     ? await prisma.inspeccion.findUnique({
         where: { id: antecedenteId },
         select: {
-          id: true, folio: true, estado: true, clienteId: true, inmuebleId: true, inspectorId: true, plantillaId: true, zonaId: true,
+          id: true, folio: true, estado: true, clienteId: true, inmuebleId: true, inspectorId: true, plantillaId: true, zonaId: true, numeroInspeccion: true,
           cliente: { select: { nombre: true } },
           inmueble: { select: { alias: true, direccion: true } },
         },
@@ -36,8 +36,13 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
   if (antecedenteId && !antecedente) redirect(`/panel/inspecciones/nueva?error=${encodeURIComponent("La inspección antecedente no existe.")}`);
 
   const [cotizacionesBase, inspectores, zonas, plantillas] = await Promise.all([
-    antecedenteId ? Promise.resolve([]) : prisma.cotizacion.findMany({
-      where: { estado: EstadoCotizacion.AUTORIZADA, inmuebleId: { not: null }, inspeccion: null },
+    prisma.cotizacion.findMany({
+      where: {
+        estado: EstadoCotizacion.AUTORIZADA,
+        inmuebleId: { not: null },
+        inspeccion: null,
+        ...(antecedente ? { clienteId: antecedente.clienteId, inmuebleId: antecedente.inmuebleId } : {}),
+      },
       select: {
         id: true, folio: true, clienteId: true, inmuebleId: true, total: true, montoPagado: true, excepcionApertura: true,
         cliente: { select: { nombre: true } }, inmueble: { select: { alias: true } },
@@ -82,28 +87,32 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
         </div>
 
         <p className="mt-7 text-xs font-black uppercase tracking-[0.3em] text-amber-300">Operación comercial vinculada</p>
-        <h1 className="mt-3 text-4xl font-black">Nueva inspección</h1>
-        <p className="mt-3 max-w-3xl text-slate-400">La primera inspección nace de una cotización aceptada y autorizada. El folio carga automáticamente cliente e inmueble y exige 50% pagado, salvo excepción de Dirección.</p>
+        <h1 className="mt-3 text-4xl font-black">{antecedente ? `Nueva inspección V${antecedente.numeroInspeccion + 1}` : "Nueva inspección V1"}</h1>
+        <p className="mt-3 max-w-3xl text-slate-400">Cada versión de inspección requiere su propia cotización aceptada y autorizada y cumple las mismas reglas de pago. Las V2, V3, V4 y posteriores conservan además el antecedente de la versión anterior.</p>
 
         {params.error && <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-5 py-4 font-bold text-rose-200">{params.error}</div>}
 
         <form action={crearInspeccion} className="mt-8 space-y-6 rounded-3xl border border-white/10 bg-slate-900 p-7">
-          {antecedente ? (
+          {antecedente && (
             <>
               <input type="hidden" name="antecedenteId" value={antecedente.id} />
-              <input type="hidden" name="clienteId" value={antecedente.clienteId} />
-              <input type="hidden" name="inmuebleId" value={antecedente.inmuebleId ?? ""} />
               <div className="grid gap-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-5 md:grid-cols-2">
-                <Dato label="Antecedente" value={antecedente.folio} />
+                <Dato label="Antecedente inmediato" value={`V${antecedente.numeroInspeccion} · ${antecedente.folio}`} />
                 <Dato label="Cliente" value={antecedente.cliente.nombre} />
                 <Dato label="Inmueble" value={antecedente.inmueble?.alias ?? "Inmueble"} />
                 <Dato label="Dirección" value={antecedente.inmueble?.direccion ?? "—"} />
               </div>
             </>
-          ) : cotizaciones.length > 0 ? (
+          )}
+
+          {cotizaciones.length > 0 ? (
             <CotizacionSelect cotizaciones={cotizaciones} />
           ) : (
-            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5 text-amber-200">No hay cotizaciones disponibles. La cotización debe estar aceptada, autorizada, tener inmueble y contar con al menos 50% pagado o excepción de Dirección.</div>
+            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5 text-amber-200">
+              {antecedente
+                ? "No hay una nueva cotización disponible para este mismo cliente e inmueble. Para crear la siguiente versión debe existir otra cotización aceptada, autorizada y con al menos 50% pagado o excepción de Dirección."
+                : "No hay cotizaciones disponibles. La cotización debe estar aceptada, autorizada, tener inmueble y contar con al menos 50% pagado o excepción de Dirección."}
+            </div>
           )}
 
           <CampoSelect name="plantillaId" label="Plantilla de inspección *" required defaultValue={antecedente?.plantillaId ?? ""} options={plantillas.map((p) => ({ value: p.id, label: `${p.nombre} · Gerente: ${p.requiereGerenteZona ? "Sí" : "No"} · Coordinador: ${p.requiereCoordinador ? "Sí" : "No"}` }))} />
@@ -112,8 +121,8 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
           <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Fecha y hora *</span><input name="fechaProgramada" type="datetime-local" required className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300" /></label>
           <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Observaciones</span><textarea name="observaciones" rows={4} className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300" /></label>
 
-          <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm leading-6 text-slate-300"><p className="font-black text-amber-300">Reglas operativas</p><p className="mt-2">La apertura exige 50% de pago. El inicio de trabajo en campo exige 100%. Las excepciones son independientes y solo pueden ser autorizadas por Dirección.</p></div>
-          <button type="submit" disabled={!antecedente && cotizaciones.length === 0} className="w-full rounded-full bg-cyan-400 px-6 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">Crear y programar inspección</button>
+          <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm leading-6 text-slate-300"><p className="font-black text-amber-300">Reglas operativas para todas las versiones</p><p className="mt-2">V1, V2, V3, V4 y posteriores siguen el mismo recorrido: cotización → aceptación del cliente → autorización interna → Caja → mínimo 50% para abrir la inspección → 100% para iniciar campo. Las excepciones son independientes y solo puede autorizarlas Dirección.</p></div>
+          <button type="submit" disabled={cotizaciones.length === 0} className="w-full rounded-full bg-cyan-400 px-6 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">Crear y programar {antecedente ? `V${antecedente.numeroInspeccion + 1}` : "V1"}</button>
         </form>
       </div>
     </main>
