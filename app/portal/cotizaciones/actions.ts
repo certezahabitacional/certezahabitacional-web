@@ -43,6 +43,7 @@ export async function aceptarCotizacionCliente(
       select: {
         id: true,
         estado: true,
+        vigenciaHasta: true,
       },
     });
 
@@ -61,6 +62,10 @@ export async function aceptarCotizacionCliente(
     );
   }
 
+  if (cotizacion.vigenciaHasta && cotizacion.vigenciaHasta < new Date()) {
+    throw new Error("La vigencia de esta cotización terminó. Contacta a Certeza Habitacional para actualizarla.");
+  }
+
   await prisma.cotizacion.update({
     where: {
       id,
@@ -68,6 +73,8 @@ export async function aceptarCotizacionCliente(
     data: {
       estado:
         EstadoCotizacion.ACEPTADA,
+      aceptadaEn: new Date(),
+      solicitudAutorizacionEn: new Date(),
     },
   });
 
@@ -82,6 +89,7 @@ export async function aceptarCotizacionCliente(
   revalidatePath(
     `/portal/cotizaciones/${id}`,
   );
+  revalidatePath("/panel/cotizaciones");
 }
 
 export async function rechazarCotizacionCliente(
@@ -157,4 +165,5 @@ export async function rechazarCotizacionCliente(
   revalidatePath(
     `/portal/cotizaciones/${id}`,
   );
+  revalidatePath("/panel/cotizaciones");
 }
