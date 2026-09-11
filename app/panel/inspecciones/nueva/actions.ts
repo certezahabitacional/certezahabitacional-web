@@ -58,15 +58,16 @@ export async function crearInspeccion(formData: FormData) {
   const fechaProgramadaTexto = texto(formData, "fechaProgramada");
   const observaciones = texto(formData, "observaciones");
 
+  if (!cotizacionId) {
+    errorNuevaInspeccion("Selecciona la cotización autorizada que origina esta inspección.", antecedenteId || undefined);
+  }
+
   if (!clienteId || !inmuebleId || !plantillaId || !zonaId || !fechaProgramadaTexto) {
     errorNuevaInspeccion("Completa los campos obligatorios.", antecedenteId || undefined);
   }
 
-  if (!antecedenteId) {
-    if (!cotizacionId) errorNuevaInspeccion("Selecciona la cotización autorizada que origina la inspección.");
-    const validacion = await validarCotizacionParaNuevaInspeccion({ cotizacionId, clienteId, inmuebleId });
-    if (!validacion.ok) errorNuevaInspeccion(validacion.error);
-  }
+  const validacion = await validarCotizacionParaNuevaInspeccion({ cotizacionId, clienteId, inmuebleId });
+  if (!validacion.ok) errorNuevaInspeccion(validacion.error, antecedenteId || undefined);
 
   const [plantilla, zona, inmueble] = await Promise.all([
     prisma.plantillaInspeccion.findFirst({
@@ -123,14 +124,21 @@ export async function crearInspeccion(formData: FormData) {
   if (antecedenteId) {
     const antecedente = await prisma.inspeccion.findUnique({
       where: { id: antecedenteId },
-      select: { id: true, folio: true, estado: true, clienteId: true, inmuebleId: true, numeroInspeccion: true, zonaId: true, cotizacionId: true },
+      select: { id: true, folio: true, estado: true, clienteId: true, inmuebleId: true, numeroInspeccion: true, zonaId: true },
     });
     if (!antecedente) errorNuevaInspeccion("La inspección antecedente no existe.");
     if (antecedente.estado !== EstadoInspeccion.FINALIZADA) errorNuevaInspeccion("Solo una inspección FINALIZADA puede generar una nueva inspección de seguimiento.", antecedente.id);
-    if (antecedente.clienteId !== clienteId || antecedente.inmuebleId !== inmuebleId) errorNuevaInspeccion("El cliente o inmueble no coincide con la inspección antecedente.", antecedente.id);
+    if (antecedente.clienteId !== clienteId || antecedente.inmuebleId !== inmuebleId) errorNuevaInspeccion("La nueva cotización debe corresponder al mismo cliente e inmueble de la inspección antecedente.", antecedente.id);
     if (antecedente.zonaId && antecedente.zonaId !== zona.id) errorNuevaInspeccion("La inspección de seguimiento debe conservar la misma zona del antecedente.", antecedente.id);
-    const seguimientoExistente = await prisma.inspeccion.findFirst({ where: { inspeccionAnteriorId: antecedente.id }, select: { id: true, folio: true, numeroInspeccion: true } });
-    if (seguimientoExistente) redirect(`/panel/inspecciones/${seguimientoExistente.id}?ok=${encodeURIComponent(`Ya existe la inspección de seguimiento V${seguimientoExistente.numeroInspeccion} (${seguimientoExistente.folio}).`)}`);
+
+    const seguimientoExistente = await prisma.inspeccion.findFirst({
+      where: { inspeccionAnteriorId: antecedente.id },
+      select: { id: true, folio: true, numeroInspeccion: true },
+    });
+    if (seguimientoExistente) {
+      redirect(`/panel/inspecciones/${seguimientoExistente.id}?ok=${encodeURIComponent(`Ya existe la inspección de seguimiento V${seguimientoExistente.numeroInspeccion} (${seguimientoExistente.folio}).`)}`);
+    }
+
     inspeccionAnterior = { id: antecedente.id, folio: antecedente.folio, numeroInspeccion: antecedente.numeroInspeccion };
     numeroInspeccion = antecedente.numeroInspeccion + 1;
   } else {
@@ -161,7 +169,7 @@ export async function crearInspeccion(formData: FormData) {
       zonaId: zona.id,
       clienteId,
       inmuebleId,
-      cotizacionId: antecedenteId ? null : cotizacionId,
+      cotizacionId,
       numeroInspeccion,
       inspeccionAnteriorId: inspeccionAnterior?.id ?? null,
       inspectorId: inspectorSeleccionado?.id ?? null,
@@ -185,7 +193,7 @@ export async function crearInspeccion(formData: FormData) {
     entidadId: inspeccion.id,
     inspeccionId: inspeccion.id,
     usuarioId: session.user.id,
-    descripcion: `${usuarioActual.rol} creó y programó ${inspeccion.folio}${cotizacionId ? ` desde la cotización ${cotizacionId}` : " como seguimiento"} con plantilla ${plantilla.nombre} en ${zona.nombre}. ` +
+    descripcion: `${usuarioActual.rol} creó y programó ${inspeccion.folio} V${inspeccion.numeroInspeccion} desde la cotización ${validacion.cotizacion.folio}${inspeccionAnterior ? `, conservando antecedente ${inspeccionAnterior.folio}` : ""}, con plantilla ${plantilla.nombre} en ${zona.nombre}. ` +
       `Gerente requerido: ${plantilla.requiereGerenteZona ? "Sí" : "No"}. Coordinador requerido: ${plantilla.requiereCoordinador ? "Sí" : "No"}. ` +
       (inspectorSeleccionado ? `Inspector asignado: ${inspectorSeleccionado.usuario.nombre}.` : "Sin Inspector asignado."),
   });
