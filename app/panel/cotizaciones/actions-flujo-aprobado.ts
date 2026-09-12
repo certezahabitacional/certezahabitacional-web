@@ -17,7 +17,7 @@ async function gestor() {
   if (!session?.user?.id) redirect("/login");
   const usuario = await prisma.usuario.findUnique({
     where: { id: session.user.id },
-    select: { id: true, rol: true, activo: true },
+    select: { id: true, nombre: true, rol: true, activo: true },
   });
   if (
     !usuario?.activo ||
@@ -96,7 +96,7 @@ export async function aceptarEnRepresentacionDelCliente(formData: FormData) {
 
   const cotizacion = await prisma.cotizacion.findUnique({
     where: { id },
-    select: { id: true, folio: true, estado: true, vigenciaHasta: true, total: true, inmuebleId: true },
+    select: { id: true, folio: true, estado: true, vigenciaHasta: true, total: true, inmuebleId: true, observacionesInternas: true },
   });
   if (!cotizacion) volver("error", "La cotización no existe.");
   if (cotizacion.estado !== EstadoCotizacion.ENVIADA) {
@@ -110,13 +110,18 @@ export async function aceptarEnRepresentacionDelCliente(formData: FormData) {
   }
 
   const ahora = new Date();
+  const entradaExcepcion = `[${ahora.toISOString()}] ACEPTACIÓN POR EXCEPCIÓN EN REPRESENTACIÓN DEL CLIENTE. Registró: ${usuario.nombre} (${usuario.rol}). Motivo: ${motivo}`;
+  const observacionesInternas = cotizacion.observacionesInternas?.trim()
+    ? `${cotizacion.observacionesInternas.trim()}\n\n${entradaExcepcion}`
+    : entradaExcepcion;
+
   await prisma.cotizacion.update({
     where: { id },
     data: {
       estado: EstadoCotizacion.ACEPTADA,
       aceptadaEn: ahora,
       solicitudAutorizacionEn: ahora,
-      observacionesInternas: `ACEPTACIÓN POR EXCEPCIÓN EN REPRESENTACIÓN DEL CLIENTE. Motivo: ${motivo}`,
+      observacionesInternas,
     },
   });
   await registrarAuditoria({
