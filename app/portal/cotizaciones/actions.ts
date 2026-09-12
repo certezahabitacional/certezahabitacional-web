@@ -2,10 +2,12 @@
 
 import {
   EstadoCotizacion,
+  TipoEvento,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { obtenerClienteActual } from "@/lib/cliente-actual";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
 
 function texto(
@@ -42,6 +44,7 @@ export async function aceptarCotizacionCliente(
       },
       select: {
         id: true,
+        folio: true,
         estado: true,
         vigenciaHasta: true,
       },
@@ -77,6 +80,16 @@ export async function aceptarCotizacionCliente(
       solicitudAutorizacionEn: new Date(),
     },
   });
+
+  if (cliente.usuarioId) {
+    await registrarAuditoria({
+      tipo: TipoEvento.EDITAR,
+      entidad: "Cotizacion",
+      entidadId: id,
+      usuarioId: cliente.usuarioId,
+      descripcion: `El cliente aceptó la cotización ${cotizacion.folio} desde el portal.`,
+    });
+  }
 
   revalidatePath(
     "/portal",
@@ -123,6 +136,7 @@ export async function rechazarCotizacionCliente(
       },
       select: {
         id: true,
+        folio: true,
         estado: true,
       },
     });
@@ -153,6 +167,16 @@ export async function rechazarCotizacionCliente(
         motivo,
     },
   });
+
+  if (cliente.usuarioId) {
+    await registrarAuditoria({
+      tipo: TipoEvento.EDITAR,
+      entidad: "Cotizacion",
+      entidadId: id,
+      usuarioId: cliente.usuarioId,
+      descripcion: `El cliente rechazó la cotización ${cotizacion.folio} desde el portal.${motivo ? ` Motivo: ${motivo}` : ""}`,
+    });
+  }
 
   revalidatePath(
     "/portal",
