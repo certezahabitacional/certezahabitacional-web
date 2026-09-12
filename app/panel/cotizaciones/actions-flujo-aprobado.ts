@@ -1,6 +1,6 @@
 "use server";
 
-import { EstadoCotizacion, TipoEvento } from "@prisma/client";
+import { EstadoCotizacion, RolUsuario, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -19,7 +19,10 @@ async function gestor() {
     where: { id: session.user.id },
     select: { id: true, rol: true, activo: true },
   });
-  if (!usuario?.activo || (usuario.rol !== "DIRECTOR" && usuario.rol !== "ADMINISTRADOR")) {
+  if (
+    !usuario?.activo ||
+    (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)
+  ) {
     redirect("/acceso");
   }
   return usuario;
@@ -29,12 +32,25 @@ function volver(tipo: "ok" | "error", mensaje: string): never {
   redirect(`/panel/cotizaciones?${tipo}=${encodeURIComponent(mensaje)}`);
 }
 
+function estaVencida(vigenciaHasta: Date | null) {
+  return Boolean(vigenciaHasta && vigenciaHasta < new Date());
+}
+
 export async function marcarListaParaCliente(formData: FormData) {
   const usuario = await gestor();
   const id = texto(formData, "id");
   const cotizacion = await prisma.cotizacion.findUnique({
     where: { id },
-    select: { id: true, folio: true, estado: true, cliente: { select: { usuarioId: true } } },
+    select: {
+      id: true,
+      folio: true,
+      estado: true,
+      vigenciaHasta: true,
+      total: true,
+      inmuebleId: true,
+      cliente: { select: { usuarioId: true } },
+      versiones: { orderBy: { version: "desc" }, take: 1, select: { id: true } },
+    },
   });
   if (!cotizacion) volver("error", "La cotización no existe.");
   if (cotizacion.estado !== EstadoCotizacion.BORRADOR) {
@@ -42,6 +58,18 @@ export async function marcarListaParaCliente(formData: FormData) {
   }
   if (!cotizacion.cliente.usuarioId) {
     volver("error", "Asigna primero acceso al cliente para que pueda aceptar la cotización en el portal.");
+  }
+  if (!cotizacion.inmuebleId) {
+    volver("error", "La cotización debe estar vinculada a un inmueble antes de enviarse al cliente.");
+  }
+  if (Number(cotizacion.total) <= 0) {
+    volver("error", "La cotización debe tener un importe total mayor a cero.");
+  }
+  if (!cotizacion.versiones[0]) {
+    volver("error", "La cotización debe tener un documento definitivo registrado antes de enviarse al cliente.");
+  }
+  if (estaVencida(cotizacion.vigenciaHasta)) {
+    volver("error", "La cotización ya está vencida. Actualiza la vigencia antes de enviarla al cliente.");
   }
 
   await prisma.cotizacion.update({
@@ -68,14 +96,17 @@ export async function aceptarEnRepresentacionDelCliente(formData: FormData) {
 
   const cotizacion = await prisma.cotizacion.findUnique({
     where: { id },
-    select: { id: true, folio: true, estado: true, vigenciaHasta: true },
+    select: { id: true, folio: true, estado: true, vigenciaHasta: true, total: true, inmuebleId: true },
   });
   if (!cotizacion) volver("error", "La cotización no existe.");
   if (cotizacion.estado !== EstadoCotizacion.ENVIADA) {
     volver("error", "La aceptación por representación solo procede cuando la cotización está pendiente de aceptación del cliente.");
   }
-  if (cotizacion.vigenciaHasta && cotizacion.vigenciaHasta < new Date()) {
+  if (estaVencida(cotizacion.vigenciaHasta)) {
     volver("error", "La cotización está vencida y debe actualizarse antes de aceptarse.");
+  }
+  if (!cotizacion.inmuebleId || Number(cotizacion.total) <= 0) {
+    volver("error", "La cotización no está completa y no puede aceptarse por excepción.");
   }
 
   const ahora = new Date();
@@ -105,11 +136,27 @@ export async function autorizarCotizacionAceptada(formData: FormData) {
   const id = texto(formData, "id");
   const cotizacion = await prisma.cotizacion.findUnique({
     where: { id },
-    select: { id: true, folio: true, estado: true, aceptadaEn: true },
+    select: {
+      id: true,
+      folio: true,
+      estado: true,
+      aceptadaEn: true,
+      vigenciaHasta: true,
+      total: true,
+      inmuebleId: true,
+      clienteId: true,
+      versiones: { orderBy: { version: "desc" }, take: 1, select: { id: true } },
+    },
   });
   if (!cotizacion) volver("error", "La cotización no existe.");
   if (cotizacion.estado !== EstadoCotizacion.ACEPTADA || !cotizacion.aceptadaEn) {
     volver("error", "La cotización debe ser aceptada por el cliente antes de la autorización interna.");
+  }
+  if (estaVencida(cotizacion.vigenciaHasta)) {
+    volver("error", "La cotización venció antes de su autorización. Actualiza su vigencia y repite el recorrido de aceptación.");
+  }
+  if (!cotizacion.clienteId || !cotizacion.inmuebleId || Number(cotizacion.total) <= 0 || !cotizacion.versiones[0]) {
+    volver("error", "La cotización no está completa y no puede autorizarse.");
   }
 
   await prisma.cotizacion.update({
