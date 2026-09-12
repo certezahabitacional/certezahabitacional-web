@@ -39,7 +39,13 @@ export default async function CajaPage({ searchParams }: { searchParams: Promise
 
   return <main className="min-h-screen bg-slate-950 px-6 py-8 text-white"><div className="mx-auto max-w-7xl">
     <Link href="/panel" className="text-sm font-bold text-cyan-300">← Panel</Link>
-    <div className="mt-3 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><h1 className="text-3xl font-black">Caja</h1><p className="mt-2 text-slate-400">Cotizaciones aceptadas y autorizadas, pagos, saldos y liberaciones financieras.</p></div><form className="flex gap-2"><input name="q" defaultValue={busqueda} placeholder="Folio, cliente o inmueble" className="rounded-full border border-white/10 bg-slate-900 px-5 py-3"/><button className="rounded-full border border-white/15 px-5 py-3 font-bold">Filtrar</button></form></div>
+    <div className="mt-3 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+      <div><h1 className="text-3xl font-black">Caja</h1><p className="mt-2 text-slate-400">Cotizaciones aceptadas y autorizadas, pagos, saldos y liberaciones financieras.</p></div>
+      <div className="flex flex-wrap gap-3">
+        <Link href="/panel/caja/comisiones" className="rounded-full border border-amber-300/30 px-5 py-3 text-sm font-black text-amber-300">Estado de comisiones</Link>
+        <form className="flex gap-2"><input name="q" defaultValue={busqueda} placeholder="Folio, cliente o inmueble" className="rounded-full border border-white/10 bg-slate-900 px-5 py-3"/><button className="rounded-full border border-white/15 px-5 py-3 font-bold">Filtrar</button></form>
+      </div>
+    </div>
     {(params.ok || params.error) && <p className={`mt-6 rounded-2xl p-4 font-bold ${params.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{params.error ?? params.ok}</p>}
 
     <div className="mt-8 space-y-5">{cotizaciones.map((c) => {
