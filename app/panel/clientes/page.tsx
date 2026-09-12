@@ -17,7 +17,12 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const usuarioActual = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { rol: true, activo: true } });
-  if (!usuarioActual?.activo || ![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.VENDEDOR].includes(usuarioActual.rol)) redirect("/acceso");
+  if (
+    !usuarioActual?.activo ||
+    (usuarioActual.rol !== RolUsuario.DIRECTOR &&
+      usuarioActual.rol !== RolUsuario.ADMINISTRADOR &&
+      usuarioActual.rol !== RolUsuario.VENDEDOR)
+  ) redirect("/acceso");
 
   const esDirector = usuarioActual.rol === RolUsuario.DIRECTOR;
   const puedeGestionarAcceso = usuarioActual.rol === RolUsuario.DIRECTOR || usuarioActual.rol === RolUsuario.ADMINISTRADOR;
