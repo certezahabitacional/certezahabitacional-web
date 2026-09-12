@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { EstadoCotizacion, EstadoPago, Prisma, RolUsuario, TipoCliente, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -61,7 +62,7 @@ export async function incorporarCotizacionDefinitiva(fd: FormData) {
     const candidatos = criterios.length
       ? await prisma.cliente.findMany({
           where: { OR: criterios },
-          select: { id: true, nombre: true, correo: true, telefono: true, rfc: true, curp: true },
+          select: { id: true },
           take: 3,
         })
       : [];
@@ -69,54 +70,85 @@ export async function incorporarCotizacionDefinitiva(fd: FormData) {
     if (candidatos.length === 1) clienteId = candidatos[0].id;
   }
 
-  const resultado = await prisma.$transaction(async (tx) => {
-    const cliente = clienteId
-      ? await tx.cliente.findUnique({ where: { id: clienteId } })
-      : await tx.cliente.create({ data: { nombre, correo: correo || null, telefono: telefono || null, rfc: rfc || null, curp: curp || null, tipo: TipoCliente.PARTICULAR } });
-    if (!cliente) throw new Error("CLIENTE_NO_EXISTE");
-
-    const inmuebles = await tx.inmueble.findMany({ where: { clienteId: cliente.id, ciudad: { equals: ciudad, mode: Prisma.QueryMode.insensitive } }, select: { id: true, direccion: true, alias: true } });
-    const inmuebleCoincidente = inmuebles.find((i) => normalizar(i.direccion) === normalizar(direccion));
-    const inmueble = inmuebleCoincidente
-      ? await tx.inmueble.findUniqueOrThrow({ where: { id: inmuebleCoincidente.id } })
-      : await tx.inmueble.create({ data: { clienteId: cliente.id, alias, tipo: tipoInmueble, direccion, colonia: colonia || null, ciudad, estado, codigoPostal: codigoPostal || null, superficieConstruccionM2: Number.isFinite(superficie) && superficie > 0 ? superficie : null } });
-
-    const year = new Date().getFullYear();
-    const [secuencia] = await tx.$queryRaw<Array<{ valor: bigint }>>`SELECT nextval('"Cotizacion_folio_seq"') AS valor`;
-    const consecutivo = Number(secuencia.valor);
-    const folio = `CH-COT-${year}-${String(consecutivo).padStart(5, "0")}`;
-
-    const cotizacion = await tx.cotizacion.create({ data: {
-      folio, clienteId: cliente.id, inmuebleId: inmueble.id, creadaPorId: actor.id,
-      origenPublico: false, editablePublica: false, estado: EstadoCotizacion.BORRADOR, estadoPago: EstadoPago.PENDIENTE,
-      superficieM2: Number.isFinite(superficie) && superficie > 0 ? superficie : null,
-      precioBase: total, subtotal: total, total,
-      vigenciaHasta: new Date(`${vigencia}T23:59:59.999Z`),
-      notas: "Cotización definitiva incorporada mediante PDF.",
-    } });
-    return { cliente, inmueble, cotizacion };
-  });
-
+  // El documento se almacena antes de crear registros de negocio. Si la transacción
+  // de base de datos falla, el archivo se elimina. Así nunca quedan Cliente/Inmueble
+  // creados por una cotización cuyo PDF no pudo incorporarse.
+  const cotizacionId = randomUUID();
+  const ruta = `${cotizacionId}/cotizacion-definitiva-v1.pdf`;
   const supabase = obtenerSupabaseAdmin();
-  const ruta = `${resultado.cotizacion.id}/cotizacion-definitiva-v1.pdf`;
   const bytes = new Uint8Array(await pdf.arrayBuffer());
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(ruta, bytes, { contentType: "application/pdf", upsert: true });
-  if (uploadError) {
-    await prisma.cotizacion.delete({ where: { id: resultado.cotizacion.id } });
-    volver("error", `No fue posible almacenar el PDF: ${uploadError.message}`);
+  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(ruta, bytes, {
+    contentType: "application/pdf",
+    upsert: false,
+  });
+  if (uploadError) volver("error", `No fue posible almacenar el PDF: ${uploadError.message}`);
+
+  let resultado: { cliente: { nombre: string }; inmueble: { alias: string }; cotizacion: { id: string; folio: string } };
+  try {
+    resultado = await prisma.$transaction(async (tx) => {
+      const cliente = clienteId
+        ? await tx.cliente.findUnique({ where: { id: clienteId } })
+        : await tx.cliente.create({ data: { nombre, correo: correo || null, telefono: telefono || null, rfc: rfc || null, curp: curp || null, tipo: TipoCliente.PARTICULAR } });
+      if (!cliente) throw new Error("CLIENTE_NO_EXISTE");
+
+      const inmuebles = await tx.inmueble.findMany({
+        where: { clienteId: cliente.id, ciudad: { equals: ciudad, mode: Prisma.QueryMode.insensitive } },
+        select: { id: true, direccion: true },
+      });
+      const inmuebleCoincidente = inmuebles.find((i) => normalizar(i.direccion) === normalizar(direccion));
+      const inmueble = inmuebleCoincidente
+        ? await tx.inmueble.findUniqueOrThrow({ where: { id: inmuebleCoincidente.id } })
+        : await tx.inmueble.create({ data: { clienteId: cliente.id, alias, tipo: tipoInmueble, direccion, colonia: colonia || null, ciudad, estado, codigoPostal: codigoPostal || null, superficieConstruccionM2: Number.isFinite(superficie) && superficie > 0 ? superficie : null } });
+
+      const year = new Date().getFullYear();
+      const [secuencia] = await tx.$queryRaw<Array<{ valor: bigint }>>`SELECT nextval('"Cotizacion_folio_seq"') AS valor`;
+      const consecutivo = Number(secuencia.valor);
+      const folio = `CH-COT-${year}-${String(consecutivo).padStart(5, "0")}`;
+
+      const cotizacion = await tx.cotizacion.create({ data: {
+        id: cotizacionId,
+        folio,
+        clienteId: cliente.id,
+        inmuebleId: inmueble.id,
+        creadaPorId: actor.id,
+        origenPublico: false,
+        editablePublica: false,
+        estado: EstadoCotizacion.BORRADOR,
+        estadoPago: EstadoPago.PENDIENTE,
+        superficieM2: Number.isFinite(superficie) && superficie > 0 ? superficie : null,
+        precioBase: total,
+        subtotal: total,
+        total,
+        vigenciaHasta: new Date(`${vigencia}T23:59:59.999Z`),
+        notas: "Cotización definitiva incorporada mediante PDF.",
+      } });
+
+      await tx.cotizacionVersion.create({ data: {
+        cotizacionId: cotizacion.id,
+        version: 1,
+        total,
+        datos: { tipo: "COTIZACION_DEFINITIVA_PDF", bucket: BUCKET, ruta, nombreOriginal: pdf.name, mimeType: "application/pdf", bytes: pdf.size } satisfies Prisma.InputJsonValue,
+      } });
+
+      return { cliente: { nombre: cliente.nombre }, inmueble: { alias: inmueble.alias }, cotizacion: { id: cotizacion.id, folio: cotizacion.folio } };
+    });
+  } catch (error) {
+    await supabase.storage.from(BUCKET).remove([ruta]);
+    if (error instanceof Error && error.message === "CLIENTE_NO_EXISTE") {
+      volver("error", "El cliente seleccionado ya no existe. Actualiza la pantalla e inténtalo nuevamente.");
+    }
+    volver("error", "No fue posible incorporar la cotización. El PDF fue retirado y no se crearon registros incompletos.");
   }
 
-  await prisma.cotizacionVersion.create({ data: {
-    cotizacionId: resultado.cotizacion.id,
-    version: 1,
-    total,
-    datos: { tipo: "COTIZACION_DEFINITIVA_PDF", bucket: BUCKET, ruta, nombreOriginal: pdf.name, mimeType: "application/pdf", bytes: pdf.size } satisfies Prisma.InputJsonValue,
-  } });
-
   await registrarAuditoria({
-    tipo: TipoEvento.CREAR, entidad: "Cotizacion", entidadId: resultado.cotizacion.id, usuarioId: actor.id,
+    tipo: TipoEvento.CREAR,
+    entidad: "Cotizacion",
+    entidadId: resultado.cotizacion.id,
+    usuarioId: actor.id,
     descripcion: `${actor.rol} incorporó la cotización definitiva ${resultado.cotizacion.folio} mediante PDF y la vinculó al cliente ${resultado.cliente.nombre} e inmueble ${resultado.inmueble.alias}.`,
   });
-  revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/clientes"); revalidatePath("/panel/inmuebles");
+  revalidatePath("/panel/cotizaciones");
+  revalidatePath("/panel/clientes");
+  revalidatePath("/panel/inmuebles");
   redirect(`/panel/cotizaciones?ok=${encodeURIComponent(`Cotización ${resultado.cotizacion.folio} incorporada. Asigna acceso al cliente y ponla a aceptación.`)}`);
 }
