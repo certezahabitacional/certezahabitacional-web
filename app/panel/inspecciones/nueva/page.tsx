@@ -19,7 +19,11 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
     select: { id: true, rol: true, activo: true, zonaId: true },
   });
   if (!usuarioActual?.activo) redirect("/acceso");
-  if (![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.GERENTE].includes(usuarioActual.rol)) redirect("/acceso");
+  if (
+    usuarioActual.rol !== RolUsuario.DIRECTOR &&
+    usuarioActual.rol !== RolUsuario.ADMINISTRADOR &&
+    usuarioActual.rol !== RolUsuario.GERENTE
+  ) redirect("/acceso");
 
   const params = await searchParams;
   const antecedenteId = params.antecedenteId?.trim() || "";
