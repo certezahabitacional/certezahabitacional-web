@@ -11,7 +11,8 @@ function fecha(v: Date | null) { return v ? new Intl.DateTimeFormat("es-MX", { d
 export default async function CotizacionesPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; q?: string }> }) {
  const session = await auth(); if (!session?.user?.id) redirect("/login");
  const u = await prisma.usuario.findUnique({ where:{id:session.user.id}, select:{rol:true,activo:true} });
- if (!u?.activo || ![RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.VENDEDOR].includes(u.rol)) redirect("/acceso");
+ const puedeEntrar = u?.rol === RolUsuario.DIRECTOR || u?.rol === RolUsuario.ADMINISTRADOR || u?.rol === RolUsuario.VENDEDOR;
+ if (!u?.activo || !puedeEntrar) redirect("/acceso");
  const p=await searchParams, q=(p.q??"").trim(), gestiona=u.rol===RolUsuario.DIRECTOR||u.rol===RolUsuario.ADMINISTRADOR;
  const cs=await prisma.cotizacion.findMany({where:q?{OR:[{folio:{contains:q,mode:"insensitive"}},{cliente:{nombre:{contains:q,mode:"insensitive"}}},{inmueble:{alias:{contains:q,mode:"insensitive"}}}]}:undefined,select:{id:true,folio:true,estado:true,total:true,montoPagado:true,creadoEn:true,vigenciaHasta:true,aceptadaEn:true,autorizadaEn:true,observacionesInternas:true,cliente:{select:{nombre:true,usuarioId:true}},inmueble:{select:{alias:true,direccion:true,ciudad:true}},inspeccion:{select:{id:true,folio:true,numeroInspeccion:true}}},orderBy:{creadoEn:"desc"}});
  const pc=cs.filter(c=>c.estado===EstadoCotizacion.ENVIADA).length, pa=cs.filter(c=>c.estado===EstadoCotizacion.ACEPTADA).length, az=cs.filter(c=>c.estado===EstadoCotizacion.AUTORIZADA).length;
