@@ -132,94 +132,76 @@ enum TipoEvento {
 
 model PlantillaInspeccion {
   id String @id @default(cuid())
-
-  nombre       String
-  codigo       String  @unique
-  descripcion  String?
+  nombre String
+  codigo String @unique
+  descripcion String?
   tipoServicio String
-  activa       Boolean @default(true)
-
+  activa Boolean @default(true)
   requiereGerenteZona Boolean @default(false)
   requiereCoordinador Boolean @default(false)
-
-  creadoEn      DateTime @default(now())
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
   inspecciones Inspeccion[]
-
   @@index([activa])
   @@index([tipoServicio])
 }
 
 model Zona {
   id String @id @default(cuid())
-
-  nombre      String
-  codigo      String  @unique
-  ciudad      String?
-  estado      String?
-  zonaHoraria String  @default("America/Ciudad_Juarez")
-  activa      Boolean @default(true)
-
-  creadoEn      DateTime @default(now())
+  nombre String
+  codigo String @unique
+  ciudad String?
+  estado String?
+  zonaHoraria String @default("America/Ciudad_Juarez")
+  activa Boolean @default(true)
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
-  usuarios     Usuario[]
+  usuarios Usuario[]
   inspecciones Inspeccion[]
   cotizaciones Cotizacion[]
-
   @@index([nombre])
   @@index([activa])
 }
 
 model Usuario {
-  id                     String     @id @default(cuid())
-  nombre                 String
-  email                  String     @unique
-  passwordHash           String
-  rol                    RolUsuario @default(INSPECTOR)
-  activo                 Boolean    @default(true)
-  requiereCambioPassword Boolean    @default(false)
-  ultimoAcceso           DateTime?
-  intentosFallidos       Int        @default(0)
-  bloqueadoHasta         DateTime?
-  ultimoFalloLogin       DateTime?
-  creadoEn               DateTime   @default(now())
-  actualizadoEn          DateTime   @updatedAt
-
+  id String @id @default(cuid())
+  nombre String
+  email String @unique
+  passwordHash String
+  rol RolUsuario @default(INSPECTOR)
+  activo Boolean @default(true)
+  requiereCambioPassword Boolean @default(false)
+  ultimoAcceso DateTime?
+  intentosFallidos Int @default(0)
+  bloqueadoHasta DateTime?
+  ultimoFalloLogin DateTime?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
   zonaId String?
-  zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
-
-  gerenteId           String?
-  gerente             Usuario?  @relation("GerenteCoordinadores", fields: [gerenteId], references: [id], onDelete: SetNull)
+  zona Zona? @relation(fields: [zonaId], references: [id], onDelete: SetNull)
+  gerenteId String?
+  gerente Usuario? @relation("GerenteCoordinadores", fields: [gerenteId], references: [id], onDelete: SetNull)
   coordinadoresACargo Usuario[] @relation("GerenteCoordinadores")
-
-  coordinadorId     String?
-  coordinador       Usuario?  @relation("CoordinadorInspectores", fields: [coordinadorId], references: [id], onDelete: SetNull)
+  coordinadorId String?
+  coordinador Usuario? @relation("CoordinadorInspectores", fields: [coordinadorId], references: [id], onDelete: SetNull)
   inspectoresACargo Usuario[] @relation("CoordinadorInspectores")
-
   inspector Inspector?
-  cliente   Cliente?
-
-  hallazgosCreados Hallazgo[]        @relation("HallazgoCreadoPor")
-  fotosSubidas     Fotografia[]      @relation("FotoSubidaPor")
-  eventos          EventoAuditoria[]
-
-  cotizacionesCreadas     Cotizacion[] @relation("CotizacionCreadaPor")
+  cliente Cliente?
+  hallazgosCreados Hallazgo[] @relation("HallazgoCreadoPor")
+  fotosSubidas Fotografia[] @relation("FotoSubidaPor")
+  eventos EventoAuditoria[]
+  cotizacionesCreadas Cotizacion[] @relation("CotizacionCreadaPor")
   cotizacionesAutorizadas Cotizacion[] @relation("CotizacionAutorizadaPor")
-  cotizacionesRechazadas  Cotizacion[] @relation("CotizacionRechazadaPor")
-  inspeccionesAgendadas   Inspeccion[] @relation("InspeccionAgendadaPor")
-  pagosRegistrados       PagoCotizacion[] @relation("PagoCotizacionRegistradoPor")
-  excepcionesApertura    Cotizacion[] @relation("CotizacionExcepcionAperturaPor")
-  excepcionesInicio      Cotizacion[] @relation("CotizacionExcepcionInicioPor")
-  observacionesAgenda    ObservacionAgenda[] @relation("ObservacionAgendaRegistradaPor")
-
+  cotizacionesRechazadas Cotizacion[] @relation("CotizacionRechazadaPor")
+  inspeccionesAgendadas Inspeccion[] @relation("InspeccionAgendadaPor")
+  pagosRegistrados PagoCotizacion[] @relation("PagoCotizacionRegistradoPor")
+  excepcionesApertura Cotizacion[] @relation("CotizacionExcepcionAperturaPor")
+  excepcionesInicio Cotizacion[] @relation("CotizacionExcepcionInicioPor")
+  observacionesAgenda ObservacionAgenda[] @relation("ObservacionAgendaRegistradaPor")
   revisionesInspeccion RevisionInspeccion[] @relation("RevisionUsuario")
-  bloqueosLiberacion   Inspeccion[]         @relation("InspeccionBloqueadaPor")
-
+  bloqueosLiberacion Inspeccion[] @relation("InspeccionBloqueadaPor")
   reasignacionesSolicitadas ReasignacionInspector[] @relation("ReasignacionSolicitadaPor")
-  reasignacionesResueltas   ReasignacionInspector[] @relation("ReasignacionResueltaPor")
-
+  reasignacionesResueltas ReasignacionInspector[] @relation("ReasignacionResueltaPor")
   @@index([bloqueadoHasta])
   @@index([zonaId])
   @@index([gerenteId])
@@ -227,31 +209,29 @@ model Usuario {
 }
 
 model Cliente {
-  id        String   @id @default(cuid())
-  usuarioId String?  @unique
-  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-
-  nombre       String
-  telefono     String?
-  correo       String?
-  tipo         TipoCliente @default(PARTICULAR)
-  empresa      String?
-  rfc          String?
-  curp         String?
-  direccion    String?
-  colonia      String?
-  ciudad       String?
-  estado       String?
+  id String @id @default(cuid())
+  folio String @unique @default(dbgenerated("('CH-CLI-'::text || ((EXTRACT(year FROM CURRENT_DATE))::integer)::text) || '-'::text || lpad((nextval('\"Cliente_folio_seq\"'::regclass))::text, 6, '0'::text))"))
+  usuarioId String? @unique
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  nombre String
+  telefono String?
+  correo String?
+  tipo TipoCliente @default(PARTICULAR)
+  empresa String?
+  rfc String?
+  curp String?
+  direccion String?
+  colonia String?
+  ciudad String?
+  estado String?
   codigoPostal String?
-  notas        String?
-
-  creadoEn      DateTime @default(now())
+  notas String?
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @default(now()) @updatedAt
-
-  inmuebles    Inmueble[]
+  inmuebles Inmueble[]
   inspecciones Inspeccion[]
   cotizaciones Cotizacion[]
-
+  @@index([folio])
   @@index([nombre])
   @@index([correo])
   @@index([telefono])
@@ -259,132 +239,101 @@ model Cliente {
 }
 
 model Inmueble {
-  id        String  @id @default(cuid())
+  id String @id @default(cuid())
   clienteId String
-  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-
-  alias        String
-  tipo         String
-  direccion    String
-  colonia      String?
-  ciudad       String
-  estado       String
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  alias String
+  tipo String
+  direccion String
+  colonia String?
+  ciudad String
+  estado String
   codigoPostal String?
-
-  latitud  Decimal? @db.Decimal(10, 7)
+  latitud Decimal? @db.Decimal(10, 7)
   longitud Decimal? @db.Decimal(10, 7)
-
-  superficieTerrenoM2      Decimal? @db.Decimal(10, 2)
+  superficieTerrenoM2 Decimal? @db.Decimal(10, 2)
   superficieConstruccionM2 Decimal? @db.Decimal(10, 2)
-
-  anioConstruccion  Int?
+  anioConstruccion Int?
   nombreConstructor String? @map("constructor")
-  desarrollo        String?
-  numeroEscritura   String?
-  notas             String?
-
-  creadoEn      DateTime @default(now())
+  desarrollo String?
+  numeroEscritura String?
+  notas String?
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
   inspecciones Inspeccion[]
   cotizaciones Cotizacion[]
-
   @@index([clienteId])
   @@index([ciudad])
 }
 
 model Inspector {
-  id        String  @id @default(cuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  telefono     String?
+  id String @id @default(cuid())
+  usuarioId String @unique
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  telefono String?
   especialidad String?
-  cedula       String?
-  ciudad       String?
-  activo       Boolean @default(true)
-
-  creadoEn      DateTime @default(now())
+  cedula String?
+  ciudad String?
+  activo Boolean @default(true)
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
   inspecciones Inspeccion[]
-
-  reasignacionesComoAnterior  ReasignacionInspector[] @relation("ReasignacionInspectorAnterior")
+  reasignacionesComoAnterior ReasignacionInspector[] @relation("ReasignacionInspectorAnterior")
   reasignacionesComoPropuesto ReasignacionInspector[] @relation("ReasignacionInspectorPropuesto")
 }
 
 model Inspeccion {
-  id    String @id @default(cuid())
+  id String @id @default(cuid())
   folio String @unique
-
   plantillaId String?
-  plantilla   PlantillaInspeccion? @relation(fields: [plantillaId], references: [id], onDelete: SetNull)
-
-  // Copia histórica de la configuración de la plantilla al crear la inspección.
+  plantilla PlantillaInspeccion? @relation(fields: [plantillaId], references: [id], onDelete: SetNull)
   requiereGerenteZona Boolean @default(false)
   requiereCoordinador Boolean @default(false)
-
   zonaId String?
-  zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
-
+  zona Zona? @relation(fields: [zonaId], references: [id], onDelete: SetNull)
   clienteId String
-  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   inmuebleId String?
-  inmueble   Inmueble? @relation(fields: [inmuebleId], references: [id], onDelete: SetNull)
-
+  inmueble Inmueble? @relation(fields: [inmuebleId], references: [id], onDelete: SetNull)
   numeroInspeccion Int @default(1)
-
-  inspeccionAnteriorId   String?
-  inspeccionAnterior     Inspeccion?  @relation("SeguimientoInspeccion", fields: [inspeccionAnteriorId], references: [id], onDelete: SetNull)
+  inspeccionAnteriorId String?
+  inspeccionAnterior Inspeccion? @relation("SeguimientoInspeccion", fields: [inspeccionAnteriorId], references: [id], onDelete: SetNull)
   inspeccionesSiguientes Inspeccion[] @relation("SeguimientoInspeccion")
-
   inspectorId String?
-  inspector   Inspector? @relation(fields: [inspectorId], references: [id], onDelete: SetNull)
-
+  inspector Inspector? @relation(fields: [inspectorId], references: [id], onDelete: SetNull)
   agendadaPorId String?
-  agendadaPor   Usuario? @relation("InspeccionAgendadaPor", fields: [agendadaPorId], references: [id], onDelete: SetNull)
-
-  cotizacionId String?     @unique
-  cotizacion   Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
-
+  agendadaPor Usuario? @relation("InspeccionAgendadaPor", fields: [agendadaPorId], references: [id], onDelete: SetNull)
+  cotizacionId String? @unique
+  cotizacion Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
   tipoServicio String
   tipoInmueble String
-  direccion    String
-  ciudad       String
-
+  direccion String
+  ciudad String
   superficieM2 Decimal? @db.Decimal(10, 2)
-
   fechaProgramada DateTime
-  zonaHoraria     String           @default("America/Ciudad_Juarez")
-  estado          EstadoInspeccion @default(PROGRAMADA)
-
+  zonaHoraria String @default("America/Ciudad_Juarez")
+  estado EstadoInspeccion @default(PROGRAMADA)
   observaciones String?
-  ish           Decimal? @db.Decimal(5, 2)
-  semaforo      String?
-
-  inicioLiberadoSinPago Boolean   @default(false)
-  inicioLiberadoPorId   String?
-  inicioLiberadoEn      DateTime?
-  motivoLiberacionPago  String?
-
-  liberacionBloqueada     Boolean   @default(false)
-  bloqueadaPorId          String?
-  bloqueadaPor            Usuario?  @relation("InspeccionBloqueadaPor", fields: [bloqueadaPorId], references: [id], onDelete: SetNull)
-  bloqueadaEn             DateTime?
+  ish Decimal? @db.Decimal(5, 2)
+  semaforo String?
+  inicioLiberadoSinPago Boolean @default(false)
+  inicioLiberadoPorId String?
+  inicioLiberadoEn DateTime?
+  motivoLiberacionPago String?
+  liberacionBloqueada Boolean @default(false)
+  bloqueadaPorId String?
+  bloqueadaPor Usuario? @relation("InspeccionBloqueadaPor", fields: [bloqueadaPorId], references: [id], onDelete: SetNull)
+  bloqueadaEn DateTime?
   motivoBloqueoLiberacion String?
-
-  creadoEn      DateTime @default(now())
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
-  hallazgos      Hallazgo[]
-  fotografias    Fotografia[]
-  firmas         Firma[]
-  certificado    Certificado?
-  eventos        EventoAuditoria[]
-  revisiones     RevisionInspeccion[]
+  hallazgos Hallazgo[]
+  fotografias Fotografia[]
+  firmas Firma[]
+  certificado Certificado?
+  eventos EventoAuditoria[]
+  revisiones RevisionInspeccion[]
   reasignaciones ReasignacionInspector[]
-
   @@index([plantillaId])
   @@index([fechaProgramada])
   @@index([estado])
@@ -402,30 +351,21 @@ model Inspeccion {
 
 model ReasignacionInspector {
   id String @id @default(cuid())
-
   inspeccionId String
-  inspeccion   Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-
+  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
   inspectorAnteriorId String?
-  inspectorAnterior   Inspector? @relation("ReasignacionInspectorAnterior", fields: [inspectorAnteriorId], references: [id], onDelete: SetNull)
-
+  inspectorAnterior Inspector? @relation("ReasignacionInspectorAnterior", fields: [inspectorAnteriorId], references: [id], onDelete: SetNull)
   inspectorPropuestoId String
-  inspectorPropuesto   Inspector @relation("ReasignacionInspectorPropuesto", fields: [inspectorPropuestoId], references: [id], onDelete: Restrict)
-
+  inspectorPropuesto Inspector @relation("ReasignacionInspectorPropuesto", fields: [inspectorPropuestoId], references: [id], onDelete: Restrict)
   solicitadaPorId String
-  solicitadaPor   Usuario @relation("ReasignacionSolicitadaPor", fields: [solicitadaPorId], references: [id], onDelete: Restrict)
-
+  solicitadaPor Usuario @relation("ReasignacionSolicitadaPor", fields: [solicitadaPorId], references: [id], onDelete: Restrict)
   resueltaPorId String?
-  resueltaPor   Usuario? @relation("ReasignacionResueltaPor", fields: [resueltaPorId], references: [id], onDelete: SetNull)
-
+  resueltaPor Usuario? @relation("ReasignacionResueltaPor", fields: [resueltaPorId], references: [id], onDelete: SetNull)
   estado EstadoReasignacionInspector @default(PENDIENTE)
-
-  motivo               String
+  motivo String
   comentarioResolucion String?
-
-  solicitadaEn DateTime  @default(now())
-  resueltaEn   DateTime?
-
+  solicitadaEn DateTime @default(now())
+  resueltaEn DateTime?
   @@index([inspeccionId])
   @@index([inspectorAnteriorId])
   @@index([inspectorPropuestoId])
@@ -437,20 +377,15 @@ model ReasignacionInspector {
 
 model RevisionInspeccion {
   id String @id @default(cuid())
-
   inspeccionId String
-  inspeccion   Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-
+  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
   usuarioId String
-  usuario   Usuario @relation("RevisionUsuario", fields: [usuarioId], references: [id], onDelete: Restrict)
-
-  rol      RolUsuario
+  usuario Usuario @relation("RevisionUsuario", fields: [usuarioId], references: [id], onDelete: Restrict)
+  rol RolUsuario
   decision TipoDecisionRevision
-  estado   EstadoDecisionRevision @default(VIGENTE)
-
+  estado EstadoDecisionRevision @default(VIGENTE)
   comentario String?
-  creadaEn   DateTime @default(now())
-
+  creadaEn DateTime @default(now())
   @@index([inspeccionId])
   @@index([usuarioId])
   @@index([rol])
@@ -461,40 +396,29 @@ model RevisionInspeccion {
 
 model Hallazgo {
   id String @id @default(cuid())
-
   inspeccionId String
-  inspeccion   Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-
+  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
   creadoPorId String?
-  creadoPor   Usuario? @relation("HallazgoCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
-
-  hallazgoAnteriorId  String?
-  hallazgoAnterior    Hallazgo?  @relation("SeguimientoHallazgo", fields: [hallazgoAnteriorId], references: [id], onDelete: SetNull)
+  creadoPor Usuario? @relation("HallazgoCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  hallazgoAnteriorId String?
+  hallazgoAnterior Hallazgo? @relation("SeguimientoHallazgo", fields: [hallazgoAnteriorId], references: [id], onDelete: SetNull)
   hallazgosSiguientes Hallazgo[] @relation("SeguimientoHallazgo")
-
-  estadoSeguimiento      EstadoSeguimientoHallazgo?
+  estadoSeguimiento EstadoSeguimientoHallazgo?
   observacionSeguimiento String?
-
-  area        String
-  titulo      String
+  area String
+  titulo String
   descripcion String
-
   clasificacion ClasificacionHallazgo
-  prioridad     PrioridadHallazgo
-
-  recomendacion    String?
-  ubicacion        String?
-  costoEstimado    Decimal? @db.Decimal(12, 2)
+  prioridad PrioridadHallazgo
+  recomendacion String?
+  ubicacion String?
+  costoEstimado Decimal? @db.Decimal(12, 2)
   tiempoReparacion String?
-  responsable      String?
-
+  responsable String?
   resuelto Boolean @default(false)
-
-  creadoEn      DateTime @default(now())
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
   fotografias Fotografia[]
-
   @@index([inspeccionId])
   @@index([hallazgoAnteriorId])
   @@index([estadoSeguimiento])
@@ -504,85 +428,63 @@ model Hallazgo {
 
 model Fotografia {
   id String @id @default(cuid())
-
   inspeccionId String
-  inspeccion   Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-
+  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
   hallazgoId String?
-  hallazgo   Hallazgo? @relation(fields: [hallazgoId], references: [id], onDelete: SetNull)
-
+  hallazgo Hallazgo? @relation(fields: [hallazgoId], references: [id], onDelete: SetNull)
   subidaPorId String?
-  subidaPor   Usuario? @relation("FotoSubidaPor", fields: [subidaPorId], references: [id], onDelete: SetNull)
-
-  url         String
-  publicId    String? @unique
+  subidaPor Usuario? @relation("FotoSubidaPor", fields: [subidaPorId], references: [id], onDelete: SetNull)
+  url String
+  publicId String? @unique
   descripcion String?
-
-  latitud  Decimal? @db.Decimal(10, 7)
+  latitud Decimal? @db.Decimal(10, 7)
   longitud Decimal? @db.Decimal(10, 7)
-
   tomadaEn DateTime?
-  creadaEn DateTime  @default(now())
-
+  creadaEn DateTime @default(now())
   @@index([inspeccionId])
   @@index([hallazgoId])
 }
 
 model Firma {
   id String @id @default(cuid())
-
   inspeccionId String
-  inspeccion   Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-
-  tipo           String
+  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  tipo String
   nombreFirmante String
-  imagenUrl      String
-
+  imagenUrl String
   firmadaEn DateTime @default(now())
-  ip        String?
-
+  ip String?
   @@index([inspeccionId])
 }
 
 model Certificado {
   id String @id @default(cuid())
-
-  inspeccionId String     @unique
-  inspeccion   Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-
-  folio            String @unique
+  inspeccionId String @unique
+  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  folio String @unique
   codigoValidacion String @unique
-
   dictamen String
-  ish      Decimal @db.Decimal(5, 2)
-
+  ish Decimal @db.Decimal(5, 2)
   emitidoEn DateTime @default(now())
-  pdfUrl    String?
-
-  vigente          Boolean   @default(true)
+  pdfUrl String?
+  vigente Boolean @default(true)
   motivoRevocacion String?
-  revocadoEn       DateTime?
+  revocadoEn DateTime?
 }
 
 model EventoAuditoria {
   id String @id @default(cuid())
-
   usuarioId String?
-  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   inspeccionId String?
-  inspeccion   Inspeccion? @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-
-  tipo        TipoEvento
-  entidad     String
-  entidadId   String?
+  inspeccion Inspeccion? @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  tipo TipoEvento
+  entidad String
+  entidadId String?
   descripcion String
-
-  ip        String?
+  ip String?
   navegador String?
-
   creadoEn DateTime @default(now())
-
   @@index([usuarioId])
   @@index([inspeccionId])
   @@index([tipo])
@@ -592,110 +494,81 @@ model EventoAuditoria {
 
 model PaqueteServicio {
   id String @id @default(cuid())
-
-  nombre      String
-  codigo      String  @unique
+  nombre String
+  codigo String @unique
   descripcion String?
-
   tipoCalculo TipoCalculoPrecio @default(HIBRIDO)
-
-  precioBase           Decimal  @db.Decimal(12, 2)
+  precioBase Decimal @db.Decimal(12, 2)
   superficieIncluidaM2 Decimal? @db.Decimal(10, 2)
-  precioM2Adicional    Decimal? @db.Decimal(12, 2)
-
+  precioM2Adicional Decimal? @db.Decimal(12, 2)
   superficieMinimaM2 Decimal? @db.Decimal(10, 2)
   superficieMaximaM2 Decimal? @db.Decimal(10, 2)
-
   activo Boolean @default(true)
-  orden  Int     @default(0)
-
-  creadoEn      DateTime @default(now())
+  orden Int @default(0)
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
   cotizaciones Cotizacion[]
-
   @@index([activo])
   @@index([orden])
 }
 
 model Cotizacion {
-  id    String @id @default(cuid())
+  id String @id @default(cuid())
   folio String @unique
-
-  // Origen y control de la pre-cotización pública.
-  origenPublico   Boolean @default(false)
+  origenPublico Boolean @default(false)
   editablePublica Boolean @default(true)
-  versionActual   Int     @default(1)
-
+  versionActual Int @default(1)
   zonaId String?
-  zona   Zona?   @relation(fields: [zonaId], references: [id], onDelete: SetNull)
-
+  zona Zona? @relation(fields: [zonaId], references: [id], onDelete: SetNull)
   clienteId String
-  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   inmuebleId String?
-  inmueble   Inmueble? @relation(fields: [inmuebleId], references: [id], onDelete: SetNull)
-
+  inmueble Inmueble? @relation(fields: [inmuebleId], references: [id], onDelete: SetNull)
   paqueteId String?
-  paquete   PaqueteServicio? @relation(fields: [paqueteId], references: [id], onDelete: SetNull)
-
+  paquete PaqueteServicio? @relation(fields: [paqueteId], references: [id], onDelete: SetNull)
   creadaPorId String?
-  creadaPor   Usuario? @relation("CotizacionCreadaPor", fields: [creadaPorId], references: [id], onDelete: SetNull)
-
+  creadaPor Usuario? @relation("CotizacionCreadaPor", fields: [creadaPorId], references: [id], onDelete: SetNull)
   autorizadaPorId String?
-  autorizadaPor   Usuario?  @relation("CotizacionAutorizadaPor", fields: [autorizadaPorId], references: [id], onDelete: SetNull)
-  autorizadaEn    DateTime?
-
+  autorizadaPor Usuario? @relation("CotizacionAutorizadaPor", fields: [autorizadaPorId], references: [id], onDelete: SetNull)
+  autorizadaEn DateTime?
   rechazadaPorId String?
-  rechazadaPor   Usuario?  @relation("CotizacionRechazadaPor", fields: [rechazadaPorId], references: [id], onDelete: SetNull)
-  rechazadaEn    DateTime?
-  motivoRechazo  String?
-
+  rechazadaPor Usuario? @relation("CotizacionRechazadaPor", fields: [rechazadaPorId], references: [id], onDelete: SetNull)
+  rechazadaEn DateTime?
+  motivoRechazo String?
   solicitudAutorizacionEn DateTime?
   aceptadaEn DateTime?
-
   zonaHoraria String @default("America/Ciudad_Juarez")
-
   superficieM2 Decimal? @db.Decimal(10, 2)
-
-  precioBase             Decimal @default(0) @db.Decimal(12, 2)
-  metrosAdicionales      Decimal @default(0) @db.Decimal(10, 2)
+  precioBase Decimal @default(0) @db.Decimal(12, 2)
+  metrosAdicionales Decimal @default(0) @db.Decimal(10, 2)
   cargoMetrosAdicionales Decimal @default(0) @db.Decimal(12, 2)
-
   cargosExtra Decimal @default(0) @db.Decimal(12, 2)
-  descuento   Decimal @default(0) @db.Decimal(12, 2)
-  subtotal    Decimal @default(0) @db.Decimal(12, 2)
-  total       Decimal @default(0) @db.Decimal(12, 2)
-
-  estado      EstadoCotizacion @default(BORRADOR)
-  estadoPago  EstadoPago       @default(PENDIENTE)
-  esquemaPago EsquemaPago      @default(UNA_EXHIBICION)
-  montoPagado Decimal          @default(0) @db.Decimal(12, 2)
-
-  excepcionApertura       Boolean  @default(false)
-  excepcionAperturaPorId  String?
-  excepcionAperturaPor    Usuario? @relation("CotizacionExcepcionAperturaPor", fields: [excepcionAperturaPorId], references: [id], onDelete: SetNull)
-  excepcionAperturaEn     DateTime?
+  descuento Decimal @default(0) @db.Decimal(12, 2)
+  subtotal Decimal @default(0) @db.Decimal(12, 2)
+  total Decimal @default(0) @db.Decimal(12, 2)
+  estado EstadoCotizacion @default(BORRADOR)
+  estadoPago EstadoPago @default(PENDIENTE)
+  esquemaPago EsquemaPago @default(UNA_EXHIBICION)
+  montoPagado Decimal @default(0) @db.Decimal(12, 2)
+  excepcionApertura Boolean @default(false)
+  excepcionAperturaPorId String?
+  excepcionAperturaPor Usuario? @relation("CotizacionExcepcionAperturaPor", fields: [excepcionAperturaPorId], references: [id], onDelete: SetNull)
+  excepcionAperturaEn DateTime?
   motivoExcepcionApertura String?
-
-  excepcionInicio       Boolean  @default(false)
-  excepcionInicioPorId  String?
-  excepcionInicioPor    Usuario? @relation("CotizacionExcepcionInicioPor", fields: [excepcionInicioPorId], references: [id], onDelete: SetNull)
-  excepcionInicioEn     DateTime?
+  excepcionInicio Boolean @default(false)
+  excepcionInicioPorId String?
+  excepcionInicioPor Usuario? @relation("CotizacionExcepcionInicioPor", fields: [excepcionInicioPorId], references: [id], onDelete: SetNull)
+  excepcionInicioEn DateTime?
   motivoExcepcionInicio String?
-
-  vigenciaHasta         DateTime?
-  notas                 String?
+  vigenciaHasta DateTime?
+  notas String?
   observacionesInternas String?
-
   inspeccion Inspeccion?
-  versiones  CotizacionVersion[]
+  versiones CotizacionVersion[]
   pagos PagoCotizacion[]
   observacionesAgenda ObservacionAgenda[]
-
-  creadoEn      DateTime @default(now())
+  creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
-
   @@index([clienteId])
   @@index([inmuebleId])
   @@index([paqueteId])
@@ -745,16 +618,12 @@ model ObservacionAgenda {
 
 model CotizacionVersion {
   id String @id @default(cuid())
-
   cotizacionId String
-  cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-
+  cotizacion Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
   version Int
-  datos   Json
-  total   Decimal @default(0) @db.Decimal(12, 2)
-
+  datos Json
+  total Decimal @default(0) @db.Decimal(12, 2)
   creadaEn DateTime @default(now())
-
   @@unique([cotizacionId, version])
   @@index([cotizacionId])
   @@index([creadaEn])

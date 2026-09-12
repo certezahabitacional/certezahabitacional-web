@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
 import { auth } from "@/auth";
+import { ordenarYFiltrarFotografias, obtenerSeleccionEvidenciaReporte } from "@/lib/evidencia-reporte";
 import { puede, puedeAbrirExpedienteTecnico } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "./PrintButton";
@@ -269,6 +270,14 @@ export default async function ReportePage({
     ) ?? null;
 
   const supabase = obtenerSupabase();
+  const seleccionEditorial = await obtenerSeleccionEvidenciaReporte(inspeccion.id);
+
+  const fotografiasReportePorHallazgo = new Map(
+    inspeccion.hallazgos.map((hallazgo) => [
+      hallazgo.id,
+      ordenarYFiltrarFotografias(hallazgo.fotografias, seleccionEditorial),
+    ]),
+  );
 
   const fotografiasConUrl = await Promise.all(
     inspeccion.fotografias.map(async (foto) => ({
@@ -313,6 +322,11 @@ export default async function ReportePage({
   );
 
   const fotografiaPortada =
+    (seleccionEditorial.activa
+      ? seleccionEditorial.idsSeleccionados
+          .map((fotoId) => urlPorFoto.get(fotoId))
+          .find(Boolean)
+      : null) ??
     fotografiasConUrl.find((foto) => foto.imagenUrl)
       ?.imagenUrl ?? null;
 
@@ -335,10 +349,10 @@ export default async function ReportePage({
   }
 
   const urgentes = inspeccion.hallazgos.filter(
-  (hallazgo) =>
-    hallazgo.clasificacion === "CR" ||
-    Number(hallazgo.prioridad) <= 1,
-);
+    (hallazgo) =>
+      hallazgo.clasificacion === "CR" ||
+      Number(hallazgo.prioridad) <= 1,
+  );
 
   const prioritarios = inspeccion.hallazgos.filter(
     (hallazgo) =>
@@ -476,6 +490,15 @@ export default async function ReportePage({
         </Link>
 
         <div className="flex gap-3">
+          {seleccionEditorial.disponible && (
+            <Link
+              href={`/panel/inspecciones/${inspeccion.id}/reporte-evidencias`}
+              className="rounded-full border border-violet-400 px-5 py-3 font-bold text-violet-800"
+            >
+              Editar evidencias
+            </Link>
+          )}
+
           {inspeccion.certificado &&
             (
               usuarioActual.rol === RolUsuario.GERENTE ||
@@ -496,7 +519,6 @@ export default async function ReportePage({
       </div>
 
       <article className="mx-auto max-w-5xl bg-white shadow-2xl print:max-w-none print:shadow-none">
-        {/* PORTADA */}
         <section className="portada-reporte relative flex flex-col overflow-hidden bg-slate-950 px-10 py-9 text-white">
           <div className="absolute right-0 top-0 h-72 w-72 rounded-bl-full bg-cyan-400/10" />
 
@@ -547,6 +569,12 @@ export default async function ReportePage({
             </dl>
           </div>
 
+          {fotografiaPortada && (
+            <div className="relative z-10 mt-5 overflow-hidden rounded-2xl border border-white/10">
+              <img src={fotografiaPortada} alt="Evidencia de portada" className="h-36 w-full object-cover" />
+            </div>
+          )}
+
           <div className="portada-indicadores relative z-10 mt-5 grid grid-cols-3 gap-3">
             <div
               className="rounded-xl border p-3"
@@ -588,7 +616,6 @@ export default async function ReportePage({
           </footer>
         </section>
 
-        {/* RESUMEN EJECUTIVO */}
         <section className="seccion-reporte px-12 py-6">
           <EncabezadoSeccion
             numero="01"
@@ -670,7 +697,6 @@ export default async function ReportePage({
           </div>
         </section>
 
-        {/* DATOS GENERALES */}
         <section className="seccion-reporte px-12 py-6">
           <EncabezadoSeccion
             numero="02"
@@ -748,7 +774,6 @@ export default async function ReportePage({
           </div>
         </section>
 
-        {/* ISH */}
         <section className="seccion-reporte px-12 py-6">
           <EncabezadoSeccion
             numero="03"
@@ -817,7 +842,6 @@ export default async function ReportePage({
           </div>
         </section>
 
-        {/* HALLAZGOS */}
         <section className="seccion-reporte px-12 py-6">
           <EncabezadoSeccion
             numero="04"
@@ -836,7 +860,9 @@ export default async function ReportePage({
           ) : (
             <div className="mt-5 space-y-5">
               {inspeccion.hallazgos.map(
-                (hallazgo, index) => (
+                (hallazgo, index) => {
+                  const fotografiasActuales = fotografiasReportePorHallazgo.get(hallazgo.id) ?? hallazgo.fotografias;
+                  return (
                   <article
                     key={hallazgo.id}
                     className="permitir-corte overflow-hidden rounded-[1.5rem] border border-slate-200"
@@ -867,33 +893,14 @@ export default async function ReportePage({
 
                     <div className="p-5">
                       <div className="grid gap-4 text-sm sm:grid-cols-3">
-                        <Ficha
-                          label="Área"
-                          value={hallazgo.area}
-                        />
-
-                        <Ficha
-                          label="Prioridad"
-                          value={String(hallazgo.prioridad)}
-                        />
-
-                        <Ficha
-                          label="Ubicación"
-                          value={
-                            hallazgo.ubicacion ??
-                            "No especificada"
-                          }
-                        />
+                        <Ficha label="Área" value={hallazgo.area} />
+                        <Ficha label="Prioridad" value={String(hallazgo.prioridad)} />
+                        <Ficha label="Ubicación" value={hallazgo.ubicacion ?? "No especificada"} />
                       </div>
 
                       <div className="mt-6">
-                        <TituloCampo>
-                          Descripción
-                        </TituloCampo>
-
-                        <p className="mt-2 leading-7 text-slate-700">
-                          {hallazgo.descripcion}
-                        </p>
+                        <TituloCampo>Descripción</TituloCampo>
+                        <p className="mt-2 leading-7 text-slate-700">{hallazgo.descripcion}</p>
                       </div>
 
                       {hallazgo.hallazgoAnteriorId && hallazgo.hallazgoAnterior ? (
@@ -932,6 +939,7 @@ export default async function ReportePage({
                                 id: foto.id,
                                 descripcion: foto.descripcion,
                                 imagenUrl: urlPorFotoAntecedente.get(foto.id) ?? null,
+                                notaEditorial: null,
                               }))}
                               vacio="Sin evidencia fotográfica antecedente"
                             />
@@ -939,12 +947,13 @@ export default async function ReportePage({
                             <ComparativoEvidencia
                               titulo={`ACTUAL · V${inspeccion.numeroInspeccion}`}
                               subtitulo="Evidencia de seguimiento"
-                              fotografias={hallazgo.fotografias.map((foto) => ({
+                              fotografias={fotografiasActuales.map((foto) => ({
                                 id: foto.id,
                                 descripcion: foto.descripcion,
                                 imagenUrl: urlPorFoto.get(foto.id) ?? null,
+                                notaEditorial: seleccionEditorial.notaPorFotografia.get(foto.id) ?? null,
                               }))}
-                              vacio="Sin evidencia fotográfica actual"
+                              vacio="Sin evidencia fotográfica actual seleccionada"
                             />
                           </div>
                         </div>
@@ -961,40 +970,19 @@ export default async function ReportePage({
 
                       {hallazgo.recomendacion && (
                         <div className="mt-6 rounded-3xl bg-cyan-50 p-6">
-                          <TituloCampo>
-                            Recomendación técnica
-                          </TituloCampo>
-
-                          <p className="mt-2 leading-7 text-slate-700">
-                            {hallazgo.recomendacion}
-                          </p>
+                          <TituloCampo>Recomendación técnica</TituloCampo>
+                          <p className="mt-2 leading-7 text-slate-700">{hallazgo.recomendacion}</p>
                         </div>
                       )}
 
                       <div className="mt-4 grid grid-cols-3 gap-3">
-                        <Ficha
-                          label="Responsable"
-                          value={
-                            hallazgo.responsable ??
-                            "Por definir"
-                          }
-                        />
-
-                        <Ficha
-                          label="Tiempo estimado"
-                          value={
-                            hallazgo.tiempoReparacion ??
-                            "Por definir"
-                          }
-                        />
-
+                        <Ficha label="Responsable" value={hallazgo.responsable ?? "Por definir"} />
+                        <Ficha label="Tiempo estimado" value={hallazgo.tiempoReparacion ?? "Por definir"} />
                         <Ficha
                           label="Costo estimado"
                           value={
                             hallazgo.costoEstimado
-                              ? Number(
-                                  hallazgo.costoEstimado,
-                                ).toLocaleString("es-MX", {
+                              ? Number(hallazgo.costoEstimado).toLocaleString("es-MX", {
                                   style: "currency",
                                   currency: "MXN",
                                 })
@@ -1003,60 +991,48 @@ export default async function ReportePage({
                         />
                       </div>
 
-                      {!hallazgo.hallazgoAnteriorId && hallazgo.fotografias.length > 0 && (
+                      {!hallazgo.hallazgoAnteriorId && fotografiasActuales.length > 0 && (
                         <div className="mt-7 grid grid-cols-2 gap-4">
-                          {hallazgo.fotografias.map(
-                            (foto, fotoIndex) => {
-                              const imagenUrl =
-                                urlPorFoto.get(foto.id);
+                          {fotografiasActuales.map((foto, fotoIndex) => {
+                            const imagenUrl = urlPorFoto.get(foto.id);
+                            const notaEditorial = seleccionEditorial.notaPorFotografia.get(foto.id) ?? null;
+                            return (
+                              <figure key={foto.id} className="overflow-hidden rounded-3xl border border-slate-200">
+                                {imagenUrl ? (
+                                  <img
+                                    src={imagenUrl}
+                                    alt={foto.descripcion ?? hallazgo.titulo}
+                                    className="h-56 w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="grid h-56 place-items-center bg-slate-100 text-sm text-slate-400">
+                                    Imagen no disponible
+                                  </div>
+                                )}
 
-                              return (
-                                <figure
-                                  key={foto.id}
-                                  className="overflow-hidden rounded-3xl border border-slate-200"
-                                >
-                                  {imagenUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={imagenUrl}
-                                      alt={
-                                        foto.descripcion ??
-                                        hallazgo.titulo
-                                      }
-                                      className="h-56 w-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="grid h-56 place-items-center bg-slate-100 text-sm text-slate-400">
-                                      Imagen no disponible
-                                    </div>
+                                <figcaption className="p-4 text-sm">
+                                  <p className="font-black">Fotografía {fotoIndex + 1}</p>
+                                  <p className="mt-1 text-slate-500">{foto.descripcion ?? "Evidencia del hallazgo"}</p>
+                                  {notaEditorial && (
+                                    <p className="mt-2 rounded-xl bg-violet-50 p-2 text-xs font-bold text-violet-900">
+                                      {notaEditorial}
+                                    </p>
                                   )}
-
-                                  <figcaption className="p-4 text-sm">
-                                    <p className="font-black">
-                                      Fotografía{" "}
-                                      {fotoIndex + 1}
-                                    </p>
-
-                                    <p className="mt-1 text-slate-500">
-                                      {foto.descripcion ??
-                                        "Evidencia del hallazgo"}
-                                    </p>
-                                  </figcaption>
-                                </figure>
-                              );
-                            },
-                          )}
+                                </figcaption>
+                              </figure>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
                   </article>
-                ),
+                  );
+                },
               )}
             </div>
           )}
         </section>
 
-        {/* EVIDENCIA COMPLEMENTARIA */}
         {fotografiasComplementarias.length > 0 && (
           <section className="seccion-reporte px-12 py-8">
             <EncabezadoSeccion
@@ -1072,7 +1048,6 @@ export default async function ReportePage({
                   className="evitar-corte overflow-hidden rounded-xl border border-slate-200 bg-white"
                 >
                   {foto.imagenUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={foto.imagenUrl}
                       alt={foto.descripcion ?? `Evidencia complementaria ${index + 1}`}
@@ -1086,9 +1061,7 @@ export default async function ReportePage({
 
                   <figcaption className="p-2 text-[10px] leading-4">
                     <p className="font-black">Foto {index + 1}</p>
-                    <p className="text-slate-500">
-                      {foto.descripcion ?? "Evidencia complementaria"}
-                    </p>
+                    <p className="text-slate-500">{foto.descripcion ?? "Evidencia complementaria"}</p>
                   </figcaption>
                 </figure>
               ))}
@@ -1096,7 +1069,6 @@ export default async function ReportePage({
           </section>
         )}
 
-        {/* RECOMENDACIONES */}
         <section className="seccion-reporte px-12 py-6">
           <EncabezadoSeccion
             numero="06"
@@ -1128,7 +1100,6 @@ export default async function ReportePage({
           </div>
         </section>
 
-        {/* FIRMAS */}
         <section className="seccion-reporte firmas-unidas px-12 py-6">
           <EncabezadoSeccion
             numero="07"
@@ -1146,10 +1117,7 @@ export default async function ReportePage({
 
           <div className="firma-grid mt-6 grid grid-cols-3 gap-5">
             <Firma
-              nombre={
-                inspeccion.inspector?.usuario.nombre ??
-                "Inspector asignado"
-              }
+              nombre={inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}
               cargo="Inspector responsable"
               imagenUrl={firmaInspector?.imagenUrl ?? null}
               fecha={firmaInspector?.firmadaEn ?? null}
@@ -1171,7 +1139,6 @@ export default async function ReportePage({
           </div>
         </section>
 
-        {/* CERTIFICADO */}
         <section className="salto-certificado seccion-reporte px-12 py-10">
           <EncabezadoSeccion
             numero="08"
@@ -1192,37 +1159,14 @@ export default async function ReportePage({
 
                 <div className="mt-8 grid items-center gap-8 md:grid-cols-[1fr_180px]">
                   <div className="text-left">
-                    <Row
-                      label="Certificado"
-                      value={inspeccion.certificado.folio}
-                    />
-
-                    <Row
-                      label="Inspección"
-                      value={inspeccion.folio}
-                    />
-
-                    <Row
-                      label="Código"
-                      value={
-                        inspeccion.certificado
-                          .codigoValidacion
-                      }
-                    />
-
-                    <Row
-                      label="ISH"
-                      value={`${Math.round(
-                        Number(
-                          inspeccion.certificado.ish,
-                        ),
-                      )}/100`}
-                    />
+                    <Row label="Certificado" value={inspeccion.certificado.folio} />
+                    <Row label="Inspección" value={inspeccion.folio} />
+                    <Row label="Código" value={inspeccion.certificado.codigoValidacion} />
+                    <Row label="ISH" value={`${Math.round(Number(inspeccion.certificado.ish))}/100`} />
                   </div>
 
                   {qrDataUrl && (
                     <div className="flex flex-col items-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={qrDataUrl}
                         alt="Código QR de validación"
@@ -1243,8 +1187,7 @@ export default async function ReportePage({
             </div>
           ) : (
             <div className="mt-10 rounded-3xl bg-amber-50 p-8 text-amber-800">
-              El expediente todavía no cuenta con un certificado
-              emitido.
+              El expediente todavía no cuenta con un certificado emitido.
             </div>
           )}
         </section>
@@ -1330,82 +1273,40 @@ function BloqueDatos({
 }) {
   return (
     <div className="rounded-[1.5rem] border border-slate-200 p-5">
-      <h3 className="text-xl font-black">
-        {titulo}
-      </h3>
-
-      <dl className="mt-5 space-y-3 text-sm">
-        {children}
-      </dl>
+      <h3 className="text-xl font-black">{titulo}</h3>
+      <dl className="mt-5 space-y-3 text-sm">{children}</dl>
     </div>
   );
 }
 
-function Row({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-6 border-b border-slate-100 pb-2">
-      <dt className="text-slate-500">
-        {label}
-      </dt>
-
-      <dd className="text-right font-bold">
-        {value}
-      </dd>
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="text-right font-bold">{value}</dd>
     </div>
   );
 }
 
-function Metric({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
+function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl bg-slate-100 p-3">
-      <p className="text-2xl font-black">
-        {value}
-      </p>
-
-      <p className="mt-1 text-xs font-bold uppercase tracking-widest text-slate-500">
-        {label}
-      </p>
+      <p className="text-2xl font-black">{value}</p>
+      <p className="mt-1 text-xs font-bold uppercase tracking-widest text-slate-500">{label}</p>
     </div>
   );
 }
 
-function Ficha({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function Ficha({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl bg-slate-100 p-4">
-      <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-        {label}
-      </p>
-
-      <p className="mt-2 font-bold">
-        {value}
-      </p>
+      <p className="text-xs font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <p className="mt-2 font-bold">{value}</p>
     </div>
   );
 }
 
-function TituloCampo({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function TituloCampo({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-700">
       {children}
@@ -1425,6 +1326,7 @@ function ComparativoEvidencia({
     id: string;
     descripcion: string | null;
     imagenUrl: string | null;
+    notaEditorial: string | null;
   }>;
   vacio: string;
 }) {
@@ -1433,38 +1335,29 @@ function ComparativoEvidencia({
   return (
     <div className="evitar-corte overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-3 py-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-700">
-          {titulo}
-        </p>
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-700">{titulo}</p>
         <p className="text-[9px] text-slate-500">{subtitulo}</p>
       </div>
 
       {visibles.length === 0 ? (
-        <div className="grid h-28 place-items-center px-3 text-center text-[10px] text-slate-400">
-          {vacio}
-        </div>
+        <div className="grid h-28 place-items-center px-3 text-center text-[10px] text-slate-400">{vacio}</div>
       ) : (
         <div className={`grid gap-2 p-2 ${visibles.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
           {visibles.map((foto, index) => (
-            <figure
-              key={foto.id}
-              className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-            >
+            <figure key={foto.id} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
               {foto.imagenUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={foto.imagenUrl}
                   alt={foto.descripcion ?? `${titulo} · fotografía ${index + 1}`}
                   className="foto-comparativa h-36 w-full object-cover"
                 />
               ) : (
-                <div className="foto-comparativa grid h-36 place-items-center text-[10px] text-slate-400">
-                  Imagen no disponible
-                </div>
+                <div className="foto-comparativa grid h-36 place-items-center text-[10px] text-slate-400">Imagen no disponible</div>
               )}
 
               <figcaption className="px-2 py-1 text-[9px] leading-4 text-slate-500">
                 {foto.descripcion ?? `Fotografía ${index + 1}`}
+                {foto.notaEditorial && <span className="mt-1 block font-bold text-violet-700">{foto.notaEditorial}</span>}
               </figcaption>
             </figure>
           ))}
@@ -1502,23 +1395,18 @@ function GrupoRecomendaciones({
           <h3 className="text-base font-black">{titulo}</h3>
           <p className="mt-1 text-xs text-slate-600">{descripcion}</p>
         </div>
-        <span className="text-xs font-black text-slate-500">
-          {hallazgos.length}
-        </span>
+        <span className="text-xs font-black text-slate-500">{hallazgos.length}</span>
       </div>
 
       {hallazgos.length === 0 ? (
-        <p className="mt-3 text-xs text-slate-500">
-          Sin hallazgos en esta categoría.
-        </p>
+        <p className="mt-3 text-xs text-slate-500">Sin hallazgos en esta categoría.</p>
       ) : (
         <ul className="mt-3 divide-y divide-slate-200/70 rounded-lg bg-white/70 px-3">
           {hallazgos.map((hallazgo) => (
             <li key={hallazgo.id} className="py-2 text-xs">
               <p className="font-black text-slate-900">{hallazgo.titulo}</p>
               <p className="mt-1 leading-5 text-slate-600">
-                {hallazgo.recomendacion ??
-                  "Revisar y definir el procedimiento correctivo correspondiente."}
+                {hallazgo.recomendacion ?? "Revisar y definir el procedimiento correctivo correspondiente."}
               </p>
             </li>
           ))}
@@ -1543,7 +1431,6 @@ function Firma({
     <div className="text-center">
       <div className="flex h-16 items-end justify-center border-b border-slate-400 pb-1">
         {imagenUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imagenUrl}
             alt={`Firma de ${nombre}`}
@@ -1556,13 +1443,8 @@ function Firma({
         )}
       </div>
 
-      <p className="mt-4 font-black">
-        {nombre}
-      </p>
-
-      <p className="mt-1 text-sm text-slate-500">
-        {cargo}
-      </p>
+      <p className="mt-4 font-black">{nombre}</p>
+      <p className="mt-1 text-sm text-slate-500">{cargo}</p>
 
       {fecha && (
         <p className="mt-1 text-xs text-slate-400">

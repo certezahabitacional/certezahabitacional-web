@@ -51,6 +51,12 @@ export default function FormularioCrearUsuario({
   const [zonaId, setZonaId] =
     useState("");
 
+  const rolesInternos =
+    rolesCreables.filter(
+      (rolDisponible) =>
+        rolDisponible !== RolUsuario.CLIENTE,
+    );
+
   const esAdministrador =
     rol === RolUsuario.ADMINISTRADOR;
 
@@ -129,6 +135,10 @@ export default function FormularioCrearUsuario({
       action={crearUsuario}
       className="mt-7 space-y-5"
     >
+      <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm leading-6 text-cyan-100">
+        Las cuentas de clientes no se crean desde este panel. El cliente nace de una cotización formal y su acceso se asigna posteriormente al registro existente.
+      </div>
+
       <Campo
         nombre="nombre"
         etiqueta="Nombre completo"
@@ -174,7 +184,7 @@ export default function FormularioCrearUsuario({
             Selecciona un rol
           </option>
 
-          {rolesCreables.map(
+          {rolesInternos.map(
             (rolDisponible) => (
               <option
                 key={
