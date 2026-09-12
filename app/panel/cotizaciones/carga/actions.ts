@@ -52,16 +52,19 @@ export async function incorporarCotizacionDefinitiva(fd: FormData) {
 
   let clienteId = clienteIdElegido;
   if (!clienteId) {
-    const candidatos = await prisma.cliente.findMany({
-      where: { OR: [
-        ...(rfc ? [{ rfc: { equals: rfc, mode: Prisma.QueryMode.insensitive } }] : []),
-        ...(curp ? [{ curp: { equals: curp, mode: Prisma.QueryMode.insensitive } }] : []),
-        ...(correo ? [{ correo: { equals: correo, mode: Prisma.QueryMode.insensitive } }] : []),
-        ...(telefono ? [{ telefono }] : []),
-      ] },
-      select: { id: true, nombre: true, correo: true, telefono: true, rfc: true, curp: true },
-      take: 3,
-    });
+    const criterios: Prisma.ClienteWhereInput[] = [
+      ...(rfc ? [{ rfc: { equals: rfc, mode: Prisma.QueryMode.insensitive } }] : []),
+      ...(curp ? [{ curp: { equals: curp, mode: Prisma.QueryMode.insensitive } }] : []),
+      ...(correo ? [{ correo: { equals: correo, mode: Prisma.QueryMode.insensitive } }] : []),
+      ...(telefono ? [{ telefono }] : []),
+    ];
+    const candidatos = criterios.length
+      ? await prisma.cliente.findMany({
+          where: { OR: criterios },
+          select: { id: true, nombre: true, correo: true, telefono: true, rfc: true, curp: true },
+          take: 3,
+        })
+      : [];
     if (candidatos.length > 1) volver("error", "Hay más de un cliente coincidente. Selecciona expresamente el cliente existente para evitar duplicados.");
     if (candidatos.length === 1) clienteId = candidatos[0].id;
   }
@@ -79,10 +82,9 @@ export async function incorporarCotizacionDefinitiva(fd: FormData) {
       : await tx.inmueble.create({ data: { clienteId: cliente.id, alias, tipo: tipoInmueble, direccion, colonia: colonia || null, ciudad, estado, codigoPostal: codigoPostal || null, superficieConstruccionM2: Number.isFinite(superficie) && superficie > 0 ? superficie : null } });
 
     const year = new Date().getFullYear();
-    const inicio = new Date(Date.UTC(year, 0, 1)); const fin = new Date(Date.UTC(year + 1, 0, 1));
-    let consecutivo = (await tx.cotizacion.count({ where: { creadoEn: { gte: inicio, lt: fin } } })) + 1;
-    let folio = `CH-COT-${year}-${String(consecutivo).padStart(5, "0")}`;
-    while (await tx.cotizacion.findUnique({ where: { folio }, select: { id: true } })) { consecutivo += 1; folio = `CH-COT-${year}-${String(consecutivo).padStart(5, "0")}`; }
+    const [secuencia] = await tx.$queryRaw<Array<{ valor: bigint }>>`SELECT nextval('"Cotizacion_folio_seq"') AS valor`;
+    const consecutivo = Number(secuencia.valor);
+    const folio = `CH-COT-${year}-${String(consecutivo).padStart(5, "0")}`;
 
     const cotizacion = await tx.cotizacion.create({ data: {
       folio, clienteId: cliente.id, inmuebleId: inmueble.id, creadaPorId: actor.id,
