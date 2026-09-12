@@ -37,7 +37,7 @@ export async function autorizarExcepcionInicio(formData: FormData) {
   const cotizacion = await prisma.cotizacion.findUnique({ where: { id: cotizacionId }, select: { estado: true, inspeccion: { select: { id: true } } } }); if (!cotizacion || cotizacion.estado !== EstadoCotizacion.AUTORIZADA) volver("error", "La excepción solo procede sobre una cotización autorizada.");
   await prisma.$transaction(async (tx) => {
     await tx.cotizacion.update({ where: { id: cotizacionId }, data: { excepcionInicio: true, excepcionInicioPorId: usuario.id, excepcionInicioEn: new Date(), motivoExcepcionInicio: motivo } });
-    if (cotizacion.inspeccion) await tx.inspeccion.update({ where: { id: cotizacion.inspeccion.id }, data: { inicioLiberadoSinPago: true, inicioLiberadoPorId: usuario.id, inicioLiberadoEn: new Date(), motivoLiberacionInicio: motivo } });
+    if (cotizacion.inspeccion) await tx.inspeccion.update({ where: { id: cotizacion.inspeccion.id }, data: { inicioLiberadoSinPago: true, inicioLiberadoPorId: usuario.id, inicioLiberadoEn: new Date(), motivoLiberacionPago: motivo } });
   });
   await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "Cotizacion", entidadId: cotizacionId, usuarioId: usuario.id, descripcion: `Dirección autorizó excepción de pago total para inicio de inspección en campo. Motivo: ${motivo}` });
   revalidatePath("/panel/caja"); revalidatePath("/panel/inspecciones"); if (cotizacion.inspeccion) revalidatePath(`/panel/inspecciones/${cotizacion.inspeccion.id}`); volver("ok", "Excepción de inicio autorizada y sincronizada con la inspección.");
