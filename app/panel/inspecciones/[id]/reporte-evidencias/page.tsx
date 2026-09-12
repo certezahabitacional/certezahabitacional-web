@@ -44,7 +44,7 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
         orderBy: [{ prioridad: "asc" }, { creadoEn: "asc" }],
         select: {
           id: true, area: true, titulo: true, clasificacion: true, prioridad: true,
-          fotografias: { orderBy: { creadoEn: "asc" }, select: { id: true, url: true, descripcion: true } },
+          fotografias: { orderBy: { creadaEn: "asc" }, select: { id: true, url: true, descripcion: true } },
         },
       },
     },
