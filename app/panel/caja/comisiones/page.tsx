@@ -4,13 +4,20 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { asignarVendedorCotizacion } from "./actions";
+import { asignarVendedorCotizacion, registrarPagoComision } from "./actions";
 
 type VendedorGuardado = {
   id: string;
   nombre: string;
   email: string;
   porcentajeComision?: number;
+};
+
+type PagoAcumulado = {
+  cotizacionId: string;
+  beneficiarioId: string;
+  tipo: string;
+  pagado: Prisma.Decimal | null;
 };
 
 function dinero(valor: number) {
@@ -35,6 +42,10 @@ function vendedorDesdeJson(datos: Prisma.JsonValue | null): VendedorGuardado | n
   };
 }
 
+function clavePago(cotizacionId: string, beneficiarioId: string, tipo: string) {
+  return `${cotizacionId}:${beneficiarioId}:${tipo}`;
+}
+
 export default async function ComisionesPage({
   searchParams,
 }: {
@@ -55,7 +66,7 @@ export default async function ComisionesPage({
   const params = await searchParams;
   const q = (params.q ?? "").trim();
 
-  const [cotizaciones, vendedores] = await Promise.all([
+  const [cotizaciones, vendedores, pagosAcumulados] = await Promise.all([
     prisma.cotizacion.findMany({
       where: {
         estado: EstadoCotizacion.AUTORIZADA,
@@ -95,7 +106,24 @@ export default async function ComisionesPage({
       select: { id: true, nombre: true, email: true },
       orderBy: { nombre: "asc" },
     }),
+    prisma.$queryRaw<PagoAcumulado[]>`
+      SELECT
+        "cotizacionId",
+        "beneficiarioId",
+        "tipo",
+        COALESCE(SUM("monto"), 0) AS "pagado"
+      FROM "PagoComision"
+      GROUP BY "cotizacionId", "beneficiarioId", "tipo"
+    `,
   ]);
+
+  const pagosPorClave = new Map<string, number>();
+  for (const pago of pagosAcumulados) {
+    pagosPorClave.set(
+      clavePago(pago.cotizacionId, pago.beneficiarioId, pago.tipo),
+      Number(pago.pagado ?? 0),
+    );
+  }
 
   const renglones = cotizaciones.map((c) => {
     const total = Number(c.total);
@@ -105,6 +133,13 @@ export default async function ComisionesPage({
     const inspector = c.inspeccion?.inspector?.usuario ?? null;
     const comisionVendedor = total * 0.1;
     const comisionInspector = total * 0.3;
+    const vendedorPagado = vendedor
+      ? pagosPorClave.get(clavePago(c.id, vendedor.id, "VENDEDOR")) ?? 0
+      : 0;
+    const inspectorPagado = inspector
+      ? pagosPorClave.get(clavePago(c.id, inspector.id, "INSPECTOR")) ?? 0
+      : 0;
+
     return {
       ...c,
       total,
@@ -116,6 +151,10 @@ export default async function ComisionesPage({
       comisionInspector,
       vendedorCubierto: comisionVendedor * factorCobro,
       inspectorCubierto: comisionInspector * factorCobro,
+      vendedorPagado,
+      inspectorPagado,
+      vendedorSaldo: Math.max(0, comisionVendedor - vendedorPagado),
+      inspectorSaldo: Math.max(0, comisionInspector - inspectorPagado),
     };
   });
 
@@ -123,6 +162,8 @@ export default async function ComisionesPage({
   const totalCobrado = renglones.reduce((a, r) => a + r.cobrado, 0);
   const totalComisionVendedores = renglones.reduce((a, r) => a + r.comisionVendedor, 0);
   const totalComisionInspectores = renglones.reduce((a, r) => a + r.comisionInspector, 0);
+  const totalPagadoVendedores = renglones.reduce((a, r) => a + r.vendedorPagado, 0);
+  const totalPagadoInspectores = renglones.reduce((a, r) => a + r.inspectorPagado, 0);
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
@@ -133,7 +174,7 @@ export default async function ComisionesPage({
             <p className="mt-7 text-xs font-black uppercase tracking-[0.3em] text-amber-300">Control interno</p>
             <h1 className="mt-2 text-4xl font-black">Estado de comisiones</h1>
             <p className="mt-3 max-w-4xl text-slate-400">
-              El vendedor genera 10% y el inspector 30% sobre el importe de la cotización. El avance cubierto se calcula proporcionalmente a lo cobrado al cliente; esta pantalla no registra todavía pagos realizados al colaborador.
+              Vendedor: 10% del importe de la cotización. Inspector: 30%. El sistema distingue comisión generada, respaldo por cobranza, pagos reales al colaborador y saldo pendiente.
             </p>
           </div>
           <form className="flex gap-2">
@@ -148,15 +189,17 @@ export default async function ComisionesPage({
           </p>
         )}
 
-        <section className="mt-8 grid gap-4 md:grid-cols-4">
+        <section className="mt-8 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           <Resumen titulo="Cotizaciones" valor={dinero(totalVentas)} />
           <Resumen titulo="Cobrado a clientes" valor={dinero(totalCobrado)} />
-          <Resumen titulo="Comisión vendedores 10%" valor={dinero(totalComisionVendedores)} />
-          <Resumen titulo="Comisión inspectores 30%" valor={dinero(totalComisionInspectores)} />
+          <Resumen titulo="Vendedores generado" valor={dinero(totalComisionVendedores)} />
+          <Resumen titulo="Vendedores pagado" valor={dinero(totalPagadoVendedores)} />
+          <Resumen titulo="Inspectores generado" valor={dinero(totalComisionInspectores)} />
+          <Resumen titulo="Inspectores pagado" valor={dinero(totalPagadoInspectores)} />
         </section>
 
         <div className="mt-8 overflow-x-auto rounded-3xl border border-white/10 bg-slate-900">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[1320px] w-full text-sm">
             <thead className="bg-slate-950/60 text-left text-xs uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-5 py-4">Cotización</th>
@@ -184,13 +227,15 @@ export default async function ComisionesPage({
                   </td>
                   <td className="px-5 py-5">
                     {r.vendedor ? (
-                      <div>
-                        <p className="font-bold">{r.vendedor.nombre}</p>
-                        <p className="text-xs text-slate-500">{r.vendedor.email}</p>
-                        <p className="mt-2">Generada: <strong>{dinero(r.comisionVendedor)}</strong></p>
-                        <p className="text-xs text-emerald-300">Respaldada por cobranza: {dinero(r.vendedorCubierto)}</p>
-                        <p className="text-xs text-amber-300">Pendiente de cobranza: {dinero(r.comisionVendedor - r.vendedorCubierto)}</p>
-                      </div>
+                      <CuentaComision
+                        cotizacionId={r.id}
+                        tipo="VENDEDOR"
+                        beneficiario={r.vendedor}
+                        generada={r.comisionVendedor}
+                        cubierta={r.vendedorCubierto}
+                        pagada={r.vendedorPagado}
+                        saldo={r.vendedorSaldo}
+                      />
                     ) : (
                       <form action={asignarVendedorCotizacion} className="space-y-2">
                         <input type="hidden" name="cotizacionId" value={r.id} />
@@ -204,13 +249,15 @@ export default async function ComisionesPage({
                   </td>
                   <td className="px-5 py-5">
                     {r.inspector ? (
-                      <div>
-                        <p className="font-bold">{r.inspector.nombre}</p>
-                        <p className="text-xs text-slate-500">{r.inspector.email}</p>
-                        <p className="mt-2">Generada: <strong>{dinero(r.comisionInspector)}</strong></p>
-                        <p className="text-xs text-emerald-300">Respaldada por cobranza: {dinero(r.inspectorCubierto)}</p>
-                        <p className="text-xs text-amber-300">Pendiente de cobranza: {dinero(r.comisionInspector - r.inspectorCubierto)}</p>
-                      </div>
+                      <CuentaComision
+                        cotizacionId={r.id}
+                        tipo="INSPECTOR"
+                        beneficiario={r.inspector}
+                        generada={r.comisionInspector}
+                        cubierta={r.inspectorCubierto}
+                        pagada={r.inspectorPagado}
+                        saldo={r.inspectorSaldo}
+                      />
                     ) : (
                       <p className="text-slate-500">Pendiente de asignar inspector a la inspección.</p>
                     )}
@@ -228,11 +275,58 @@ export default async function ComisionesPage({
   );
 }
 
+function CuentaComision({
+  cotizacionId,
+  tipo,
+  beneficiario,
+  generada,
+  cubierta,
+  pagada,
+  saldo,
+}: {
+  cotizacionId: string;
+  tipo: "VENDEDOR" | "INSPECTOR";
+  beneficiario: { id: string; nombre: string; email: string };
+  generada: number;
+  cubierta: number;
+  pagada: number;
+  saldo: number;
+}) {
+  return (
+    <div className="min-w-64">
+      <p className="font-bold">{beneficiario.nombre}</p>
+      <p className="text-xs text-slate-500">{beneficiario.email}</p>
+      <div className="mt-3 space-y-1 text-xs">
+        <p>Generada: <strong className="text-white">{dinero(generada)}</strong></p>
+        <p className="text-emerald-300">Respaldada por cobranza: {dinero(cubierta)}</p>
+        <p className="text-cyan-300">Pagada al colaborador: {dinero(pagada)}</p>
+        <p className={saldo > 0.001 ? "text-amber-300" : "text-emerald-300"}>Saldo por pagar: {dinero(saldo)}</p>
+      </div>
+
+      {saldo > 0.001 && (
+        <details className="mt-3 rounded-xl border border-white/10 bg-slate-950/70">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-black text-cyan-300">Registrar pago</summary>
+          <form action={registrarPagoComision} className="space-y-2 border-t border-white/10 p-3">
+            <input type="hidden" name="cotizacionId" value={cotizacionId} />
+            <input type="hidden" name="beneficiarioId" value={beneficiario.id} />
+            <input type="hidden" name="tipo" value={tipo} />
+            <input name="monto" type="number" min="0.01" max={saldo} step="0.01" required placeholder={`Máx. ${dinero(saldo)}`} className="w-full rounded-lg bg-slate-900 px-3 py-2" />
+            <input name="metodoPago" placeholder="Método de pago" className="w-full rounded-lg bg-slate-900 px-3 py-2" />
+            <input name="referencia" placeholder="Referencia" className="w-full rounded-lg bg-slate-900 px-3 py-2" />
+            <input name="notas" placeholder="Notas" className="w-full rounded-lg bg-slate-900 px-3 py-2" />
+            <button className="w-full rounded-lg bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950">Registrar pago de comisión</button>
+          </form>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function Resumen({ titulo, valor }: { titulo: string; valor: string }) {
   return (
-    <article className="rounded-3xl border border-white/10 bg-slate-900 p-6">
+    <article className="rounded-3xl border border-white/10 bg-slate-900 p-5">
       <p className="text-xs font-black uppercase tracking-wider text-slate-500">{titulo}</p>
-      <p className="mt-3 text-2xl font-black text-cyan-300">{valor}</p>
+      <p className="mt-3 text-xl font-black text-cyan-300">{valor}</p>
     </article>
   );
 }
