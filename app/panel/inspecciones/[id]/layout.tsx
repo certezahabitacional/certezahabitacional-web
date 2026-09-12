@@ -13,8 +13,8 @@ export default async function InspeccionLayout({
     <>
       {children}
 
-      <nav className="print:hidden fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 rounded-3xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <nav className="print:hidden fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 rounded-3xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <Link
             href={`/panel/inspecciones/${id}/flujo`}
             className="rounded-2xl bg-cyan-300 px-3 py-3 text-center text-xs font-black text-slate-950 sm:text-sm"
@@ -32,6 +32,12 @@ export default async function InspeccionLayout({
             className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-amber-300 sm:text-sm"
           >
             Control 4 fotos
+          </Link>
+          <Link
+            href={`/panel/inspecciones/${id}/reporte-evidencias`}
+            className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-violet-300 sm:text-sm"
+          >
+            Evidencia reporte
           </Link>
           <Link
             href={`/panel/inspecciones/${id}/instrumentos`}
