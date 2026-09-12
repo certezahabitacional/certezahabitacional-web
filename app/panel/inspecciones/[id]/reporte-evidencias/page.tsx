@@ -60,6 +60,10 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
   const seleccion = await leerSelecciones(id);
   const mapa = new Map(seleccion.filas.map((f) => [f.fotografiaId, f]));
   const seleccionadas = seleccion.filas.filter((f) => f.seleccionada).sort((a, b) => a.orden - b.orden);
+  const idsSeleccionados = new Set(seleccionadas.map((f) => f.fotografiaId));
+  const hallazgosSinSeleccion = inspeccion.hallazgos.filter((h) => h.fotografias.length > 0 && !h.fotografias.some((f) => idsSeleccionados.has(f.id))).length;
+  const coberturaLista = seleccion.disponible && inspeccion.hallazgos.length > 0 && hallazgosSinSeleccion === 0 && seleccionadas.length > 0;
+
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const supabaseUrl = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -82,7 +86,10 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}`} className="font-black text-cyan-300">← Expediente</Link>
-          <Link href={`/panel/inspecciones/${id}/evidencia-control`} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-amber-300">Control 4 fotos</Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/panel/inspecciones/${id}/reporte-evidencias/preview`} className="rounded-full bg-violet-300 px-4 py-2 text-sm font-black text-slate-950">Vista previa editorial</Link>
+            <Link href={`/panel/inspecciones/${id}/evidencia-control`} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-amber-300">Control 4 fotos</Link>
+          </div>
         </div>
 
         <header className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-6">
@@ -92,10 +99,13 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
           <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
             <span className="rounded-full bg-white/5 px-3 py-2">Estado: {inspeccion.estado}</span>
             <span className="rounded-full bg-violet-400/10 px-3 py-2 text-violet-300">Seleccionadas: {seleccionadas.length}</span>
+            <span className={`rounded-full px-3 py-2 ${coberturaLista ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>{coberturaLista ? "Cobertura editorial completa" : `${hallazgosSinSeleccion} hallazgo(s) sin foto seleccionada`}</span>
           </div>
         </header>
 
         {!seleccion.disponible && <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm font-bold text-amber-200">La pantalla está preparada, pero la selección editorial permanecerá deshabilitada hasta aplicar la migración correspondiente en la base de datos.</div>}
+        {seleccion.disponible && seleccionadas.length > 0 && hallazgosSinSeleccion > 0 && <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm font-bold text-amber-200">Antes de considerar lista la edición del reporte, selecciona al menos una fotografía de cada hallazgo que tenga evidencia disponible.</div>}
+        {coberturaLista && <div className="mt-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-4 text-sm font-bold text-emerald-300">La cobertura editorial está completa. Ya puedes revisar el resultado en la vista previa antes de integrar la selección al reporte definitivo.</div>}
         {query.ok && <div className="mt-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-4 font-bold text-emerald-300">{query.ok}</div>}
         {query.error && <div className="mt-5 rounded-2xl border border-rose-400/25 bg-rose-400/10 p-4 font-bold text-rose-300">{query.error}</div>}
 
@@ -118,9 +128,10 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
         )}
 
         <section className="mt-7 space-y-5">
-          {hallazgos.map((h, hi) => (
-            <article key={h.id} className="rounded-3xl border border-white/10 bg-slate-900 p-5">
-              <div className="flex flex-wrap gap-2 text-xs font-black"><span className="text-cyan-300">#{hi + 1} · {h.area}</span><span className="rounded-full bg-white/5 px-2 py-1">{h.clasificacion}</span><span className="rounded-full bg-white/5 px-2 py-1">{h.prioridad}</span></div>
+          {hallazgos.map((h, hi) => {
+            const seleccionadasHallazgo = h.fotografias.filter((f) => idsSeleccionados.has(f.id)).length;
+            return <article key={h.id} className="rounded-3xl border border-white/10 bg-slate-900 p-5">
+              <div className="flex flex-wrap gap-2 text-xs font-black"><span className="text-cyan-300">#{hi + 1} · {h.area}</span><span className="rounded-full bg-white/5 px-2 py-1">{h.clasificacion}</span><span className="rounded-full bg-white/5 px-2 py-1">{h.prioridad}</span><span className={`rounded-full px-2 py-1 ${seleccionadasHallazgo > 0 ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>{seleccionadasHallazgo} seleccionada(s)</span></div>
               <h2 className="mt-2 text-xl font-black">{h.titulo}</h2>
               <p className="mt-1 text-sm text-slate-400">{h.fotografias.length} fotografía(s) disponibles · mínimo operativo de campo: 4.</p>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -138,8 +149,8 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
                   </div>;
                 })}
               </div>
-            </article>
-          ))}
+            </article>;
+          })}
         </section>
       </div>
     </main>
