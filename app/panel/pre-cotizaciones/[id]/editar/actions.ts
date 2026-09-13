@@ -85,7 +85,12 @@ export async function guardarPreCotizacion(formData: FormData) {
   });
 
   if (!cotizacion) volver(id, "error", "La pre-cotización no existe.");
-  if (![EstadoCotizacion.BORRADOR, EstadoCotizacion.ENVIADA, EstadoCotizacion.ACEPTADA].includes(cotizacion.estado)) {
+  const estadosEditables: EstadoCotizacion[] = [
+    EstadoCotizacion.BORRADOR,
+    EstadoCotizacion.ENVIADA,
+    EstadoCotizacion.ACEPTADA,
+  ];
+  if (!estadosEditables.includes(cotizacion.estado)) {
     volver(id, "error", "Solo se pueden editar registros que estén en Pre-cotizaciones.");
   }
   if (!cotizacion.inmuebleId) volver(id, "error", "La pre-cotización no tiene inmueble asociado.");
@@ -126,8 +131,6 @@ export async function guardarPreCotizacion(formData: FormData) {
   };
 
   await prisma.$transaction(async (tx) => {
-    // Cliente e Inmueble NO se modifican aquí. Los cambios quedan propuestos en la nueva versión
-    // y solo se aplican a las bases maestras después de aceptación del cliente + autorización interna.
     await tx.cotizacion.update({
       where: { id },
       data: {
