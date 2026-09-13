@@ -24,7 +24,12 @@ export default async function EditarPreCotizacionPage({ params, searchParams }: 
     versiones:{orderBy:{version:"desc"},take:1,select:{version:true,datos:true,total:true}},
   }});
   if (!c) notFound();
-  if (![EstadoCotizacion.BORRADOR, EstadoCotizacion.ENVIADA, EstadoCotizacion.ACEPTADA].includes(c.estado)) redirect("/panel/cotizaciones");
+  const estadosEditables: EstadoCotizacion[] = [
+    EstadoCotizacion.BORRADOR,
+    EstadoCotizacion.ENVIADA,
+    EstadoCotizacion.ACEPTADA,
+  ];
+  if (!estadosEditables.includes(c.estado)) redirect("/panel/cotizaciones");
   if (!c.inmueble) notFound();
 
   const version = c.versiones[0]; const datos = objeto(version?.datos); const propuesta = datos?.estadoCambios === "PENDIENTES_AUTORIZACION";
