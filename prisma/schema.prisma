@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum RolUsuario {
@@ -25,11 +26,40 @@ enum EstadoInspeccion {
   CANCELADA
 }
 
+enum TipoDecisionRevision {
+  VISTO_BUENO
+  APROBADO
+  NO_APROBADO
+  RETENIDO_AUDITORIA
+  LEVANTAR_BLOQUEO
+  DEVUELTO_COORDINACION
+  DEVUELTO_INSPECTOR
+}
+
+enum EstadoDecisionRevision {
+  VIGENTE
+  INVALIDADA
+  SUPERADA
+}
+
+enum EstadoReasignacionInspector {
+  PENDIENTE
+  AUTORIZADA
+  RECHAZADA
+  CANCELADA
+}
+
 enum TipoCliente {
   PARTICULAR
   INMOBILIARIA
   CONSTRUCTORA
   INVERSIONISTA
+}
+
+enum TipoCalculoPrecio {
+  PRECIO_FIJO
+  POR_M2
+  HIBRIDO
 }
 
 enum EstadoCotizacion {
@@ -47,72 +77,46 @@ enum EstadoPago {
   PENDIENTE
   PARCIAL
   PAGADO
+  CANCELADO
 }
 
 enum EsquemaPago {
   UNA_EXHIBICION
-  DOS_EXHIBICIONES
-  TRES_EXHIBICIONES
-}
-
-enum TipoCalculoPrecio {
-  FIJO
-  POR_M2
-  HIBRIDO
+  DOS_EXHIBICIONES_50_50
 }
 
 enum ClasificacionHallazgo {
-  CRITICO
-  MAYOR
-  MENOR
-  OBSERVACION
+  C
+  O
+  NC
+  CR
+  NA
 }
 
 enum PrioridadHallazgo {
-  ALTA
-  MEDIA
-  BAJA
+  P1
+  P2
+  P3
+  P4
+  P5
 }
 
 enum EstadoSeguimientoHallazgo {
-  PENDIENTE
+  PENDIENTE_VERIFICAR
   CORREGIDO
-  PARCIAL
+  PARCIALMENTE_CORREGIDO
   NO_CORREGIDO
-  NO_APLICA
-}
-
-enum EstadoReasignacionInspector {
-  PENDIENTE
-  AUTORIZADA
-  RECHAZADA
-  CANCELADA
-}
-
-enum TipoDecisionRevision {
-  APROBAR
-  RECHAZAR
-  OBSERVAR
-}
-
-enum EstadoDecisionRevision {
-  VIGENTE
-  REVOCADA
+  CORRECCION_NO_SATISFACTORIA
+  NO_VERIFICABLE
+  NUEVO_HALLAZGO
 }
 
 enum TipoEvento {
+  LOGIN
+  LOGOUT
   CREAR
   EDITAR
   ELIMINAR
-  LOGIN
-  LOGOUT
-  AUTORIZAR
-  RECHAZAR
-  AGENDAR
-  REASIGNAR
-  INICIAR
-  FINALIZAR
-  EMITIR_REPORTE
   EMITIR_CERTIFICADO
   REVOCAR_CERTIFICADO
   REACTIVAR_CERTIFICADO
@@ -208,7 +212,7 @@ model Usuario {
 
 model Cliente {
   id String @id @default(cuid())
-  folio String @unique @default(dbgenerated("('CH-CLI-'::text || ((EXTRACT(year FROM CURRENT_DATE))::integer)::text) || '-'::text || lpad((nextval('\\\"Cliente_folio_seq\\\"'::regclass))::text, 6, '0'::text))"))
+  folio String @unique @default(dbgenerated("('CH-CLI-'::text || ((EXTRACT(year FROM CURRENT_DATE))::integer)::text) || '-'::text || lpad((nextval('\"Cliente_folio_seq\"'::regclass))::text, 6, '0'::text))"))
   usuarioId String? @unique
   usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   nombre String
@@ -239,7 +243,7 @@ model Cliente {
 model Inmueble {
   id String @id @default(cuid())
   clienteId String
-  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   alias String
   tipo String
   direccion String
@@ -247,14 +251,14 @@ model Inmueble {
   ciudad String
   estado String
   codigoPostal String?
+  latitud Decimal? @db.Decimal(10, 7)
+  longitud Decimal? @db.Decimal(10, 7)
   superficieTerrenoM2 Decimal? @db.Decimal(10, 2)
   superficieConstruccionM2 Decimal? @db.Decimal(10, 2)
   anioConstruccion Int?
-  nombreConstructor String?
+  nombreConstructor String? @map("constructor")
   desarrollo String?
   numeroEscritura String?
-  latitud Decimal? @db.Decimal(10, 7)
-  longitud Decimal? @db.Decimal(10, 7)
   notas String?
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -276,30 +280,33 @@ model Inspector {
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
   inspecciones Inspeccion[]
-  pagosComision PagoComision[]
+  reasignacionesComoAnterior ReasignacionInspector[] @relation("ReasignacionInspectorAnterior")
+  reasignacionesComoPropuesto ReasignacionInspector[] @relation("ReasignacionInspectorPropuesto")
 }
 
 model Inspeccion {
   id String @id @default(cuid())
   folio String @unique
-  numeroInspeccion Int @default(1)
-  inspeccionAnteriorId String?
-  inspeccionAnterior Inspeccion? @relation("VersionesInspeccion", fields: [inspeccionAnteriorId], references: [id], onDelete: SetNull)
-  inspeccionesSiguientes Inspeccion[] @relation("VersionesInspeccion")
-  cotizacionId String? @unique
-  cotizacion Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+  plantillaId String?
+  plantilla PlantillaInspeccion? @relation(fields: [plantillaId], references: [id], onDelete: SetNull)
+  requiereGerenteZona Boolean @default(false)
+  requiereCoordinador Boolean @default(false)
+  zonaId String?
+  zona Zona? @relation(fields: [zonaId], references: [id], onDelete: SetNull)
   clienteId String
   cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   inmuebleId String?
   inmueble Inmueble? @relation(fields: [inmuebleId], references: [id], onDelete: SetNull)
+  numeroInspeccion Int @default(1)
+  inspeccionAnteriorId String?
+  inspeccionAnterior Inspeccion? @relation("SeguimientoInspeccion", fields: [inspeccionAnteriorId], references: [id], onDelete: SetNull)
+  inspeccionesSiguientes Inspeccion[] @relation("SeguimientoInspeccion")
   inspectorId String?
   inspector Inspector? @relation(fields: [inspectorId], references: [id], onDelete: SetNull)
-  plantillaId String?
-  plantilla PlantillaInspeccion? @relation(fields: [plantillaId], references: [id], onDelete: SetNull)
-  zonaId String?
-  zona Zona? @relation(fields: [zonaId], references: [id], onDelete: SetNull)
   agendadaPorId String?
   agendadaPor Usuario? @relation("InspeccionAgendadaPor", fields: [agendadaPorId], references: [id], onDelete: SetNull)
+  cotizacionId String? @unique
+  cotizacion Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
   tipoServicio String
   tipoInmueble String
   direccion String
@@ -308,16 +315,18 @@ model Inspeccion {
   fechaProgramada DateTime
   zonaHoraria String @default("America/Ciudad_Juarez")
   estado EstadoInspeccion @default(PROGRAMADA)
+  observaciones String?
+  ish Decimal? @db.Decimal(5, 2)
+  semaforo String?
   inicioLiberadoSinPago Boolean @default(false)
   inicioLiberadoPorId String?
-  inicioLiberadoPor Usuario? @relation("InspeccionLiberadaPor", fields: [inicioLiberadoPorId], references: [id], onDelete: SetNull)
   inicioLiberadoEn DateTime?
   motivoLiberacionPago String?
-  bloqueadaLiberacion Boolean @default(false)
+  liberacionBloqueada Boolean @default(false)
   bloqueadaPorId String?
   bloqueadaPor Usuario? @relation("InspeccionBloqueadaPor", fields: [bloqueadaPorId], references: [id], onDelete: SetNull)
   bloqueadaEn DateTime?
-  motivoBloqueo String?
+  motivoBloqueoLiberacion String?
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
   hallazgos Hallazgo[]
@@ -327,95 +336,19 @@ model Inspeccion {
   eventos EventoAuditoria[]
   revisiones RevisionInspeccion[]
   reasignaciones ReasignacionInspector[]
-  preparaciones PreparacionTecnica[]
-  archivosPlano ArchivoPlano[]
+  @@index([plantillaId])
+  @@index([fechaProgramada])
+  @@index([estado])
+  @@index([zonaId])
   @@index([clienteId])
   @@index([inmuebleId])
-  @@index([inspectorId])
-  @@index([plantillaId])
-  @@index([zonaId])
-  @@index([estado])
-  @@index([fechaProgramada])
   @@index([numeroInspeccion])
   @@index([inspeccionAnteriorId])
-}
-
-model PreparacionTecnica {
-  id String @id @default(cuid())
-  inspeccionId String
-  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-  preparadoPorId String
-  preparadoPor Usuario @relation(fields: [preparadoPorId], references: [id], onDelete: Restrict)
-  descripcion String?
-  creadoEn DateTime @default(now())
-  actualizadoEn DateTime @updatedAt
-  detalles PreparacionTecnicaDetalle[]
-  @@unique([inspeccionId])
-  @@index([preparadoPorId])
-}
-
-model PreparacionTecnicaDetalle {
-  id String @id @default(cuid())
-  preparacionId String
-  preparacion PreparacionTecnica @relation(fields: [preparacionId], references: [id], onDelete: Cascade)
-  conceptoId String?
-  concepto ConceptoInspeccion? @relation(fields: [conceptoId], references: [id], onDelete: SetNull)
-  conceptoLibre String?
-  incluido Boolean @default(true)
-  orden Int @default(0)
-  @@index([preparacionId])
-  @@index([conceptoId])
-}
-
-model ConceptoInspeccion {
-  id String @id @default(cuid())
-  codigo String @unique
-  nombre String
-  categoria String
-  descripcion String?
-  activo Boolean @default(true)
-  orden Int @default(0)
-  creadoEn DateTime @default(now())
-  actualizadoEn DateTime @updatedAt
-  preparaciones PreparacionTecnicaDetalle[]
-  @@index([categoria])
-  @@index([activo])
-  @@index([orden])
-}
-
-model ArchivoPlano {
-  id String @id @default(cuid())
-  inspeccionId String
-  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
-  especialidad String
-  nombreArchivo String
-  url String
-  publicId String?
-  subidoPorId String
-  subidoPor Usuario @relation(fields: [subidoPorId], references: [id], onDelete: Restrict)
-  creadoEn DateTime @default(now())
-  @@index([inspeccionId])
-  @@index([especialidad])
-}
-
-model PagoComision {
-  id String @id @default(cuid())
-  tipoBeneficiario String
-  beneficiarioUsuarioId String
-  cotizacionId String?
-  inspeccionId String?
-  porcentaje Decimal @db.Decimal(5, 2)
-  baseCalculo Decimal @db.Decimal(12, 2)
-  monto Decimal @db.Decimal(12, 2)
-  pagado Boolean @default(false)
-  pagadoEn DateTime?
-  referenciaPago String?
-  creadoEn DateTime @default(now())
-  actualizadoEn DateTime @updatedAt
-  @@index([beneficiarioUsuarioId])
-  @@index([cotizacionId])
-  @@index([inspeccionId])
-  @@index([pagado])
+  @@index([inspectorId])
+  @@index([agendadaPorId])
+  @@index([inicioLiberadoPorId])
+  @@index([liberacionBloqueada])
+  @@index([bloqueadaPorId])
 }
 
 model ReasignacionInspector {
@@ -696,12 +629,4 @@ model CotizacionVersion {
   @@unique([cotizacionId, version])
   @@index([cotizacionId])
   @@index([creadaEn])
-}
-
-model ComisionConfiguracion {
-  id String @id @default(cuid())
-  tipo String @unique
-  porcentaje Decimal @db.Decimal(5, 2)
-  activa Boolean @default(true)
-  actualizadoEn DateTime @updatedAt
 }
