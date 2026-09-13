@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { validarInicioCampoPorCaja } from "@/lib/inspeccion-finanzas";
 import { prisma } from "@/lib/prisma";
 
 const MINIMO_EVIDENCIAS = 4;
@@ -35,6 +36,58 @@ async function guiaCompleta(inspeccionId: string) {
   } catch {
     return { habilitada: false, total: 0, pendientes: 0 };
   }
+}
+
+export async function iniciarInspeccionDesdeFlujo(formData: FormData) {
+  const session = await auth();
+  const inspeccionId = String(formData.get("inspeccionId") ?? "").trim();
+  if (!session?.user?.id) redirect("/login");
+  if (!inspeccionId) redirect("/panel/inspecciones?error=Inspeccion%20no%20valida");
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, rol: true, activo: true, inspector: { select: { id: true, activo: true } } },
+  });
+  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.id || !usuario.inspector.activo) {
+    volver(inspeccionId, "error", "Solo el Inspector activo asignado puede iniciar el trabajo de campo.");
+  }
+
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id: inspeccionId },
+    select: { id: true, folio: true, estado: true, inspectorId: true, cotizacionId: true },
+  });
+  if (!inspeccion) volver(inspeccionId, "error", "La inspección no existe.");
+  if (inspeccion.inspectorId !== usuario.inspector.id) volver(inspeccionId, "error", "La inspección está asignada a otro Inspector.");
+  if (inspeccion.estado !== EstadoInspeccion.PROGRAMADA) volver(inspeccionId, "error", "Solo una inspección PROGRAMADA puede iniciar trabajo de campo.");
+
+  const validacion = await validarInicioCampoPorCaja(inspeccionId);
+  if (!validacion.ok) volver(inspeccionId, "error", validacion.error);
+
+  await prisma.inspeccion.update({
+    where: { id: inspeccionId },
+    data: {
+      estado: EstadoInspeccion.EN_PROCESO,
+      inicioLiberadoSinPago: validacion.liberadaPorExcepcion ?? false,
+    },
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.INICIAR,
+    entidad: "Inspeccion",
+    entidadId: inspeccionId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${inspeccion.folio} inició trabajo de campo con liberación financiera de Caja: ${validacion.liberadaPorExcepcion ? "excepción autorizada de 100%" : validacion.liberadaPorPago ? "100% pagado" : "expediente histórico sin cotización"}.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
+  revalidatePath("/panel/inspecciones");
+  revalidatePath("/panel/agenda");
+  revalidatePath("/panel/cotizaciones");
+  revalidatePath("/panel/caja");
+  volver(inspeccionId, "ok", "Caja liberó el inicio. La inspección quedó EN PROCESO.");
 }
 
 export async function finalizarCapturaGuiada(formData: FormData) {
