@@ -7,6 +7,7 @@ export type ModuloPanel =
   | "AGENDA"
   | "PRE_COTIZACIONES"
   | "COTIZACIONES"
+  | "CAJA"
   | "INSPECTORES"
   | "AUDITORIA"
   | "USUARIOS"
@@ -26,6 +27,7 @@ export const OPCIONES_PANEL: readonly OpcionNavegacionPanel[] = [
   { modulo: "AGENDA", etiqueta: "Agenda", href: "/panel/agenda" },
   { modulo: "PRE_COTIZACIONES", etiqueta: "Pre-cotizaciones", href: "/panel/pre-cotizaciones" },
   { modulo: "COTIZACIONES", etiqueta: "Cotizaciones", href: "/panel/cotizaciones" },
+  { modulo: "CAJA", etiqueta: "Caja", href: "/panel/caja" },
   { modulo: "INSPECTORES", etiqueta: "Inspectores", href: "/panel/inspectores" },
   { modulo: "AUDITORIA", etiqueta: "Auditoría", href: "/panel/auditoria" },
   { modulo: "USUARIOS", etiqueta: "Usuarios", href: "/panel/usuarios" },
@@ -41,6 +43,7 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
     "AGENDA",
     "PRE_COTIZACIONES",
     "COTIZACIONES",
+    "CAJA",
     "INSPECTORES",
     "AUDITORIA",
     "USUARIOS",
@@ -54,6 +57,7 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
     "AGENDA",
     "PRE_COTIZACIONES",
     "COTIZACIONES",
+    "CAJA",
     "INSPECTORES",
     "USUARIOS",
     "NUEVA_INSPECCION",
