@@ -29,7 +29,14 @@ type EntradaFinancieraCaja = {
   excepcionInicio?: boolean;
   tieneInspeccion?: boolean;
   fechaAgendada?: Date | string | null;
+  ahora?: Date | string;
 };
+
+function fechaValida(valor: Date | string | null | undefined): Date | null {
+  if (!valor) return null;
+  const fecha = valor instanceof Date ? valor : new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
 
 export function calcularResumenFinancieroCaja({
   importe,
@@ -38,6 +45,7 @@ export function calcularResumenFinancieroCaja({
   excepcionInicio = false,
   tieneInspeccion = false,
   fechaAgendada = null,
+  ahora = new Date(),
 }: EntradaFinancieraCaja): ResumenFinancieroCaja {
   const totalSeguro = Math.max(0, Number.isFinite(importe) ? importe : 0);
   const pagadoSeguro = Math.max(0, Number.isFinite(pagado) ? pagado : 0);
@@ -49,16 +57,31 @@ export function calcularResumenFinancieroCaja({
   const liberacionPorExcepcion = !cumpleLiberacion100 && excepcionInicio;
   const puedeAgendar = cumpleApertura50 || excepcionApertura;
   const puedeLiberarCampo = cumpleLiberacion100 || excepcionInicio;
-  const agendada = Boolean(fechaAgendada) || tieneInspeccion;
+
+  const fechaAgenda = fechaValida(fechaAgendada);
+  const fechaReferencia = fechaValida(ahora) ?? new Date();
+  const existeAgenda = Boolean(tieneInspeccion || fechaAgenda);
 
   const estadoPago: EstadoPagoCaja =
     pagadoSeguro <= 0.001 ? "PENDIENTE" : cumpleLiberacion100 ? "PAGADO" : "PARCIAL";
 
-  // Estado operativo: antes de existir agenda/inspección permanece SIN AGENDAR, aunque ya tenga
-  // suficiencia financiera. AGENDADA significa que sí existe programación y ya está liberada al 100%.
+  /*
+   * Estado operativo visible en COTIZACIONES:
+   * - SIN_AGENDAR: todavía no existe una inspección/fecha programada.
+   * - AGENDADA: ya existe agenda y la fecha aún es futura, pero todavía no está liberada al 100%.
+   * - SIN_LIBERAR: la fecha programada llegó o venció y Caja todavía no autoriza el inicio.
+   * - LIBERADA: Caja autoriza el inicio por 100% pagado o por excepción vigente.
+   *
+   * Con esto el estado no se captura manualmente: se deriva de Caja + Agenda.
+   */
   let estadoOperativo: EstadoOperativoCotizacion = "SIN_AGENDAR";
-  if (agendada && !puedeLiberarCampo) estadoOperativo = "SIN_LIBERAR";
-  if (agendada && puedeLiberarCampo) estadoOperativo = "LIBERADA";
+  if (existeAgenda && puedeLiberarCampo) {
+    estadoOperativo = "LIBERADA";
+  } else if (existeAgenda && fechaAgenda && fechaAgenda.getTime() > fechaReferencia.getTime()) {
+    estadoOperativo = "AGENDADA";
+  } else if (existeAgenda) {
+    estadoOperativo = "SIN_LIBERAR";
+  }
 
   return {
     importe: totalSeguro,
