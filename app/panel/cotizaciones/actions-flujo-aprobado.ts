@@ -84,7 +84,12 @@ export async function cancelarCotizacion(formData: FormData) {
   if(!motivo) volver("error","Registra el motivo o antecedente del cierre.");
   const c=await prisma.cotizacion.findUnique({where:{id},select:{folio:true,estado:true,montoPagado:true,observacionesInternas:true,inspeccion:{select:{id:true,folio:true,estado:true}}}});
   if(!c) volver("error","La cotización no existe."); if(c.estado!==EstadoCotizacion.AUTORIZADA) volver("error","Solo una cotización autorizada activa puede cerrarse desde este panel.");
-  if(c.inspeccion&&[EstadoInspeccion.EN_PROCESO,EstadoInspeccion.REPORTE_PENDIENTE,EstadoInspeccion.FINALIZADA].includes(c.inspeccion.estado)) volver("error",`La inspección ${c.inspeccion.folio} ya avanzó a ${c.inspeccion.estado.replaceAll("_"," ")}. Requiere resolución administrativa del expediente.`);
+  const estadosQueBloqueanCierre: EstadoInspeccion[] = [
+    EstadoInspeccion.EN_PROCESO,
+    EstadoInspeccion.REPORTE_PENDIENTE,
+    EstadoInspeccion.FINALIZADA,
+  ];
+  if(c.inspeccion&&estadosQueBloqueanCierre.includes(c.inspeccion.estado)) volver("error",`La inspección ${c.inspeccion.folio} ya avanzó a ${c.inspeccion.estado.replaceAll("_"," ")}. Requiere resolución administrativa del expediente.`);
   const ahora=new Date(); const etiqueta=tipoCierre==="CANCELACION_CLIENTE"?"CANCELACIÓN DEL CLIENTE":"FALTA DE RESPUESTA DEL CLIENTE"; const nota=`[${ahora.toISOString()}] CIERRE POR ${etiqueta}. Ejecutó: ${usuario.nombre} (${usuario.rol}). Motivo/antecedente: ${motivo}. Pagos e historial se conservan.`;
   await prisma.$transaction(async tx=>{
     await tx.cotizacion.update({where:{id},data:{estado:EstadoCotizacion.CANCELADA,editablePublica:false,observacionesInternas:c.observacionesInternas?.trim()?`${c.observacionesInternas.trim()}\n\n${nota}`:nota}});
