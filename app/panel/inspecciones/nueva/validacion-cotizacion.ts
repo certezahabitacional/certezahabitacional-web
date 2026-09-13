@@ -1,5 +1,6 @@
 import { EstadoCotizacion } from "@prisma/client";
 
+import { calcularResumenFinancieroCaja } from "@/lib/caja-finanzas";
 import { prisma } from "@/lib/prisma";
 
 export async function validarCotizacionParaNuevaInspeccion({
@@ -23,7 +24,7 @@ export async function validarCotizacionParaNuevaInspeccion({
       montoPagado: true,
       excepcionApertura: true,
       excepcionInicio: true,
-      inspeccion: { select: { id: true, folio: true } },
+      inspeccion: { select: { id: true, folio: true, fechaProgramada: true } },
     },
   });
 
@@ -38,12 +39,21 @@ export async function validarCotizacionParaNuevaInspeccion({
     return { ok: false as const, error: `La cotización ${cotizacion.folio} ya está vinculada a la inspección ${cotizacion.inspeccion.folio}.` };
   }
 
-  const total = Number(cotizacion.total);
-  const pagado = Number(cotizacion.montoPagado);
-  const porcentaje = total > 0 ? pagado / total : 0;
-  if (porcentaje < 0.5 && !cotizacion.excepcionApertura) {
-    return { ok: false as const, error: "Se requiere al menos 50% de pago para abrir Nueva Inspección, salvo excepción autorizada por Dirección." };
+  const resumenFinanciero = calcularResumenFinancieroCaja({
+    importe: Number(cotizacion.total),
+    pagado: Number(cotizacion.montoPagado),
+    excepcionApertura: cotizacion.excepcionApertura,
+    excepcionInicio: cotizacion.excepcionInicio,
+    tieneInspeccion: false,
+    fechaAgendada: null,
+  });
+
+  if (!resumenFinanciero.puedeAgendar) {
+    return {
+      ok: false as const,
+      error: "Se requiere al menos 50% de pago para abrir Nueva Inspección, salvo excepción autorizada por Director o Administrador.",
+    };
   }
 
-  return { ok: true as const, cotizacion };
+  return { ok: true as const, cotizacion, resumenFinanciero };
 }
