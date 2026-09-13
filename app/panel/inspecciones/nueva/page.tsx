@@ -3,6 +3,7 @@ import { EstadoCotizacion, RolUsuario } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { calcularResumenFinancieroCaja } from "@/lib/caja-finanzas";
 import { prisma } from "@/lib/prisma";
 import { crearInspeccion } from "./actions";
 import CotizacionSelect from "./CotizacionSelect";
@@ -48,7 +49,7 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
         ...(antecedente ? { clienteId: antecedente.clienteId, inmuebleId: antecedente.inmuebleId } : {}),
       },
       select: {
-        id: true, folio: true, clienteId: true, inmuebleId: true, total: true, montoPagado: true, excepcionApertura: true,
+        id: true, folio: true, clienteId: true, inmuebleId: true, total: true, montoPagado: true, excepcionApertura: true, excepcionInicio: true,
         cliente: { select: { nombre: true } }, inmueble: { select: { alias: true } },
       },
       orderBy: { autorizadaEn: "desc" },
@@ -63,20 +64,27 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
   ]);
 
   const cotizaciones = cotizacionesBase
-    .filter((c) => {
-      const total = Number(c.total);
-      const pagado = Number(c.montoPagado);
-      return c.excepcionApertura || (total > 0 && pagado / total >= 0.5);
-    })
     .map((c) => ({
+      c,
+      resumen: calcularResumenFinancieroCaja({
+        importe: Number(c.total),
+        pagado: Number(c.montoPagado),
+        excepcionApertura: c.excepcionApertura,
+        excepcionInicio: c.excepcionInicio,
+        tieneInspeccion: false,
+        fechaAgendada: null,
+      }),
+    }))
+    .filter(({ resumen }) => resumen.puedeAgendar)
+    .map(({ c, resumen }) => ({
       id: c.id,
       folio: c.folio,
       clienteId: c.clienteId,
       clienteNombre: c.cliente.nombre,
       inmuebleId: c.inmuebleId!,
       inmuebleAlias: c.inmueble?.alias ?? "Inmueble",
-      total: Number(c.total),
-      montoPagado: Number(c.montoPagado),
+      total: resumen.importe,
+      montoPagado: resumen.pagado,
       excepcionApertura: c.excepcionApertura,
     }));
 
@@ -92,7 +100,7 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
 
         <p className="mt-7 text-xs font-black uppercase tracking-[0.3em] text-amber-300">Operación comercial vinculada</p>
         <h1 className="mt-3 text-4xl font-black">{antecedente ? `Nueva inspección V${antecedente.numeroInspeccion + 1}` : "Nueva inspección V1"}</h1>
-        <p className="mt-3 max-w-3xl text-slate-400">Cada versión de inspección requiere su propia cotización aceptada y autorizada y cumple las mismas reglas de pago. Las V2, V3, V4 y posteriores conservan además el antecedente de la versión anterior.</p>
+        <p className="mt-3 max-w-3xl text-slate-400">Cada versión de inspección requiere su propia cotización aceptada y autorizada y cumple las mismas reglas financieras de Caja. Las V2, V3, V4 y posteriores conservan además el antecedente de la versión anterior.</p>
 
         {params.error && <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-5 py-4 font-bold text-rose-200">{params.error}</div>}
 
@@ -114,8 +122,8 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
           ) : (
             <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5 text-amber-200">
               {antecedente
-                ? "No hay una nueva cotización disponible para este mismo cliente e inmueble. Para crear la siguiente versión debe existir otra cotización aceptada, autorizada y con al menos 50% pagado o excepción de Dirección."
-                : "No hay cotizaciones disponibles. La cotización debe estar aceptada, autorizada, tener inmueble y contar con al menos 50% pagado o excepción de Dirección."}
+                ? "No hay una nueva cotización disponible para este mismo cliente e inmueble. Para crear la siguiente versión debe existir otra cotización aceptada, autorizada y habilitada por Caja con al menos 50% pagado o excepción de Director/Administrador."
+                : "No hay cotizaciones disponibles. La cotización debe estar aceptada, autorizada, tener inmueble y estar habilitada por Caja con al menos 50% pagado o excepción de Director/Administrador."}
             </div>
           )}
 
@@ -125,7 +133,7 @@ export default async function NuevaInspeccionPage({ searchParams }: { searchPara
           <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Fecha y hora *</span><input name="fechaProgramada" type="datetime-local" required className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300" /></label>
           <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Observaciones</span><textarea name="observaciones" rows={4} className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300" /></label>
 
-          <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm leading-6 text-slate-300"><p className="font-black text-amber-300">Reglas operativas para todas las versiones</p><p className="mt-2">V1, V2, V3, V4 y posteriores siguen el mismo recorrido: cotización → aceptación del cliente → autorización interna → Caja → mínimo 50% para abrir la inspección → 100% para iniciar campo. Las excepciones son independientes y solo puede autorizarlas Dirección.</p></div>
+          <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm leading-6 text-slate-300"><p className="font-black text-amber-300">Reglas operativas para todas las versiones</p><p className="mt-2">V1, V2, V3, V4 y posteriores siguen el mismo recorrido: cotización → aceptación del cliente → autorización interna → Caja → mínimo 50% para abrir/agendar → 100% para liberar el inicio en campo. Las excepciones de 50% y 100% solo pueden ser autorizadas por Director o Administrador y quedan auditadas.</p></div>
           <button type="submit" disabled={cotizaciones.length === 0} className="w-full rounded-full bg-cyan-400 px-6 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">Crear y programar {antecedente ? `V${antecedente.numeroInspeccion + 1}` : "V1"}</button>
         </form>
       </div>
