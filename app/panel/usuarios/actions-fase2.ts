@@ -43,7 +43,13 @@ async function resolverJerarquia(rol: RolUsuario, zonaId: string, gerenteId: str
     if (!zonaId) error("Selecciona la zona del Administrador.");
     await validarZona(zonaId); zonaFinalId = zonaId;
   }
-  if ([RolUsuario.VENDEDOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR, RolUsuario.INSPECTOR].includes(rol)) {
+  const rolesConZona: RolUsuario[] = [
+    RolUsuario.VENDEDOR,
+    RolUsuario.GERENTE,
+    RolUsuario.COORDINADOR,
+    RolUsuario.INSPECTOR,
+  ];
+  if (rolesConZona.includes(rol)) {
     if (!zonaId) error("Selecciona una zona para este usuario.");
     await validarZona(zonaId); zonaFinalId = zonaId;
   }
