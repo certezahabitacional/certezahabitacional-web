@@ -72,7 +72,7 @@ export async function iniciarInspeccionDesdeFlujo(formData: FormData) {
   });
 
   await registrarAuditoria({
-    tipo: TipoEvento.INICIAR,
+    tipo: TipoEvento.EDITAR,
     entidad: "Inspeccion",
     entidadId: inspeccionId,
     inspeccionId,
@@ -153,10 +153,10 @@ export async function finalizarCapturaGuiada(formData: FormData) {
     await tx.revisionInspeccion.updateMany({
       where: {
         inspeccionId,
-        decision: TipoDecisionRevision.OBSERVAR,
+        decision: TipoDecisionRevision.DEVUELTO_INSPECTOR,
         estado: EstadoDecisionRevision.VIGENTE,
       },
-      data: { estado: EstadoDecisionRevision.REVOCADA },
+      data: { estado: EstadoDecisionRevision.SUPERADA },
     });
   });
 
@@ -166,7 +166,7 @@ export async function finalizarCapturaGuiada(formData: FormData) {
     entidadId: inspeccion.id,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Captura guiada finalizada para ${inspeccion.folio}: guía técnica completa, ${inspeccion.hallazgos.length} hallazgo(s) con mínimo 4 evidencias y firmas requeridas registradas. Las observaciones vigentes anteriores quedaron revocadas al entregar la nueva captura.`,
+    descripcion: `Captura guiada finalizada para ${inspeccion.folio}: guía técnica completa, ${inspeccion.hallazgos.length} hallazgo(s) con mínimo 4 evidencias y firmas requeridas registradas. Las devoluciones vigentes al inspector quedaron superadas al entregar la nueva captura.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
