@@ -18,7 +18,8 @@ export default async function CotizacionClientePage({ params }: Props) {
   const clienteActual = await obtenerClienteActual(); const { id } = await params;
   const cotizacion = await prisma.cotizacion.findFirst({ where: { id, clienteId: clienteActual.id }, include: { cliente:true, inmueble: true, paquete: true, versiones: { orderBy: { version: "desc" }, take: 1, select: { version: true, datos:true, total:true } } } });
   if (!cotizacion) notFound();
-  const puedeConsultar = [EstadoCotizacion.ENVIADA, EstadoCotizacion.ACEPTADA, EstadoCotizacion.RECHAZADA].includes(cotizacion.estado); if (!puedeConsultar) notFound();
+  const estadosConsultables: EstadoCotizacion[] = [EstadoCotizacion.ENVIADA, EstadoCotizacion.ACEPTADA, EstadoCotizacion.RECHAZADA];
+  const puedeConsultar = estadosConsultables.includes(cotizacion.estado); if (!puedeConsultar) notFound();
   const version = cotizacion.versiones[0];
   if (!version || version.version !== cotizacion.versionActual) notFound();
 
