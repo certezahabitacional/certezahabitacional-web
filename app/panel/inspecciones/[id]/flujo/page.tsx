@@ -3,8 +3,9 @@ import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { validarInicioCampoPorCaja } from "@/lib/inspeccion-finanzas";
 import { prisma } from "@/lib/prisma";
-import { finalizarCapturaGuiada } from "./actions";
+import { finalizarCapturaGuiada, iniciarInspeccionDesdeFlujo } from "./actions";
 
 async function leerGuia(id: string) {
   try {
@@ -28,6 +29,7 @@ export default async function FlujoCampoPage({params,searchParams}:{params:Promi
   const consulta=usuario.rol===RolUsuario.DIRECTOR||usuario.rol===RolUsuario.GERENTE||usuario.rol===RolUsuario.COORDINADOR;
   if(!esInspector&&!consulta) redirect("/acceso");
 
+  const liberacionCaja=inspeccion.estado===EstadoInspeccion.PROGRAMADA ? await validarInicioCampoPorCaja(id) : null;
   const guia=await leerGuia(id);
   const guiaLista=guia.habilitada?guia.total>0&&guia.completos===guia.total:true;
   const hallazgos=inspeccion.hallazgos.length;
@@ -50,7 +52,10 @@ export default async function FlujoCampoPage({params,searchParams}:{params:Promi
     <p className="mt-7 text-xs font-black uppercase tracking-[.25em] text-amber-300">Flujo operativo de campo</p>
     <h1 className="mt-2 text-4xl font-black">{inspeccion.folio}</h1><p className="mt-2 text-slate-400">{inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias??"Inmueble"}</p>
     {(q.ok||q.error)&&<p className={`mt-5 rounded-2xl p-4 font-bold ${q.error?'bg-rose-400/10 text-rose-300':'bg-emerald-400/10 text-emerald-300'}`}>{q.error??q.ok}</p>}
-    <div className="mt-8 space-y-4">{pasos.map(p=><Link key={p.n} href={p.href} className={`grid gap-3 rounded-3xl border p-5 transition md:grid-cols-[55px_1fr_auto] md:items-center ${p.ok?'border-emerald-400/20 bg-emerald-400/5':'border-white/10 bg-slate-900 hover:border-cyan-300/30'}`}><span className={`grid h-11 w-11 place-items-center rounded-full font-black ${p.ok?'bg-emerald-300 text-slate-950':'bg-slate-800 text-cyan-300'}`}>{p.ok?'✓':p.n}</span><div><h2 className="text-lg font-black">{p.t}</h2><p className="mt-1 text-sm text-slate-400">{p.d}</p></div><span className="text-sm font-black text-cyan-300">Abrir →</span></Link>)}</div>
-    <section className={`mt-7 rounded-3xl border p-6 ${listo?'border-emerald-300/25 bg-emerald-300/5':'border-amber-300/20 bg-amber-300/5'}`}><h2 className="text-xl font-black">Entrega a revisión</h2>{listo?<><p className="mt-2 text-sm text-emerald-100">Recorrido, hallazgos, evidencia mínima y firmas están completos. El Inspector puede entregar el expediente.</p>{esInspector&&<form action={finalizarCapturaGuiada} className="mt-5"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-full bg-emerald-300 px-6 py-3 font-black text-slate-950">Finalizar captura y enviar a revisión</button></form>}</>:<p className="mt-2 text-sm text-amber-100">Completa los pasos pendientes. El sistema no habilitará la entrega mientras falte algún requisito.</p>}</section>
+
+    {inspeccion.estado===EstadoInspeccion.PROGRAMADA&&<section className={`mt-7 rounded-3xl border p-6 ${liberacionCaja?.ok?'border-emerald-300/25 bg-emerald-300/5':'border-amber-300/20 bg-amber-300/5'}`}><p className="text-xs font-black uppercase tracking-[.2em] text-amber-300">Liberación financiera de Caja</p><h2 className="mt-2 text-xl font-black">Inicio de trabajo de campo</h2>{liberacionCaja?.ok?<><p className="mt-2 text-sm text-emerald-100">Caja autoriza el inicio: {liberacionCaja.liberadaPorExcepcion?'excepción de 100% autorizada por Director/Administrador':liberacionCaja.liberadaPorPago?'100% pagado':'expediente histórico compatible'}.</p>{esInspector&&<form action={iniciarInspeccionDesdeFlujo} className="mt-5"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-full bg-emerald-300 px-6 py-3 font-black text-slate-950">Iniciar inspección en campo</button></form>}</>:<p className="mt-2 text-sm text-amber-100">{liberacionCaja?.error??"Caja no ha liberado el inicio de campo."}</p>}</section>}
+
+    {inspeccion.estado!==EstadoInspeccion.PROGRAMADA&&<><div className="mt-8 space-y-4">{pasos.map(p=><Link key={p.n} href={p.href} className={`grid gap-3 rounded-3xl border p-5 transition md:grid-cols-[55px_1fr_auto] md:items-center ${p.ok?'border-emerald-400/20 bg-emerald-400/5':'border-white/10 bg-slate-900 hover:border-cyan-300/30'}`}><span className={`grid h-11 w-11 place-items-center rounded-full font-black ${p.ok?'bg-emerald-300 text-slate-950':'bg-slate-800 text-cyan-300'}`}>{p.ok?'✓':p.n}</span><div><h2 className="text-lg font-black">{p.t}</h2><p className="mt-1 text-sm text-slate-400">{p.d}</p></div><span className="text-sm font-black text-cyan-300">Abrir →</span></Link>)}</div>
+    <section className={`mt-7 rounded-3xl border p-6 ${listo?'border-emerald-300/25 bg-emerald-300/5':'border-amber-300/20 bg-amber-300/5'}`}><h2 className="text-xl font-black">Entrega a revisión</h2>{listo?<><p className="mt-2 text-sm text-emerald-100">Recorrido, hallazgos, evidencia mínima y firmas están completos. El Inspector puede entregar el expediente.</p>{esInspector&&<form action={finalizarCapturaGuiada} className="mt-5"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-full bg-emerald-300 px-6 py-3 font-black text-slate-950">Finalizar captura y enviar a revisión</button></form>}</>:<p className="mt-2 text-sm text-amber-100">Completa los pasos pendientes. El sistema no habilitará la entrega mientras falte algún requisito.</p>}</section></>}
   </div></main>;
 }
