@@ -23,7 +23,11 @@ export async function actualizarAgenda(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const fechaTexto = texto(formData, "fechaProgramada");
   const estadoTexto = texto(formData, "estado");
-  const permitidos = [EstadoInspeccion.PROGRAMADA, EstadoInspeccion.EN_PROCESO, EstadoInspeccion.FINALIZADA];
+  const permitidos: EstadoInspeccion[] = [
+    EstadoInspeccion.PROGRAMADA,
+    EstadoInspeccion.EN_PROCESO,
+    EstadoInspeccion.FINALIZADA,
+  ];
   if (!inspeccionId || !fechaTexto || !permitidos.includes(estadoTexto as EstadoInspeccion)) volver("error", "Fecha o estatus inválidos.");
   const fechaProgramada = new Date(fechaTexto);
   if (Number.isNaN(fechaProgramada.getTime())) volver("error", "La fecha agendada no es válida.");
