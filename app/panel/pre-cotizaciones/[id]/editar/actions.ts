@@ -20,19 +20,13 @@ function numero(formData: FormData, campo: string) {
 async function gestor() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-
   const usuario = await prisma.usuario.findUnique({
     where: { id: session.user.id },
     select: { id: true, nombre: true, rol: true, activo: true },
   });
-
-  if (
-    !usuario?.activo ||
-    (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)
-  ) {
+  if (!usuario?.activo || (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)) {
     redirect("/acceso");
   }
-
   return usuario;
 }
 
@@ -87,8 +81,6 @@ export async function guardarPreCotizacion(formData: FormData) {
       inmuebleId: true,
       versionActual: true,
       montoPagado: true,
-      total: true,
-      inspeccion: { select: { id: true } },
     },
   });
 
@@ -104,6 +96,7 @@ export async function guardarPreCotizacion(formData: FormData) {
 
   const snapshot: Prisma.InputJsonObject = {
     origen: "EDICION_PRE_COTIZACION",
+    estadoCambios: "PENDIENTES_AUTORIZACION",
     motivo,
     editadoPor: usuario.nombre,
     editadoPorRol: usuario.rol,
@@ -133,36 +126,8 @@ export async function guardarPreCotizacion(formData: FormData) {
   };
 
   await prisma.$transaction(async (tx) => {
-    await tx.cliente.update({
-      where: { id: cotizacion.clienteId },
-      data: {
-        nombre,
-        telefono: telefono || null,
-        correo,
-        tipo,
-        empresa,
-        direccion: direccionCliente,
-        colonia: coloniaCliente,
-        ciudad: ciudadCliente,
-        estado: estadoCliente,
-        codigoPostal: codigoPostalCliente,
-      },
-    });
-
-    await tx.inmueble.update({
-      where: { id: cotizacion.inmuebleId! },
-      data: {
-        alias,
-        direccion: direccionInmueble,
-        colonia: coloniaInmueble,
-        ciudad: ciudadInmueble,
-        estado: estadoInmueble,
-        codigoPostal: codigoPostalInmueble,
-        superficieTerrenoM2: new Prisma.Decimal(m2Terreno),
-        superficieConstruccionM2: new Prisma.Decimal(m2Construccion),
-      },
-    });
-
+    // Cliente e Inmueble NO se modifican aquí. Los cambios quedan propuestos en la nueva versión
+    // y solo se aplican a las bases maestras después de aceptación del cliente + autorización interna.
     await tx.cotizacion.update({
       where: { id },
       data: {
@@ -188,17 +153,6 @@ export async function guardarPreCotizacion(formData: FormData) {
         total: new Prisma.Decimal(total),
       },
     });
-
-    if (cotizacion.inspeccion) {
-      await tx.inspeccion.update({
-        where: { id: cotizacion.inspeccion.id },
-        data: {
-          direccion: direccionInmueble,
-          ciudad: ciudadInmueble,
-          superficieM2: new Prisma.Decimal(m2Construccion),
-        },
-      });
-    }
   });
 
   await registrarAuditoria({
@@ -206,17 +160,12 @@ export async function guardarPreCotizacion(formData: FormData) {
     entidad: "Cotizacion",
     entidadId: id,
     usuarioId: usuario.id,
-    descripcion: `${usuario.rol} modificó Cliente/Inmueble/Pre-cotización ${cotizacion.folio}, generando versión ${nuevaVersion}. Motivo: ${motivo}. Pagos históricos preservados: ${Number(cotizacion.montoPagado).toLocaleString("es-MX", { style: "currency", currency: "MXN" })}.`,
+    descripcion: `${usuario.rol} propuso cambios de Cliente/Inmueble en ${cotizacion.folio}, versión ${nuevaVersion}. Motivo: ${motivo}. Los datos maestros permanecen sin cambios hasta nueva aceptación y autorización. Pagos históricos preservados: ${Number(cotizacion.montoPagado).toLocaleString("es-MX", { style: "currency", currency: "MXN" })}.`,
   });
 
   revalidatePath("/panel/pre-cotizaciones");
   revalidatePath("/panel/cotizaciones");
-  revalidatePath("/panel/clientes");
-  revalidatePath("/panel/inmuebles");
   revalidatePath("/panel/caja");
-  revalidatePath("/panel/agenda");
-  revalidatePath("/panel/inspecciones");
   revalidatePath("/portal/cotizaciones");
-
-  volver(id, "ok", `Cambios guardados como versión ${nuevaVersion}. Se requiere nueva aceptación del cliente y nueva autorización interna.`);
+  volver(id, "ok", `Cambios guardados como propuesta versión ${nuevaVersion}. Cliente e Inmueble se actualizarán únicamente después de la nueva aceptación y autorización.`);
 }
