@@ -1,6 +1,6 @@
 "use server";
 
-import { EstadoCotizacion, Prisma, RolUsuario, TipoCliente, TipoEvento } from "@prisma/client";
+import { EstadoCotizacion, EstadoInspeccion, Prisma, RolUsuario, TipoCliente, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -56,11 +56,29 @@ export async function autorizarCotizacionAceptada(formData: FormData) {
   revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/clientes"); revalidatePath("/panel/inmuebles"); revalidatePath("/panel/caja"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); volver("ok",sobrepago?"Cotización autorizada. ALERTA: el importe es menor a lo ya pagado; Caja requiere revisión administrativa.":"Pre-cotización autorizada y sincronizada. Pagos y operación previa fueron preservados.");
 }
 
+// CORRECCION/AJUSTE: vuelve temporalmente a Pre-cotizaciones y conserva toda la operacion.
 export async function regresarAPrecotizacion(formData: FormData) {
-  const usuario=await gestor(); const id=texto(formData,"id"); const motivo=texto(formData,"motivo"); if(!motivo) volver("error","Registra el motivo para regresar la cotización a pre-cotización.");
-  const c=await prisma.cotizacion.findUnique({where:{id},select:{folio:true,estado:true,montoPagado:true,inspeccion:{select:{id:true,folio:true}},observacionesInternas:true}}); if(!c) volver("error","La cotización no existe."); if(c.estado!==EstadoCotizacion.AUTORIZADA) volver("error","Solo una cotización autorizada puede regresar temporalmente a pre-cotización.");
-  const ahora=new Date(); const nota=`[${ahora.toISOString()}] REGRESO CONTROLADO A PRE-COTIZACIÓN. Ejecutó: ${usuario.nombre} (${usuario.rol}). Motivo: ${motivo}. Se preservan pagos, saldo, agenda, inspección, inspector, evidencias y antecedentes.`;
+  const usuario=await gestor(); const id=texto(formData,"id"); const motivo=texto(formData,"motivo"); if(!motivo) volver("error","Registra el motivo del cambio o ajuste.");
+  const c=await prisma.cotizacion.findUnique({where:{id},select:{folio:true,estado:true,montoPagado:true,observacionesInternas:true}}); if(!c) volver("error","La cotización no existe."); if(c.estado!==EstadoCotizacion.AUTORIZADA) volver("error","Solo una cotización autorizada puede regresar temporalmente a pre-cotización.");
+  const ahora=new Date(); const nota=`[${ahora.toISOString()}] REGRESO POR CORRECCIÓN/AJUSTE. Ejecutó: ${usuario.nombre} (${usuario.rol}). Motivo: ${motivo}. Se preservan pagos, saldo, agenda, inspección, inspector, evidencias y antecedentes.`;
   await prisma.cotizacion.update({where:{id},data:{estado:EstadoCotizacion.BORRADOR,aceptadaEn:null,solicitudAutorizacionEn:null,autorizadaPorId:null,autorizadaEn:null,editablePublica:true,observacionesInternas:c.observacionesInternas?.trim()?`${c.observacionesInternas.trim()}\n\n${nota}`:nota}});
-  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} abrió ciclo controlado de corrección para ${c.folio}. Motivo: ${motivo}. Pagos (${Number(c.montoPagado).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}) y operación existente preservados.`});
-  revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/caja"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); volver("ok","Ciclo de corrección abierto sin rollback operativo. La nueva versión deberá aceptarse y autorizarse nuevamente.");
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} abrió ciclo de CORRECCIÓN/AJUSTE para ${c.folio}. Motivo: ${motivo}. Pagos (${Number(c.montoPagado).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}) y operación existente preservados.`});
+  revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/caja"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); volver("ok","Cotización enviada a Pre-cotizaciones para corrección/ajuste. La nueva versión deberá aceptarse y autorizarse nuevamente.");
+}
+
+// CANCELACION/FALTA DE RESPUESTA: cierra comercialmente sin regresar a Pre-cotizaciones.
+export async function cancelarCotizacion(formData: FormData) {
+  const usuario=await gestor(); const id=texto(formData,"id"); const tipoCierre=texto(formData,"tipoCierre"); const motivo=texto(formData,"motivo");
+  if(!["CANCELACION_CLIENTE","SIN_RESPUESTA_CLIENTE"].includes(tipoCierre)) volver("error","Selecciona cancelación del cliente o falta de respuesta.");
+  if(!motivo) volver("error","Registra el motivo o antecedente del cierre.");
+  const c=await prisma.cotizacion.findUnique({where:{id},select:{folio:true,estado:true,montoPagado:true,observacionesInternas:true,inspeccion:{select:{id:true,folio:true,estado:true}}}});
+  if(!c) volver("error","La cotización no existe."); if(c.estado!==EstadoCotizacion.AUTORIZADA) volver("error","Solo una cotización autorizada activa puede cerrarse desde este panel.");
+  if(c.inspeccion&&[EstadoInspeccion.EN_PROCESO,EstadoInspeccion.REPORTE_PENDIENTE,EstadoInspeccion.FINALIZADA].includes(c.inspeccion.estado)) volver("error",`La inspección ${c.inspeccion.folio} ya avanzó a ${c.inspeccion.estado.replaceAll("_"," ")}. Requiere resolución administrativa del expediente.`);
+  const ahora=new Date(); const etiqueta=tipoCierre==="CANCELACION_CLIENTE"?"CANCELACIÓN DEL CLIENTE":"FALTA DE RESPUESTA DEL CLIENTE"; const nota=`[${ahora.toISOString()}] CIERRE POR ${etiqueta}. Ejecutó: ${usuario.nombre} (${usuario.rol}). Motivo/antecedente: ${motivo}. Pagos e historial se conservan.`;
+  await prisma.$transaction(async tx=>{
+    await tx.cotizacion.update({where:{id},data:{estado:EstadoCotizacion.CANCELADA,editablePublica:false,observacionesInternas:c.observacionesInternas?.trim()?`${c.observacionesInternas.trim()}\n\n${nota}`:nota}});
+    if(c.inspeccion?.estado===EstadoInspeccion.PROGRAMADA) await tx.inspeccion.update({where:{id:c.inspeccion.id},data:{estado:EstadoInspeccion.CANCELADA}});
+  });
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} cerró ${c.folio} por ${etiqueta}. Motivo: ${motivo}. Pagos preservados: ${Number(c.montoPagado).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}.${c.inspeccion?.estado===EstadoInspeccion.PROGRAMADA?` Inspección ${c.inspeccion.folio} cancelada sin eliminarse.`:""}`});
+  revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/caja"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); volver("ok",`Cotización cerrada por ${etiqueta.toLowerCase()}. No regresó a Pre-cotizaciones y el historial quedó preservado.`);
 }
