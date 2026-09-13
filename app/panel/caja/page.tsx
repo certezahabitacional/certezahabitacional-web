@@ -1,286 +1,41 @@
+import Link from "next/link";
 import { EstadoCotizacion, Prisma, RolUsuario } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { calcularResumenFinancieroCaja } from "@/lib/caja-finanzas";
 import { prisma } from "@/lib/prisma";
-import {
-  autorizarExcepcionApertura,
-  autorizarExcepcionInicio,
-  registrarPagoLibre,
-} from "./actions";
+import { autorizarExcepcionApertura, autorizarExcepcionInicio, registrarPagoLibre } from "./actions";
 
-function dinero(valor: number) {
-  return valor.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
-}
+function dinero(valor: number) { return valor.toLocaleString("es-MX", { style: "currency", currency: "MXN" }); }
+function vendedorDesdeJson(datos: Prisma.JsonValue | null) { if (!datos || typeof datos !== "object" || Array.isArray(datos)) return null; const vendedor = (datos as Prisma.JsonObject).vendedor; if (!vendedor || typeof vendedor !== "object" || Array.isArray(vendedor)) return null; const objeto = vendedor as Prisma.JsonObject; return typeof objeto.nombre === "string" ? objeto.nombre : null; }
 
-function vendedorDesdeJson(datos: Prisma.JsonValue | null) {
-  if (!datos || typeof datos !== "object" || Array.isArray(datos)) return null;
-  const vendedor = (datos as Prisma.JsonObject).vendedor;
-  if (!vendedor || typeof vendedor !== "object" || Array.isArray(vendedor)) return null;
-  const objeto = vendedor as Prisma.JsonObject;
-  return typeof objeto.nombre === "string" ? objeto.nombre : null;
-}
-
-export default async function CajaPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; estado?: string; ok?: string; error?: string }>;
-}) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: session.user.id },
-    select: { rol: true, activo: true },
-  });
-
-  if (
-    !usuario?.activo ||
-    (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)
-  ) {
-    redirect("/acceso");
-  }
-
-  const params = await searchParams;
-  const busqueda = (params.q ?? "").trim();
-  const estadoFiltro = (params.estado ?? "").trim();
+export default async function CajaPage({ searchParams }: { searchParams: Promise<{ q?: string; estado?: string; ok?: string; error?: string }> }) {
+  const session = await auth(); if (!session?.user?.id) redirect("/login");
+  const usuario = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { rol: true, activo: true } });
+  if (!usuario?.activo || (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)) redirect("/acceso");
+  const params = await searchParams; const busqueda = (params.q ?? "").trim(); const estadoFiltro = (params.estado ?? "").trim();
 
   const cotizaciones = await prisma.cotizacion.findMany({
-    where: {
-      estado: EstadoCotizacion.AUTORIZADA,
-      ...(busqueda
-        ? {
-            OR: [
-              { folio: { contains: busqueda, mode: "insensitive" } },
-              { cliente: { nombre: { contains: busqueda, mode: "insensitive" } } },
-              { inmueble: { alias: { contains: busqueda, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      folio: true,
-      total: true,
-      montoPagado: true,
-      estadoPago: true,
-      excepcionApertura: true,
-      excepcionInicio: true,
-      motivoExcepcionApertura: true,
-      motivoExcepcionInicio: true,
-      autorizadaEn: true,
-      cliente: { select: { nombre: true } },
-      inmueble: { select: { alias: true } },
-      inspeccion: {
-        select: {
-          folio: true,
-          numeroInspeccion: true,
-          fechaProgramada: true,
-          estado: true,
-          inspector: { select: { usuario: { select: { nombre: true } } } },
-        },
-      },
-      versiones: {
-        orderBy: { version: "desc" },
-        take: 1,
-        select: { datos: true },
-      },
-      pagos: {
-        select: {
-          id: true,
-          monto: true,
-          fechaPago: true,
-          metodoPago: true,
-          referencia: true,
-          notas: true,
-          registradoPor: { select: { nombre: true } },
-        },
-        orderBy: { fechaPago: "desc" },
-      },
-    },
+    where: { estado: EstadoCotizacion.AUTORIZADA, ...(busqueda ? { OR: [{ folio: { contains: busqueda, mode: "insensitive" } }, { cliente: { nombre: { contains: busqueda, mode: "insensitive" } } }, { inmueble: { alias: { contains: busqueda, mode: "insensitive" } } }] } : {}) },
+    select: { id:true, folio:true, total:true, montoPagado:true, estadoPago:true, excepcionApertura:true, excepcionInicio:true, motivoExcepcionApertura:true, motivoExcepcionInicio:true, autorizadaEn:true, cliente:{select:{nombre:true}}, inmueble:{select:{alias:true}}, inspeccion:{select:{folio:true,numeroInspeccion:true,fechaProgramada:true,estado:true,inspector:{select:{usuario:{select:{nombre:true}}}}}}, versiones:{orderBy:{version:"desc"},take:1,select:{datos:true}}, pagos:{select:{id:true,monto:true,fechaPago:true,metodoPago:true,referencia:true,notas:true,registradoPor:{select:{nombre:true}}},orderBy:{fechaPago:"desc"}} },
     orderBy: [{ autorizadaEn: "desc" }, { folio: "desc" }],
   });
 
-  const filas = cotizaciones
-    .map((c) => {
-      const resumen = calcularResumenFinancieroCaja({
-        importe: Number(c.total),
-        pagado: Number(c.montoPagado),
-        excepcionApertura: c.excepcionApertura,
-        excepcionInicio: c.excepcionInicio,
-        tieneInspeccion: Boolean(c.inspeccion),
-        fechaAgendada: c.inspeccion?.fechaProgramada ?? null,
-      });
+  const filas = cotizaciones.map(c => { const resumen=calcularResumenFinancieroCaja({importe:Number(c.total),pagado:Number(c.montoPagado),excepcionApertura:c.excepcionApertura,excepcionInicio:c.excepcionInicio,tieneInspeccion:Boolean(c.inspeccion),fechaAgendada:c.inspeccion?.fechaProgramada??null}); return {cotizacion:c,resumen,vendedor:vendedorDesdeJson(c.versiones[0]?.datos??null)??"Por asignar",inspector:c.inspeccion?.inspector?.usuario.nombre??"Por asignar"}; }).filter(f=>!estadoFiltro||f.resumen.estadoOperativo===estadoFiltro);
 
-      return {
-        cotizacion: c,
-        resumen,
-        vendedor: vendedorDesdeJson(c.versiones[0]?.datos ?? null) ?? "Por asignar",
-        inspector: c.inspeccion?.inspector?.usuario.nombre ?? "Por asignar",
-      };
-    })
-    .filter((fila) => !estadoFiltro || fila.resumen.estadoOperativo === estadoFiltro);
-
-  return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6">
-      <div className="mx-auto max-w-[1500px]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.28em] text-amber-300">Control financiero operativo</p>
-            <h1 className="mt-2 text-4xl font-black">Caja</h1>
-            <p className="mt-3 max-w-4xl text-slate-400">
-              Fuente financiera central para Cotizaciones, Agenda, Nueva Inspección e Inspecciones. Aquí se registran pagos, saldos y excepciones de apertura/liberación.
-            </p>
-          </div>
-
-          <form className="grid gap-2 sm:grid-cols-[minmax(260px,1fr)_220px_auto]">
-            <input
-              name="q"
-              defaultValue={busqueda}
-              placeholder="Buscar folio, cliente o inmueble"
-              className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm outline-none focus:border-cyan-300/50"
-            />
-            <select
-              name="estado"
-              defaultValue={estadoFiltro}
-              className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm outline-none focus:border-cyan-300/50"
-            >
-              <option value="">Todos los estados</option>
-              <option value="SIN_AGENDAR">Sin agendar</option>
-              <option value="AGENDADA">Agendada</option>
-              <option value="SIN_LIBERAR">Sin liberar</option>
-              <option value="LIBERADA">Liberada</option>
-            </select>
-            <button className="rounded-full border border-white/15 px-5 py-3 text-sm font-black">Buscar / filtrar</button>
-          </form>
-        </div>
-
-        {(params.ok || params.error) && (
-          <p className={`mt-6 rounded-2xl border p-4 font-bold ${params.error ? "border-rose-400/20 bg-rose-400/10 text-rose-300" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"}`}>
-            {params.error ?? params.ok}
-          </p>
-        )}
-
-        <div className="mt-8 overflow-x-auto rounded-3xl border border-white/10 bg-slate-900/70">
-          <table className="min-w-[1180px] w-full border-collapse text-left">
-            <thead className="sticky top-0 z-20 bg-slate-900 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
-              <tr className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                <th className="px-4 py-4">Folio (cotización)</th>
-                <th className="px-4 py-4">Cliente</th>
-                <th className="px-4 py-4">Inmueble</th>
-                <th className="px-4 py-4 text-right">Importe</th>
-                <th className="px-4 py-4 text-right">Pagos</th>
-                <th className="px-4 py-4 text-right">Saldo</th>
-                <th className="px-4 py-4">Vendedor</th>
-                <th className="px-4 py-4">Inspector</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map(({ cotizacion: c, resumen, vendedor, inspector }) => (
-                <tr key={c.id} className="border-t border-white/5 align-top hover:bg-white/[0.025]">
-                  <td className="px-4 py-4">
-                    <details>
-                      <summary className="cursor-pointer list-none">
-                        <p className="font-mono text-xs font-black text-cyan-300">{c.folio}</p>
-                        <p className="mt-1 text-[11px] font-bold text-slate-500">{resumen.estadoOperativo.replaceAll("_", " ")}</p>
-                      </summary>
-
-                      <div className="mt-4 w-[760px] max-w-[80vw] rounded-2xl border border-white/10 bg-slate-950 p-5">
-                        <div className="grid gap-4 md:grid-cols-4">
-                          <MiniDato t="Pagado" v={`${dinero(resumen.pagado)} · ${resumen.porcentajePagado.toFixed(0)}%`} />
-                          <MiniDato t="Regla 50%" v={resumen.puedeAgendar ? "Cumplida / autorizada" : "Pendiente"} />
-                          <MiniDato t="Regla 100%" v={resumen.puedeLiberarCampo ? "Cumplida / autorizada" : "Pendiente"} />
-                          <MiniDato t="Inspección" v={c.inspeccion ? `${c.inspeccion.folio} · V${c.inspeccion.numeroInspeccion}` : "Aún no creada"} />
-                        </div>
-
-                        {resumen.alertaSobrepago && (
-                          <p className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm font-black text-rose-300">
-                            Alerta: el monto pagado supera el importe vigente. Requiere revisión administrativa.
-                          </p>
-                        )}
-
-                        <div className="mt-5 grid gap-5 border-t border-white/10 pt-5 lg:grid-cols-2">
-                          <section>
-                            <h3 className="font-black text-cyan-300">Registrar pago</h3>
-                            <form action={registrarPagoLibre} className="mt-3 grid gap-3 sm:grid-cols-2">
-                              <input type="hidden" name="cotizacionId" value={c.id} />
-                              <input name="monto" type="number" min="0.01" step="0.01" max={resumen.saldo} required placeholder="Importe" className="rounded-xl bg-slate-900 px-4 py-3" />
-                              <input name="metodoPago" placeholder="Método de pago" className="rounded-xl bg-slate-900 px-4 py-3" />
-                              <input name="referencia" placeholder="Referencia" className="rounded-xl bg-slate-900 px-4 py-3" />
-                              <input name="notas" placeholder="Notas" className="rounded-xl bg-slate-900 px-4 py-3" />
-                              <button disabled={resumen.saldo <= 0.001} className="rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950 disabled:opacity-40">Registrar pago</button>
-                            </form>
-
-                            <div className="mt-4 space-y-2 text-xs text-slate-400">
-                              {c.pagos.slice(0, 8).map((p) => (
-                                <p key={p.id}>
-                                  {p.fechaPago.toLocaleDateString("es-MX")} · {dinero(Number(p.monto))} · {p.metodoPago ?? "Sin método"}{p.referencia ? ` · ${p.referencia}` : ""} · {p.registradoPor.nombre}
-                                </p>
-                              ))}
-                              {c.pagos.length === 0 && <p>Sin pagos registrados.</p>}
-                            </div>
-                          </section>
-
-                          <section>
-                            <h3 className="font-black text-amber-300">Excepciones financieras</h3>
-                            <p className="mt-2 text-sm text-slate-400">
-                              Director y Administrador pueden autorizar por excepción la apertura con menos del 50% y la liberación a campo sin el 100%. Toda excepción queda auditada.
-                            </p>
-
-                            <div className="mt-4 space-y-4">
-                              {!c.excepcionApertura && !resumen.cumpleApertura50 && (
-                                <form action={autorizarExcepcionApertura} className="flex gap-2">
-                                  <input type="hidden" name="cotizacionId" value={c.id} />
-                                  <input name="motivo" required placeholder="Motivo excepción 50%" className="min-w-0 flex-1 rounded-xl bg-slate-900 px-4 py-3" />
-                                  <button className="rounded-xl border border-amber-300/30 px-4 font-bold text-amber-300">Autorizar</button>
-                                </form>
-                              )}
-
-                              {!c.excepcionInicio && !resumen.cumpleLiberacion100 && (
-                                <form action={autorizarExcepcionInicio} className="flex gap-2">
-                                  <input type="hidden" name="cotizacionId" value={c.id} />
-                                  <input name="motivo" required placeholder="Motivo excepción 100%" className="min-w-0 flex-1 rounded-xl bg-slate-900 px-4 py-3" />
-                                  <button className="rounded-xl border border-rose-300/30 px-4 font-bold text-rose-300">Autorizar</button>
-                                </form>
-                              )}
-                            </div>
-
-                            <div className="mt-4 space-y-1 text-xs">
-                              <p className={c.excepcionApertura ? "text-amber-300" : "text-slate-500"}>Excepción 50%: {c.excepcionApertura ? `Sí · ${c.motivoExcepcionApertura ?? "sin motivo visible"}` : "No"}</p>
-                              <p className={c.excepcionInicio ? "text-rose-300" : "text-slate-500"}>Excepción 100%: {c.excepcionInicio ? `Sí · ${c.motivoExcepcionInicio ?? "sin motivo visible"}` : "No"}</p>
-                            </div>
-                          </section>
-                        </div>
-                      </div>
-                    </details>
-                  </td>
-                  <td className="px-4 py-4 font-bold">{c.cliente.nombre}</td>
-                  <td className="px-4 py-4 text-slate-300">{c.inmueble?.alias ?? "Por definir"}</td>
-                  <td className="px-4 py-4 text-right font-black">{dinero(resumen.importe)}</td>
-                  <td className="px-4 py-4 text-right text-emerald-300">{dinero(resumen.pagado)}</td>
-                  <td className="px-4 py-4 text-right text-amber-300">{dinero(resumen.saldo)}</td>
-                  <td className="px-4 py-4">{vendedor}</td>
-                  <td className="px-4 py-4">{inspector}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {filas.length === 0 && (
-            <div className="p-10 text-center text-slate-400">No hay cotizaciones autorizadas con esos filtros.</div>
-          )}
-        </div>
-      </div>
-    </main>
-  );
+  return <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6"><div className="mx-auto max-w-[1500px]">
+    <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div><p className="text-sm font-black uppercase tracking-[0.28em] text-amber-300">Control financiero operativo</p><h1 className="mt-2 text-4xl font-black">Caja</h1><p className="mt-3 max-w-4xl text-slate-400">Fuente financiera central para Cotizaciones, Agenda, Nueva Inspección e Inspecciones. Aquí se registran pagos, saldos y excepciones de apertura/liberación.</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-black text-slate-950">Caja activa</span><Link href="/panel/caja/historico" className="rounded-full border border-rose-300/30 px-4 py-2 text-sm font-black text-rose-300">Histórico de canceladas</Link></div></div>
+    <form className="grid gap-2 sm:grid-cols-[minmax(260px,1fr)_220px_auto]"><input name="q" defaultValue={busqueda} placeholder="Buscar folio, cliente o inmueble" className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm"/><select name="estado" defaultValue={estadoFiltro} className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm"><option value="">Todos los estados</option><option value="SIN_AGENDAR">Sin agendar</option><option value="AGENDADA">Agendada</option><option value="SIN_LIBERAR">Sin liberar</option><option value="LIBERADA">Liberada</option></select><button className="rounded-full border border-white/15 px-5 py-3 text-sm font-black">Buscar / filtrar</button></form></div>
+    {(params.ok||params.error)&&<p className={`mt-6 rounded-2xl border p-4 font-bold ${params.error?"border-rose-400/20 bg-rose-400/10 text-rose-300":"border-emerald-400/20 bg-emerald-400/10 text-emerald-300"}`}>{params.error??params.ok}</p>}
+    <div className="mt-8 overflow-x-auto rounded-3xl border border-white/10 bg-slate-900/70"><table className="min-w-[1180px] w-full border-collapse text-left"><thead className="sticky top-0 z-20 bg-slate-900"><tr className="text-[11px] font-black uppercase tracking-wider text-slate-400"><th className="px-4 py-4">Folio (cotización)</th><th className="px-4 py-4">Cliente</th><th className="px-4 py-4">Inmueble</th><th className="px-4 py-4 text-right">Importe</th><th className="px-4 py-4 text-right">Pagos</th><th className="px-4 py-4 text-right">Saldo</th><th className="px-4 py-4">Vendedor</th><th className="px-4 py-4">Inspector</th></tr></thead><tbody>
+    {filas.map(({cotizacion:c,resumen,vendedor,inspector})=><tr key={c.id} className="border-t border-white/5 align-top hover:bg-white/[0.025]"><td className="px-4 py-4"><details><summary className="cursor-pointer list-none"><p className="font-mono text-xs font-black text-cyan-300">{c.folio}</p><p className="mt-1 text-[11px] font-bold text-slate-500">{resumen.estadoOperativo.replaceAll("_"," ")}</p></summary><div className="mt-4 w-[760px] max-w-[80vw] rounded-2xl border border-white/10 bg-slate-950 p-5">
+      <div className="grid gap-4 md:grid-cols-4"><MiniDato t="Pagado" v={`${dinero(resumen.pagado)} · ${resumen.porcentajePagado.toFixed(0)}%`}/><MiniDato t="Regla 50%" v={resumen.puedeAgendar?"Cumplida / autorizada":"Pendiente"}/><MiniDato t="Regla 100%" v={resumen.puedeLiberarCampo?"Cumplida / autorizada":"Pendiente"}/><MiniDato t="Inspección" v={c.inspeccion?`${c.inspeccion.folio} · V${c.inspeccion.numeroInspeccion}`:"Aún no creada"}/></div>
+      {resumen.alertaSobrepago&&<p className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm font-black text-rose-300">Alerta: el monto pagado supera el importe vigente. Requiere revisión administrativa.</p>}
+      <div className="mt-5 grid gap-5 border-t border-white/10 pt-5 lg:grid-cols-2"><section><h3 className="font-black text-cyan-300">Registrar pago</h3><form action={registrarPagoLibre} className="mt-3 grid gap-3 sm:grid-cols-2"><input type="hidden" name="cotizacionId" value={c.id}/><input name="monto" type="number" min="0.01" step="0.01" max={resumen.saldo} required placeholder="Importe" className="rounded-xl bg-slate-900 px-4 py-3"/><input name="metodoPago" placeholder="Método de pago" className="rounded-xl bg-slate-900 px-4 py-3"/><input name="referencia" placeholder="Referencia" className="rounded-xl bg-slate-900 px-4 py-3"/><input name="notas" placeholder="Notas" className="rounded-xl bg-slate-900 px-4 py-3"/><button disabled={resumen.saldo<=0.001} className="rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950 disabled:opacity-40">Registrar pago</button></form><div className="mt-4 space-y-2 text-xs text-slate-400">{c.pagos.slice(0,8).map(p=><p key={p.id}>{p.fechaPago.toLocaleDateString("es-MX")} · {dinero(Number(p.monto))} · {p.metodoPago??"Sin método"}{p.referencia?` · ${p.referencia}`:""} · {p.registradoPor.nombre}</p>)}{c.pagos.length===0&&<p>Sin pagos registrados.</p>}</div></section>
+      <section><h3 className="font-black text-amber-300">Excepciones financieras</h3><p className="mt-2 text-sm text-slate-400">Director y Administrador pueden autorizar por excepción la apertura con menos del 50% y la liberación a campo sin el 100%. Toda excepción queda auditada.</p><div className="mt-4 space-y-4">{!c.excepcionApertura&&!resumen.cumpleApertura50&&<form action={autorizarExcepcionApertura} className="flex gap-2"><input type="hidden" name="cotizacionId" value={c.id}/><input name="motivo" required placeholder="Motivo excepción 50%" className="min-w-0 flex-1 rounded-xl bg-slate-900 px-4 py-3"/><button className="rounded-xl border border-amber-300/30 px-4 font-bold text-amber-300">Autorizar</button></form>}{!c.excepcionInicio&&!resumen.cumpleLiberacion100&&<form action={autorizarExcepcionInicio} className="flex gap-2"><input type="hidden" name="cotizacionId" value={c.id}/><input name="motivo" required placeholder="Motivo excepción 100%" className="min-w-0 flex-1 rounded-xl bg-slate-900 px-4 py-3"/><button className="rounded-xl border border-rose-300/30 px-4 font-bold text-rose-300">Autorizar</button></form>}</div><div className="mt-4 space-y-1 text-xs"><p className={c.excepcionApertura?"text-amber-300":"text-slate-500"}>Excepción 50%: {c.excepcionApertura?`Sí · ${c.motivoExcepcionApertura??"sin motivo visible"}`:"No"}</p><p className={c.excepcionInicio?"text-rose-300":"text-slate-500"}>Excepción 100%: {c.excepcionInicio?`Sí · ${c.motivoExcepcionInicio??"sin motivo visible"}`:"No"}</p></div></section></div>
+    </div></details></td><td className="px-4 py-4 font-bold">{c.cliente.nombre}</td><td className="px-4 py-4 text-slate-300">{c.inmueble?.alias??"Por definir"}</td><td className="px-4 py-4 text-right font-black">{dinero(resumen.importe)}</td><td className="px-4 py-4 text-right text-emerald-300">{dinero(resumen.pagado)}</td><td className="px-4 py-4 text-right text-amber-300">{dinero(resumen.saldo)}</td><td className="px-4 py-4">{vendedor}</td><td className="px-4 py-4">{inspector}</td></tr>)}
+    </tbody></table>{filas.length===0&&<div className="p-10 text-center text-slate-400">No hay cotizaciones autorizadas con esos filtros.</div>}</div>
+  </div></main>;
 }
-
-function MiniDato({ t, v }: { t: string; v: string }) {
-  return (
-    <div>
-      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{t}</p>
-      <p className="mt-1 text-sm font-bold text-slate-200">{v}</p>
-    </div>
-  );
-}
+function MiniDato({t,v}:{t:string;v:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{t}</p><p className="mt-1 text-sm font-bold text-slate-200">{v}</p></div>;}
