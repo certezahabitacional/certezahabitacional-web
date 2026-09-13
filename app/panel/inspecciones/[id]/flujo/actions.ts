@@ -153,10 +153,10 @@ export async function finalizarCapturaGuiada(formData: FormData) {
     await tx.revisionInspeccion.updateMany({
       where: {
         inspeccionId,
-        decision: TipoDecisionRevision.DEVUELTO_INSPECTOR,
+        decision: TipoDecisionRevision.OBSERVAR,
         estado: EstadoDecisionRevision.VIGENTE,
       },
-      data: { estado: EstadoDecisionRevision.SUPERADA },
+      data: { estado: EstadoDecisionRevision.REVOCADA },
     });
   });
 
@@ -166,7 +166,7 @@ export async function finalizarCapturaGuiada(formData: FormData) {
     entidadId: inspeccion.id,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Captura guiada finalizada para ${inspeccion.folio}: guía técnica completa, ${inspeccion.hallazgos.length} hallazgo(s) con mínimo 4 evidencias y firmas requeridas registradas.`,
+    descripcion: `Captura guiada finalizada para ${inspeccion.folio}: guía técnica completa, ${inspeccion.hallazgos.length} hallazgo(s) con mínimo 4 evidencias y firmas requeridas registradas. Las observaciones vigentes anteriores quedaron revocadas al entregar la nueva captura.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
