@@ -1,248 +1,66 @@
 "use server";
 
-import { EstadoCotizacion, RolUsuario, TipoEvento } from "@prisma/client";
+import { EstadoCotizacion, Prisma, RolUsuario, TipoCliente, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
 
-function texto(formData: FormData, campo: string) {
-  return String(formData.get(campo) ?? "").trim();
-}
-
+function texto(formData: FormData, campo: string) { return String(formData.get(campo) ?? "").trim(); }
 async function gestor() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: session.user.id },
-    select: { id: true, nombre: true, rol: true, activo: true },
-  });
-  if (
-    !usuario?.activo ||
-    (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)
-  ) {
-    redirect("/acceso");
-  }
+  const session = await auth(); if (!session?.user?.id) redirect("/login");
+  const usuario = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { id: true, nombre: true, rol: true, activo: true } });
+  if (!usuario?.activo || (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)) redirect("/acceso");
   return usuario;
 }
-
-function volver(tipo: "ok" | "error", mensaje: string): never {
-  redirect(`/panel/cotizaciones?${tipo}=${encodeURIComponent(mensaje)}`);
-}
-
-function estaVencida(vigenciaHasta: Date | null) {
-  return Boolean(vigenciaHasta && vigenciaHasta < new Date());
-}
+function volver(tipo: "ok" | "error", mensaje: string): never { redirect(`/panel/cotizaciones?${tipo}=${encodeURIComponent(mensaje)}`); }
+function estaVencida(vigenciaHasta: Date | null) { return Boolean(vigenciaHasta && vigenciaHasta < new Date()); }
+function objeto(v: Prisma.JsonValue | undefined): Record<string, any> | null { return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, any> : null; }
 
 export async function marcarListaParaCliente(formData: FormData) {
-  const usuario = await gestor();
-  const id = texto(formData, "id");
-  const cotizacion = await prisma.cotizacion.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      folio: true,
-      estado: true,
-      vigenciaHasta: true,
-      total: true,
-      inmuebleId: true,
-      cliente: { select: { usuarioId: true } },
-      versiones: { orderBy: { version: "desc" }, take: 1, select: { id: true } },
-    },
-  });
-  if (!cotizacion) volver("error", "La cotización no existe.");
-  if (cotizacion.estado !== EstadoCotizacion.BORRADOR) {
-    volver("error", "Solo una pre-cotización en borrador puede quedar lista para aceptación del cliente.");
-  }
-  if (!cotizacion.cliente.usuarioId) {
-    volver("error", "Asigna primero acceso al cliente para que pueda aceptar la pre-cotización en el portal.");
-  }
-  if (!cotizacion.inmuebleId) {
-    volver("error", "La pre-cotización debe estar vinculada a un inmueble antes de enviarse al cliente.");
-  }
-  if (Number(cotizacion.total) <= 0) {
-    volver("error", "La pre-cotización debe tener un importe total mayor a cero.");
-  }
-  if (!cotizacion.versiones[0]) {
-    volver("error", "La pre-cotización debe tener una versión documental registrada antes de enviarse al cliente.");
-  }
-  if (estaVencida(cotizacion.vigenciaHasta)) {
-    volver("error", "La pre-cotización ya está vencida. Actualiza la vigencia antes de enviarla al cliente.");
-  }
-
-  await prisma.cotizacion.update({
-    where: { id },
-    data: { estado: EstadoCotizacion.ENVIADA },
-  });
-  await registrarAuditoria({
-    tipo: TipoEvento.EDITAR,
-    entidad: "Cotizacion",
-    entidadId: id,
-    usuarioId: usuario.id,
-    descripcion: `${usuario.rol} dejó la pre-cotización ${cotizacion.folio} lista para aceptación del cliente.`,
-  });
-  revalidatePath("/panel/pre-cotizaciones");
-  revalidatePath("/panel/cotizaciones");
-  revalidatePath("/portal/cotizaciones");
-  volver("ok", "Pre-cotización lista para aceptación del cliente.");
+  const usuario = await gestor(); const id = texto(formData, "id");
+  const c = await prisma.cotizacion.findUnique({ where: { id }, select: { id:true,folio:true,estado:true,vigenciaHasta:true,total:true,inmuebleId:true,cliente:{select:{usuarioId:true}},versiones:{orderBy:{version:"desc"},take:1,select:{id:true}} } });
+  if (!c) volver("error","La cotización no existe.");
+  if (c.estado !== EstadoCotizacion.BORRADOR) volver("error","Solo una pre-cotización en borrador puede quedar lista para aceptación del cliente.");
+  if (!c.cliente.usuarioId) volver("error","Asigna primero acceso al cliente para que pueda aceptar la pre-cotización en el portal.");
+  if (!c.inmuebleId || Number(c.total)<=0 || !c.versiones[0]) volver("error","La pre-cotización no está completa.");
+  if (estaVencida(c.vigenciaHasta)) volver("error","La pre-cotización ya está vencida. Actualiza la vigencia.");
+  await prisma.cotizacion.update({where:{id},data:{estado:EstadoCotizacion.ENVIADA}});
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} dejó la pre-cotización ${c.folio} lista para aceptación del cliente.`});
+  revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/portal/cotizaciones"); volver("ok","Pre-cotización lista para aceptación del cliente.");
 }
 
 export async function aceptarEnRepresentacionDelCliente(formData: FormData) {
-  const usuario = await gestor();
-  const id = texto(formData, "id");
-  const motivo = texto(formData, "motivo");
-  if (!motivo) volver("error", "La aceptación por excepción requiere registrar el motivo.");
-
-  const cotizacion = await prisma.cotizacion.findUnique({
-    where: { id },
-    select: { id: true, folio: true, estado: true, vigenciaHasta: true, total: true, inmuebleId: true, observacionesInternas: true },
-  });
-  if (!cotizacion) volver("error", "La pre-cotización no existe.");
-  if (cotizacion.estado !== EstadoCotizacion.ENVIADA) {
-    volver("error", "La aceptación por representación solo procede cuando la pre-cotización está pendiente de aceptación del cliente.");
-  }
-  if (estaVencida(cotizacion.vigenciaHasta)) {
-    volver("error", "La pre-cotización está vencida y debe actualizarse antes de aceptarse.");
-  }
-  if (!cotizacion.inmuebleId || Number(cotizacion.total) <= 0) {
-    volver("error", "La pre-cotización no está completa y no puede aceptarse por excepción.");
-  }
-
-  const ahora = new Date();
-  const entradaExcepcion = `[${ahora.toISOString()}] ACEPTACIÓN POR EXCEPCIÓN EN REPRESENTACIÓN DEL CLIENTE. Registró: ${usuario.nombre} (${usuario.rol}). Motivo: ${motivo}`;
-  const observacionesInternas = cotizacion.observacionesInternas?.trim()
-    ? `${cotizacion.observacionesInternas.trim()}\n\n${entradaExcepcion}`
-    : entradaExcepcion;
-
-  await prisma.cotizacion.update({
-    where: { id },
-    data: {
-      estado: EstadoCotizacion.ACEPTADA,
-      aceptadaEn: ahora,
-      solicitudAutorizacionEn: ahora,
-      observacionesInternas,
-    },
-  });
-  await registrarAuditoria({
-    tipo: TipoEvento.EDITAR,
-    entidad: "Cotizacion",
-    entidadId: id,
-    usuarioId: usuario.id,
-    descripcion: `${usuario.rol} registró aceptación por excepción de la pre-cotización ${cotizacion.folio} en representación del cliente. Motivo: ${motivo}`,
-  });
-  revalidatePath("/panel/pre-cotizaciones");
-  revalidatePath("/portal/cotizaciones");
-  volver("ok", "Aceptación por excepción registrada. La pre-cotización está pendiente de autorización interna.");
+  const usuario=await gestor(); const id=texto(formData,"id"); const motivo=texto(formData,"motivo"); if(!motivo) volver("error","La aceptación por excepción requiere registrar el motivo.");
+  const c=await prisma.cotizacion.findUnique({where:{id},select:{folio:true,estado:true,vigenciaHasta:true,total:true,inmuebleId:true,observacionesInternas:true}});
+  if(!c) volver("error","La pre-cotización no existe."); if(c.estado!==EstadoCotizacion.ENVIADA) volver("error","La aceptación por representación solo procede cuando está pendiente del cliente."); if(estaVencida(c.vigenciaHasta)) volver("error","La pre-cotización está vencida."); if(!c.inmuebleId||Number(c.total)<=0) volver("error","La pre-cotización no está completa.");
+  const ahora=new Date(); const nota=`[${ahora.toISOString()}] ACEPTACIÓN POR EXCEPCIÓN EN REPRESENTACIÓN DEL CLIENTE. Registró: ${usuario.nombre} (${usuario.rol}). Motivo: ${motivo}`;
+  await prisma.cotizacion.update({where:{id},data:{estado:EstadoCotizacion.ACEPTADA,aceptadaEn:ahora,solicitudAutorizacionEn:ahora,observacionesInternas:c.observacionesInternas?.trim()?`${c.observacionesInternas.trim()}\n\n${nota}`:nota}});
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} registró aceptación por excepción de ${c.folio}. Motivo: ${motivo}`}); revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/portal/cotizaciones"); volver("ok","Aceptación por excepción registrada. Pendiente de autorización interna.");
 }
 
 export async function autorizarCotizacionAceptada(formData: FormData) {
-  const usuario = await gestor();
-  const id = texto(formData, "id");
-  const cotizacion = await prisma.cotizacion.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      folio: true,
-      estado: true,
-      aceptadaEn: true,
-      vigenciaHasta: true,
-      total: true,
-      inmuebleId: true,
-      clienteId: true,
-      versiones: { orderBy: { version: "desc" }, take: 1, select: { id: true } },
-    },
+  const usuario=await gestor(); const id=texto(formData,"id");
+  const c=await prisma.cotizacion.findUnique({where:{id},select:{id:true,folio:true,estado:true,aceptadaEn:true,vigenciaHasta:true,total:true,montoPagado:true,inmuebleId:true,clienteId:true,versionActual:true,versiones:{orderBy:{version:"desc"},take:1,select:{version:true,datos:true,total:true}},inspeccion:{select:{id:true}}}});
+  if(!c) volver("error","La pre-cotización no existe."); if(c.estado!==EstadoCotizacion.ACEPTADA||!c.aceptadaEn) volver("error","Debe ser aceptada antes de la autorización interna."); if(estaVencida(c.vigenciaHasta)) volver("error","La pre-cotización venció antes de su autorización."); if(!c.inmuebleId||!c.versiones[0]||Number(c.total)<=0) volver("error","La pre-cotización no está completa.");
+  const datos=objeto(c.versiones[0].datos); const cliente=objeto(datos?.cliente); const inmueble=objeto(datos?.inmueble);
+  await prisma.$transaction(async tx=>{
+    if(cliente){ await tx.cliente.update({where:{id:c.clienteId},data:{nombre:String(cliente.nombre??""),telefono:String(cliente.telefono??"")||null,correo:String(cliente.correo??"")||null,tipo:Object.values(TipoCliente).includes(cliente.tipo as TipoCliente)?cliente.tipo as TipoCliente:undefined,empresa:String(cliente.empresa??"")||null,direccion:String(cliente.direccion??"")||null,colonia:String(cliente.colonia??"")||null,ciudad:String(cliente.ciudad??"")||null,estado:String(cliente.estado??"")||null,codigoPostal:String(cliente.codigoPostal??"")||null}}); }
+    if(inmueble){ await tx.inmueble.update({where:{id:c.inmuebleId!},data:{alias:String(inmueble.alias??""),direccion:String(inmueble.direccion??""),colonia:String(inmueble.colonia??"")||null,ciudad:String(inmueble.ciudad??""),estado:String(inmueble.estado??""),codigoPostal:String(inmueble.codigoPostal??"")||null,superficieTerrenoM2:new Prisma.Decimal(Number(inmueble.m2Terreno??0)),superficieConstruccionM2:new Prisma.Decimal(Number(inmueble.m2Construccion??0))}}); }
+    await tx.cotizacion.update({where:{id},data:{estado:EstadoCotizacion.AUTORIZADA,autorizadaPorId:usuario.id,autorizadaEn:new Date(),editablePublica:false}});
+    if(c.inspeccion&&inmueble){ await tx.inspeccion.update({where:{id:c.inspeccion.id},data:{direccion:String(inmueble.direccion??""),ciudad:String(inmueble.ciudad??""),superficieM2:new Prisma.Decimal(Number(inmueble.m2Construccion??0))}}); }
   });
-  if (!cotizacion) volver("error", "La pre-cotización no existe.");
-  if (cotizacion.estado !== EstadoCotizacion.ACEPTADA || !cotizacion.aceptadaEn) {
-    volver("error", "La pre-cotización debe ser aceptada por el cliente antes de la autorización interna.");
-  }
-  if (estaVencida(cotizacion.vigenciaHasta)) {
-    volver("error", "La pre-cotización venció antes de su autorización. Actualiza su vigencia y repite el recorrido de aceptación.");
-  }
-  if (!cotizacion.clienteId || !cotizacion.inmuebleId || Number(cotizacion.total) <= 0 || !cotizacion.versiones[0]) {
-    volver("error", "La pre-cotización no está completa y no puede autorizarse.");
-  }
-
-  await prisma.cotizacion.update({
-    where: { id },
-    data: {
-      estado: EstadoCotizacion.AUTORIZADA,
-      autorizadaPorId: usuario.id,
-      autorizadaEn: new Date(),
-    },
-  });
-  await registrarAuditoria({
-    tipo: TipoEvento.EDITAR,
-    entidad: "Cotizacion",
-    entidadId: id,
-    usuarioId: usuario.id,
-    descripcion: `${usuario.rol} autorizó la pre-cotización aceptada ${cotizacion.folio}; se convirtió en cotización y quedó incorporada a Caja.`,
-  });
-  revalidatePath("/panel/pre-cotizaciones");
-  revalidatePath("/panel/cotizaciones");
-  revalidatePath("/panel/caja");
-  revalidatePath("/panel/agenda");
-  volver("ok", "Pre-cotización autorizada. Se convirtió en cotización y ya forma parte de Caja.");
+  const sobrepago=Number(c.montoPagado)>Number(c.total);
+  await registrarAuditoria({tipo:TipoEvento.AUTORIZAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} autorizó ${c.folio}, versión ${c.versionActual}. Se sincronizaron Cliente/Inmueble sin alterar pagos, agenda, asignaciones ni inspección.${sobrepago?" ALERTA: el importe autorizado es menor al monto ya pagado; requiere revisión administrativa.":""}`});
+  revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/clientes"); revalidatePath("/panel/inmuebles"); revalidatePath("/panel/caja"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); volver("ok",sobrepago?"Cotización autorizada. ALERTA: el importe es menor a lo ya pagado; Caja requiere revisión administrativa.":"Pre-cotización autorizada y sincronizada. Pagos y operación previa fueron preservados.");
 }
 
 export async function regresarAPrecotizacion(formData: FormData) {
-  const usuario = await gestor();
-  const id = texto(formData, "id");
-  const motivo = texto(formData, "motivo");
-  if (!motivo) volver("error", "Registra el motivo para regresar la cotización a pre-cotización.");
-
-  const cotizacion = await prisma.cotizacion.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      folio: true,
-      estado: true,
-      montoPagado: true,
-      estadoPago: true,
-      inspeccion: { select: { id: true, folio: true, estado: true, inspectorId: true, fechaProgramada: true } },
-      observacionesInternas: true,
-    },
-  });
-
-  if (!cotizacion) volver("error", "La cotización no existe.");
-  if (cotizacion.estado !== EstadoCotizacion.AUTORIZADA) {
-    volver("error", "Solo una cotización autorizada puede regresar temporalmente a pre-cotización.");
-  }
-
-  const ahora = new Date();
-  const nota = `[${ahora.toISOString()}] REGRESO CONTROLADO A PRE-COTIZACIÓN. Ejecutó: ${usuario.nombre} (${usuario.rol}). Motivo: ${motivo}. Se preservan pagos, saldo, agenda, inspección e inspector.`;
-  const observacionesInternas = cotizacion.observacionesInternas?.trim()
-    ? `${cotizacion.observacionesInternas.trim()}\n\n${nota}`
-    : nota;
-
-  await prisma.cotizacion.update({
-    where: { id },
-    data: {
-      estado: EstadoCotizacion.BORRADOR,
-      aceptadaEn: null,
-      solicitudAutorizacionEn: null,
-      autorizadaPorId: null,
-      autorizadaEn: null,
-      editablePublica: true,
-      observacionesInternas,
-    },
-  });
-
-  await registrarAuditoria({
-    tipo: TipoEvento.EDITAR,
-    entidad: "Cotizacion",
-    entidadId: id,
-    usuarioId: usuario.id,
-    descripcion: `${usuario.rol} regresó la cotización ${cotizacion.folio} a pre-cotización para corrección. Motivo: ${motivo}. Pagos y procesos operativos existentes se preservaron.`,
-  });
-
-  revalidatePath("/panel/pre-cotizaciones");
-  revalidatePath("/panel/cotizaciones");
-  revalidatePath("/panel/caja");
-  revalidatePath("/panel/agenda");
-  revalidatePath("/panel/inspecciones");
-  revalidatePath("/panel/inspecciones/nueva");
-  volver("ok", "Cotización regresada a pre-cotización sin alterar pagos, agenda, inspección ni asignaciones existentes.");
+  const usuario=await gestor(); const id=texto(formData,"id"); const motivo=texto(formData,"motivo"); if(!motivo) volver("error","Registra el motivo para regresar la cotización a pre-cotización.");
+  const c=await prisma.cotizacion.findUnique({where:{id},select:{folio:true,estado:true,montoPagado:true,inspeccion:{select:{id:true,folio:true}},observacionesInternas:true}}); if(!c) volver("error","La cotización no existe."); if(c.estado!==EstadoCotizacion.AUTORIZADA) volver("error","Solo una cotización autorizada puede regresar temporalmente a pre-cotización.");
+  const ahora=new Date(); const nota=`[${ahora.toISOString()}] REGRESO CONTROLADO A PRE-COTIZACIÓN. Ejecutó: ${usuario.nombre} (${usuario.rol}). Motivo: ${motivo}. Se preservan pagos, saldo, agenda, inspección, inspector, evidencias y antecedentes.`;
+  await prisma.cotizacion.update({where:{id},data:{estado:EstadoCotizacion.BORRADOR,aceptadaEn:null,solicitudAutorizacionEn:null,autorizadaPorId:null,autorizadaEn:null,editablePublica:true,observacionesInternas:c.observacionesInternas?.trim()?`${c.observacionesInternas.trim()}\n\n${nota}`:nota}});
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} abrió ciclo controlado de corrección para ${c.folio}. Motivo: ${motivo}. Pagos (${Number(c.montoPagado).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}) y operación existente preservados.`});
+  revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/caja"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); volver("ok","Ciclo de corrección abierto sin rollback operativo. La nueva versión deberá aceptarse y autorizarse nuevamente.");
 }
