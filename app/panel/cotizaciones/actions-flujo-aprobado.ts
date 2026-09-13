@@ -65,7 +65,7 @@ export async function autorizarCotizacionAceptada(formData: FormData) {
     if(c.inspeccion&&inmueble){ await tx.inspeccion.update({where:{id:c.inspeccion.id},data:{direccion:String(inmueble.direccion??""),ciudad:String(inmueble.ciudad??""),superficieM2:new Prisma.Decimal(Number(inmueble.m2Construccion??0))}}); }
   });
   const sobrepago=Number(c.montoPagado)>Number(c.total);
-  await registrarAuditoria({tipo:TipoEvento.AUTORIZAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} autorizó ${c.folio} V${c.versionActual}. La aceptación corresponde a la misma versión vigente. Se sincronizaron Cliente/Inmueble sin alterar pagos, agenda, asignaciones ni inspección.${sobrepago?" ALERTA: el importe autorizado es menor al monto ya pagado; requiere revisión administrativa.":""}`});
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} autorizó ${c.folio} V${c.versionActual}. La aceptación corresponde a la misma versión vigente. Se sincronizaron Cliente/Inmueble sin alterar pagos, agenda, asignaciones ni inspección.${sobrepago?" ALERTA: el importe autorizado es menor al monto ya pagado; requiere revisión administrativa.":""}`});
   revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/clientes"); revalidatePath("/panel/inmuebles"); revalidatePath("/panel/caja"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); volver("ok",sobrepago?`V${c.versionActual} autorizada. ALERTA: el importe es menor a lo ya pagado; Caja requiere revisión administrativa.`:`V${c.versionActual} autorizada y sincronizada. Pagos y operación previa fueron preservados.`);
 }
 
