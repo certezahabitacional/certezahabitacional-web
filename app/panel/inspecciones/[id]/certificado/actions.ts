@@ -3,16 +3,20 @@
 import {
   EstadoDecisionRevision,
   EstadoInspeccion,
+  EstadoPago,
   RolUsuario,
+  TipoDecisionRevision,
   TipoEvento,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { validarAjustesParaCertificado } from "@/lib/ajustes-comerciales";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { puede } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
+import { obtenerEstadoExpedienteRevision } from "@/lib/validacion-expediente-certeza";
 
 function texto(formData: FormData, campo: string) {
   return String(formData.get(campo) ?? "").trim();
@@ -204,12 +208,24 @@ export async function reactivarCertificado(formData: FormData) {
 
   if (!inspeccionId) throw new Error("No se recibió el identificador de la inspección.");
 
+  // La reactivación es una nueva liberación del certificado y debe respetar
+  // las mismas barreras comerciales que la emisión inicial.
+  await validarAjustesParaCertificado(inspeccionId);
+
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id: inspeccionId },
     select: {
       id: true,
       estado: true,
       cotizacionId: true,
+      liberacionBloqueada: true,
+      cotizacion: {
+        select: {
+          total: true,
+          montoPagado: true,
+          estadoPago: true,
+        },
+      },
       certificado: {
         select: {
           id: true,
@@ -218,6 +234,19 @@ export async function reactivarCertificado(formData: FormData) {
           vigente: true,
           motivoRevocacion: true,
           revocadoEn: true,
+        },
+      },
+      revisiones: {
+        where: {
+          estado: EstadoDecisionRevision.VIGENTE,
+          decision: TipoDecisionRevision.APROBADO,
+          rol: {
+            in: [RolUsuario.GERENTE, RolUsuario.DIRECTOR],
+          },
+        },
+        select: {
+          id: true,
+          creadaEn: true,
         },
       },
     },
@@ -247,6 +276,63 @@ export async function reactivarCertificado(formData: FormData) {
     );
   }
 
+  if (inspeccion.liberacionBloqueada) {
+    redirect(
+      urlCertificado(
+        inspeccionId,
+        "error",
+        "La liberación de esta inspección está bloqueada por Dirección.",
+      ),
+    );
+  }
+
+  if (inspeccion.revisiones.length === 0) {
+    redirect(
+      urlCertificado(
+        inspeccionId,
+        "error",
+        "No existe una nueva aprobación vigente de Gerencia o Dirección para reactivar el certificado.",
+      ),
+    );
+  }
+
+  if (inspeccion.cotizacion) {
+    const total = Number(inspeccion.cotizacion.total);
+    const pagado = Number(inspeccion.cotizacion.montoPagado);
+    const saldo = Math.max(0, total - pagado);
+    const liquidada =
+      inspeccion.cotizacion.estadoPago === EstadoPago.PAGADO && saldo <= 0.001;
+
+    if (!liquidada) {
+      const saldoFormateado = new Intl.NumberFormat("es-MX", {
+        style: "currency",
+        currency: "MXN",
+        minimumFractionDigits: 2,
+      }).format(saldo);
+
+      redirect(
+        urlCertificado(
+          inspeccionId,
+          "error",
+          `El certificado no puede reactivarse mientras exista un saldo pendiente de ${saldoFormateado}. La excepción administrativa de inicio no sustituye la liquidación total.`,
+        ),
+      );
+    }
+  }
+
+  const estadoExpediente = await obtenerEstadoExpedienteRevision(inspeccionId);
+  if (!estadoExpediente?.completo) {
+    redirect(
+      urlCertificado(
+        inspeccionId,
+        "error",
+        `El expediente no está listo para reactivar el certificado. Faltan: ${
+          estadoExpediente?.faltantes.join(", ") || "validaciones del expediente"
+        }.`,
+      ),
+    );
+  }
+
   const certificado = await prisma.certificado.update({
     where: { inspeccionId },
     data: {
@@ -264,8 +350,8 @@ export async function reactivarCertificado(formData: FormData) {
     cotizacionId: inspeccion.cotizacionId,
     usuarioId: usuario.id,
     origen: "REACTIVACION_DIRECCION",
-    motivo: "Reactivación posterior a nuevo cierre y aprobación del expediente",
-    descripcion: `Dirección reactivó el certificado ${certificado.folio} después de que la inspección volvió a estado FINALIZADA.`,
+    motivo: "Reactivación posterior a nuevo cierre, firmas vigentes, liquidación y aprobación del expediente",
+    descripcion: `Dirección reactivó el certificado ${certificado.folio} después de que la inspección volvió a estado FINALIZADA y superó las validaciones técnicas, comerciales y financieras.`,
     valorAnterior: {
       certificadoVigente: false,
       motivoRevocacion: inspeccion.certificado.motivoRevocacion,
@@ -287,7 +373,7 @@ export async function reactivarCertificado(formData: FormData) {
     urlCertificado(
       inspeccionId,
       "ok",
-      "Certificado reactivado correctamente después del nuevo cierre y aprobación.",
+      "Certificado reactivado correctamente después del nuevo cierre, firmas, liquidación y aprobación.",
     ),
   );
 }
