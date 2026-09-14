@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { RolUsuario } from "@prisma/client";
+import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { auth } from "@/auth";
@@ -130,7 +130,11 @@ export default async function CertificadoPage({
     redirect("/acceso");
   }
 
+  const inspeccionFinalizada =
+    inspeccion.estado === EstadoInspeccion.FINALIZADA;
+
   const puedeEmitir =
+    inspeccionFinalizada &&
     puede(
       usuarioActual.rol,
       "CERTIFICADO_EMITIR",
@@ -162,13 +166,17 @@ export default async function CertificadoPage({
       "CERTIFICADO_REVOCAR",
     );
 
-  const puedeReactivar =
+  const tieneFacultadReactivar =
     usuarioActual.rol ===
       RolUsuario.DIRECTOR &&
     puede(
       usuarioActual.rol,
       "CERTIFICADO_REACTIVAR",
     );
+
+  const puedeReactivar =
+    tieneFacultadReactivar &&
+    inspeccionFinalizada;
 
   if (!inspeccion.certificado) {
     return (
@@ -203,9 +211,13 @@ export default async function CertificadoPage({
                 Emitir certificado definitivo
               </button>
             </form>
-          ) : (
+          ) : inspeccionFinalizada ? (
             <div className="mt-7 rounded-2xl border border-white/10 bg-slate-950 p-4 text-sm text-slate-400">
               El certificado todavía no ha sido emitido. Tu rol puede consultar el expediente, pero no emitir el certificado.
+            </div>
+          ) : (
+            <div className="mt-7 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-200">
+              El certificado solo puede emitirse después de completar captura, revisión y aprobación. Estado actual: {inspeccion.estado.replaceAll("_", " ")}.
             </div>
           )}
           <Link
@@ -247,16 +259,16 @@ export default async function CertificadoPage({
       </div>
 
       {query.ok && (
-  <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-emerald-100 px-5 py-4 font-bold text-emerald-800 print:hidden">
-    {query.ok}
-  </div>
-)}
+        <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-emerald-100 px-5 py-4 font-bold text-emerald-800 print:hidden">
+          {query.ok}
+        </div>
+      )}
 
-{query.error && (
-  <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-rose-100 px-5 py-4 font-bold text-rose-800 print:hidden">
-    {query.error}
-  </div>
-)}
+      {query.error && (
+        <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-rose-100 px-5 py-4 font-bold text-rose-800 print:hidden">
+          {query.error}
+        </div>
+      )}
       <article className="mx-auto min-h-[900px] max-w-5xl border-[12px] border-slate-950 bg-white p-12 shadow-2xl print:min-h-screen print:max-w-none print:shadow-none">
         <div className="border-2 border-amber-500 p-10 text-center">
           <ReportBrandHeader
@@ -302,143 +314,168 @@ export default async function CertificadoPage({
           </div>
 
           <div className="mx-auto mt-12 grid max-w-3xl gap-8 border-t border-slate-300 pt-8 text-sm text-slate-600 md:grid-cols-[1fr_180px] md:items-center">
-  <div>
-    <p>
-      Emitido el{" "}
-      {certificado.emitidoEn.toLocaleDateString("es-MX", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      })}
-    </p>
+            <div>
+              <p>
+                Emitido el{" "}
+                {certificado.emitidoEn.toLocaleDateString("es-MX", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </p>
 
-    <p className="mt-3 font-black tracking-widest text-slate-950">
-      CÓDIGO DE VALIDACIÓN: {certificado.codigoValidacion}
-    </p>
+              <p className="mt-3 font-black tracking-widest text-slate-950">
+                CÓDIGO DE VALIDACIÓN: {certificado.codigoValidacion}
+              </p>
 
-    <p className="mt-5 leading-6">
-      Este certificado debe interpretarse junto con el reporte técnico completo.
-      No sustituye peritajes estructurales, dictámenes de instalaciones ocultas
-      ni estudios especializados.
-    </p>
+              <p className="mt-5 leading-6">
+                Este certificado debe interpretarse junto con el reporte técnico completo.
+                No sustituye peritajes estructurales, dictámenes de instalaciones ocultas
+                ni estudios especializados.
+              </p>
 
-    <p className="mt-5 text-xs">
-      Escanee el código QR para verificar la autenticidad y vigencia del certificado.
-    </p>
-  </div>
+              <p className="mt-5 text-xs">
+                Escanee el código QR para verificar la autenticidad y vigencia del certificado.
+              </p>
+            </div>
 
-  <div className="flex flex-col items-center justify-center self-center">
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img
-      src={qrDataUrl}
-      alt="Código QR de validación"
-      className="mx-auto h-40 w-40"
-    />
-    <p className="mt-2 text-xs font-bold text-slate-700">
-      Verificar certificado
-    </p>
-  </div>
-</div>
+            <div className="flex flex-col items-center justify-center self-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrDataUrl}
+                alt="Código QR de validación"
+                className="mx-auto h-40 w-40"
+              />
+              <p className="mt-2 text-xs font-bold text-slate-700">
+                Verificar certificado
+              </p>
+            </div>
+          </div>
         </div>
       </article>
       <section className="mx-auto mt-6 max-w-5xl rounded-3xl border border-slate-300 bg-white p-7 shadow-xl print:hidden">
-  <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
-    <div>
-      <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-        Estado administrativo
-      </p>
-
-      <p
-        className={
-          certificado.vigente
-            ? "mt-2 text-2xl font-black text-emerald-700"
-            : "mt-2 text-2xl font-black text-rose-700"
-        }
-      >
-        {certificado.vigente
-          ? "CERTIFICADO VIGENTE"
-          : "CERTIFICADO REVOCADO"}
-      </p>
-
-      {!certificado.vigente && certificado.motivoRevocacion && (
-        <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm text-rose-800">
-          <p className="font-black">Motivo de revocación</p>
-
-          <p className="mt-1 leading-6">
-            {certificado.motivoRevocacion}
-          </p>
-
-          {certificado.revocadoEn && (
-            <p className="mt-2 text-xs">
-              Revocado el{" "}
-              {certificado.revocadoEn.toLocaleString("es-MX")}
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+              Estado administrativo
             </p>
+
+            <p
+              className={
+                certificado.vigente
+                  ? "mt-2 text-2xl font-black text-emerald-700"
+                  : "mt-2 text-2xl font-black text-rose-700"
+              }
+            >
+              {certificado.vigente
+                ? "CERTIFICADO VIGENTE"
+                : "CERTIFICADO REVOCADO"}
+            </p>
+
+            {!certificado.vigente && certificado.motivoRevocacion && (
+              <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm text-rose-800">
+                <p className="font-black">Motivo de revocación</p>
+
+                <p className="mt-1 leading-6">
+                  {certificado.motivoRevocacion}
+                </p>
+
+                {certificado.revocadoEn && (
+                  <p className="mt-2 text-xs">
+                    Revocado el{" "}
+                    {certificado.revocadoEn.toLocaleString("es-MX")}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {!certificado.vigente &&
+            puedeReactivar && (
+            <form action={reactivarCertificado}>
+              <input
+                type="hidden"
+                name="inspeccionId"
+                value={inspeccion.id}
+              />
+
+              <button
+                type="submit"
+                className="rounded-full bg-emerald-500 px-6 py-3 font-black text-white"
+              >
+                Reactivar certificado
+              </button>
+            </form>
           )}
         </div>
-      )}
-    </div>
 
-    {!certificado.vigente &&
-      puedeReactivar && (
-      <form action={reactivarCertificado}>
-        <input
-          type="hidden"
-          name="inspeccionId"
-          value={inspeccion.id}
-        />
+        {!certificado.vigente &&
+          tieneFacultadReactivar &&
+          !inspeccionFinalizada && (
+            <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+              <p className="font-black">Reactivación bloqueada hasta nueva aprobación</p>
+              <p className="mt-2 leading-6">
+                La revocación reabrió la inspección. Primero debe completarse otra vez la captura, revisión y aprobación. Estado actual: <strong>{inspeccion.estado.replaceAll("_", " ")}</strong>.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link
+                  href={`/panel/inspecciones/${inspeccion.id}/captura`}
+                  className="rounded-full border border-amber-500 px-4 py-2 font-black text-amber-900"
+                >
+                  Ir a captura
+                </Link>
+                <Link
+                  href={`/panel/inspecciones/${inspeccion.id}/revision`}
+                  className="rounded-full border border-amber-500 px-4 py-2 font-black text-amber-900"
+                >
+                  Ir a revisión
+                </Link>
+              </div>
+            </div>
+          )}
 
-        <button
-          type="submit"
-          className="rounded-full bg-emerald-500 px-6 py-3 font-black text-white"
-        >
-          Reactivar certificado
-        </button>
-      </form>
-    )}
-  </div>
+        {!puedeRevocar && !tieneFacultadReactivar && (
+          <div className="mt-7 border-t border-slate-200 pt-6 text-sm text-slate-500">
+            La revocación o reactivación de certificados corresponde exclusivamente a Dirección.
+          </div>
+        )}
 
-  {!puedeRevocar && !puedeReactivar && (
-    <div className="mt-7 border-t border-slate-200 pt-6 text-sm text-slate-500">
-      La revocación o reactivación de certificados corresponde exclusivamente a Dirección.
-    </div>
-  )}
+        {certificado.vigente &&
+          puedeRevocar && (
+          <form
+            action={revocarCertificado}
+            className="mt-7 border-t border-slate-200 pt-6"
+          >
+            <input
+              type="hidden"
+              name="inspeccionId"
+              value={inspeccion.id}
+            />
 
-  {certificado.vigente &&
-    puedeRevocar && (
-    <form
-      action={revocarCertificado}
-      className="mt-7 border-t border-slate-200 pt-6"
-    >
-      <input
-        type="hidden"
-        name="inspeccionId"
-        value={inspeccion.id}
-      />
+            <label className="block">
+              <span className="mb-2 block text-sm font-black">
+                Motivo de revocación
+              </span>
 
-      <label className="block">
-        <span className="mb-2 block text-sm font-black">
-          Motivo de revocación
-        </span>
+              <textarea
+                name="motivo"
+                required
+                minLength={10}
+                rows={3}
+                placeholder="Ejemplo: certificado sustituido por una nueva inspección..."
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3"
+              />
+            </label>
 
-        <textarea
-          name="motivo"
-          required
-          minLength={10}
-          rows={3}
-          placeholder="Ejemplo: certificado sustituido por una nueva inspección..."
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3"
-        />
-      </label>
-
-      <button
-        type="submit"
-        className="mt-4 rounded-full bg-rose-600 px-6 py-3 font-black text-white"
-      >
-        Revocar certificado
-      </button>
-    </form>
-  )}
-</section>
+            <button
+              type="submit"
+              className="mt-4 rounded-full bg-rose-600 px-6 py-3 font-black text-white"
+            >
+              Revocar certificado
+            </button>
+          </form>
+        )}
+      </section>
     </main>
   );
 }
