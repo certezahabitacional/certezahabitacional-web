@@ -2,7 +2,7 @@
 
 Estado: **GO TÉCNICO / PENDIENTE AUTORIZACIÓN EXPRESA PARA PROD**
 
-Este documento organiza la liberación del Método Certeza V1/V2+ y sus controles comerciales. No sustituye la aprobación expresa para desplegar a `main` ni para modificar la base PROD.
+Este documento organiza la liberación del Método Certeza V1/V2+, sus controles comerciales y el nuevo alcance operativo por asignación directa de cada inspección. No sustituye la aprobación expresa para desplegar a `main` ni para modificar la base PROD.
 
 ## 1. Condiciones previas obligatorias
 
@@ -15,21 +15,24 @@ Antes de liberar:
 - `ProtocoloInspeccionPaso` debe garantizar unicidad por `("inspeccionId", "clave")` para que la inicialización V1 con `ON CONFLICT` sea idempotente.
 - La reapertura de certificado debe invalidar revisiones vigentes, abrir captura y exigir nuevas firmas posteriores a `reabiertaEn`.
 - La reactivación debe exigir nueva aprobación, expediente completo, saldo $0.00, ausencia de ajustes comerciales pendientes y ausencia de bloqueo directivo.
+- Inspector, Coordinador y Gerente deben resolver su acceso técnico por asignación directa a cada inspección, no por una jerarquía permanente en `Usuario`.
 - Debe realizarse respaldo/snapshot de PROD antes de aplicar DDL.
 
 ## 2. Estado real de PROD antes de liberar
 
-Validación previa realizada contra el esquema PROD:
+Validación previa realizada contra el esquema PROD el 14 de septiembre de 2026:
 
 - `DocumentoProyectoInspeccion`, `GuiaInspeccionItem`, `SeleccionEvidenciaReporte` y `CotizacionVersion` existen.
 - `Inspeccion.numeroInspeccion` e `Inspeccion.inspeccionAnteriorId` existen.
 - `Hallazgo.hallazgoAnteriorId`, `estadoSeguimiento`, `observacionSeguimiento` y `resuelto` existen.
-- Actualmente existen **0 inspecciones** y **0 hallazgos** en PROD.
+- Actualmente existe **1 inspección real** en PROD: `CH-2026-0001`, estado `PROGRAMADA`, V1, sin Inspector asignado, zona Ciudad Juárez, con `requiereGerenteZona=false` y `requiereCoordinador=false`.
+- Actualmente existen **0 usuarios activos** con rol Inspector, Coordinador o Gerente y **0 usuarios** de esos roles con jerarquías `gerenteId/coordinadorId` que deban convertirse.
+- `AsignacionRolInspeccion` y su trigger de sincronización todavía no existen en PROD.
 - `InspeccionControlV2` y `AjusteComercial` todavía no existen en PROD.
 - Existe el trigger histórico `trg_validar_evidencia_minima_cierre_inspeccion` sobre `Inspeccion.estado`.
 - La función histórica de cierre exige al menos un hallazgo; será reemplazada al final del paquete por la función V1/V2+ endurecida.
 
-La ausencia actual de inspecciones reduce el riesgo de conversión: no hay expedientes activos que deban migrarse al nuevo control V2.
+La inspección existente no será modificada funcionalmente por la migración de asignaciones: al no tener Inspector ni requerir Gerente/Coordinador, no se crearán asignaciones artificiales ni se cambiará su estado. Dirección conserva alcance global para administrarla después de la migración.
 
 ## 3. Deriva de historial detectada y reconciliada
 
@@ -55,7 +58,8 @@ Cuando exista autorización expresa, aplicar en este orden lógico:
 3. `database/preservar_datos_version_cotizacion_ajuste.sql`
 4. `database/inspeccion_vivienda_v2.sql`
 5. `database/protocolo_clave_unica.sql`
-6. `database/cierre_v1_v2_seguimiento.sql`
+6. `database/asignacion_roles_por_inspeccion.sql`
+7. `database/cierre_v1_v2_seguimiento.sql`
 
 ### Razón del orden
 
@@ -69,6 +73,8 @@ Cuando exista autorización expresa, aplicar en este orden lógico:
 
 `protocolo_clave_unica.sql` garantiza explícitamente la unicidad de `("inspeccionId", "clave")`, incluso si la tabla ya existiera por una recuperación o despliegue parcial. Esta protección es necesaria para la inicialización idempotente del protocolo V1.
 
+`asignacion_roles_por_inspeccion.sql` crea la relación única por inspección para Gerente, Coordinador e Inspector, preserva cualquier vínculo histórico antes de limpiar la jerarquía permanente de Coordinadores/Inspectores y deja un trigger para mantener sincronizado al Inspector cuando cambie `Inspeccion.inspectorId`.
+
 `inspeccion_vivienda_v2.sql` contiene además una definición histórica/intermedia de la función de cierre; por eso `cierre_v1_v2_seguimiento.sql` debe ejecutarse **siempre al final**, dejando vigente la lógica endurecida V1/V2+.
 
 ## 5. Validaciones de esquema post-migración
@@ -79,6 +85,9 @@ Confirmar en PROD, antes de desplegar la aplicación:
 - `InspeccionControlV2` contiene `reabiertaEn`, `reabiertaPorId`, `motivoReapertura`, `actualizadoEn`;
 - existe `AjusteComercial` con sus índices, incluido `AjusteComercial_rechazadoPorId_idx`;
 - existe el índice único `ProtocoloInspeccionPaso_inspeccionId_clave_key` sobre `("inspeccionId", "clave")`;
+- existe `AsignacionRolInspeccion`, con unicidad por `("inspeccionId", "rol")`;
+- existe el trigger `trg_sincronizar_asignacion_inspector_inspeccion` sobre `Inspeccion.inspectorId`;
+- la inspección `CH-2026-0001` conserva su estado `PROGRAMADA`, su zona y `inspectorId=null` después de migrar;
 - RLS está habilitado en las tablas server-only definidas por los scripts;
 - el trigger `trg_validar_evidencia_minima_cierre_inspeccion` sigue asociado a `Inspeccion.estado`;
 - la función `validar_evidencia_minima_cierre_inspeccion()` contiene los pasos base `FACHADA_PRINCIPAL`, `HIDRAULICA_INICIO`, `GAS_INICIO`, `RECORRIDO_AREAS`, `HIDRAULICA_CIERRE`, `GAS_CIERRE`, `CIERRE_CAMPO`;
@@ -101,7 +110,7 @@ Confirmar en PROD, antes de desplegar la aplicación:
 - hallazgos reales con evidencia;
 - cierre técnico completo;
 - firmas Inspector y Cliente;
-- aprobación según jerarquía;
+- aprobación según asignación operativa de la inspección;
 - certificado solo con saldo $0.00.
 
 ### V2+
@@ -111,6 +120,19 @@ Confirmar en PROD, antes de desplegar la aplicación:
 - cada seguimiento/nuevo hallazgo debe tener >=4 fotos;
 - puede existir cero hallazgo nuevo;
 - los resueltos no deben reaparecer como pendientes.
+
+### Asignaciones por inspección
+
+- crear Inspector sin Gerente ni Coordinador permanentes;
+- crear inspección sin Gerente/Coordinador cuando el flujo no los requiere;
+- asignar Inspector, Coordinador y Gerente de forma independiente por inspección;
+- Inspector solo puede listar/abrir expedientes donde está asignado;
+- Coordinador solo puede listar/abrir/revisar expedientes donde está asignado;
+- Gerente solo puede listar/abrir/aprobar expedientes donde está asignado;
+- APIs deben devolver 403 ante un usuario técnico no asignado aunque pertenezca a la misma zona;
+- Dirección conserva alcance global y Administración conserva alcance administrativo;
+- al reasignar Inspector debe actualizarse `AsignacionRolInspeccion` automáticamente;
+- los expedientes históricos sin filas de asignación mantienen fallback compatible donde corresponda.
 
 ### Revocación y reapertura
 
@@ -136,19 +158,22 @@ Confirmar en PROD, antes de desplegar la aplicación:
 
 ## 7. Smoke test posterior al despliegue
 
-Sin usar expedientes reales sensibles, validar:
+Sin modificar la inspección real existente salvo que se decida expresamente usarla para operación, validar:
 
 1. Login y cambio obligatorio de contraseña temporal.
-2. Alcance por roles Inspector, Coordinador, Gerente, Director, Administrador y Cliente.
-3. Apertura de V1 y navegación por Flujo, Protocolo, Áreas, Evidencias, Firmas y Revisión.
-4. Inicialización repetida del protocolo V1 sin duplicar pasos.
-5. Cierre V1 limpio.
-6. Flujo V2 de seguimiento.
-7. Emisión de certificado.
-8. Verificación pública del certificado/QR.
-9. Revocación, reapertura, nuevas firmas, reaprobación y reactivación.
-10. Bloqueo de certificado con saldo o ajuste pendiente.
-11. Portal Cliente solo lectura de información liberada.
+2. Creación de usuarios Inspector, Coordinador y Gerente sin jerarquía permanente obligatoria.
+3. Creación de una inspección de prueba con asignaciones directas.
+4. Alcance por roles Inspector, Coordinador, Gerente, Director, Administrador y Cliente.
+5. Intento de acceso a un expediente no asignado por UI y API.
+6. Apertura de V1 y navegación por Flujo, Protocolo, Áreas, Evidencias, Firmas y Revisión.
+7. Inicialización repetida del protocolo V1 sin duplicar pasos.
+8. Cierre V1 limpio.
+9. Flujo V2 de seguimiento.
+10. Emisión de certificado.
+11. Verificación pública del certificado/QR.
+12. Revocación, reapertura, nuevas firmas, reaprobación y reactivación.
+13. Bloqueo de certificado con saldo o ajuste pendiente.
+14. Portal Cliente solo lectura de información liberada.
 
 ## 8. Criterio GO / NO-GO
 
@@ -156,15 +181,15 @@ Sin usar expedientes reales sensibles, validar:
 
 - build candidato está verde;
 - rama candidata no está detrás de `main`;
-- DEV contiene el esquema V1/V2 completo;
-- las pruebas de cierre, reapertura, firmas y certificado pasan;
+- DEV contiene el esquema V1/V2 completo y `AsignacionRolInspeccion`;
+- las pruebas de cierre, reapertura, firmas, certificado y alcance por asignación pasan;
 - no existe un bloqueador funcional conocido.
 
 **GO de despliegue a PROD** únicamente si además:
 
 - existe autorización expresa del responsable;
 - existe respaldo/snapshot o punto de recuperación de PROD;
-- las seis migraciones aplican sin error y en el orden definido;
+- las siete migraciones aplican sin error y en el orden definido;
 - las validaciones post-migración son correctas;
 - el despliegue del mismo commit candidato queda verde;
 - el smoke test posterior pasa completo.
@@ -182,4 +207,4 @@ Siempre que el alcance de lanzamiento lo autorice explícitamente:
 - refinamientos no críticos del portal Cliente;
 - ajustes visuales del reporte.
 
-Estas funciones no deben confundirse con los controles mínimos de seguridad, cierre técnico, trazabilidad, pago, aprobación y certificado, que sí son obligatorios para el candidato de producción.
+Estas funciones no deben confundirse con los controles mínimos de seguridad, cierre técnico, trazabilidad, pago, aprobación, alcance por asignación y certificado, que sí son obligatorios para el candidato de producción.
