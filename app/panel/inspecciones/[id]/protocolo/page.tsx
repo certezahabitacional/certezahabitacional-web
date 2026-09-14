@@ -141,7 +141,7 @@ export default async function ProtocoloPage({
                           <h2 className="text-lg font-black">{paso.nombre}</h2>
                           <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-black text-slate-400">{paso.estado}</span>
                         </div>
-                        <p className="mt-1 text-sm text-slate-500">{paso.clave.replaceAll("_", " ")}</p>
+                        <p className="mt-1 text-sm text-slate-500">{paso.clave.replace(/_/g, " ")}</p>
                         {(paso.lecturaInicial !== null || paso.lecturaFinal !== null) && (
                           <p className="mt-3 text-sm text-slate-300">
                             {paso.lecturaInicial !== null ? `Inicial: ${paso.lecturaInicial}${paso.unidad ? ` ${paso.unidad}` : ""}` : ""}
