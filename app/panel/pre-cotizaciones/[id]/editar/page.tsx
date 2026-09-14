@@ -11,13 +11,19 @@ function objeto(v: Prisma.JsonValue | undefined): Record<string, any> | null { r
 function cadena(v: unknown, respaldo = "") { return typeof v === "string" ? v : respaldo; }
 function numero(v: unknown, respaldo: number) { const n=Number(v); return Number.isFinite(n)?n:respaldo; }
 
+const ESTADOS_EDITABLES_PRE_COTIZACION = new Set<EstadoCotizacion>([
+  EstadoCotizacion.BORRADOR,
+  EstadoCotizacion.ENVIADA,
+  EstadoCotizacion.ACEPTADA,
+]);
+
 export default async function EditarPreCotizacionPage({ params, searchParams }: { params: Promise<{ id:string }>; searchParams: Promise<{ ok?:string; error?:string }> }) {
   const usuario=await obtenerUsuarioConAlcanceZona("/panel/pre-cotizaciones");
   if(usuario.rol!==RolUsuario.DIRECTOR&&usuario.rol!==RolUsuario.ADMINISTRADOR) redirect("/acceso");
   const {id}=await params; const mensajes=await searchParams;
   const c=await prisma.cotizacion.findUnique({where:{id},select:{id:true,folio:true,estado:true,zonaId:true,versionActual:true,total:true,montoPagado:true,vigenciaHasta:true,cliente:{select:{folio:true,nombre:true,telefono:true,correo:true,tipo:true,empresa:true,direccion:true,colonia:true,ciudad:true,estado:true,codigoPostal:true}},inmueble:{select:{alias:true,direccion:true,colonia:true,ciudad:true,estado:true,codigoPostal:true,superficieTerrenoM2:true,superficieConstruccionM2:true}},versiones:{orderBy:{version:"desc"},take:1,select:{version:true,datos:true,total:true}}}});
   if(!c) notFound(); if(!puedeAccederZona(usuario,c.zonaId)) redirect("/acceso");
-  const estadosEditables=[EstadoCotizacion.BORRADOR,EstadoCotizacion.ENVIADA,EstadoCotizacion.ACEPTADA]; if(!estadosEditables.includes(c.estado)) redirect("/panel/cotizaciones"); if(!c.inmueble) notFound();
+  if(!ESTADOS_EDITABLES_PRE_COTIZACION.has(c.estado)) redirect("/panel/cotizaciones"); if(!c.inmueble) notFound();
   const version=c.versiones[0],datos=objeto(version?.datos),propuesta=datos?.estadoCambios==="PENDIENTES_AUTORIZACION",cliente=propuesta?objeto(datos?.cliente):null,inmueble=propuesta?objeto(datos?.inmueble):null;
   const valores={nombre:cadena(cliente?.nombre,c.cliente.nombre),telefono:cadena(cliente?.telefono,c.cliente.telefono??""),correo:cadena(cliente?.correo,c.cliente.correo??""),tipo:Object.values(TipoCliente).includes(cliente?.tipo as TipoCliente)?cliente?.tipo as TipoCliente:c.cliente.tipo,empresa:cadena(cliente?.empresa,c.cliente.empresa??""),direccionCliente:cadena(cliente?.direccion,c.cliente.direccion??""),coloniaCliente:cadena(cliente?.colonia,c.cliente.colonia??""),ciudadCliente:cadena(cliente?.ciudad,c.cliente.ciudad??""),estadoCliente:cadena(cliente?.estado,c.cliente.estado??""),codigoPostalCliente:cadena(cliente?.codigoPostal,c.cliente.codigoPostal??""),alias:cadena(inmueble?.alias,c.inmueble.alias),direccionInmueble:cadena(inmueble?.direccion,c.inmueble.direccion),coloniaInmueble:cadena(inmueble?.colonia,c.inmueble.colonia??""),ciudadInmueble:cadena(inmueble?.ciudad,c.inmueble.ciudad),estadoInmueble:cadena(inmueble?.estado,c.inmueble.estado),codigoPostalInmueble:cadena(inmueble?.codigoPostal,c.inmueble.codigoPostal??""),m2Terreno:numero(inmueble?.m2Terreno,Number(c.inmueble.superficieTerrenoM2??0)),m2Construccion:numero(inmueble?.m2Construccion,Number(c.inmueble.superficieConstruccionM2??0)),total:numero(datos?.total,Number(version?.total??c.total))};
   const input="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/50";
