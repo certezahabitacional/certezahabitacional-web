@@ -5,7 +5,20 @@ import {
   obtenerUsuarioConAlcanceZona,
   puedeAccederZona,
 } from "@/lib/alcance-zona";
+import {
+  rolAsignableDesdeUsuario,
+  usuarioAsignadoAInspeccion,
+} from "@/lib/asignaciones-inspeccion";
 import { prisma } from "@/lib/prisma";
+
+async function tieneAsignacionDirecta(
+  inspeccionId: string,
+  usuario: { id: string; rol: import("@prisma/client").RolUsuario },
+) {
+  const rolAsignable = rolAsignableDesdeUsuario(usuario.rol);
+  if (!rolAsignable) return true;
+  return usuarioAsignadoAInspeccion(inspeccionId, usuario.id, rolAsignable);
+}
 
 export async function exigirZonaInspeccionPorId(
   inspeccionId: string,
@@ -20,6 +33,10 @@ export async function exigirZonaInspeccionPorId(
   });
 
   if (!inspeccion || !puedeAccederZona(usuario, inspeccion.zonaId)) {
+    redirect("/acceso");
+  }
+
+  if (!(await tieneAsignacionDirecta(inspeccionId, usuario))) {
     redirect("/acceso");
   }
 
@@ -81,7 +98,7 @@ export async function validarZonaInspeccionApi(
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: session.user.id },
-    select: { rol: true, activo: true, zonaId: true },
+    select: { id: true, rol: true, activo: true, zonaId: true },
   });
 
   if (!usuario?.activo) {
@@ -106,6 +123,14 @@ export async function validarZonaInspeccionApi(
       ok: false,
       status: 403,
       error: "No tienes acceso a información de otra zona.",
+    };
+  }
+
+  if (!(await tieneAsignacionDirecta(inspeccionId, usuario))) {
+    return {
+      ok: false,
+      status: 403,
+      error: "No estás ligado a esta inspección.",
     };
   }
 
