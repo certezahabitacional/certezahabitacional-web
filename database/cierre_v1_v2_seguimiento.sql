@@ -15,7 +15,9 @@ declare
   areas_confirmadas boolean;
   areas_obligatorias integer;
   areas_incompletas integer;
+  pasos_requeridos_faltantes integer;
   pasos_incompletos integer;
+  pruebas_invalidas integer;
   antecedentes_pendientes integer;
   antecedentes_sin_seguimiento integer;
   seguimientos_invalidos integer;
@@ -71,6 +73,30 @@ begin
         raise exception using message = format('No se puede finalizar V1: %s área(s) obligatoria(s) siguen sin revisión completa, comentario o 4 fotografías.', areas_incompletas), errcode = '23514';
       end if;
 
+      -- La V1 siempre debe tener la secuencia mínima del Método Certeza.
+      select count(*) into pasos_requeridos_faltantes
+      from (
+        values
+          ('FACHADA_PRINCIPAL'),
+          ('HIDRAULICA_INICIO'),
+          ('GAS_INICIO'),
+          ('RECORRIDO_AREAS'),
+          ('HIDRAULICA_CIERRE'),
+          ('GAS_CIERRE'),
+          ('CIERRE_CAMPO')
+      ) as requeridos(clave)
+      where not exists (
+        select 1
+        from public."ProtocoloInspeccionPaso" p
+        where p."inspeccionId" = new."id"
+          and p."clave" = requeridos.clave
+          and p."obligatorio" = true
+      );
+
+      if pasos_requeridos_faltantes > 0 then
+        raise exception using message = format('No se puede finalizar V1: faltan %s paso(s) base del protocolo del Método Certeza.', pasos_requeridos_faltantes), errcode = '23514';
+      end if;
+
       select count(*) into pasos_incompletos
       from public."ProtocoloInspeccionPaso" p
       where p."inspeccionId" = new."id"
@@ -79,6 +105,42 @@ begin
 
       if pasos_incompletos > 0 then
         raise exception using message = format('No se puede finalizar V1: %s paso(s) obligatorio(s) del protocolo siguen pendientes.', pasos_incompletos), errcode = '23514';
+      end if;
+
+      -- Hidráulica y gas deben quedar como pares consistentes: ambos NO_APLICA,
+      -- o ambos COMPLETADOS con lectura inicial/final, unidad y secuencia temporal válida.
+      select count(*) into pruebas_invalidas
+      from (
+        values ('HIDRAULICA'), ('GAS')
+      ) as sistemas(sistema)
+      join public."ProtocoloInspeccionPaso" inicio
+        on inicio."inspeccionId" = new."id"
+       and inicio."clave" = sistemas.sistema || '_INICIO'
+      join public."ProtocoloInspeccionPaso" cierre
+        on cierre."inspeccionId" = new."id"
+       and cierre."clave" = sistemas.sistema || '_CIERRE'
+      where
+        (
+          (inicio."estado" = 'NO_APLICA') <> (cierre."estado" = 'NO_APLICA')
+        )
+        or (
+          inicio."estado" <> 'NO_APLICA'
+          and (
+            inicio."estado" <> 'COMPLETADO'
+            or cierre."estado" <> 'COMPLETADO'
+            or inicio."lecturaInicial" is null
+            or cierre."lecturaFinal" is null
+            or nullif(btrim(coalesce(inicio."unidad", '')), '') is null
+            or nullif(btrim(coalesce(cierre."unidad", '')), '') is null
+            or lower(btrim(inicio."unidad")) <> lower(btrim(cierre."unidad"))
+            or inicio."completadoEn" is null
+            or cierre."completadoEn" is null
+            or cierre."completadoEn" < inicio."completadoEn"
+          )
+        );
+
+      if pruebas_invalidas > 0 then
+        raise exception using message = 'No se puede finalizar V1: las pruebas hidráulica y/o de gas no tienen un inicio/cierre coherente con lecturas, unidad y secuencia temporal válidas.', errcode = '23514';
       end if;
 
       if not exists (
