@@ -65,7 +65,8 @@ export default async function AreasPage({
   if (inspeccion.numeroInspeccion > 1) redirect(`/panel/inspecciones/${id}/captura`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const consulta = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR].includes(usuario.rol);
+  const rolesConsulta: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR];
+  const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
   const [controlRows, areas] = await Promise.all([
