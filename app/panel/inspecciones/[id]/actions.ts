@@ -2,6 +2,7 @@
 
 import { exigirZonaInspeccionForm } from "@/lib/alcance-zona-inspeccion";
 import { validarAjustesParaCertificado } from "@/lib/ajustes-comerciales";
+import { finalizarCapturaMetodoCerteza } from "@/lib/cierre-captura";
 import * as legacy from "./actions-legacy";
 
 function inspeccionId(formData: FormData) {
@@ -15,7 +16,11 @@ export async function liberarInicioSinPago(formData: FormData) { await exigirZon
 export async function crearHallazgo(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.crearHallazgo(formData); }
 export async function registrarSeguimientoHallazgo(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.registrarSeguimientoHallazgo(formData); }
 export async function actualizarHallazgo(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.actualizarHallazgo(formData); }
-export async function finalizarCaptura(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.finalizarCaptura(formData); }
+export async function finalizarCaptura(formData: FormData) {
+  await exigirZonaInspeccionForm(formData);
+  const manejadaPorMetodo = await finalizarCapturaMetodoCerteza(formData);
+  if (!manejadaPorMetodo) return legacy.finalizarCaptura(formData);
+}
 export async function darVistoBuenoCoordinador(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.darVistoBuenoCoordinador(formData); }
 export async function devolverAInspector(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.devolverAInspector(formData); }
 export async function aprobarGerencia(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.aprobarGerencia(formData); }
