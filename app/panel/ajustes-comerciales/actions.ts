@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 function texto(fd: FormData, campo: string) { return String(fd.get(campo) ?? "").trim(); }
 function numero(fd: FormData, campo: string) { const n = Number(texto(fd, campo).replace(",", ".")); return Number.isFinite(n) ? n : NaN; }
 function volver(destino: string, tipo: "ok" | "error", mensaje: string): never { redirect(`${destino}${destino.includes("?") ? "&" : "?"}${tipo}=${encodeURIComponent(mensaje)}`); }
+function incluido<T>(valor: T, opciones: readonly T[]) { return opciones.includes(valor); }
 
 async function usuarioActual() {
   const sesion = await auth();
@@ -46,7 +47,7 @@ export async function proponerAjusteComercial(formData: FormData) {
     volver(destino, "error", "Completa tipo, concepto, motivo y un monto mayor a cero.");
   }
 
-  if (![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.INSPECTOR].includes(usuario.rol)) redirect("/acceso");
+  if (!incluido(usuario.rol, [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.INSPECTOR] as RolUsuario[])) redirect("/acceso");
 
   const cotizacion = await prisma.cotizacion.findUnique({
     where: { id: cotizacionId },
@@ -60,7 +61,7 @@ export async function proponerAjusteComercial(formData: FormData) {
     }
   }
 
-  const requiereAceptacion = [EstadoCotizacion.ACEPTADA, EstadoCotizacion.AUTORIZADA].includes(cotizacion.estado) || Boolean(cotizacion.inspeccion);
+  const requiereAceptacion = incluido(cotizacion.estado, [EstadoCotizacion.ACEPTADA, EstadoCotizacion.AUTORIZADA] as EstadoCotizacion[]) || Boolean(cotizacion.inspeccion);
   const ajusteId = randomUUID();
 
   await prisma.$executeRaw`
@@ -102,10 +103,10 @@ export async function resolverAjusteComercial(formData: FormData) {
 
   if (decision === "AUTORIZAR") {
     if (ajuste.tipo === "DESCUENTO" && usuario.rol !== RolUsuario.DIRECTOR) volver(destino, "error", "Los descuentos solo pueden ser autorizados por Dirección.");
-    if (ajuste.tipo === "CARGO" && ![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR].includes(usuario.rol)) volver(destino, "error", "Los cargos solo pueden ser autorizados por Administración o Dirección.");
+    if (ajuste.tipo === "CARGO" && !incluido(usuario.rol, [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR] as RolUsuario[])) volver(destino, "error", "Los cargos solo pueden ser autorizados por Administración o Dirección.");
     await prisma.$executeRaw`UPDATE "AjusteComercial" SET "estado"='AUTORIZADO',"autorizadoPorId"=${usuario.id},"autorizadoEn"=NOW(),"motivoResolucion"=${motivoResolucion} WHERE "id"=${ajusteId}::uuid AND "estado"='PENDIENTE'`;
   } else {
-    if (![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR].includes(usuario.rol)) redirect("/acceso");
+    if (!incluido(usuario.rol, [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR] as RolUsuario[])) redirect("/acceso");
     await prisma.$executeRaw`UPDATE "AjusteComercial" SET "estado"='RECHAZADO',"rechazadoPorId"=${usuario.id},"rechazadoEn"=NOW(),"motivoResolucion"=${motivoResolucion} WHERE "id"=${ajusteId}::uuid AND "estado"='PENDIENTE'`;
   }
 
@@ -129,7 +130,7 @@ export async function resolverAjusteComercial(formData: FormData) {
 
 export async function registrarAceptacionAjuste(formData: FormData) {
   const usuario = await usuarioActual();
-  if (![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR].includes(usuario.rol)) redirect("/acceso");
+  if (!incluido(usuario.rol, [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR] as RolUsuario[])) redirect("/acceso");
   const ajusteId = texto(formData, "ajusteId");
   const motivo = texto(formData, "motivo");
   const destino = texto(formData, "destino") || "/panel/cotizaciones";
@@ -150,7 +151,7 @@ export async function registrarAceptacionAjuste(formData: FormData) {
 
 export async function aplicarAjusteComercial(formData: FormData) {
   const usuario = await usuarioActual();
-  if (![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR].includes(usuario.rol)) redirect("/acceso");
+  if (!incluido(usuario.rol, [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR] as RolUsuario[])) redirect("/acceso");
   const ajusteId = texto(formData, "ajusteId");
   const destino = texto(formData, "destino") || "/panel/cotizaciones";
   const ajuste = await obtenerAjuste(ajusteId);
