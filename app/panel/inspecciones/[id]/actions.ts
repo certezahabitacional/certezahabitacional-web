@@ -1,7 +1,12 @@
 "use server";
 
 import { exigirZonaInspeccionForm } from "@/lib/alcance-zona-inspeccion";
+import { validarAjustesParaCertificado } from "@/lib/ajustes-comerciales";
 import * as legacy from "./actions-legacy";
+
+function inspeccionId(formData: FormData) {
+  return String(formData.get("inspeccionId") ?? "").trim();
+}
 
 export async function asignarInspector(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.asignarInspector(formData); }
 export async function autorizarReasignacionInspector(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.autorizarReasignacionInspector(formData); }
@@ -22,4 +27,9 @@ export async function levantarBloqueoYAprobar(formData: FormData) { await exigir
 export async function cambiarEstado(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.cambiarEstado(formData); }
 export async function iniciarInspeccion(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.iniciarInspeccion(formData); }
 export async function cancelarInspeccion(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.cancelarInspeccion(formData); }
-export async function emitirCertificado(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.emitirCertificado(formData); }
+export async function emitirCertificado(formData: FormData) {
+  await exigirZonaInspeccionForm(formData);
+  const id = inspeccionId(formData);
+  if (id) await validarAjustesParaCertificado(id);
+  return legacy.emitirCertificado(formData);
+}
