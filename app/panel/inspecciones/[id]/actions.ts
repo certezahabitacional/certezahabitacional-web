@@ -2,6 +2,7 @@
 
 import { exigirZonaInspeccionForm } from "@/lib/alcance-zona-inspeccion";
 import { validarAjustesParaCertificado } from "@/lib/ajustes-comerciales";
+import { asignarInspectorPorInspeccion } from "@/lib/asignar-inspector-por-inspeccion";
 import { finalizarCapturaMetodoCerteza } from "@/lib/cierre-captura";
 import {
   aprobarDireccionMetodoCerteza,
@@ -9,13 +10,21 @@ import {
   darVistoBuenoCoordinadorMetodoCerteza,
   levantarBloqueoYAprobarMetodoCerteza,
 } from "@/lib/revision-certeza-actions";
+import {
+  devolverACoordinacionPorAsignacion,
+  devolverAInspectorPorAsignacion,
+} from "@/lib/revision-asignacion-actions";
 import * as legacy from "./actions-legacy";
 
 function inspeccionId(formData: FormData) {
   return String(formData.get("inspeccionId") ?? "").trim();
 }
 
-export async function asignarInspector(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.asignarInspector(formData); }
+export async function asignarInspector(formData: FormData) {
+  await exigirZonaInspeccionForm(formData);
+  const manejadaPorAsignacion = await asignarInspectorPorInspeccion(formData);
+  if (!manejadaPorAsignacion) return legacy.asignarInspector(formData);
+}
 export async function autorizarReasignacionInspector(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.autorizarReasignacionInspector(formData); }
 export async function rechazarReasignacionInspector(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.rechazarReasignacionInspector(formData); }
 export async function liberarInicioSinPago(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.liberarInicioSinPago(formData); }
@@ -32,13 +41,21 @@ export async function darVistoBuenoCoordinador(formData: FormData) {
   const manejadaPorMetodo = await darVistoBuenoCoordinadorMetodoCerteza(formData);
   if (!manejadaPorMetodo) return legacy.darVistoBuenoCoordinador(formData);
 }
-export async function devolverAInspector(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.devolverAInspector(formData); }
+export async function devolverAInspector(formData: FormData) {
+  await exigirZonaInspeccionForm(formData);
+  const manejadaPorAsignacion = await devolverAInspectorPorAsignacion(formData);
+  if (!manejadaPorAsignacion) return legacy.devolverAInspector(formData);
+}
 export async function aprobarGerencia(formData: FormData) {
   await exigirZonaInspeccionForm(formData);
   const manejadaPorMetodo = await aprobarGerenciaMetodoCerteza(formData);
   if (!manejadaPorMetodo) return legacy.aprobarGerencia(formData);
 }
-export async function devolverACoordinacion(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.devolverACoordinacion(formData); }
+export async function devolverACoordinacion(formData: FormData) {
+  await exigirZonaInspeccionForm(formData);
+  const manejadaPorAsignacion = await devolverACoordinacionPorAsignacion(formData);
+  if (!manejadaPorAsignacion) return legacy.devolverACoordinacion(formData);
+}
 export async function aprobarDireccion(formData: FormData) {
   await exigirZonaInspeccionForm(formData);
   const manejadaPorMetodo = await aprobarDireccionMetodoCerteza(formData);
