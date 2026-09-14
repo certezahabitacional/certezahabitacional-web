@@ -11,6 +11,7 @@ export type UsuarioConAlcanceZona = {
   email: string;
   rol: RolUsuario;
   activo: boolean;
+  requiereCambioPassword: boolean;
   zonaId: string | null;
   zona: {
     id: string;
@@ -35,6 +36,7 @@ const cargarUsuarioConAlcanceZona = cache(async () => {
       email: true,
       rol: true,
       activo: true,
+      requiereCambioPassword: true,
       zonaId: true,
       zona: {
         select: {
@@ -61,6 +63,10 @@ export async function obtenerUsuarioConAlcanceZona(
   }
 
   if (!usuario?.activo) redirect("/acceso");
+
+  if (usuario.requiereCambioPassword && !callbackUrl.startsWith("/cambiar-password")) {
+    redirect(`/cambiar-password?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+  }
 
   if (usuario.rol !== RolUsuario.DIRECTOR && !usuario.zonaId) {
     redirect(
