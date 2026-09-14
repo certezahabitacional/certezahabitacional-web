@@ -19,41 +19,12 @@ async function gestor() {
   return actual;
 }
 
-async function validarZona(zonaId: string) {
+async function resolverZona(rol: RolUsuario, zonaId: string) {
+  if (rol === RolUsuario.DIRECTOR) return null;
+  if (!zonaId) error("Selecciona una zona para este usuario.");
   const zona = await prisma.zona.findUnique({ where: { id: zonaId }, select: { id: true, activa: true } });
   if (!zona?.activa) error("La zona seleccionada no existe o está inactiva.");
-}
-
-async function validarGerente(gerenteId: string, zonaId: string) {
-  const gerente = await prisma.usuario.findUnique({ where: { id: gerenteId }, select: { rol: true, activo: true, zonaId: true } });
-  if (!gerente || gerente.rol !== RolUsuario.GERENTE || !gerente.activo || gerente.zonaId !== zonaId) error("El Gerente seleccionado no es válido para la zona elegida.");
-}
-
-async function validarCoordinador(coordinadorId: string, zonaId: string, gerenteId: string) {
-  const coordinador = await prisma.usuario.findUnique({ where: { id: coordinadorId }, select: { rol: true, activo: true, zonaId: true, gerenteId: true } });
-  if (!coordinador || coordinador.rol !== RolUsuario.COORDINADOR || !coordinador.activo || coordinador.zonaId !== zonaId || coordinador.gerenteId !== gerenteId) error("El Coordinador seleccionado no pertenece a la zona y Gerencia indicadas.");
-}
-
-async function resolverJerarquia(rol: RolUsuario, zonaId: string, gerenteId: string, coordinadorId: string) {
-  let zonaFinalId: string | null = null;
-  let gerenteFinalId: string | null = null;
-  let coordinadorFinalId: string | null = null;
-
-  if (rol !== RolUsuario.DIRECTOR) {
-    if (!zonaId) error("Selecciona una zona para este usuario.");
-    await validarZona(zonaId);
-    zonaFinalId = zonaId;
-  }
-
-  if (rol === RolUsuario.COORDINADOR || rol === RolUsuario.INSPECTOR) {
-    if (!gerenteId) error("Selecciona el Gerente responsable.");
-    await validarGerente(gerenteId, zonaId); gerenteFinalId = gerenteId;
-  }
-  if (rol === RolUsuario.INSPECTOR) {
-    if (!coordinadorId) error("Selecciona el Coordinador responsable del Inspector.");
-    await validarCoordinador(coordinadorId, zonaId, gerenteId); coordinadorFinalId = coordinadorId;
-  }
-  return { zonaFinalId, gerenteFinalId, coordinadorFinalId };
+  return zona.id;
 }
 
 function validarRolGestionable(gestorRol: RolUsuario, rol: RolUsuario) {
@@ -63,16 +34,29 @@ function validarRolGestionable(gestorRol: RolUsuario, rol: RolUsuario) {
 
 function validarZonaGestor(actual: Awaited<ReturnType<typeof obtenerAdministradorActual>>, zonaId: string | null) {
   if (actual.rol === RolUsuario.DIRECTOR) return;
-  if (!actual.zonaId || !zonaId || actual.zonaId !== zonaId) {
-    error("Administración solo puede gestionar usuarios de su propia zona.");
-  }
+  if (!actual.zonaId || !zonaId || actual.zonaId !== zonaId) error("Administración solo puede gestionar usuarios de su propia zona.");
+}
+
+async function tieneInspeccionesAsignadas(usuarioId: string) {
+  const filas = await prisma.$queryRaw<Array<{ existe: boolean }>>`
+    SELECT EXISTS(
+      SELECT 1 FROM "AsignacionRolInspeccion" WHERE "usuarioId" = ${usuarioId}
+    ) AS "existe"
+  `;
+  return Boolean(filas[0]?.existe);
 }
 
 export async function crearUsuarioFase2(formData: FormData) {
   const actual = await gestor();
-  const nombre = texto(formData, "nombre"); const email = texto(formData, "email").toLowerCase(); const password = texto(formData, "password"); const rol = texto(formData, "rol") as RolUsuario;
-  const zonaId = texto(formData, "zonaId"); const gerenteId = texto(formData, "gerenteId"); const coordinadorId = texto(formData, "coordinadorId");
-  const telefono = texto(formData, "telefono"); const especialidad = texto(formData, "especialidad"); const cedula = texto(formData, "cedula"); const ciudad = texto(formData, "ciudad");
+  const nombre = texto(formData, "nombre");
+  const email = texto(formData, "email").toLowerCase();
+  const password = texto(formData, "password");
+  const rol = texto(formData, "rol") as RolUsuario;
+  const zonaId = texto(formData, "zonaId");
+  const telefono = texto(formData, "telefono");
+  const especialidad = texto(formData, "especialidad");
+  const cedula = texto(formData, "cedula");
+  const ciudad = texto(formData, "ciudad");
 
   if (nombre.length < 3) error("El nombre debe tener al menos 3 caracteres.");
   if (!email.includes("@")) error("El correo electrónico no es válido.");
@@ -80,50 +64,69 @@ export async function crearUsuarioFase2(formData: FormData) {
   if (!Object.values(RolUsuario).includes(rol)) error("El rol seleccionado no es válido.");
   validarRolGestionable(actual.rol, rol);
 
-  const { zonaFinalId, gerenteFinalId, coordinadorFinalId } = await resolverJerarquia(rol, zonaId, gerenteId, coordinadorId);
+  const zonaFinalId = await resolverZona(rol, zonaId);
   validarZonaGestor(actual, zonaFinalId);
   if (await prisma.usuario.findUnique({ where: { email }, select: { id: true } })) error("Ya existe una cuenta registrada con ese correo.");
   const passwordHash = await bcrypt.hash(password, 12);
 
   const creado = await prisma.$transaction(async (tx) => {
-    const usuario = await tx.usuario.create({ data: { nombre, email, telefono: telefono || null, ciudad: ciudad || null, passwordHash, rol, activo: true, requiereCambioPassword: true, zonaId: zonaFinalId, gerenteId: gerenteFinalId, coordinadorId: coordinadorFinalId } });
-    if (rol === RolUsuario.INSPECTOR) await tx.inspector.create({ data: { usuarioId: usuario.id, telefono: telefono || null, especialidad: especialidad || null, cedula: cedula || null, ciudad: ciudad || null, activo: true } });
+    const usuario = await tx.usuario.create({
+      data: {
+        nombre, email, telefono: telefono || null, ciudad: ciudad || null,
+        passwordHash, rol, activo: true, requiereCambioPassword: true,
+        zonaId: zonaFinalId, gerenteId: null, coordinadorId: null,
+      },
+    });
+    if (rol === RolUsuario.INSPECTOR) {
+      await tx.inspector.create({ data: { usuarioId: usuario.id, telefono: telefono || null, especialidad: especialidad || null, cedula: cedula || null, ciudad: ciudad || null, activo: true } });
+    }
     return usuario;
   });
 
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "Usuario", entidadId: creado.id, usuarioId: actual.id, descripcion: `${actual.rol} creó el usuario ${email} con rol ${rol}${zonaFinalId ? ` en zona ${zonaFinalId}` : ""}${rol === RolUsuario.INSPECTOR ? " y su perfil de Inspector" : ""}.` });
+  await registrarAuditoria({
+    tipo: TipoEvento.CREAR, entidad: "Usuario", entidadId: creado.id, usuarioId: actual.id,
+    descripcion: `${actual.rol} creó el usuario ${email} con rol ${rol}${zonaFinalId ? ` en zona ${zonaFinalId}` : ""}. Las relaciones operativas se asignan por inspección.`,
+  });
   revalidatePath("/panel/usuarios"); revalidatePath("/panel/inspectores"); revalidatePath("/panel/inspecciones"); revalidatePath("/panel/agenda");
-  exito("Usuario creado correctamente. Deberá cambiar su contraseña en el primer acceso.");
+  exito("Usuario creado correctamente. Las asignaciones operativas se definirán en cada inspección.");
 }
 
 export async function actualizarUsuarioFase2(formData: FormData) {
   const actual = await gestor();
-  const usuarioId = texto(formData, "usuarioId"); const nombre = texto(formData, "nombre"); const email = texto(formData, "email").toLowerCase(); const rol = texto(formData, "rol") as RolUsuario;
-  const telefono = texto(formData, "telefono"); const ciudad = texto(formData, "ciudad"); const zonaId = texto(formData, "zonaId"); const gerenteId = texto(formData, "gerenteId"); const coordinadorId = texto(formData, "coordinadorId");
-  const especialidad = texto(formData, "especialidad"); const cedula = texto(formData, "cedula");
+  const usuarioId = texto(formData, "usuarioId");
+  const nombre = texto(formData, "nombre");
+  const email = texto(formData, "email").toLowerCase();
+  const rol = texto(formData, "rol") as RolUsuario;
+  const telefono = texto(formData, "telefono");
+  const ciudad = texto(formData, "ciudad");
+  const zonaId = texto(formData, "zonaId");
+  const especialidad = texto(formData, "especialidad");
+  const cedula = texto(formData, "cedula");
 
   if (!usuarioId || nombre.length < 3 || !email.includes("@") || !Object.values(RolUsuario).includes(rol)) error("Los datos del usuario no son válidos.");
   if (usuarioId === actual.id) error("Tu propia cuenta no puede editarse desde este módulo.");
 
   const objetivo = await prisma.usuario.findUnique({
     where: { id: usuarioId },
-    select: { id: true, nombre: true, email: true, rol: true, zonaId: true, inspector: { select: { id: true, _count: { select: { inspecciones: true } } } }, coordinadoresACargo: { select: { id: true }, take: 1 }, inspectoresACargo: { select: { id: true }, take: 1 } },
+    select: { id: true, nombre: true, email: true, rol: true, zonaId: true, inspector: { select: { id: true, _count: { select: { inspecciones: true } } } } },
   });
   if (!objetivo) error("El usuario no existe.");
   validarZonaGestor(actual, objetivo.zonaId);
   validarRolGestionable(actual.rol, objetivo.rol); validarRolGestionable(actual.rol, rol);
 
-  if (objetivo.rol === RolUsuario.GERENTE && rol !== RolUsuario.GERENTE && objetivo.coordinadoresACargo.length) error("Reasigna primero los Coordinadores de este Gerente.");
-  if (objetivo.rol === RolUsuario.COORDINADOR && rol !== RolUsuario.COORDINADOR && objetivo.inspectoresACargo.length) error("Reasigna primero los Inspectores de este Coordinador.");
+  if (objetivo.rol !== rol && await tieneInspeccionesAsignadas(usuarioId)) error("No puedes cambiar el rol de un usuario mientras tenga inspecciones asignadas. Reasigna primero esas inspecciones.");
   if (objetivo.rol === RolUsuario.INSPECTOR && rol !== RolUsuario.INSPECTOR && (objetivo.inspector?._count.inspecciones ?? 0) > 0) error("No puedes cambiar el rol de un Inspector con inspecciones asociadas.");
   const duplicado = await prisma.usuario.findFirst({ where: { email, id: { not: usuarioId } }, select: { id: true } });
   if (duplicado) error("Ya existe otra cuenta con ese correo.");
 
-  const { zonaFinalId, gerenteFinalId, coordinadorFinalId } = await resolverJerarquia(rol, zonaId, gerenteId, coordinadorId);
+  const zonaFinalId = await resolverZona(rol, zonaId);
   validarZonaGestor(actual, zonaFinalId);
 
   await prisma.$transaction(async (tx) => {
-    await tx.usuario.update({ where: { id: usuarioId }, data: { nombre, email, telefono: telefono || null, ciudad: ciudad || null, rol, zonaId: zonaFinalId, gerenteId: gerenteFinalId, coordinadorId: coordinadorFinalId } });
+    await tx.usuario.update({
+      where: { id: usuarioId },
+      data: { nombre, email, telefono: telefono || null, ciudad: ciudad || null, rol, zonaId: zonaFinalId, gerenteId: null, coordinadorId: null },
+    });
     if (rol === RolUsuario.INSPECTOR) {
       await tx.inspector.upsert({ where: { usuarioId }, create: { usuarioId, telefono: telefono || null, especialidad: especialidad || null, cedula: cedula || null, ciudad: ciudad || null, activo: true }, update: { telefono: telefono || null, especialidad: especialidad || null, cedula: cedula || null, ciudad: ciudad || null } });
     } else if (objetivo.inspector) {
