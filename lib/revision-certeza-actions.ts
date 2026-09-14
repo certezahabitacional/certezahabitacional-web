@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { usuarioAsignadoAInspeccion } from "@/lib/asignaciones-inspeccion";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
 import { obtenerEstadoExpedienteRevision } from "@/lib/validacion-expediente-certeza";
@@ -54,13 +55,6 @@ async function cargarContexto(inspeccionId: string) {
         requiereCoordinador: true,
         requiereGerenteZona: true,
         inicioLiberadoSinPago: true,
-        inspector: {
-          select: {
-            usuario: {
-              select: { coordinadorId: true, gerenteId: true },
-            },
-          },
-        },
         cotizacion: {
           select: { total: true, montoPagado: true, estadoPago: true },
         },
@@ -80,30 +74,23 @@ async function cargarContexto(inspeccionId: string) {
   return { usuario, inspeccion };
 }
 
-function exigirAlcance(
+async function exigirAlcance(
   inspeccionId: string,
   rolNecesario: RolUsuario,
   contexto: NonNullable<Awaited<ReturnType<typeof cargarContexto>>>,
 ) {
   const { usuario, inspeccion } = contexto;
-
   if (usuario.rol !== rolNecesario) redirect("/acceso");
 
   if (rolNecesario === RolUsuario.COORDINADOR) {
-    if (
-      !inspeccion.requiereCoordinador ||
-      inspeccion.inspector?.usuario.coordinadorId !== usuario.id
-    ) {
-      error(inspeccionId, "Esta inspección no pertenece al alcance de esta Coordinación.");
+    if (!inspeccion.requiereCoordinador || !(await usuarioAsignadoAInspeccion(inspeccionId, usuario.id, "COORDINADOR"))) {
+      error(inspeccionId, "Esta inspección no está asignada a esta Coordinación.");
     }
   }
 
   if (rolNecesario === RolUsuario.GERENTE) {
-    if (
-      !inspeccion.requiereGerenteZona ||
-      inspeccion.inspector?.usuario.gerenteId !== usuario.id
-    ) {
-      error(inspeccionId, "Esta inspección no pertenece al alcance de esta Gerencia.");
+    if (!inspeccion.requiereGerenteZona || !(await usuarioAsignadoAInspeccion(inspeccionId, usuario.id, "GERENTE"))) {
+      error(inspeccionId, "Esta inspección no está asignada a esta Gerencia.");
     }
   }
 }
@@ -112,10 +99,7 @@ async function exigirExpedienteCompleto(inspeccionId: string) {
   const estado = await obtenerEstadoExpedienteRevision(inspeccionId);
   if (!estado) error(inspeccionId, "La inspección no existe.");
   if (!estado.completo) {
-    error(
-      inspeccionId,
-      `El expediente todavía está incompleto. Faltan: ${estado.faltantes.join(", ")}.`,
-    );
+    error(inspeccionId, `El expediente todavía está incompleto. Faltan: ${estado.faltantes.join(", ")}.`);
   }
   return estado;
 }
@@ -125,276 +109,119 @@ function exigirPagoOperativo(
   inspeccion: NonNullable<Awaited<ReturnType<typeof cargarContexto>>>["inspeccion"],
 ) {
   if (!inspeccion.cotizacion || inspeccion.inicioLiberadoSinPago) return;
-
   const total = Number(inspeccion.cotizacion.total);
   const pagado = Number(inspeccion.cotizacion.montoPagado);
   const saldo = Math.max(0, total - pagado);
-  const liquidada =
-    inspeccion.cotizacion.estadoPago === EstadoPago.PAGADO && saldo <= 0.01;
-
+  const liquidada = inspeccion.cotizacion.estadoPago === EstadoPago.PAGADO && saldo <= 0.01;
   if (!liquidada) {
-    const saldoFormateado = new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(saldo);
+    const saldoFormateado = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(saldo);
     error(inspeccionId, `Existe un saldo pendiente de ${saldoFormateado}.`);
   }
 }
 
-export async function darVistoBuenoCoordinadorMetodoCerteza(
-  formData: FormData,
-): Promise<boolean> {
+export async function darVistoBuenoCoordinadorMetodoCerteza(formData: FormData): Promise<boolean> {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) return false;
-
   const contexto = await cargarContexto(inspeccionId);
   if (!contexto) return false;
-  exigirAlcance(inspeccionId, RolUsuario.COORDINADOR, contexto);
+  await exigirAlcance(inspeccionId, RolUsuario.COORDINADOR, contexto);
 
   const { usuario, inspeccion } = contexto;
-  if (inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE) {
-    error(inspeccionId, "El visto bueno técnico requiere una inspección en REPORTE PENDIENTE.");
-  }
-  if (inspeccion.liberacionBloqueada) {
-    error(inspeccionId, "La liberación está bloqueada por Dirección.");
-  }
-
+  if (inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE) error(inspeccionId, "El visto bueno técnico requiere una inspección en REPORTE PENDIENTE.");
+  if (inspeccion.liberacionBloqueada) error(inspeccionId, "La liberación está bloqueada por Dirección.");
   await exigirExpedienteCompleto(inspeccionId);
 
-  const existente = await prisma.revisionInspeccion.findFirst({
-    where: {
-      inspeccionId,
-      rol: RolUsuario.COORDINADOR,
-      decision: TipoDecisionRevision.VISTO_BUENO,
-      estado: EstadoDecisionRevision.VIGENTE,
-    },
-    select: { id: true },
-  });
+  const existente = await prisma.revisionInspeccion.findFirst({ where: { inspeccionId, rol: RolUsuario.COORDINADOR, decision: TipoDecisionRevision.VISTO_BUENO, estado: EstadoDecisionRevision.VIGENTE }, select: { id: true } });
   if (existente) error(inspeccionId, "Coordinación ya tiene un visto bueno técnico vigente.");
-
   const comentario = texto(formData, "comentario");
+
   await prisma.$transaction(async (tx) => {
-    await tx.revisionInspeccion.updateMany({
-      where: { inspeccionId, rol: RolUsuario.COORDINADOR, estado: EstadoDecisionRevision.VIGENTE },
-      data: { estado: EstadoDecisionRevision.SUPERADA },
-    });
-    await tx.revisionInspeccion.create({
-      data: {
-        inspeccionId,
-        usuarioId: usuario.id,
-        rol: RolUsuario.COORDINADOR,
-        decision: TipoDecisionRevision.VISTO_BUENO,
-        comentario: comentario || null,
-      },
-    });
+    await tx.revisionInspeccion.updateMany({ where: { inspeccionId, rol: RolUsuario.COORDINADOR, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
+    await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.COORDINADOR, decision: TipoDecisionRevision.VISTO_BUENO, comentario: comentario || null } });
   });
 
-  await registrarAuditoria({
-    tipo: TipoEvento.REVISION_INSPECCION,
-    entidad: "RevisionInspeccion",
-    inspeccionId,
-    usuarioId: usuario.id,
-    origen: "METODO_CERTEZA",
-    descripcion: `Coordinación otorgó visto bueno técnico a ${inspeccion.folio}.`,
-  });
+  await registrarAuditoria({ tipo: TipoEvento.REVISION_INSPECCION, entidad: "RevisionInspeccion", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Coordinación otorgó visto bueno técnico a ${inspeccion.folio}.` });
   revalidar(inspeccionId);
   ok(inspeccionId, "Visto bueno técnico de Coordinación registrado.");
 }
 
-export async function aprobarGerenciaMetodoCerteza(
-  formData: FormData,
-): Promise<boolean> {
+export async function aprobarGerenciaMetodoCerteza(formData: FormData): Promise<boolean> {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) return false;
-
   const contexto = await cargarContexto(inspeccionId);
   if (!contexto) return false;
-  exigirAlcance(inspeccionId, RolUsuario.GERENTE, contexto);
+  await exigirAlcance(inspeccionId, RolUsuario.GERENTE, contexto);
 
   const { usuario, inspeccion } = contexto;
-  if (inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE) {
-    error(inspeccionId, "Gerencia solo puede aprobar una inspección en REPORTE PENDIENTE.");
-  }
-  if (inspeccion.liberacionBloqueada) {
-    error(inspeccionId, "La liberación está bloqueada por Dirección.");
-  }
-
+  if (inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE) error(inspeccionId, "Gerencia solo puede aprobar una inspección en REPORTE PENDIENTE.");
+  if (inspeccion.liberacionBloqueada) error(inspeccionId, "La liberación está bloqueada por Dirección.");
   await exigirExpedienteCompleto(inspeccionId);
 
   if (inspeccion.requiereCoordinador) {
-    const vistoBueno = await prisma.revisionInspeccion.findFirst({
-      where: {
-        inspeccionId,
-        rol: RolUsuario.COORDINADOR,
-        decision: TipoDecisionRevision.VISTO_BUENO,
-        estado: EstadoDecisionRevision.VIGENTE,
-      },
-      select: { id: true },
-    });
-    if (!vistoBueno) {
-      error(inspeccionId, "Esta inspección requiere visto bueno técnico vigente de Coordinación.");
-    }
+    const vistoBueno = await prisma.revisionInspeccion.findFirst({ where: { inspeccionId, rol: RolUsuario.COORDINADOR, decision: TipoDecisionRevision.VISTO_BUENO, estado: EstadoDecisionRevision.VIGENTE }, select: { id: true } });
+    if (!vistoBueno) error(inspeccionId, "Esta inspección requiere visto bueno técnico vigente de Coordinación.");
   }
 
   exigirPagoOperativo(inspeccionId, inspeccion);
   const comentario = texto(formData, "comentario");
-
   await prisma.$transaction(async (tx) => {
-    await tx.revisionInspeccion.updateMany({
-      where: { inspeccionId, rol: RolUsuario.GERENTE, estado: EstadoDecisionRevision.VIGENTE },
-      data: { estado: EstadoDecisionRevision.SUPERADA },
-    });
-    await tx.revisionInspeccion.create({
-      data: {
-        inspeccionId,
-        usuarioId: usuario.id,
-        rol: RolUsuario.GERENTE,
-        decision: TipoDecisionRevision.APROBADO,
-        comentario: comentario || null,
-      },
-    });
-    await tx.inspeccion.update({
-      where: { id: inspeccionId },
-      data: { estado: EstadoInspeccion.FINALIZADA },
-    });
+    await tx.revisionInspeccion.updateMany({ where: { inspeccionId, rol: RolUsuario.GERENTE, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
+    await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.GERENTE, decision: TipoDecisionRevision.APROBADO, comentario: comentario || null } });
+    await tx.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.FINALIZADA } });
   });
 
-  await registrarAuditoria({
-    tipo: TipoEvento.REVISION_INSPECCION,
-    entidad: "RevisionInspeccion",
-    inspeccionId,
-    usuarioId: usuario.id,
-    origen: "METODO_CERTEZA",
-    descripcion: `Gerencia aprobó y cerró la inspección ${inspeccion.folio}.`,
-  });
+  await registrarAuditoria({ tipo: TipoEvento.REVISION_INSPECCION, entidad: "RevisionInspeccion", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Gerencia aprobó y cerró la inspección ${inspeccion.folio}.` });
   revalidar(inspeccionId);
   ok(inspeccionId, "Gerencia aprobó la inspección. El expediente quedó FINALIZADO.");
 }
 
-export async function aprobarDireccionMetodoCerteza(
-  formData: FormData,
-): Promise<boolean> {
+export async function aprobarDireccionMetodoCerteza(formData: FormData): Promise<boolean> {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) return false;
-
   const contexto = await cargarContexto(inspeccionId);
   if (!contexto) return false;
-  exigirAlcance(inspeccionId, RolUsuario.DIRECTOR, contexto);
+  await exigirAlcance(inspeccionId, RolUsuario.DIRECTOR, contexto);
 
   const { usuario, inspeccion } = contexto;
-  if (
-    inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE &&
-    inspeccion.estado !== EstadoInspeccion.FINALIZADA
-  ) {
-    error(inspeccionId, "Dirección solo puede aprobar una inspección con captura terminada.");
-  }
-  if (inspeccion.liberacionBloqueada) {
-    error(inspeccionId, "Existe un bloqueo directivo; usa «Levantar bloqueo y aprobar».");
-  }
-
+  if (inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE && inspeccion.estado !== EstadoInspeccion.FINALIZADA) error(inspeccionId, "Dirección solo puede aprobar una inspección con captura terminada.");
+  if (inspeccion.liberacionBloqueada) error(inspeccionId, "Existe un bloqueo directivo; usa «Levantar bloqueo y aprobar».");
   await exigirExpedienteCompleto(inspeccionId);
   exigirPagoOperativo(inspeccionId, inspeccion);
   const comentario = texto(formData, "comentario");
 
   await prisma.$transaction(async (tx) => {
-    await tx.revisionInspeccion.updateMany({
-      where: { inspeccionId, rol: RolUsuario.DIRECTOR, estado: EstadoDecisionRevision.VIGENTE },
-      data: { estado: EstadoDecisionRevision.SUPERADA },
-    });
-    await tx.revisionInspeccion.create({
-      data: {
-        inspeccionId,
-        usuarioId: usuario.id,
-        rol: RolUsuario.DIRECTOR,
-        decision: TipoDecisionRevision.APROBADO,
-        comentario: comentario || null,
-      },
-    });
-    await tx.inspeccion.update({
-      where: { id: inspeccionId },
-      data: { estado: EstadoInspeccion.FINALIZADA },
-    });
+    await tx.revisionInspeccion.updateMany({ where: { inspeccionId, rol: RolUsuario.DIRECTOR, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
+    await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.DIRECTOR, decision: TipoDecisionRevision.APROBADO, comentario: comentario || null } });
+    await tx.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.FINALIZADA } });
   });
 
-  await registrarAuditoria({
-    tipo: TipoEvento.REVISION_INSPECCION,
-    entidad: "RevisionInspeccion",
-    inspeccionId,
-    usuarioId: usuario.id,
-    origen: "METODO_CERTEZA",
-    descripcion: `Dirección aprobó y cerró la inspección ${inspeccion.folio}.`,
-  });
+  await registrarAuditoria({ tipo: TipoEvento.REVISION_INSPECCION, entidad: "RevisionInspeccion", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección aprobó y cerró la inspección ${inspeccion.folio}.` });
   revalidar(inspeccionId);
   ok(inspeccionId, "Dirección aprobó la inspección. El expediente quedó FINALIZADO.");
 }
 
-export async function levantarBloqueoYAprobarMetodoCerteza(
-  formData: FormData,
-): Promise<boolean> {
+export async function levantarBloqueoYAprobarMetodoCerteza(formData: FormData): Promise<boolean> {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) return false;
-
   const contexto = await cargarContexto(inspeccionId);
   if (!contexto) return false;
-  exigirAlcance(inspeccionId, RolUsuario.DIRECTOR, contexto);
+  await exigirAlcance(inspeccionId, RolUsuario.DIRECTOR, contexto);
 
   const { usuario, inspeccion } = contexto;
   const comentario = texto(formData, "comentario");
-  if (comentario.length < 10) {
-    error(inspeccionId, "Indica un comentario de al menos 10 caracteres para levantar el bloqueo.");
-  }
-  if (!inspeccion.liberacionBloqueada) {
-    error(inspeccionId, "Esta inspección no tiene un bloqueo directivo vigente.");
-  }
-
+  if (comentario.length < 10) error(inspeccionId, "Indica un comentario de al menos 10 caracteres para levantar el bloqueo.");
+  if (!inspeccion.liberacionBloqueada) error(inspeccionId, "Esta inspección no tiene un bloqueo directivo vigente.");
   await exigirExpedienteCompleto(inspeccionId);
   exigirPagoOperativo(inspeccionId, inspeccion);
 
   await prisma.$transaction(async (tx) => {
-    await tx.revisionInspeccion.updateMany({
-      where: { inspeccionId, estado: EstadoDecisionRevision.VIGENTE },
-      data: { estado: EstadoDecisionRevision.SUPERADA },
-    });
-    await tx.revisionInspeccion.create({
-      data: {
-        inspeccionId,
-        usuarioId: usuario.id,
-        rol: RolUsuario.DIRECTOR,
-        decision: TipoDecisionRevision.LEVANTAR_BLOQUEO,
-        comentario,
-        estado: EstadoDecisionRevision.SUPERADA,
-      },
-    });
-    await tx.revisionInspeccion.create({
-      data: {
-        inspeccionId,
-        usuarioId: usuario.id,
-        rol: RolUsuario.DIRECTOR,
-        decision: TipoDecisionRevision.APROBADO,
-        comentario: `Bloqueo levantado. ${comentario}`,
-      },
-    });
-    await tx.inspeccion.update({
-      where: { id: inspeccionId },
-      data: {
-        estado: EstadoInspeccion.FINALIZADA,
-        liberacionBloqueada: false,
-        bloqueadaPorId: null,
-        bloqueadaEn: null,
-        motivoBloqueoLiberacion: null,
-      },
-    });
+    await tx.revisionInspeccion.updateMany({ where: { inspeccionId, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
+    await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.DIRECTOR, decision: TipoDecisionRevision.LEVANTAR_BLOQUEO, comentario, estado: EstadoDecisionRevision.SUPERADA } });
+    await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.DIRECTOR, decision: TipoDecisionRevision.APROBADO, comentario: `Bloqueo levantado. ${comentario}` } });
+    await tx.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.FINALIZADA, liberacionBloqueada: false, bloqueadaPorId: null, bloqueadaEn: null, motivoBloqueoLiberacion: null } });
   });
 
-  await registrarAuditoria({
-    tipo: TipoEvento.DESBLOQUEAR_LIBERACION,
-    entidad: "Inspeccion",
-    entidadId: inspeccion.id,
-    inspeccionId,
-    usuarioId: usuario.id,
-    origen: "METODO_CERTEZA",
-    descripcion: `Dirección levantó el bloqueo y aprobó ${inspeccion.folio}. Motivo: ${comentario}`,
-  });
+  await registrarAuditoria({ tipo: TipoEvento.DESBLOQUEAR_LIBERACION, entidad: "Inspeccion", entidadId: inspeccion.id, inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección levantó el bloqueo y aprobó ${inspeccion.folio}. Motivo: ${comentario}` });
   revalidar(inspeccionId);
   ok(inspeccionId, "Dirección levantó el bloqueo y aprobó la inspección.");
 }
