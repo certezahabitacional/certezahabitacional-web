@@ -10,28 +10,28 @@ export async function obtenerAdministradorActual() {
   }
 
   const administrador = await prisma.usuario.findUnique({
-    where: {
-      id: session.user.id,
-    },
+    where: { id: session.user.id },
     select: {
       id: true,
       nombre: true,
       email: true,
       rol: true,
       activo: true,
+      zonaId: true,
+      zona: { select: { id: true, nombre: true, codigo: true } },
     },
   });
 
-  if (!administrador?.activo) {
-    redirect("/login");
-  }
+  if (!administrador?.activo) redirect("/login");
 
   const tieneAcceso =
     administrador.rol === "DIRECTOR" ||
     administrador.rol === "ADMINISTRADOR";
 
-  if (!tieneAcceso) {
-    redirect("/panel");
+  if (!tieneAcceso) redirect("/panel");
+
+  if (administrador.rol !== "DIRECTOR" && !administrador.zonaId) {
+    redirect(`/acceso?error=${encodeURIComponent("Tu usuario no tiene una zona asignada.")}`);
   }
 
   return administrador;
