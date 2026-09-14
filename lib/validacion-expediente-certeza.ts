@@ -17,6 +17,10 @@ export type EstadoExpedienteRevision = {
  * acepta el cambio a REPORTE_PENDIENTE y su trigger valida el protocolo técnico.
  * Así una V1 sin defectos es válida y una V2+ se mide por sus pendientes reales.
  *
+ * Cuando Dirección reabre una inspección, las firmas anteriores se conservan
+ * como historial, pero dejan de ser válidas para la nueva aprobación. Solo
+ * cuentan firmas capturadas a partir de `reabiertaEn`.
+ *
  * Los expedientes históricos conservan la regla previa para no alterar su flujo.
  */
 export async function obtenerEstadoExpedienteRevision(
@@ -35,7 +39,10 @@ export async function obtenerEstadoExpedienteRevision(
         },
       },
       firmas: {
-        select: { tipo: true },
+        select: {
+          tipo: true,
+          firmadaEn: true,
+        },
       },
     },
   });
@@ -43,9 +50,12 @@ export async function obtenerEstadoExpedienteRevision(
   if (!inspeccion) return null;
 
   const control = await prisma.$queryRaw<
-    Array<{ capturaCerrada: boolean }>
+    Array<{
+      capturaCerrada: boolean;
+      reabiertaEn: Date | null;
+    }>
   >`
-    SELECT "capturaCerrada"
+    SELECT "capturaCerrada", "reabiertaEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId" = ${inspeccionId}
     LIMIT 1
@@ -57,10 +67,15 @@ export async function obtenerEstadoExpedienteRevision(
     : inspeccion.hallazgos.length > 0 &&
       inspeccion.hallazgos.every((hallazgo) => hallazgo.fotografias.length > 0);
 
-  const firmaInspector = inspeccion.firmas.some((firma) =>
+  const reabiertaEn = control[0]?.reabiertaEn ?? null;
+  const firmasVigentes = inspeccion.firmas.filter(
+    (firma) => !reabiertaEn || firma.firmadaEn >= reabiertaEn,
+  );
+
+  const firmaInspector = firmasVigentes.some((firma) =>
     firma.tipo.toLowerCase().includes("inspector"),
   );
-  const firmaCliente = inspeccion.firmas.some((firma) =>
+  const firmaCliente = firmasVigentes.some((firma) =>
     firma.tipo.toLowerCase().includes("cliente"),
   );
 
@@ -83,8 +98,20 @@ export async function obtenerEstadoExpedienteRevision(
     }
   }
 
-  if (!firmaInspector) faltantes.push("firma del inspector");
-  if (!firmaCliente) faltantes.push("firma del cliente");
+  if (!firmaInspector) {
+    faltantes.push(
+      reabiertaEn
+        ? "nueva firma del inspector posterior a la reapertura"
+        : "firma del inspector",
+    );
+  }
+  if (!firmaCliente) {
+    faltantes.push(
+      reabiertaEn
+        ? "nueva firma del cliente posterior a la reapertura"
+        : "firma del cliente",
+    );
+  }
 
   return {
     completo: faltantes.length === 0,
