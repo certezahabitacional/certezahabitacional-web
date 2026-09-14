@@ -9,15 +9,23 @@ function fecha(valor: Date | null) { return valor ? new Intl.DateTimeFormat("es-
 
 export default async function PortalPage() {
   const cliente = await obtenerClienteActual();
-  const liberada = inspeccionLiberadaParaCliente(cliente.id);
+  const liberada = inspeccionLiberadaParaCliente(cliente.id, cliente.zonaId);
+  const inmuebleZona = {
+    clienteId: cliente.id,
+    OR: [
+      { inspecciones: { some: { zonaId: cliente.zonaId } } },
+      { cotizaciones: { some: { zonaId: cliente.zonaId } } },
+    ],
+  };
+  const cotizacionZona = { clienteId: cliente.id, zonaId: cliente.zonaId };
   const [inspecciones,inmuebles,certificados,cotizaciones,cotizacionesPendientes,recientes,cotizacionesRecientes] = await Promise.all([
     prisma.inspeccion.count({ where: liberada }),
-    prisma.inmueble.count({ where: { clienteId: cliente.id } }),
+    prisma.inmueble.count({ where: inmuebleZona }),
     prisma.certificado.count({ where: { vigente: true, inspeccion: liberada } }),
-    prisma.cotizacion.count({ where: { clienteId: cliente.id } }),
-    prisma.cotizacion.count({ where: { clienteId: cliente.id, estado: EstadoCotizacion.ENVIADA } }),
+    prisma.cotizacion.count({ where: cotizacionZona }),
+    prisma.cotizacion.count({ where: { ...cotizacionZona, estado: EstadoCotizacion.ENVIADA } }),
     prisma.inspeccion.findMany({ where: liberada, include: { certificado: true }, orderBy: { actualizadoEn: "desc" }, take: 5 }),
-    prisma.cotizacion.findMany({ where: { clienteId: cliente.id, estado: { in: [EstadoCotizacion.ENVIADA,EstadoCotizacion.ACEPTADA,EstadoCotizacion.AUTORIZADA,EstadoCotizacion.RECHAZADA] } }, include: { inmueble: { select: { alias:true,direccion:true } }, paquete:{select:{nombre:true}} }, orderBy:{actualizadoEn:"desc"}, take:5 }),
+    prisma.cotizacion.findMany({ where: { ...cotizacionZona, estado: { in: [EstadoCotizacion.ENVIADA,EstadoCotizacion.ACEPTADA,EstadoCotizacion.AUTORIZADA,EstadoCotizacion.RECHAZADA] } }, include: { inmueble: { select: { alias:true,direccion:true } }, paquete:{select:{nombre:true}} }, orderBy:{actualizadoEn:"desc"}, take:5 }),
   ]);
   return <main className="px-6 py-10"><div className="mx-auto max-w-7xl">
     <section className="rounded-[2rem] bg-cyan-300 p-8 text-slate-950"><p className="text-sm font-black uppercase tracking-[0.25em]">Bienvenido</p><h1 className="mt-3 text-4xl font-black">{cliente.nombre}</h1><p className="mt-3 max-w-2xl text-slate-800">Consulta tus cotizaciones y los expedientes de inspección que ya fueron cerrados y autorizados para entrega.</p></section>
