@@ -148,11 +148,14 @@ export default async function CapturaPage({
     notFound();
   }
 
+  const esSeguimiento = inspeccion.numeroInspeccion > 1;
+
   const hallazgosAntecedentes =
-    inspeccion.numeroInspeccion > 1 && inspeccion.inspeccionAnteriorId
+    esSeguimiento && inspeccion.inspeccionAnteriorId
       ? await prisma.hallazgo.findMany({
           where: {
             inspeccionId: inspeccion.inspeccionAnteriorId,
+            resuelto: false,
           },
           orderBy: [
             { prioridad: "asc" },
@@ -321,7 +324,9 @@ export default async function CapturaPage({
                 href={`/panel/inspecciones/${id}/captura#nuevo-hallazgo`}
                 className="rounded-2xl border border-white/15 px-4 py-3 text-center font-black text-slate-200"
               >
-                + Capturar siguiente hallazgo
+                {esSeguimiento
+                  ? "+ Nuevo hallazgo / solicitud especial"
+                  : "+ Capturar siguiente hallazgo"}
               </Link>
             </div>
           </section>
@@ -358,16 +363,28 @@ export default async function CapturaPage({
           </div>
         </header>
 
+        {esSeguimiento && hallazgosAntecedentesConImagenes.length === 0 && (
+          <section className="mt-7 rounded-3xl border border-emerald-400/20 bg-emerald-400/5 p-5 sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-300">
+              Seguimiento V{inspeccion.numeroInspeccion}
+            </p>
+            <h2 className="mt-2 text-xl font-black">Sin pendientes heredados</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              La visita anterior no tiene hallazgos pendientes por verificar. Si durante esta visita se detecta algo nuevo o existe una solicitud especial del cliente, regístralo como nuevo hallazgo / solicitud especial.
+            </p>
+          </section>
+        )}
+
         {hallazgosAntecedentesConImagenes.length > 0 && (
           <section className="mt-7 rounded-3xl border border-violet-400/20 bg-slate-900 p-5 sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-300">
               Seguimiento de la inspección anterior
             </p>
             <h2 className="mt-2 text-2xl font-black">
-              Verificación de hallazgos V{inspeccion.numeroInspeccion - 1}
+              Verificación de pendientes V{inspeccion.numeroInspeccion - 1}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Revisa cada antecedente y registra su evolución. El expediente anterior permanece intacto.
+              Solo se muestran hallazgos no resueltos de la visita anterior. Los ya corregidos permanecen intactos en el historial y no vuelven a formar parte del alcance ordinario.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -526,7 +543,9 @@ export default async function CapturaPage({
                   ? "Editar seguimiento"
                   : hallazgoEnEdicion
                     ? "Editar hallazgo"
-                    : "Nuevo hallazgo"}
+                    : esSeguimiento
+                      ? "Nuevo hallazgo / solicitud especial"
+                      : "Nuevo hallazgo"}
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -534,7 +553,9 @@ export default async function CapturaPage({
                   ? "Actualiza el resultado de la verificación y, si es necesario, corrige la información técnica del hallazgo. Las evidencias existentes se conservarán."
                   : hallazgoEnEdicion
                     ? "Corrige la información del hallazgo y guarda los cambios. Las evidencias existentes se conservarán."
-                    : "Guarda el hallazgo y decide inmediatamente si agregas evidencia o continúas con el siguiente."}
+                    : esSeguimiento
+                      ? "Utiliza esta opción únicamente si durante la visita aparece una condición nueva o el cliente solicita una revisión especial fuera de los pendientes heredados."
+                      : "Guarda el hallazgo y decide inmediatamente si agregas evidencia o continúas con el siguiente."}
               </p>
             </div>
 
@@ -725,7 +746,9 @@ export default async function CapturaPage({
                 ? "Guardar cambios del seguimiento"
                 : hallazgoEnEdicion
                   ? "Guardar cambios del hallazgo"
-                  : "Guardar hallazgo"}
+                  : esSeguimiento
+                    ? "Guardar nuevo hallazgo / solicitud especial"
+                    : "Guardar hallazgo"}
             </button>
 
             {hallazgoEnEdicion && (
@@ -755,7 +778,9 @@ export default async function CapturaPage({
               href={`/panel/inspecciones/${id}/captura#nuevo-hallazgo`}
               className="rounded-full border border-cyan-400/30 px-4 py-2 text-sm font-black text-cyan-300"
             >
-              + Nuevo hallazgo
+              {esSeguimiento
+                ? "+ Nuevo hallazgo / solicitud especial"
+                : "+ Nuevo hallazgo"}
             </Link>
           </div>
 
@@ -868,7 +893,9 @@ export default async function CapturaPage({
             href={`/panel/inspecciones/${id}/captura#nuevo-hallazgo`}
             className="rounded-full bg-cyan-400 px-5 py-3 text-center font-black text-slate-950"
           >
-            + Capturar siguiente hallazgo
+            {esSeguimiento
+              ? "+ Nuevo hallazgo / solicitud especial"
+              : "+ Capturar siguiente hallazgo"}
           </Link>
 
           <Link
