@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 /**
  * Fuente única de identidad para el portal del cliente.
  * Nunca resuelve el cliente por parámetros de URL ni por datos enviados desde el navegador.
- * El cliente siempre se obtiene a partir del usuario autenticado.
+ * El cliente siempre se obtiene a partir del usuario autenticado y de su zona asignada.
  */
 export async function obtenerClienteActual() {
   const session = await auth();
@@ -21,6 +21,7 @@ export async function obtenerClienteActual() {
       id: true,
       activo: true,
       rol: true,
+      zonaId: true,
       cliente: true,
     },
   });
@@ -33,9 +34,16 @@ export async function obtenerClienteActual() {
     redirect("/panel");
   }
 
+  if (!usuario.zonaId) {
+    redirect("/login?error=Cliente%20sin%20zona%20asignada");
+  }
+
   if (!usuario.cliente || usuario.cliente.usuarioId !== usuario.id) {
     redirect("/login?error=Cliente%20sin%20perfil%20asociado");
   }
 
-  return usuario.cliente;
+  return {
+    ...usuario.cliente,
+    zonaId: usuario.zonaId,
+  };
 }
