@@ -22,23 +22,34 @@ create table if not exists public."AjusteComercial" (
   "requiereAceptacionCliente" boolean not null default false,
   "aceptadoCliente" boolean not null default false,
   "aceptadoClienteEn" timestamptz,
+  "aplicadoPorId" text references public."Usuario"("id") on delete set null,
+  "aplicadoEn" timestamptz,
   "versionCotizacionOrigen" integer,
+  "versionCotizacionAplicada" integer,
   "creadoEn" timestamptz not null default now()
 );
+
+alter table public."AjusteComercial"
+  add column if not exists "aplicadoPorId" text references public."Usuario"("id") on delete set null,
+  add column if not exists "aplicadoEn" timestamptz,
+  add column if not exists "versionCotizacionAplicada" integer;
 
 create index if not exists "AjusteComercial_cotizacionId_idx" on public."AjusteComercial"("cotizacionId");
 create index if not exists "AjusteComercial_inspeccionId_idx" on public."AjusteComercial"("inspeccionId");
 create index if not exists "AjusteComercial_estado_idx" on public."AjusteComercial"("estado");
 create index if not exists "AjusteComercial_propuestoPorId_idx" on public."AjusteComercial"("propuestoPorId");
 create index if not exists "AjusteComercial_autorizadoPorId_idx" on public."AjusteComercial"("autorizadoPorId");
+create index if not exists "AjusteComercial_aplicadoPorId_idx" on public."AjusteComercial"("aplicadoPorId");
+create index if not exists "AjusteComercial_aplicadoEn_idx" on public."AjusteComercial"("aplicadoEn");
 
 alter table public."AjusteComercial" enable row level security;
 
--- Reglas de negocio previstas:
+-- Reglas de negocio:
 -- 1. Todo descuento requiere autorización de DIRECCION.
 -- 2. Un cargo puede proponerse desde pre-cotización o durante la inspección.
--- 3. Un ajuste autorizado genera nueva versión comercial de la cotización.
--- 4. Los pagos ya realizados nunca se borran ni se recalculan históricamente.
--- 5. Si un cargo autorizado genera saldo, el certificado permanece bloqueado hasta liquidación.
--- 6. Si un ajuste modifica una condición ya aceptada por el cliente, debe marcar requiereAceptacionCliente=true.
--- 7. Toda creación/resolución debe acompañarse de HistorialCambioSistema y EventoAuditoria.
+-- 3. AUTORIZAR y APLICAR son momentos distintos. Durante campo, un ajuste autorizado no debe bloquear la captura del Inspector.
+-- 4. Si requiere aceptación del cliente, el ajuste solo se aplica al total después de dicha aceptación.
+-- 5. Al aplicarse, genera nueva versión comercial y actualiza cargosExtra/descuento/subtotal/total sin borrar pagos históricos.
+-- 6. Si el nuevo total genera saldo pendiente, el certificado permanece bloqueado hasta liquidación.
+-- 7. Todo ajuste PENDIENTE o AUTORIZADO sin aplicar bloquea la liberación del certificado.
+-- 8. Toda creación, autorización, rechazo, aceptación y aplicación debe acompañarse de HistorialCambioSistema y EventoAuditoria.
