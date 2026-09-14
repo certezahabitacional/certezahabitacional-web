@@ -28,16 +28,22 @@ export default async function InspeccionLayout({ children, params }: { children:
 
   const rolesAjustes: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.INSPECTOR];
   const puedeVerAjustes = rolesAjustes.includes(usuario.rol);
+  const rolesRevision: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR, RolUsuario.INSPECTOR];
+  const puedeVerRevision = rolesRevision.includes(usuario.rol);
+
+  const columnas = 5 + (puedeVerRevision ? 1 : 0) + (puedeVerAjustes ? 1 : 0);
+  const columnasSm = columnas >= 7 ? "sm:grid-cols-7" : columnas === 6 ? "sm:grid-cols-6" : "sm:grid-cols-5";
 
   return <>
     {children}
-    <nav className="print:hidden fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-6xl -translate-x-1/2 rounded-3xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur">
-      <div className={`grid grid-cols-2 gap-2 ${puedeVerAjustes ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
+    <nav className="print:hidden fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-7xl -translate-x-1/2 rounded-3xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur">
+      <div className={`grid grid-cols-2 gap-2 ${columnasSm}`}>
         <Link href={`/panel/inspecciones/${id}/flujo`} className="rounded-2xl bg-cyan-300 px-3 py-3 text-center text-xs font-black text-slate-950 sm:text-sm">Flujo de campo</Link>
         <Link href={`/panel/inspecciones/${id}/preparacion`} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-cyan-300 sm:text-sm">Guía técnica</Link>
         <Link href={`/panel/inspecciones/${id}/evidencia-control`} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-amber-300 sm:text-sm">Control 4 fotos</Link>
         <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-violet-300 sm:text-sm">Evidencia reporte</Link>
         <Link href={`/panel/inspecciones/${id}/instrumentos`} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-emerald-300 sm:text-sm">Instrumentos</Link>
+        {puedeVerRevision && <Link href={`/panel/inspecciones/${id}/revision`} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-fuchsia-300 sm:text-sm">Revisión</Link>}
         {puedeVerAjustes && <Link href={`/panel/inspecciones/${id}/ajustes`} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-xs font-black text-orange-300 sm:text-sm">Ajustes</Link>}
       </div>
     </nav>
