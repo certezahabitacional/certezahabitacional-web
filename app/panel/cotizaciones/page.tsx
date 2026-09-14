@@ -1,31 +1,140 @@
 import Link from "next/link";
 import { EstadoCotizacion, RolUsuario } from "@prisma/client";
 import { redirect } from "next/navigation";
+
 import { auth } from "@/auth";
+import { calcularResumenFinancieroCaja } from "@/lib/caja-finanzas";
 import { prisma } from "@/lib/prisma";
-import { aceptarEnRepresentacionDelCliente, autorizarCotizacionAceptada, marcarListaParaCliente } from "./actions-flujo-aprobado";
+import { cancelarCotizacion, regresarAPrecotizacion } from "./actions-flujo-aprobado";
 
-function dinero(v: unknown) { return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(Number(v ?? 0)); }
-function fecha(v: Date | null) { return v ? new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" }).format(v) : "—"; }
-
-export default async function CotizacionesPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; q?: string }> }) {
- const session = await auth(); if (!session?.user?.id) redirect("/login");
- const u = await prisma.usuario.findUnique({ where:{id:session.user.id}, select:{rol:true,activo:true} });
- const puedeEntrar = u?.rol === RolUsuario.DIRECTOR || u?.rol === RolUsuario.ADMINISTRADOR || u?.rol === RolUsuario.VENDEDOR;
- if (!u?.activo || !puedeEntrar) redirect("/acceso");
- const p=await searchParams, q=(p.q??"").trim(), gestiona=u.rol===RolUsuario.DIRECTOR||u.rol===RolUsuario.ADMINISTRADOR;
- const cs=await prisma.cotizacion.findMany({where:q?{OR:[{folio:{contains:q,mode:"insensitive"}},{cliente:{nombre:{contains:q,mode:"insensitive"}}},{inmueble:{alias:{contains:q,mode:"insensitive"}}}]}:undefined,select:{id:true,folio:true,estado:true,total:true,montoPagado:true,creadoEn:true,vigenciaHasta:true,aceptadaEn:true,autorizadaEn:true,observacionesInternas:true,cliente:{select:{nombre:true,usuarioId:true}},inmueble:{select:{alias:true,direccion:true,ciudad:true}},inspeccion:{select:{id:true,folio:true,numeroInspeccion:true}}},orderBy:{creadoEn:"desc"}});
- const pc=cs.filter(c=>c.estado===EstadoCotizacion.ENVIADA).length, pa=cs.filter(c=>c.estado===EstadoCotizacion.ACEPTADA).length, az=cs.filter(c=>c.estado===EstadoCotizacion.AUTORIZADA).length;
- return <main className="min-h-screen bg-slate-950 px-6 py-8 text-white"><div className="mx-auto max-w-7xl">
-  <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><Link href="/panel" className="text-sm font-black text-cyan-300">← Volver al panel</Link><p className="mt-7 text-sm font-black uppercase tracking-[0.3em] text-amber-300">Flujo comercial aprobado</p><h1 className="mt-3 text-4xl font-black">Cotizaciones</h1><p className="mt-3 max-w-3xl text-slate-400">Cotización definitiva → aceptación del cliente → autorización interna → Caja.</p></div><div className="flex flex-wrap gap-3">{gestiona&&<Link href="/panel/cotizaciones/carga" className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950">Cargar PDF definitivo</Link>}{gestiona&&<Link href="/panel/clientes/accesos" className="rounded-full border border-white/15 px-5 py-3 text-sm font-black">Acceso clientes</Link>}{gestiona&&<Link href="/panel/caja" className="rounded-full border border-white/15 px-5 py-3 text-sm font-black">Caja</Link>}</div></div>
-  {(p.ok||p.error)&&<div className={`mt-7 rounded-2xl border p-5 ${p.error?"border-rose-400/20 bg-rose-400/5":"border-emerald-400/20 bg-emerald-400/5"}`}><p className={`font-bold ${p.error?"text-rose-300":"text-emerald-300"}`}>{p.error??p.ok}</p></div>}
-  <section className="mt-8 grid gap-4 sm:grid-cols-3"><Indicador t="Pendientes del cliente" v={pc} d="Listas para aceptar"/><Indicador t="Pendientes de autorización" v={pa} d="Ya aceptadas"/><Indicador t="En Caja" v={az} d="Aceptadas y autorizadas"/></section>
-  <form className="mt-8 flex max-w-2xl gap-2"><input name="q" defaultValue={q} placeholder="Buscar folio, cliente o inmueble" className="min-w-0 flex-1 rounded-full border border-white/10 bg-slate-900 px-5 py-3"/><button className="rounded-full border border-white/15 px-5 py-3 font-black">Filtrar</button></form>
-  {gestiona&&<div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6"><p className="font-black text-cyan-300">Incorporación formal</p><p className="mt-2 text-sm text-slate-300">La pre-cotización pública no se modifica. El PDF definitivo sin marca PRE COTIZACIÓN se incorpora aquí y queda vinculado a Cliente e Inmueble.</p></div>}
-  <section className="mt-8 space-y-5">{cs.map(c=>{const total=Number(c.total),pagado=Number(c.montoPagado);return <article key={c.id} className="rounded-3xl border border-white/10 bg-slate-900 p-7"><div className="flex flex-col justify-between gap-5 lg:flex-row"><div><div className="flex flex-wrap items-center gap-3"><p className="font-mono text-xs font-black text-cyan-300">{c.folio}</p><Estado e={c.estado}/></div><h2 className="mt-3 text-2xl font-black">{c.cliente.nombre}</h2><p className="mt-2 text-sm text-slate-400">{c.inmueble?`${c.inmueble.alias} · ${c.inmueble.direccion}, ${c.inmueble.ciudad}`:"Sin inmueble asociado"}</p><div className="mt-4 grid gap-3 text-sm text-slate-400 sm:grid-cols-2 lg:grid-cols-4"><p>Creada: <b className="text-slate-200">{fecha(c.creadoEn)}</b></p><p>Aceptada: <b className="text-slate-200">{fecha(c.aceptadaEn)}</b></p><p>Autorizada: <b className="text-slate-200">{fecha(c.autorizadaEn)}</b></p><p>Vigencia: <b className="text-slate-200">{fecha(c.vigenciaHasta)}</b></p></div></div><div className="lg:text-right"><p className="text-xs font-black uppercase tracking-widest text-slate-500">Importe</p><p className="mt-1 text-3xl font-black text-cyan-300">{dinero(total)}</p><p className="mt-2 text-sm text-slate-400">Pagado {dinero(pagado)} · Saldo {dinero(Math.max(0,total-pagado))}</p></div></div>
-  {c.observacionesInternas&&<div className="mt-5 rounded-2xl border border-amber-300/10 bg-amber-300/5 p-4 text-sm text-slate-300">{c.observacionesInternas}</div>}
-  {gestiona&&<div className="mt-6 border-t border-white/10 pt-5">{c.estado===EstadoCotizacion.BORRADOR&&(!c.cliente.usuarioId?<Link href="/panel/clientes/accesos" className="rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Asignar acceso al cliente</Link>:<form action={marcarListaParaCliente}><input type="hidden" name="id" value={c.id}/><button className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950">Poner a aceptación del cliente</button></form>)}{c.estado===EstadoCotizacion.ENVIADA&&<div className="space-y-4"><p className="font-black text-cyan-300">Pendiente de aceptación del cliente.</p><form action={aceptarEnRepresentacionDelCliente} className="flex flex-col gap-3 md:flex-row"><input type="hidden" name="id" value={c.id}/><input name="motivo" required placeholder="Motivo excepcional" className="min-w-0 flex-1 rounded-xl bg-slate-950 px-4 py-3"/><button className="rounded-xl border border-amber-300/30 px-5 py-3 font-black text-amber-300">Aceptar en representación</button></form></div>}{c.estado===EstadoCotizacion.ACEPTADA&&<div className="flex flex-wrap items-center gap-3"><p className="font-black text-emerald-300">Aceptada. Pendiente de autorización interna.</p><form action={autorizarCotizacionAceptada}><input type="hidden" name="id" value={c.id}/><button className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950">Autorizar y enviar a Caja</button></form></div>}{c.estado===EstadoCotizacion.AUTORIZADA&&<div className="flex flex-wrap gap-3"><Link href="/panel/caja" className="rounded-full border border-violet-300/30 px-5 py-3 text-sm font-black text-violet-300">Abrir Caja</Link>{c.inspeccion&&<Link href={`/panel/inspecciones/${c.inspeccion.id}`} className="rounded-full border border-white/15 px-5 py-3 text-sm font-black">Ver V{c.inspeccion.numeroInspeccion}</Link>}</div>}</div>}{u.rol===RolUsuario.VENDEDOR&&<div className="mt-6 rounded-2xl border border-white/10 p-4 text-sm text-slate-400">Consulta únicamente.</div>}</article>})}{!cs.length&&<div className="rounded-3xl border border-dashed border-white/15 p-10 text-center text-slate-400">No hay cotizaciones con ese filtro.</div>}</section>
- </div></main>;
+function dinero(valor: unknown) {
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(Number(valor ?? 0));
 }
-function Indicador({t,v,d}:{t:string;v:number;d:string}){return <article className="rounded-3xl border border-white/10 bg-slate-900 p-6"><p className="text-sm font-bold text-slate-400">{t}</p><p className="mt-4 text-3xl font-black text-cyan-300">{String(v).padStart(2,"0")}</p><p className="mt-2 text-xs text-slate-600">{d}</p></article>}
-function Estado({e}:{e:EstadoCotizacion}){const c=e===EstadoCotizacion.AUTORIZADA?"text-violet-300 bg-violet-400/10":e===EstadoCotizacion.ACEPTADA?"text-emerald-300 bg-emerald-400/10":e===EstadoCotizacion.ENVIADA?"text-cyan-300 bg-cyan-400/10":e===EstadoCotizacion.RECHAZADA||e===EstadoCotizacion.CANCELADA?"text-rose-300 bg-rose-400/10":"text-slate-300 bg-slate-400/10";return <span className={`rounded-full px-3 py-1 text-xs font-black ${c}`}>{e.replaceAll("_"," ")}</span>}
+
+function fecha(valor: Date) {
+  return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(valor);
+}
+
+function causaCierre(descripcion?: string | null) {
+  if (!descripcion) return "Cancelada";
+  if (descripcion.includes("FALTA DE RESPUESTA DEL CLIENTE")) return "Falta de respuesta del cliente";
+  if (descripcion.includes("CANCELACIÓN DEL CLIENTE")) return "Cancelación del cliente";
+  return "Cancelada";
+}
+
+function motivoCierre(descripcion?: string | null) {
+  if (!descripcion) return "Sin detalle disponible";
+  const match = descripcion.match(/Motivo:\s*(.*?)(?:\. Pagos preservados:|$)/i);
+  return match?.[1]?.trim() || "Consultar Auditoría";
+}
+
+export default async function CotizacionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; estado?: string; vista?: string; ok?: string; error?: string }>;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const usuario = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { rol: true, activo: true } });
+  const puedeEntrar = usuario?.rol === RolUsuario.DIRECTOR || usuario?.rol === RolUsuario.ADMINISTRADOR || usuario?.rol === RolUsuario.VENDEDOR;
+  if (!usuario?.activo || !puedeEntrar) redirect("/acceso");
+
+  const params = await searchParams;
+  const q = (params.q ?? "").trim();
+  const estadoFiltro = (params.estado ?? "").trim();
+  const vistaHistorico = params.vista === "historico";
+  const gestiona = usuario.rol === RolUsuario.DIRECTOR || usuario.rol === RolUsuario.ADMINISTRADOR;
+
+  const cotizaciones = await prisma.cotizacion.findMany({
+    where: {
+      estado: vistaHistorico ? EstadoCotizacion.CANCELADA : EstadoCotizacion.AUTORIZADA,
+      ...(q ? { OR: [
+        { folio: { contains: q, mode: "insensitive" } },
+        { cliente: { nombre: { contains: q, mode: "insensitive" } } },
+        { inmueble: { alias: { contains: q, mode: "insensitive" } } },
+      ] } : {}),
+    },
+    select: {
+      id: true, folio: true, total: true, montoPagado: true, excepcionApertura: true, excepcionInicio: true, actualizadoEn: true,
+      cliente: { select: { nombre: true, tipo: true } },
+      inmueble: { select: { alias: true, superficieTerrenoM2: true, superficieConstruccionM2: true } },
+      paquete: { select: { nombre: true } },
+      inspeccion: { select: { id: true, folio: true, fechaProgramada: true, estado: true } },
+    },
+    orderBy: { creadoEn: "desc" },
+  });
+
+  const ids = cotizaciones.map((c) => c.id);
+  const eventosCierre = vistaHistorico && ids.length > 0
+    ? await prisma.eventoAuditoria.findMany({
+        where: {
+          entidad: "Cotizacion",
+          entidadId: { in: ids },
+          descripcion: { contains: "cerró", mode: "insensitive" },
+        },
+        select: {
+          entidadId: true,
+          descripcion: true,
+          creadoEn: true,
+          usuario: { select: { nombre: true, rol: true } },
+        },
+        orderBy: { creadoEn: "desc" },
+      })
+    : [];
+
+  const cierrePorCotizacion = new Map<string, (typeof eventosCierre)[number]>();
+  for (const evento of eventosCierre) {
+    if (evento.entidadId && !cierrePorCotizacion.has(evento.entidadId)) cierrePorCotizacion.set(evento.entidadId, evento);
+  }
+
+  const filas = cotizaciones.map((c) => ({
+    c,
+    financiero: calcularResumenFinancieroCaja({
+      importe: Number(c.total), pagado: Number(c.montoPagado), excepcionApertura: c.excepcionApertura,
+      excepcionInicio: c.excepcionInicio, tieneInspeccion: Boolean(c.inspeccion), fechaAgendada: c.inspeccion?.fechaProgramada ?? null,
+    }),
+    cierre: cierrePorCotizacion.get(c.id),
+  })).filter(({ financiero }) => vistaHistorico || !estadoFiltro || financiero.estadoOperativo === estadoFiltro);
+
+  const queryComun = q ? `&q=${encodeURIComponent(q)}` : "";
+
+  return <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6"><div className="mx-auto max-w-[1800px]">
+    <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"><div>
+      <p className="text-sm font-black uppercase tracking-[0.28em] text-amber-300">Base formal autorizada</p>
+      <h1 className="mt-2 text-4xl font-black">Cotizaciones</h1>
+      <p className="mt-3 max-w-4xl text-slate-400">Las cotizaciones activas continúan el proceso operativo. Las canceladas se conservan como histórico con causa, responsable, fecha y situación financiera; nunca se borran.</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link href={`/panel/cotizaciones?vista=activas${queryComun}`} className={`rounded-full px-4 py-2 text-sm font-black ${!vistaHistorico ? "bg-cyan-300 text-slate-950" : "border border-white/15 text-slate-300"}`}>Activas</Link>
+        <Link href={`/panel/cotizaciones?vista=historico${queryComun}`} className={`rounded-full px-4 py-2 text-sm font-black ${vistaHistorico ? "bg-rose-300 text-slate-950" : "border border-white/15 text-slate-300"}`}>Histórico canceladas</Link>
+      </div>
+    </div><form className="grid gap-2 sm:grid-cols-[minmax(260px,1fr)_210px_auto]">
+      <input type="hidden" name="vista" value={vistaHistorico ? "historico" : "activas"}/>
+      <input name="q" defaultValue={q} placeholder="Buscar folio, cliente o inmueble" className="rounded-full border border-white/10 bg-slate-900 px-5 py-3"/>
+      {!vistaHistorico ? <select name="estado" defaultValue={estadoFiltro} className="rounded-full border border-white/10 bg-slate-900 px-5 py-3"><option value="">Todos los estados</option><option value="SIN_AGENDAR">Sin agendar</option><option value="AGENDADA">Agendada</option><option value="SIN_LIBERAR">Sin liberar</option><option value="LIBERADA">Liberada</option></select> : <div className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm text-slate-400">Estado: CANCELADA</div>}
+      <button className="rounded-full border border-white/15 px-5 py-3 font-black">Buscar / filtrar</button>
+    </form></div>
+
+    {(params.ok || params.error) && <p className={`mt-6 rounded-2xl border p-4 font-bold ${params.error ? "border-rose-400/20 bg-rose-400/10 text-rose-300" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"}`}>{params.error ?? params.ok}</p>}
+
+    <div className="mt-8 overflow-x-auto rounded-3xl border border-white/10 bg-slate-900/70"><table className="min-w-[1800px] w-full border-collapse text-left">
+      <thead className="sticky top-0 z-20 bg-slate-900"><tr className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+        <th className="px-3 py-4">Folio</th><th className="px-3 py-4">Servicio contratado</th><th className="px-3 py-4">Tipo de cliente</th><th className="px-3 py-4">Nombre de cliente</th><th className="px-3 py-4">Alias inmueble</th><th className="px-3 py-4">M2 terreno</th><th className="px-3 py-4">M2 construcción</th><th className="px-3 py-4 text-right">Importe</th><th className="px-3 py-4">Ver cotización (PDF)</th><th className="px-3 py-4">{vistaHistorico ? "Situación financiera" : "Estatus cliente"}</th><th className="px-3 py-4">{vistaHistorico ? "Cierre / histórico" : "Gestión"}</th>
+      </tr></thead><tbody>{filas.map(({ c, financiero, cierre }) => <tr key={c.id} className="border-t border-white/5 align-top hover:bg-white/[0.025]">
+        <td className="px-3 py-4 font-mono text-xs font-black text-cyan-300">{c.folio}</td>
+        <td className="px-3 py-4">{c.paquete?.nombre ?? "Servicio de inspección"}</td>
+        <td className="px-3 py-4">{c.cliente.tipo.replaceAll("_", " ")}</td>
+        <td className="px-3 py-4 font-bold">{c.cliente.nombre}</td>
+        <td className="px-3 py-4">{c.inmueble?.alias ?? "—"}</td>
+        <td className="px-3 py-4">{c.inmueble?.superficieTerrenoM2 ? Number(c.inmueble.superficieTerrenoM2).toLocaleString("es-MX") : "—"}</td>
+        <td className="px-3 py-4">{c.inmueble?.superficieConstruccionM2 ? Number(c.inmueble.superficieConstruccionM2).toLocaleString("es-MX") : "—"}</td>
+        <td className="px-3 py-4 text-right font-black">{dinero(c.total)}</td>
+        <td className="px-3 py-4"><a href={`/api/cotizaciones/${c.id}/pdf`} target="_blank" rel="noreferrer" className="font-black text-cyan-300">Ver PDF</a></td>
+        <td className="px-3 py-4">{vistaHistorico ? <><span className="rounded-full bg-rose-400/10 px-3 py-2 text-xs font-black text-rose-300">CANCELADA</span><p className="mt-2 text-[11px] text-slate-500">Pagado {dinero(financiero.pagado)} · saldo registrado {dinero(financiero.saldo)}</p></> : <><span className="rounded-full bg-white/5 px-3 py-2 text-xs font-black">{financiero.estadoOperativo.replaceAll("_", " ")}</span><p className="mt-2 text-[11px] text-slate-500">Caja: {financiero.porcentajePagado.toFixed(0)}% pagado · saldo {dinero(financiero.saldo)}</p></>}</td>
+        <td className="px-3 py-4">{vistaHistorico ? <div className="min-w-[360px] rounded-2xl border border-rose-300/15 bg-rose-300/5 p-3 text-xs"><p className="font-black text-rose-300">{causaCierre(cierre?.descripcion)}</p><p className="mt-2 text-slate-300">{motivoCierre(cierre?.descripcion)}</p><p className="mt-2 text-slate-500">Fecha: {fecha(cierre?.creadoEn ?? c.actualizadoEn)}</p><p className="mt-1 text-slate-500">Responsable: {cierre?.usuario ? `${cierre.usuario.nombre} · ${cierre.usuario.rol}` : "Consultar Auditoría"}</p>{c.inspeccion && <p className="mt-1 text-slate-500">Inspección: {c.inspeccion.folio} · {c.inspeccion.estado.replaceAll("_", " ")}</p>}</div> : gestiona ? <div className="min-w-[390px] space-y-3">
+          <details className="rounded-2xl border border-amber-300/15 bg-amber-300/5 p-3"><summary className="cursor-pointer font-black text-amber-300">Corregir / ajustar</summary><form action={regresarAPrecotizacion} className="mt-3 flex gap-2"><input type="hidden" name="id" value={c.id}/><input name="motivo" required placeholder="Dato o valor que requiere ajuste" className="min-w-0 flex-1 rounded-xl bg-slate-950 px-3 py-2 text-xs"/><button className="rounded-xl border border-amber-300/30 px-3 text-xs font-black text-amber-300">Enviar a Pre-cotización</button></form><p className="mt-2 text-[11px] leading-5 text-slate-500">Conserva pagos, agenda, inspección, inspector y antecedentes. La nueva versión requiere aceptación del cliente y autorización interna.</p></details>
+          <details className="rounded-2xl border border-rose-300/15 bg-rose-300/5 p-3"><summary className="cursor-pointer font-black text-rose-300">Cancelar / cerrar</summary><form action={cancelarCotizacion} className="mt-3 grid gap-2"><input type="hidden" name="id" value={c.id}/><select name="tipoCierre" required defaultValue="" className="rounded-xl bg-slate-950 px-3 py-2 text-xs"><option value="" disabled>Selecciona causa de cierre</option><option value="CANCELACION_CLIENTE">Cancelación del cliente</option><option value="SIN_RESPUESTA_CLIENTE">Falta de respuesta del cliente</option></select><input name="motivo" required placeholder="Motivo o antecedente documentado" className="rounded-xl bg-slate-950 px-3 py-2 text-xs"/><button className="rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">Cerrar cotización</button></form><p className="mt-2 text-[11px] leading-5 text-slate-500">No regresa a Pre-cotizaciones. Conserva historial y pagos. Si existe una inspección programada se cancela sin borrarse; si ya inició, el cierre simple queda bloqueado.</p></details>
+        </div> : <span className="text-xs text-slate-500">Solo lectura</span>}</td>
+      </tr>)}</tbody>
+    </table>{filas.length === 0 && <div className="p-10 text-center text-slate-400">{vistaHistorico ? "No hay cotizaciones canceladas con esos filtros." : "No hay cotizaciones activas con esos filtros."}</div>}</div>
+  </div></main>;
+}

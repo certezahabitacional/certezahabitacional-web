@@ -167,6 +167,8 @@ model Usuario {
   id String @id @default(cuid())
   nombre String
   email String @unique
+  telefono String?
+  ciudad String?
   passwordHash String
   rol RolUsuario @default(INSPECTOR)
   activo Boolean @default(true)

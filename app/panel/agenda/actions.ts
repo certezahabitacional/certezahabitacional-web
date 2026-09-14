@@ -1,70 +1,47 @@
 "use server";
 
-import { RolUsuario } from "@prisma/client";
+import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
 import { auth } from "@/auth";
+import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
 
-function redirigirError(mensaje: string): never {
-  redirect(
-    `/panel/agenda?error=${encodeURIComponent(mensaje)}`,
-  );
+function texto(formData: FormData, campo: string) { return String(formData.get(campo) ?? "").trim(); }
+function volver(tipo: "ok" | "error", mensaje: string): never { redirect(`/panel/agenda?${tipo}=${encodeURIComponent(mensaje)}`); }
+
+async function gestorAgenda() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const usuario = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { id: true, rol: true, activo: true } });
+  if (!usuario?.activo || (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)) redirect("/acceso");
+  return usuario;
 }
 
-/**
- * Acción heredada.
- *
- * La programación de inspecciones ya no se realiza directamente
- * desde Agenda. El flujo oficial es:
- *
- * Administración:
- *   cotización / requisitos / liberación administrativa
- *
- * Dirección o Administración:
- *   /panel/inspecciones/nueva
- *
- * Gerencia:
- *   solo cuando la plantilla requiere su intervención.
- *
- * Mantener esta Server Action exportada evita romper referencias
- * antiguas durante la transición, pero bloquea cualquier intento de
- * usarla como puerta trasera para crear una inspección.
- */
-export async function agendarCotizacion(
-  _formData: FormData,
-): Promise<never> {
-  const session = await auth();
+export async function actualizarAgenda(formData: FormData) {
+  const usuario = await gestorAgenda();
+  const inspeccionId = texto(formData, "inspeccionId");
+  const fechaTexto = texto(formData, "fechaProgramada");
+  const estadoTexto = texto(formData, "estado");
+  const permitidos: EstadoInspeccion[] = [
+    EstadoInspeccion.PROGRAMADA,
+    EstadoInspeccion.EN_PROCESO,
+    EstadoInspeccion.FINALIZADA,
+  ];
+  if (!inspeccionId || !fechaTexto || !permitidos.includes(estadoTexto as EstadoInspeccion)) volver("error", "Fecha o estatus inválidos.");
+  const fechaProgramada = new Date(fechaTexto);
+  if (Number.isNaN(fechaProgramada.getTime())) volver("error", "La fecha agendada no es válida.");
 
-  if (!session?.user) {
-    redirect("/login");
-  }
+  const inspeccion = await prisma.inspeccion.findUnique({ where: { id: inspeccionId }, select: { id: true, folio: true, estado: true, fechaProgramada: true, cotizacionId: true } });
+  if (!inspeccion) volver("error", "La inspección no existe.");
 
-  const usuario = await prisma.usuario.findUnique({
-    where: {
-      id: session.user.id,
-    },
-    select: {
-      rol: true,
-      activo: true,
-    },
-  });
+  await prisma.inspeccion.update({ where: { id: inspeccionId }, data: { fechaProgramada, estado: estadoTexto as EstadoInspeccion, agendadaPorId: usuario.id } });
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "Inspeccion", entidadId: inspeccionId, usuarioId: usuario.id, descripcion: `${usuario.rol} actualizó Agenda de ${inspeccion.folio}: fecha ${inspeccion.fechaProgramada.toISOString()} → ${fechaProgramada.toISOString()}, estatus ${inspeccion.estado} → ${estadoTexto}.` });
+  revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/caja");
+  volver("ok", "Agenda actualizada correctamente.");
+}
 
-  if (!usuario || !usuario.activo) {
-    redirect("/acceso");
-  }
-
-  if (
-    usuario.rol !== RolUsuario.GERENTE &&
-    usuario.rol !== RolUsuario.ADMINISTRADOR &&
-    usuario.rol !== RolUsuario.DIRECTOR
-  ) {
-    redirigirError(
-      "No tienes facultad para programar inspecciones.",
-    );
-  }
-
-  redirigirError(
-    "La programación directa desde Agenda fue deshabilitada. Usa «Nueva inspección» para programar el servicio mediante el flujo vigente.",
-  );
+export async function agendarCotizacion(_formData: FormData): Promise<never> {
+  await gestorAgenda();
+  volver("error", "La creación de servicios se realiza exclusivamente desde Nueva inspección.");
 }

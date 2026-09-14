@@ -1,479 +1,220 @@
 import Link from "next/link";
-import {
-  Prisma,
-  RolUsuario,
-} from "@prisma/client";
+import { EstadoInspeccion, Prisma, RolUsuario } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import {
-  puede,
-  puedeVerExpedienteTecnico,
-} from "@/lib/permisos";
+import { puedeVerExpedienteTecnico } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
 
-const formatoFecha = new Intl.DateTimeFormat("es-MX", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
+function formatoFecha(fecha: Date, zonaHoraria: string) {
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: zonaHoraria,
+  }).format(fecha);
+}
 
-export default async function InspeccionesPage() {
+function etiquetaEstado(estado: EstadoInspeccion) {
+  return estado.replaceAll("_", " ");
+}
+
+export default async function InspeccionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; estado?: string; inspector?: string }>;
+}) {
   const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  if (!session?.user) {
-    redirect("/login");
-  }
-
-  /*
-   * La base de datos es la fuente de verdad para rol y alcance
-   * organizacional. No dependemos únicamente del rol almacenado
-   * en la sesión.
-   */
-  const usuarioActual = await prisma.usuario.findUnique({
-    where: {
-      id: session.user.id,
-    },
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
     select: {
       id: true,
       rol: true,
       activo: true,
       zonaId: true,
-      inspector: {
-        select: {
-          id: true,
-        },
-      },
+      inspector: { select: { id: true } },
     },
   });
 
-  if (!usuarioActual || !usuarioActual.activo) {
-    redirect("/acceso");
-  }
+  if (!usuario?.activo) redirect("/acceso");
+  if (usuario.rol === RolUsuario.CLIENTE) redirect("/portal/inspecciones");
 
-  const rol = usuarioActual.rol;
+  const rolesPermitidos = [
+    RolUsuario.DIRECTOR,
+    RolUsuario.ADMINISTRADOR,
+    RolUsuario.VENDEDOR,
+    RolUsuario.GERENTE,
+    RolUsuario.COORDINADOR,
+    RolUsuario.INSPECTOR,
+  ];
+  if (!rolesPermitidos.includes(usuario.rol)) redirect("/acceso");
 
-  /*
-   * CLIENTE nunca utiliza el panel interno de inspecciones.
-   * Su acceso se realiza exclusivamente desde el portal.
-   */
-  if (rol === RolUsuario.CLIENTE) {
-    redirect("/portal/inspecciones");
-  }
+  const params = await searchParams;
+  const q = (params.q ?? "").trim();
+  const estado = (params.estado ?? "").trim();
+  const inspector = (params.inspector ?? "").trim();
 
-  /*
-   * Alcance organizacional:
-   *
-   * DIRECTOR
-   *   - Todas las inspecciones.
-   *
-   * ADMINISTRADOR
-   *   - Vista administrativa transversal de las inspecciones.
-   *   - NO se le da acceso al expediente técnico.
-   *
-   * GERENTE
-   *   - Inspecciones asignadas a Inspectores adscritos a su Gerencia.
-   *
-   * COORDINADOR
-   *   - Únicamente inspecciones asignadas a Inspectores
-   *     que dependan de su coordinación.
-   *
-   * INSPECTOR
-   *   - Únicamente inspecciones asignadas a él.
-   *
-   * El alcance de Gerencia se determina por la relación jerárquica
-   * del Inspector asignado (usuario.gerenteId). Esto evita que dos
-   * Gerentes que compartan una misma zona puedan consultar entre sí
-   * inspecciones ajenas a su estructura.
-   */
-  let where: Prisma.InspeccionWhereInput = {
-    id: {
-      in: [],
-    },
-  };
+  let alcance: Prisma.InspeccionWhereInput = {};
 
-  switch (rol) {
+  switch (usuario.rol) {
     case RolUsuario.DIRECTOR:
+      alcance = {};
+      break;
     case RolUsuario.ADMINISTRADOR:
-      where = {};
+    case RolUsuario.VENDEDOR:
+      alcance = usuario.zonaId ? { zonaId: usuario.zonaId } : {};
       break;
-
     case RolUsuario.GERENTE:
-      where = {
-        inspector: {
-          usuario: {
-            gerenteId: usuarioActual.id,
-          },
-        },
-      };
+      alcance = { inspector: { usuario: { gerenteId: usuario.id } } };
       break;
-
     case RolUsuario.COORDINADOR:
-      where = {
-        inspector: {
-          usuario: {
-            coordinadorId: usuarioActual.id,
-          },
-        },
-      };
+      alcance = { inspector: { usuario: { coordinadorId: usuario.id } } };
       break;
-
     case RolUsuario.INSPECTOR:
-      if (usuarioActual.inspector?.id) {
-        where = {
-          inspectorId: usuarioActual.inspector.id,
-        };
-      }
+      if (!usuario.inspector?.id) redirect("/acceso");
+      alcance = { inspectorId: usuario.inspector.id };
       break;
   }
 
-  const puedeCrearInspeccion = puede(
-    rol,
-    "INSPECCION_PROGRAMAR",
-  );
-
-  /*
-   * ADMINISTRADOR puede consultar el estado administrativo/operativo
-   * de la inspección, pero no abrir el expediente técnico.
-   */
-  const puedeAbrirExpediente =
-    puedeVerExpedienteTecnico(rol);
-
-  /*
-   * Intencionalmente NO consultamos hallazgos, fotografías, ISH,
-   * revisiones ni ningún otro contenido técnico en este listado.
-   * Esto evita exponer información técnica al ADMINISTRADOR.
-   */
-  const inspecciones =
-    await prisma.inspeccion.findMany({
-      where,
-      select: {
-        id: true,
-        folio: true,
-        numeroInspeccion: true,
-        tipoInmueble: true,
-        direccion: true,
-        ciudad: true,
-        fechaProgramada: true,
-        estado: true,
-        zona: {
-          select: {
-            nombre: true,
-            codigo: true,
-          },
-        },
-        inmueble: {
-          select: {
-            alias: true,
-          },
-        },
-        inspector: {
-          select: {
-            usuario: {
-              select: {
-                nombre: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        fechaProgramada: "desc",
-      },
-    });
-
-  const resumen = {
-    total: inspecciones.length,
-    programadas: inspecciones.filter(
-      (item) => item.estado === "PROGRAMADA",
-    ).length,
-    proceso: inspecciones.filter(
-      (item) => item.estado === "EN_PROCESO",
-    ).length,
-    reportePendiente: inspecciones.filter(
-      (item) => item.estado === "REPORTE_PENDIENTE",
-    ).length,
-    finalizadas: inspecciones.filter(
-      (item) => item.estado === "FINALIZADA",
-    ).length,
-    canceladas: inspecciones.filter(
-      (item) => item.estado === "CANCELADA",
-    ).length,
+  const where: Prisma.InspeccionWhereInput = {
+    AND: [
+      alcance,
+      estado ? { estado: estado as EstadoInspeccion } : {},
+      inspector
+        ? { inspector: { usuario: { nombre: { contains: inspector, mode: "insensitive" } } } }
+        : {},
+      q
+        ? {
+            OR: [
+              { folio: { contains: q, mode: "insensitive" } },
+              { cliente: { nombre: { contains: q, mode: "insensitive" } } },
+              { inmueble: { alias: { contains: q, mode: "insensitive" } } },
+              { direccion: { contains: q, mode: "insensitive" } },
+              { inspector: { usuario: { nombre: { contains: q, mode: "insensitive" } } } },
+            ],
+          }
+        : {},
+    ],
   };
 
-  const esVistaAdministrativa =
-    rol === RolUsuario.ADMINISTRADOR;
+  const inspecciones = await prisma.inspeccion.findMany({
+    where,
+    select: {
+      id: true,
+      folio: true,
+      numeroInspeccion: true,
+      fechaProgramada: true,
+      estado: true,
+      zonaHoraria: true,
+      cliente: { select: { nombre: true } },
+      inmueble: { select: { alias: true, direccion: true, ciudad: true } },
+      inspector: { select: { usuario: { select: { nombre: true } } } },
+      zona: { select: { nombre: true, codigo: true, zonaHoraria: true } },
+    },
+    orderBy: [{ fechaProgramada: "desc" }, { folio: "desc" }],
+    take: 500,
+  });
+
+  const inspectores = Array.from(
+    new Set(
+      inspecciones
+        .map((i) => i.inspector?.usuario.nombre)
+        .filter((nombre): nombre is string => Boolean(nombre)),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "es"));
+
+  const puedeAbrirExpediente = puedeVerExpedienteTecnico(usuario.rol);
 
   return (
-    <main className="min-h-screen bg-slate-950 px-6 py-8 text-white">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6">
+      <div className="mx-auto max-w-[1550px]">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <Link
-              href="/panel"
-              className="text-sm font-bold text-cyan-300"
-            >
-              ← Panel
-            </Link>
-
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-black">
-                Inspecciones
-              </h1>
-
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-black text-slate-300">
-                {etiquetaRol(rol)}
-              </span>
-            </div>
-
-            <p className="mt-1 text-slate-400">
-              {esVistaAdministrativa
-                ? "Vista administrativa de programación, asignación y estado de las inspecciones."
-                : "Programación, expedientes y seguimiento operativo dentro de tu ámbito."}
+            <p className="text-sm font-black uppercase tracking-[0.28em] text-amber-300">Control operativo</p>
+            <h1 className="mt-2 text-4xl font-black">Inspecciones</h1>
+            <p className="mt-3 max-w-4xl text-slate-400">
+              Panel de lectura ordenado por fecha agendada más reciente y, en segundo término, por folio más nuevo. Dirección consulta el universo completo; los demás roles ven únicamente el alcance que les corresponde.
             </p>
-
-            {rol === RolUsuario.GERENTE && (
-              <p className="mt-2 text-sm font-bold text-emerald-300">
-                Alcance: inspectores adscritos a tu Gerencia
-              </p>
-            )}
-
-            {rol === RolUsuario.COORDINADOR && (
-              <p className="mt-2 text-sm font-bold text-indigo-300">
-                Alcance: inspectores de tu coordinación
-              </p>
-            )}
-
-            {rol === RolUsuario.INSPECTOR && (
-              <p className="mt-2 text-sm font-bold text-amber-300">
-                Alcance: únicamente tus inspecciones asignadas
-              </p>
-            )}
-
-            {esVistaAdministrativa && (
-              <div className="mt-4 max-w-3xl rounded-2xl border border-violet-300/20 bg-violet-300/5 px-4 py-3 text-sm leading-6 text-violet-100">
-                Administración puede consultar información operativa
-                necesaria para sus funciones, pero no tiene acceso al
-                expediente técnico, hallazgos, evidencias, ISH ni
-                contenido del reporte.
-              </div>
-            )}
           </div>
 
-          {puedeCrearInspeccion && (
-            <Link
-              href="/panel/inspecciones/nueva"
-              className="rounded-full bg-cyan-400 px-6 py-3 text-center font-black text-slate-950 transition hover:bg-cyan-300"
-            >
-              Nueva inspección
-            </Link>
-          )}
+          <form className="grid gap-2 sm:grid-cols-[minmax(260px,1fr)_200px_220px_auto]">
+            <input
+              name="q"
+              defaultValue={q}
+              placeholder="Buscar folio, cliente, inmueble, domicilio o inspector"
+              className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm"
+            />
+            <select name="estado" defaultValue={estado} className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm">
+              <option value="">Todos los estatus</option>
+              {Object.values(EstadoInspeccion).map((valor) => <option key={valor} value={valor}>{etiquetaEstado(valor)}</option>)}
+            </select>
+            <select name="inspector" defaultValue={inspector} className="rounded-full border border-white/10 bg-slate-900 px-5 py-3 text-sm">
+              <option value="">Todos los inspectores</option>
+              {inspectores.map((nombre) => <option key={nombre} value={nombre}>{nombre}</option>)}
+            </select>
+            <button className="rounded-full border border-white/15 px-5 py-3 text-sm font-black">Buscar / filtrar</button>
+          </form>
         </div>
 
-        <section className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <Tarjeta
-            etiqueta="Total"
-            valor={resumen.total}
-          />
-          <Tarjeta
-            etiqueta="Programadas"
-            valor={resumen.programadas}
-          />
-          <Tarjeta
-            etiqueta="En proceso"
-            valor={resumen.proceso}
-          />
-          <Tarjeta
-            etiqueta="Reporte pendiente"
-            valor={resumen.reportePendiente}
-          />
-          <Tarjeta
-            etiqueta="Finalizadas"
-            valor={resumen.finalizadas}
-          />
-          <Tarjeta
-            etiqueta="Canceladas"
-            valor={resumen.canceladas}
-          />
-        </section>
-
-        <section className="mt-7 overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
-          {inspecciones.length === 0 ? (
-            <div className="p-14 text-center">
-              <p className="font-black text-slate-300">
-                No hay inspecciones disponibles.
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                No existen inspecciones dentro del alcance
-                correspondiente a tu usuario.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-white/10">
-              {inspecciones.map((inspeccion) => {
-                const contenido = (
-                  <>
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-black text-cyan-300">
-                          {inspeccion.folio}
-                        </p>
-
-                        <span className="rounded-full bg-cyan-400/10 px-2.5 py-1 text-[11px] font-black text-cyan-200">
-                          V{inspeccion.numeroInspeccion}
-                        </span>
-                      </div>
-
-                      {inspeccion.zona && (
-                        <p className="mt-2 text-xs font-bold text-slate-500">
-                          {inspeccion.zona.nombre} ·{" "}
-                          {inspeccion.zona.codigo}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <p className="font-black">
-                        {inspeccion.inmueble?.alias ??
-                          inspeccion.tipoInmueble}
-                      </p>
-
-                      <p className="mt-1 text-sm text-slate-400">
-                        {inspeccion.direccion},{" "}
-                        {inspeccion.ciudad}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-bold">
-                        {formatoFecha.format(
-                          inspeccion.fechaProgramada,
-                        )}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        Inspector:{" "}
-                        {inspeccion.inspector?.usuario
-                          .nombre ?? "Sin asignar"}
-                      </p>
-                    </div>
-
-                    <div className="md:text-right">
-                      <Estado
-                        estado={inspeccion.estado}
-                      />
-
-                      {esVistaAdministrativa && (
-                        <p className="mt-2 text-xs font-bold text-violet-300">
-                          Consulta administrativa
-                        </p>
-                      )}
-                    </div>
-                  </>
+        <div className="mt-8 max-h-[72vh] overflow-auto rounded-3xl border border-white/10 bg-slate-900/70">
+          <table className="min-w-[1300px] w-full border-collapse text-left">
+            <thead className="sticky top-0 z-20 bg-slate-900 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
+              <tr className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                <th className="px-4 py-4">Folio</th>
+                <th className="px-4 py-4">Cliente</th>
+                <th className="px-4 py-4">Inmueble</th>
+                <th className="px-4 py-4">Agenda</th>
+                <th className="px-4 py-4">Inspector</th>
+                <th className="px-4 py-4">Estatus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inspecciones.map((i) => {
+                const zona = i.zona?.zonaHoraria ?? i.zonaHoraria ?? "America/Ciudad_Juarez";
+                const folio = (
+                  <div>
+                    <p className="font-mono text-xs font-black text-cyan-300">{i.folio}</p>
+                    <p className="mt-1 text-[11px] font-bold text-slate-500">V{i.numeroInspeccion}{i.zona ? ` · ${i.zona.codigo}` : ""}</p>
+                  </div>
                 );
-
-                if (!puedeAbrirExpediente) {
-                  return (
-                    <div
-                      key={inspeccion.id}
-                      className="grid gap-4 p-6 md:grid-cols-[1.1fr_1.5fr_1fr_auto] md:items-center"
-                    >
-                      {contenido}
-                    </div>
-                  );
-                }
 
                 return (
-                  <Link
-                    key={inspeccion.id}
-                    href={`/panel/inspecciones/${inspeccion.id}`}
-                    className="grid gap-4 p-6 transition hover:bg-white/[0.03] md:grid-cols-[1.1fr_1.5fr_1fr_auto] md:items-center"
-                  >
-                    {contenido}
-                  </Link>
+                  <tr key={i.id} className="border-t border-white/5 hover:bg-white/[0.025]">
+                    <td className="px-4 py-4">
+                      {puedeAbrirExpediente ? <Link href={`/panel/inspecciones/${i.id}`}>{folio}</Link> : folio}
+                    </td>
+                    <td className="px-4 py-4 font-bold">{i.cliente.nombre}</td>
+                    <td className="px-4 py-4">
+                      <p className="font-bold">{i.inmueble?.alias ?? "Sin alias"}</p>
+                      <p className="mt-1 text-xs text-slate-500">{i.inmueble ? `${i.inmueble.direccion}, ${i.inmueble.ciudad}` : "Sin inmueble asociado"}</p>
+                    </td>
+                    <td className="px-4 py-4">{formatoFecha(i.fechaProgramada, zona)}</td>
+                    <td className="px-4 py-4">{i.inspector?.usuario.nombre ?? "Sin asignar"}</td>
+                    <td className="px-4 py-4"><Estado estado={i.estado} /></td>
+                  </tr>
                 );
               })}
-            </div>
-          )}
-        </section>
+            </tbody>
+          </table>
+          {inspecciones.length === 0 && <div className="p-10 text-center text-slate-400">No hay inspecciones con esos filtros dentro de tu alcance.</div>}
+        </div>
       </div>
     </main>
   );
 }
 
-function Tarjeta({
-  etiqueta,
-  valor,
-}: {
-  etiqueta: string;
-  valor: number;
-}) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900 p-5">
-      <p className="text-sm font-bold text-slate-400">
-        {etiqueta}
-      </p>
-
-      <p className="mt-2 text-3xl font-black text-cyan-300">
-        {String(valor).padStart(2, "0")}
-      </p>
-    </div>
-  );
-}
-
-function Estado({
-  estado,
-}: {
-  estado: string;
-}) {
+function Estado({ estado }: { estado: EstadoInspeccion }) {
   const clase =
-    estado === "FINALIZADA"
+    estado === EstadoInspeccion.FINALIZADA
       ? "bg-emerald-400/15 text-emerald-300"
-      : estado === "CANCELADA"
+      : estado === EstadoInspeccion.CANCELADA
         ? "bg-rose-400/15 text-rose-300"
-        : estado === "EN_PROCESO"
+        : estado === EstadoInspeccion.EN_PROCESO
           ? "bg-amber-400/15 text-amber-300"
-          : estado === "REPORTE_PENDIENTE"
+          : estado === EstadoInspeccion.REPORTE_PENDIENTE
             ? "bg-violet-400/15 text-violet-300"
             : "bg-sky-400/15 text-sky-300";
 
-  return (
-    <span
-      className={`inline-block rounded-full px-3 py-1 text-xs font-black ${clase}`}
-    >
-      {etiquetaEstado(estado)}
-    </span>
-  );
-}
-
-function etiquetaEstado(
-  estado: string,
-): string {
-  switch (estado) {
-    case "PROGRAMADA":
-      return "PROGRAMADA";
-    case "EN_PROCESO":
-      return "EN PROCESO";
-    case "REPORTE_PENDIENTE":
-      return "REPORTE PENDIENTE";
-    case "FINALIZADA":
-      return "FINALIZADA";
-    case "CANCELADA":
-      return "CANCELADA";
-    default:
-      return estado.replaceAll("_", " ");
-  }
-}
-
-const ETIQUETAS_ROL: Record<RolUsuario, string> = {
-  [RolUsuario.DIRECTOR]: "DIRECTOR",
-  [RolUsuario.ADMINISTRADOR]: "ADMINISTRADOR",
-  [RolUsuario.VENDEDOR]: "VENDEDOR",
-  [RolUsuario.GERENTE]: "GERENTE",
-  [RolUsuario.COORDINADOR]: "COORDINADOR",
-  [RolUsuario.INSPECTOR]: "INSPECTOR",
-  [RolUsuario.CLIENTE]: "CLIENTE",
-};
-
-function etiquetaRol(rol: RolUsuario): string {
-  return ETIQUETAS_ROL[rol];
+  return <span className={`inline-block rounded-full px-3 py-1 text-xs font-black ${clase}`}>{etiquetaEstado(estado)}</span>;
 }
