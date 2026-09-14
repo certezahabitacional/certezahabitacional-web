@@ -30,14 +30,23 @@ export async function guardarPreCotizacion(formData: FormData) {
   if(!Number.isFinite(total)||total<=0) volver(id,"error","El importe debe ser mayor a cero.");
   if(!motivo) volver(id,"error","Registra el motivo de la modificación.");
 
-  const cotizacion=await prisma.cotizacion.findUnique({where:{id},select:{id:true,folio:true,estado:true,zonaId:true,clienteId:true,inmuebleId:true,versionActual:true,montoPagado:true}});
+  const cotizacion=await prisma.cotizacion.findUnique({
+    where:{id},
+    select:{
+      id:true,folio:true,estado:true,zonaId:true,clienteId:true,inmuebleId:true,versionActual:true,montoPagado:true,
+      total:true,subtotal:true,superficieM2:true,vigenciaHasta:true,
+      cliente:{select:{nombre:true,telefono:true,correo:true,tipo:true,empresa:true,direccion:true,colonia:true,ciudad:true,estado:true,codigoPostal:true}},
+      inmueble:{select:{alias:true,direccion:true,colonia:true,ciudad:true,estado:true,codigoPostal:true,superficieTerrenoM2:true,superficieConstruccionM2:true}}
+    }
+  });
   if(!cotizacion) volver(id,"error","La pre-cotización no existe.");
   if(!puedeAccederZona(usuario,cotizacion.zonaId)) volver(id,"error","No tienes acceso para editar una pre-cotización de otra zona.");
   if(!ESTADOS_EDITABLES_PRE_COTIZACION.has(cotizacion.estado)) volver(id,"error","Solo se pueden editar registros que estén en Pre-cotizaciones.");
-  if(!cotizacion.inmuebleId) volver(id,"error","La pre-cotización no tiene inmueble asociado.");
+  if(!cotizacion.inmuebleId||!cotizacion.inmueble) volver(id,"error","La pre-cotización no tiene inmueble asociado.");
   const nuevaVersion=cotizacion.versionActual+1; const vigenciaHasta=vigencia?new Date(`${vigencia}T23:59:59`):null; if(vigenciaHasta&&Number.isNaN(vigenciaHasta.getTime())) volver(id,"error","La vigencia capturada no es válida.");
   const snapshot:Prisma.InputJsonObject={origen:"EDICION_PRE_COTIZACION",estadoCambios:"PENDIENTES_AUTORIZACION",motivo,editadoPor:usuario.nombre,editadoPorRol:usuario.rol,cliente:{nombre,telefono,correo,tipo,empresa:empresa??"",direccion:direccionCliente??"",colonia:coloniaCliente??"",ciudad:ciudadCliente??"",estado:estadoCliente??"",codigoPostal:codigoPostalCliente??""},inmueble:{alias,direccion:direccionInmueble,colonia:coloniaInmueble??"",ciudad:ciudadInmueble,estado:estadoInmueble,codigoPostal:codigoPostalInmueble??"",m2Terreno,m2Construccion},total};
+  const valorAnterior:Prisma.InputJsonObject={version:cotizacion.versionActual,estado:cotizacion.estado,total:Number(cotizacion.total),subtotal:Number(cotizacion.subtotal),superficieM2:Number(cotizacion.superficieM2??0),vigenciaHasta:cotizacion.vigenciaHasta?.toISOString()??null,cliente:{nombre:cotizacion.cliente.nombre,telefono:cotizacion.cliente.telefono??"",correo:cotizacion.cliente.correo??"",tipo:cotizacion.cliente.tipo,empresa:cotizacion.cliente.empresa??"",direccion:cotizacion.cliente.direccion??"",colonia:cotizacion.cliente.colonia??"",ciudad:cotizacion.cliente.ciudad??"",estado:cotizacion.cliente.estado??"",codigoPostal:cotizacion.cliente.codigoPostal??""},inmueble:{alias:cotizacion.inmueble.alias,direccion:cotizacion.inmueble.direccion,colonia:cotizacion.inmueble.colonia??"",ciudad:cotizacion.inmueble.ciudad,estado:cotizacion.inmueble.estado,codigoPostal:cotizacion.inmueble.codigoPostal??"",m2Terreno:Number(cotizacion.inmueble.superficieTerrenoM2??0),m2Construccion:Number(cotizacion.inmueble.superficieConstruccionM2??0)}};
   await prisma.$transaction(async tx=>{await tx.cotizacion.update({where:{id},data:{versionActual:nuevaVersion,superficieM2:new Prisma.Decimal(m2Construccion),subtotal:new Prisma.Decimal(total),total:new Prisma.Decimal(total),vigenciaHasta,estado:EstadoCotizacion.BORRADOR,aceptadaEn:null,solicitudAutorizacionEn:null,autorizadaPorId:null,autorizadaEn:null,editablePublica:true}});await tx.cotizacionVersion.create({data:{cotizacionId:id,version:nuevaVersion,datos:snapshot,total:new Prisma.Decimal(total)}});});
-  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} propuso cambios de Cliente/Inmueble en ${cotizacion.folio}, versión ${nuevaVersion}. Motivo: ${motivo}. Pagos históricos preservados: ${Number(cotizacion.montoPagado).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}.`});
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Cotizacion",entidadId:id,cotizacionId:id,usuarioId:usuario.id,origen:"PRE_COTIZACION",motivo,valorAnterior,valorNuevo:{version:nuevaVersion,estado:EstadoCotizacion.BORRADOR,total,superficieM2:m2Construccion,vigenciaHasta:vigenciaHasta?.toISOString()??null,cliente:snapshot.cliente,inmueble:snapshot.inmueble},metadatos:{pagosHistoricosPreservados:Number(cotizacion.montoPagado),requiereNuevaAceptacion:true,requiereNuevaAutorizacion:true},descripcion:`${usuario.rol} propuso cambios de Cliente/Inmueble en ${cotizacion.folio}, versión ${nuevaVersion}. Motivo: ${motivo}. Pagos históricos preservados: ${Number(cotizacion.montoPagado).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}.`});
   revalidatePath("/panel/pre-cotizaciones");revalidatePath("/panel/cotizaciones");revalidatePath("/panel/caja");revalidatePath("/portal/cotizaciones");volver(id,"ok",`Cambios guardados como propuesta versión ${nuevaVersion}.`);
 }
