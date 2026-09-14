@@ -52,12 +52,13 @@ export default async function ProtocoloPage({
   });
   if (!inspeccion) notFound();
 
+  const numeroInspeccion = inspeccion.numeroInspeccion ?? 1;
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
   const rolesConsulta: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR];
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  if (inspeccion.numeroInspeccion > 1) {
+  if (numeroInspeccion > 1) {
     redirect(`/panel/inspecciones/${id}/captura`);
   }
 
