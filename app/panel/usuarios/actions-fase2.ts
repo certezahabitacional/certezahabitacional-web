@@ -34,25 +34,17 @@ async function validarCoordinador(coordinadorId: string, zonaId: string, gerente
   if (!coordinador || coordinador.rol !== RolUsuario.COORDINADOR || !coordinador.activo || coordinador.zonaId !== zonaId || coordinador.gerenteId !== gerenteId) error("El Coordinador seleccionado no pertenece a la zona y Gerencia indicadas.");
 }
 
-async function resolverJerarquia(rol: RolUsuario, zonaId: string, gerenteId: string, coordinadorId: string, alcanceAdministrador: string) {
+async function resolverJerarquia(rol: RolUsuario, zonaId: string, gerenteId: string, coordinadorId: string) {
   let zonaFinalId: string | null = null;
   let gerenteFinalId: string | null = null;
   let coordinadorFinalId: string | null = null;
 
-  if (rol === RolUsuario.ADMINISTRADOR && alcanceAdministrador === "ZONA") {
-    if (!zonaId) error("Selecciona la zona del Administrador.");
-    await validarZona(zonaId); zonaFinalId = zonaId;
-  }
-  const rolesConZona: RolUsuario[] = [
-    RolUsuario.VENDEDOR,
-    RolUsuario.GERENTE,
-    RolUsuario.COORDINADOR,
-    RolUsuario.INSPECTOR,
-  ];
-  if (rolesConZona.includes(rol)) {
+  if (rol !== RolUsuario.DIRECTOR) {
     if (!zonaId) error("Selecciona una zona para este usuario.");
-    await validarZona(zonaId); zonaFinalId = zonaId;
+    await validarZona(zonaId);
+    zonaFinalId = zonaId;
   }
+
   if (rol === RolUsuario.COORDINADOR || rol === RolUsuario.INSPECTOR) {
     if (!gerenteId) error("Selecciona el Gerente responsable.");
     await validarGerente(gerenteId, zonaId); gerenteFinalId = gerenteId;
@@ -69,10 +61,17 @@ function validarRolGestionable(gestorRol: RolUsuario, rol: RolUsuario) {
   if (gestorRol === RolUsuario.ADMINISTRADOR && (rol === RolUsuario.DIRECTOR || rol === RolUsuario.ADMINISTRADOR)) error("Administración no puede crear ni editar cuentas de Director o Administrador.");
 }
 
+function validarZonaGestor(actual: Awaited<ReturnType<typeof obtenerAdministradorActual>>, zonaId: string | null) {
+  if (actual.rol === RolUsuario.DIRECTOR) return;
+  if (!actual.zonaId || !zonaId || actual.zonaId !== zonaId) {
+    error("Administración solo puede gestionar usuarios de su propia zona.");
+  }
+}
+
 export async function crearUsuarioFase2(formData: FormData) {
   const actual = await gestor();
   const nombre = texto(formData, "nombre"); const email = texto(formData, "email").toLowerCase(); const password = texto(formData, "password"); const rol = texto(formData, "rol") as RolUsuario;
-  const zonaId = texto(formData, "zonaId"); const gerenteId = texto(formData, "gerenteId"); const coordinadorId = texto(formData, "coordinadorId"); const alcanceAdministrador = texto(formData, "alcanceAdministrador") || "GLOBAL";
+  const zonaId = texto(formData, "zonaId"); const gerenteId = texto(formData, "gerenteId"); const coordinadorId = texto(formData, "coordinadorId");
   const telefono = texto(formData, "telefono"); const especialidad = texto(formData, "especialidad"); const cedula = texto(formData, "cedula"); const ciudad = texto(formData, "ciudad");
 
   if (nombre.length < 3) error("El nombre debe tener al menos 3 caracteres.");
@@ -81,7 +80,8 @@ export async function crearUsuarioFase2(formData: FormData) {
   if (!Object.values(RolUsuario).includes(rol)) error("El rol seleccionado no es válido.");
   validarRolGestionable(actual.rol, rol);
 
-  const { zonaFinalId, gerenteFinalId, coordinadorFinalId } = await resolverJerarquia(rol, zonaId, gerenteId, coordinadorId, alcanceAdministrador);
+  const { zonaFinalId, gerenteFinalId, coordinadorFinalId } = await resolverJerarquia(rol, zonaId, gerenteId, coordinadorId);
+  validarZonaGestor(actual, zonaFinalId);
   if (await prisma.usuario.findUnique({ where: { email }, select: { id: true } })) error("Ya existe una cuenta registrada con ese correo.");
   const passwordHash = await bcrypt.hash(password, 12);
 
@@ -91,7 +91,7 @@ export async function crearUsuarioFase2(formData: FormData) {
     return usuario;
   });
 
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "Usuario", entidadId: creado.id, usuarioId: actual.id, descripcion: `${actual.rol} creó el usuario ${email} con rol ${rol}${rol === RolUsuario.INSPECTOR ? " y su perfil de Inspector" : ""}.` });
+  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "Usuario", entidadId: creado.id, usuarioId: actual.id, descripcion: `${actual.rol} creó el usuario ${email} con rol ${rol}${zonaFinalId ? ` en zona ${zonaFinalId}` : ""}${rol === RolUsuario.INSPECTOR ? " y su perfil de Inspector" : ""}.` });
   revalidatePath("/panel/usuarios"); revalidatePath("/panel/inspectores"); revalidatePath("/panel/inspecciones"); revalidatePath("/panel/agenda");
   exito("Usuario creado correctamente. Deberá cambiar su contraseña en el primer acceso.");
 }
@@ -99,7 +99,7 @@ export async function crearUsuarioFase2(formData: FormData) {
 export async function actualizarUsuarioFase2(formData: FormData) {
   const actual = await gestor();
   const usuarioId = texto(formData, "usuarioId"); const nombre = texto(formData, "nombre"); const email = texto(formData, "email").toLowerCase(); const rol = texto(formData, "rol") as RolUsuario;
-  const telefono = texto(formData, "telefono"); const ciudad = texto(formData, "ciudad"); const zonaId = texto(formData, "zonaId"); const gerenteId = texto(formData, "gerenteId"); const coordinadorId = texto(formData, "coordinadorId"); const alcanceAdministrador = texto(formData, "alcanceAdministrador") || "GLOBAL";
+  const telefono = texto(formData, "telefono"); const ciudad = texto(formData, "ciudad"); const zonaId = texto(formData, "zonaId"); const gerenteId = texto(formData, "gerenteId"); const coordinadorId = texto(formData, "coordinadorId");
   const especialidad = texto(formData, "especialidad"); const cedula = texto(formData, "cedula");
 
   if (!usuarioId || nombre.length < 3 || !email.includes("@") || !Object.values(RolUsuario).includes(rol)) error("Los datos del usuario no son válidos.");
@@ -107,9 +107,10 @@ export async function actualizarUsuarioFase2(formData: FormData) {
 
   const objetivo = await prisma.usuario.findUnique({
     where: { id: usuarioId },
-    select: { id: true, nombre: true, email: true, rol: true, inspector: { select: { id: true, _count: { select: { inspecciones: true } } } }, coordinadoresACargo: { select: { id: true }, take: 1 }, inspectoresACargo: { select: { id: true }, take: 1 } },
+    select: { id: true, nombre: true, email: true, rol: true, zonaId: true, inspector: { select: { id: true, _count: { select: { inspecciones: true } } } }, coordinadoresACargo: { select: { id: true }, take: 1 }, inspectoresACargo: { select: { id: true }, take: 1 } },
   });
   if (!objetivo) error("El usuario no existe.");
+  validarZonaGestor(actual, objetivo.zonaId);
   validarRolGestionable(actual.rol, objetivo.rol); validarRolGestionable(actual.rol, rol);
 
   if (objetivo.rol === RolUsuario.GERENTE && rol !== RolUsuario.GERENTE && objetivo.coordinadoresACargo.length) error("Reasigna primero los Coordinadores de este Gerente.");
@@ -118,7 +119,8 @@ export async function actualizarUsuarioFase2(formData: FormData) {
   const duplicado = await prisma.usuario.findFirst({ where: { email, id: { not: usuarioId } }, select: { id: true } });
   if (duplicado) error("Ya existe otra cuenta con ese correo.");
 
-  const { zonaFinalId, gerenteFinalId, coordinadorFinalId } = await resolverJerarquia(rol, zonaId, gerenteId, coordinadorId, alcanceAdministrador);
+  const { zonaFinalId, gerenteFinalId, coordinadorFinalId } = await resolverJerarquia(rol, zonaId, gerenteId, coordinadorId);
+  validarZonaGestor(actual, zonaFinalId);
 
   await prisma.$transaction(async (tx) => {
     await tx.usuario.update({ where: { id: usuarioId }, data: { nombre, email, telefono: telefono || null, ciudad: ciudad || null, rol, zonaId: zonaFinalId, gerenteId: gerenteFinalId, coordinadorId: coordinadorFinalId } });
@@ -129,7 +131,7 @@ export async function actualizarUsuarioFase2(formData: FormData) {
     }
   });
 
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "Usuario", entidadId: usuarioId, usuarioId: actual.id, descripcion: `${actual.rol} actualizó ${objetivo.email}: nombre ${objetivo.nombre} → ${nombre}; correo ${objetivo.email} → ${email}; rol ${objetivo.rol} → ${rol}.` });
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "Usuario", entidadId: usuarioId, usuarioId: actual.id, descripcion: `${actual.rol} actualizó ${objetivo.email}: nombre ${objetivo.nombre} → ${nombre}; correo ${objetivo.email} → ${email}; rol ${objetivo.rol} → ${rol}; zona ${objetivo.zonaId ?? "GLOBAL"} → ${zonaFinalId ?? "GLOBAL"}.` });
   revalidatePath("/panel/usuarios"); revalidatePath("/panel/inspectores"); revalidatePath("/panel/inspecciones"); revalidatePath("/panel/agenda");
   exito("Usuario actualizado correctamente.");
 }

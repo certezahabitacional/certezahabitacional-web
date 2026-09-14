@@ -16,7 +16,7 @@ function num(v: unknown, fallback: unknown){ const n=Number(v); return Number.is
 
 export default async function CotizacionClientePage({ params }: Props) {
   const clienteActual = await obtenerClienteActual(); const { id } = await params;
-  const cotizacion = await prisma.cotizacion.findFirst({ where: { id, clienteId: clienteActual.id }, include: { cliente:true, inmueble: true, paquete: true, versiones: { orderBy: { version: "desc" }, take: 1, select: { version: true, datos:true, total:true } } } });
+  const cotizacion = await prisma.cotizacion.findFirst({ where: { id, clienteId: clienteActual.id, zonaId: clienteActual.zonaId }, include: { cliente:true, inmueble: true, paquete: true, versiones: { orderBy: { version: "desc" }, take: 1, select: { version: true, datos:true, total:true } } } });
   if (!cotizacion) notFound();
   const estadosConsultables: EstadoCotizacion[] = [EstadoCotizacion.ENVIADA, EstadoCotizacion.ACEPTADA, EstadoCotizacion.RECHAZADA];
   const puedeConsultar = estadosConsultables.includes(cotizacion.estado); if (!puedeConsultar) notFound();

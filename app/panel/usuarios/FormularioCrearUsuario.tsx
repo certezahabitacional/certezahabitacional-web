@@ -20,29 +20,24 @@ export default function FormularioCrearUsuario({ rolesCreables, zonas, gerentes,
   const [rol, setRol] = useState<RolUsuario | "">("");
   const [zonaId, setZonaId] = useState("");
   const [gerenteId, setGerenteId] = useState("");
-  const [alcance, setAlcance] = useState<"GLOBAL" | "ZONA">("GLOBAL");
 
   const internos = rolesCreables.filter(r => r !== RolUsuario.CLIENTE);
-  const esAdmin = rol === RolUsuario.ADMINISTRADOR;
-  const esVendedor = rol === RolUsuario.VENDEDOR;
-  const esGerente = rol === RolUsuario.GERENTE;
+  const esDirector = rol === RolUsuario.DIRECTOR;
   const esCoordinador = rol === RolUsuario.COORDINADOR;
   const esInspector = rol === RolUsuario.INSPECTOR;
-  const mostrarZona = esVendedor || esGerente || esCoordinador || esInspector || (esAdmin && alcance === "ZONA");
+  const mostrarZona = Boolean(rol) && !esDirector;
   const mostrarGerente = esCoordinador || esInspector;
 
   const gerentesZona = useMemo(() => gerentes.filter(g => g.zonaId === zonaId), [gerentes, zonaId]);
   const coordinadoresDisponibles = useMemo(() => coordinadores.filter(c => c.zonaId === zonaId && c.gerenteId === gerenteId), [coordinadores, zonaId, gerenteId]);
 
   return <form action={crearUsuarioFase2} className="mt-7 space-y-5">
-    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm leading-6 text-cyan-100">Usuarios es el único módulo para crear cuentas internas. Los clientes se originan desde Pre-cotizaciones y no se dan de alta manualmente.</div>
+    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm leading-6 text-cyan-100">Todos los usuarios internos, excepto Dirección, deben pertenecer obligatoriamente a una zona. Su acceso quedará limitado a la información de esa zona.</div>
     <Campo nombre="nombre" etiqueta="Nombre completo" tipo="text" />
     <Campo nombre="email" etiqueta="Correo / usuario de acceso" tipo="email" />
     <PasswordField name="password" label="Contraseña inicial" autoComplete="new-password" minLength={8} inputClassName="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 pr-24 outline-none focus:border-cyan-300" />
 
-    <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Rol</span><select name="rol" required value={rol} onChange={e => { setRol(e.target.value as RolUsuario); setZonaId(""); setGerenteId(""); setAlcance("GLOBAL"); }} className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"><option value="" disabled>Selecciona un rol</option>{internos.map(r => <option key={r} value={r}>{etiqueta(r)}</option>)}</select></label>
-
-    {esAdmin && <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Alcance administrativo</span><select name="alcanceAdministrador" value={alcance} onChange={e => { setAlcance(e.target.value as "GLOBAL" | "ZONA"); if (e.target.value === "GLOBAL") setZonaId(""); }} className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"><option value="GLOBAL">Global</option><option value="ZONA">Por zona</option></select></label>}
+    <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Rol</span><select name="rol" required value={rol} onChange={e => { setRol(e.target.value as RolUsuario); setZonaId(""); setGerenteId(""); }} className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"><option value="" disabled>Selecciona un rol</option>{internos.map(r => <option key={r} value={r}>{etiqueta(r)}</option>)}</select></label>
 
     {mostrarZona && <label className="block"><span className="mb-2 block text-sm font-bold text-slate-300">Zona *</span><select name="zonaId" required value={zonaId} onChange={e => { setZonaId(e.target.value); setGerenteId(""); }} className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"><option value="" disabled>Selecciona una zona</option>{zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}</select></label>}
 
