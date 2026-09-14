@@ -26,7 +26,8 @@ export default async function InspeccionLayout({ children, params }: { children:
   const permitidos: RolUsuario[] = [RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.VENDEDOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR,RolUsuario.INSPECTOR];
   if (!permitidos.includes(usuario.rol)) redirect("/acceso");
 
-  const puedeVerAjustes = [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.INSPECTOR].includes(usuario.rol as RolUsuario);
+  const rolesAjustes: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.INSPECTOR];
+  const puedeVerAjustes = rolesAjustes.includes(usuario.rol);
 
   return <>
     {children}
