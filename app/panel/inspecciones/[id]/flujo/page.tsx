@@ -101,7 +101,10 @@ export default async function FlujoCampoPage({
   if (!inspeccion) notFound();
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const consulta = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR].includes(usuario.rol);
+  const consulta =
+    usuario.rol === RolUsuario.DIRECTOR ||
+    usuario.rol === RolUsuario.GERENTE ||
+    usuario.rol === RolUsuario.COORDINADOR;
   if (!esInspector && !consulta) redirect("/acceso");
 
   const liberacionCaja = inspeccion.estado === EstadoInspeccion.PROGRAMADA ? await validarInicioCampoPorCaja(id) : null;
