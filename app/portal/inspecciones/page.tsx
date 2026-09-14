@@ -10,7 +10,7 @@ function formatoFecha(fecha: Date, zonaHoraria: string) {
 export default async function PortalInspeccionesPage() {
   const cliente = await obtenerClienteActual();
   const inspecciones = await prisma.inspeccion.findMany({
-    where: inspeccionLiberadaParaCliente(cliente.id),
+    where: inspeccionLiberadaParaCliente(cliente.id, cliente.zonaId),
     include: {
       inmueble: true,
       inspector: { include: { usuario: true } },
