@@ -12,7 +12,7 @@ async function crearUrlEvidencia(ruta:string){if(ruta.startsWith("http://")||rut
 
 export default async function PortalInspeccionDetallePage({params}:{params:Promise<{id:string}>}){
  const cliente=await obtenerClienteActual();const {id}=await params;
- const inspeccion=await prisma.inspeccion.findFirst({where:{id,...inspeccionLiberadaParaCliente(cliente.id)},include:{inmueble:true,inspector:{include:{usuario:true}},hallazgos:{include:{fotografias:{orderBy:{creadaEn:"asc"}}},orderBy:[{prioridad:"asc"},{creadoEn:"asc"}]},fotografias:{where:{hallazgoId:null},orderBy:{creadaEn:"asc"}},firmas:{orderBy:{firmadaEn:"asc"}},certificado:true}});
+ const inspeccion=await prisma.inspeccion.findFirst({where:{id,...inspeccionLiberadaParaCliente(cliente.id,cliente.zonaId)},include:{inmueble:true,inspector:{include:{usuario:true}},hallazgos:{include:{fotografias:{orderBy:{creadaEn:"asc"}}},orderBy:[{prioridad:"asc"},{creadoEn:"asc"}]},fotografias:{where:{hallazgoId:null},orderBy:{creadaEn:"asc"}},firmas:{orderBy:{firmadaEn:"asc"}},certificado:true}});
  if(!inspeccion)notFound();
  const seleccion=await obtenerSeleccionEvidenciaReporte(id);
  const hallazgos=inspeccion.hallazgos.map(h=>({...h,fotografias:ordenarYFiltrarFotografias(h.fotografias,seleccion)}));
