@@ -59,10 +59,20 @@ export default async function InspeccionesPage({ searchParams }: { searchParams:
 
   const inspecciones = await prisma.inspeccion.findMany({
     where,
-    select: { id: true, folio: true, numeroInspeccion: true, fechaProgramada: true, estado: true, zonaHoraria: true,
-      cliente: { select: { nombre: true } }, inmueble: { select: { alias: true, direccion: true, ciudad: true } },
-      inspector: { select: { usuario: { select: { nombre: true } } }, zona: { select: { nombre: true, codigo: true, zonaHoraria: true } } },
-    orderBy: [{ fechaProgramada: "desc" }, { folio: "desc" }], take: 500,
+    select: {
+      id: true,
+      folio: true,
+      numeroInspeccion: true,
+      fechaProgramada: true,
+      estado: true,
+      zonaHoraria: true,
+      cliente: { select: { nombre: true } },
+      inmueble: { select: { alias: true, direccion: true, ciudad: true } },
+      inspector: { select: { usuario: { select: { nombre: true } } } },
+      zona: { select: { nombre: true, codigo: true, zonaHoraria: true } },
+    },
+    orderBy: [{ fechaProgramada: "desc" }, { folio: "desc" }],
+    take: 500,
   });
   const inspectores = Array.from(new Set(inspecciones.map(i => i.inspector?.usuario.nombre).filter((n): n is string => Boolean(n)))).sort((a,b)=>a.localeCompare(b,"es"));
   const puedeAbrirExpediente = puedeVerExpedienteTecnico(usuario.rol);
