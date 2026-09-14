@@ -39,6 +39,7 @@ create index if not exists "AjusteComercial_inspeccionId_idx" on public."AjusteC
 create index if not exists "AjusteComercial_estado_idx" on public."AjusteComercial"("estado");
 create index if not exists "AjusteComercial_propuestoPorId_idx" on public."AjusteComercial"("propuestoPorId");
 create index if not exists "AjusteComercial_autorizadoPorId_idx" on public."AjusteComercial"("autorizadoPorId");
+create index if not exists "AjusteComercial_rechazadoPorId_idx" on public."AjusteComercial"("rechazadoPorId");
 create index if not exists "AjusteComercial_aplicadoPorId_idx" on public."AjusteComercial"("aplicadoPorId");
 create index if not exists "AjusteComercial_aplicadoEn_idx" on public."AjusteComercial"("aplicadoEn");
 
