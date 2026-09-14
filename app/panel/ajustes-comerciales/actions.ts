@@ -12,6 +12,10 @@ function texto(fd: FormData, campo: string) { return String(fd.get(campo) ?? "")
 function numero(fd: FormData, campo: string) { const n = Number(texto(fd, campo).replace(",", ".")); return Number.isFinite(n) ? n : NaN; }
 function volver(destino: string, tipo: "ok" | "error", mensaje: string): never { redirect(`${destino}${destino.includes("?") ? "&" : "?"}${tipo}=${encodeURIComponent(mensaje)}`); }
 function incluido<T>(valor: T, opciones: readonly T[]) { return opciones.includes(valor); }
+function objetoJson(valor: Prisma.JsonValue | null | undefined): Prisma.InputJsonObject {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return {};
+  return valor as unknown as Prisma.InputJsonObject;
+}
 
 async function usuarioActual() {
   const sesion = await auth();
@@ -28,7 +32,8 @@ async function obtenerAjuste(id: string) {
   const filas = await prisma.$queryRaw<Array<{
     id: string; cotizacionId: string; inspeccionId: string | null; tipo: string; origen: string; concepto: string; motivo: string;
     monto: Prisma.Decimal; estado: string; requiereAceptacionCliente: boolean; aceptadoCliente: boolean; aplicadoEn: Date | null;
-  }>>`SELECT "id","cotizacionId","inspeccionId","tipo","origen","concepto","motivo","monto","estado","requiereAceptacionCliente","aceptadoCliente","aplicadoEn" FROM "AjusteComercial" WHERE "id"=${id}`;
+    versionCotizacionOrigen: number | null;
+  }>>`SELECT "id","cotizacionId","inspeccionId","tipo","origen","concepto","motivo","monto","estado","requiereAceptacionCliente","aceptadoCliente","aplicadoEn","versionCotizacionOrigen" FROM "AjusteComercial" WHERE "id"=${id}`;
   return filas[0] ?? null;
 }
 
@@ -160,9 +165,32 @@ export async function aplicarAjusteComercial(formData: FormData) {
 
   const cotizacion = await prisma.cotizacion.findUnique({
     where: { id: ajuste.cotizacionId },
-    select: { id: true, folio: true, versionActual: true, total: true, subtotal: true, cargosExtra: true, descuento: true, montoPagado: true, estadoPago: true },
+    select: {
+      id: true,
+      folio: true,
+      versionActual: true,
+      total: true,
+      subtotal: true,
+      cargosExtra: true,
+      descuento: true,
+      montoPagado: true,
+      estadoPago: true,
+      versiones: {
+        orderBy: { version: "desc" },
+        take: 1,
+        select: { version: true, datos: true },
+      },
+    },
   });
   if (!cotizacion) volver(destino, "error", "La cotización relacionada ya no existe.");
+
+  const versionBase = cotizacion.versiones[0];
+  if (!versionBase || versionBase.version !== cotizacion.versionActual) {
+    volver(destino, "error", "La versión documental no coincide con la versión vigente de la cotización. Corrige la inconsistencia antes de aplicar el ajuste.");
+  }
+  if (ajuste.versionCotizacionOrigen === null || ajuste.versionCotizacionOrigen !== cotizacion.versionActual) {
+    volver(destino, "error", `La cotización cambió después de proponer este ajuste. El ajuste corresponde a V${ajuste.versionCotizacionOrigen ?? "?"} y la cotización está en V${cotizacion.versionActual}. Debe proponerse y aceptarse nuevamente sobre la versión vigente.`);
+  }
 
   const monto = Number(ajuste.monto);
   const totalAnterior = Number(cotizacion.total);
@@ -177,18 +205,38 @@ export async function aplicarAjusteComercial(formData: FormData) {
   const pagado = Number(cotizacion.montoPagado);
   const estadoPagoNuevo = pagado >= totalNuevo - 0.001 ? EstadoPago.PAGADO : pagado > 0 ? EstadoPago.PARCIAL : EstadoPago.PENDIENTE;
 
-  const snapshot: Prisma.InputJsonObject = {
-    origen: "AJUSTE_COMERCIAL",
+  const datosBase = objetoJson(versionBase.datos);
+  const ajustesPrevios: Prisma.InputJsonValue[] = Array.isArray(datosBase.ajustesComerciales)
+    ? [...datosBase.ajustesComerciales]
+    : [];
+  const registroAjuste: Prisma.InputJsonObject = {
     ajusteId,
     tipo: ajuste.tipo,
+    origen: ajuste.origen,
     concepto: ajuste.concepto,
     motivo: ajuste.motivo,
     monto,
-    totalAnterior,
-    totalNuevo,
-    pagosHistoricosPreservados: pagado,
+    versionCotizacionOrigen: ajuste.versionCotizacionOrigen,
+    versionCotizacionAplicada: versionNueva,
+    requiereAceptacionCliente: ajuste.requiereAceptacionCliente,
+    aceptadoCliente: ajuste.aceptadoCliente,
     aplicadoPor: usuario.nombre,
     aplicadoPorRol: usuario.rol,
+    aplicadoEn: new Date().toISOString(),
+  };
+  const snapshot: Prisma.InputJsonObject = {
+    ...datosBase,
+    origenVersionBase: typeof datosBase.origen === "string" ? datosBase.origen : "VERSION_PREVIA",
+    origen: "AJUSTE_COMERCIAL",
+    versionBase: cotizacion.versionActual,
+    ajusteActual: registroAjuste,
+    ajustesComerciales: [...ajustesPrevios, registroAjuste],
+    total: totalNuevo,
+    subtotal: subtotalNuevo,
+    cargosExtra: cargosNuevos,
+    descuento: descuentoNuevo,
+    montoPagado: pagado,
+    estadoPago: estadoPagoNuevo,
   };
 
   await prisma.$transaction(async (tx) => {
@@ -203,7 +251,14 @@ export async function aplicarAjusteComercial(formData: FormData) {
         estadoPago: estadoPagoNuevo,
       },
     });
-    await tx.cotizacionVersion.create({ data: { cotizacionId: cotizacion.id, version: versionNueva, datos: snapshot, total: new Prisma.Decimal(totalNuevo) } });
+    await tx.cotizacionVersion.create({
+      data: {
+        cotizacionId: cotizacion.id,
+        version: versionNueva,
+        datos: snapshot,
+        total: new Prisma.Decimal(totalNuevo),
+      },
+    });
     await tx.$executeRaw`UPDATE "AjusteComercial" SET "aplicadoPorId"=${usuario.id},"aplicadoEn"=NOW(),"versionCotizacionAplicada"=${versionNueva} WHERE "id"=${ajusteId}::uuid AND "aplicadoEn" IS NULL`;
   });
 
@@ -217,5 +272,5 @@ export async function aplicarAjusteComercial(formData: FormData) {
 
   revalidatePath("/panel/pre-cotizaciones"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/caja");
   if (ajuste.inspeccionId) revalidatePath(`/panel/inspecciones/${ajuste.inspeccionId}`);
-  volver(destino, "ok", `Ajuste aplicado. La cotización quedó en V${versionNueva}; los pagos históricos se conservaron.`);
+  volver(destino, "ok", `Ajuste aplicado. La cotización quedó en V${versionNueva}; se conservó íntegro el snapshot de V${cotizacion.versionActual} y los pagos históricos.`);
 }
