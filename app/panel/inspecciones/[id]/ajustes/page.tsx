@@ -61,8 +61,9 @@ export default async function AjustesInspeccionPage({
   const { id } = await params;
   const mensajes = await searchParams;
   const usuario = await obtenerUsuarioConAlcanceZona(`/panel/inspecciones/${id}/ajustes`);
+  const rolesPermitidos: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.INSPECTOR];
 
-  if (![RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.INSPECTOR].includes(usuario.rol as RolUsuario)) {
+  if (!rolesPermitidos.includes(usuario.rol)) {
     redirect("/acceso");
   }
 
