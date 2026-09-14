@@ -13,6 +13,12 @@ function numero(formData: FormData, campo: string) { const valor=Number(texto(fo
 async function gestor() { const usuario=await obtenerUsuarioConAlcanceZona("/panel/pre-cotizaciones"); if(usuario.rol!==RolUsuario.DIRECTOR&&usuario.rol!==RolUsuario.ADMINISTRADOR) redirect("/acceso"); return usuario; }
 function volver(id:string,tipo:"ok"|"error",mensaje:string):never{redirect(`/panel/pre-cotizaciones/${id}/editar?${tipo}=${encodeURIComponent(mensaje)}`);}
 
+const ESTADOS_EDITABLES_PRE_COTIZACION = new Set<EstadoCotizacion>([
+  EstadoCotizacion.BORRADOR,
+  EstadoCotizacion.ENVIADA,
+  EstadoCotizacion.ACEPTADA,
+]);
+
 export async function guardarPreCotizacion(formData: FormData) {
   const usuario=await gestor(); const id=texto(formData,"id"); if(!id) redirect("/panel/pre-cotizaciones");
   const nombre=texto(formData,"nombre"),telefono=texto(formData,"telefono"),correo=texto(formData,"correo"),tipo=texto(formData,"tipo") as TipoCliente,empresa=texto(formData,"empresa")||null,direccionCliente=texto(formData,"direccionCliente")||null,coloniaCliente=texto(formData,"coloniaCliente")||null,ciudadCliente=texto(formData,"ciudadCliente")||null,estadoCliente=texto(formData,"estadoCliente")||null,codigoPostalCliente=texto(formData,"codigoPostalCliente")||null;
@@ -27,7 +33,7 @@ export async function guardarPreCotizacion(formData: FormData) {
   const cotizacion=await prisma.cotizacion.findUnique({where:{id},select:{id:true,folio:true,estado:true,zonaId:true,clienteId:true,inmuebleId:true,versionActual:true,montoPagado:true}});
   if(!cotizacion) volver(id,"error","La pre-cotización no existe.");
   if(!puedeAccederZona(usuario,cotizacion.zonaId)) volver(id,"error","No tienes acceso para editar una pre-cotización de otra zona.");
-  const estadosEditables=[EstadoCotizacion.BORRADOR,EstadoCotizacion.ENVIADA,EstadoCotizacion.ACEPTADA]; if(!estadosEditables.includes(cotizacion.estado)) volver(id,"error","Solo se pueden editar registros que estén en Pre-cotizaciones.");
+  if(!ESTADOS_EDITABLES_PRE_COTIZACION.has(cotizacion.estado)) volver(id,"error","Solo se pueden editar registros que estén en Pre-cotizaciones.");
   if(!cotizacion.inmuebleId) volver(id,"error","La pre-cotización no tiene inmueble asociado.");
   const nuevaVersion=cotizacion.versionActual+1; const vigenciaHasta=vigencia?new Date(`${vigencia}T23:59:59`):null; if(vigenciaHasta&&Number.isNaN(vigenciaHasta.getTime())) volver(id,"error","La vigencia capturada no es válida.");
   const snapshot:Prisma.InputJsonObject={origen:"EDICION_PRE_COTIZACION",estadoCambios:"PENDIENTES_AUTORIZACION",motivo,editadoPor:usuario.nombre,editadoPorRol:usuario.rol,cliente:{nombre,telefono,correo,tipo,empresa:empresa??"",direccion:direccionCliente??"",colonia:coloniaCliente??"",ciudad:ciudadCliente??"",estado:estadoCliente??"",codigoPostal:codigoPostalCliente??""},inmueble:{alias,direccion:direccionInmueble,colonia:coloniaInmueble??"",ciudad:ciudadInmueble,estado:estadoInmueble,codigoPostal:codigoPostalInmueble??"",m2Terreno,m2Construccion},total};
