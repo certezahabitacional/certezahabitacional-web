@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -8,11 +9,11 @@ import { prisma } from "@/lib/prisma";
  * Nunca resuelve el cliente por parámetros de URL ni por datos enviados desde el navegador.
  * El cliente siempre se obtiene a partir del usuario autenticado y de su zona asignada.
  */
-export async function obtenerClienteActual() {
+const cargarClienteActual = cache(async () => {
   const session = await auth();
 
   if (!session?.user?.id) {
-    redirect("/login?callbackUrl=/portal");
+    return { autenticado: false as const, usuario: null };
   }
 
   const usuario = await prisma.usuario.findUnique({
@@ -25,6 +26,16 @@ export async function obtenerClienteActual() {
       cliente: true,
     },
   });
+
+  return { autenticado: true as const, usuario };
+});
+
+export async function obtenerClienteActual() {
+  const { autenticado, usuario } = await cargarClienteActual();
+
+  if (!autenticado) {
+    redirect("/login?callbackUrl=/portal");
+  }
 
   if (!usuario || !usuario.activo) {
     redirect("/login?error=Usuario%20no%20disponible");
