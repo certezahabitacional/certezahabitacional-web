@@ -298,13 +298,6 @@ export async function POST(
   const nombreCliente = acceso.inspeccion.cliente.nombre;
 
   await prisma.$transaction(async (tx) => {
-    await tx.firma.deleteMany({
-      where: {
-        inspeccionId: id,
-        tipo: { in: [...TIPOS] },
-      },
-    });
-
     await tx.firma.create({
       data: {
         inspeccionId: id,
@@ -331,7 +324,7 @@ export async function POST(
     inspeccionId: acceso.inspeccion.id,
     usuarioId: acceso.usuario.id,
     descripcion:
-      `Inspector ${nombreInspector} registró las firmas del Inspector y del Cliente en la inspección ${acceso.inspeccion.folio}.`,
+      `Inspector ${nombreInspector} agregó una nueva versión de las firmas del Inspector y del Cliente en la inspección ${acceso.inspeccion.folio}; las firmas anteriores se conservaron como historial.`,
   });
 
   return NextResponse.json({ ok: true });
