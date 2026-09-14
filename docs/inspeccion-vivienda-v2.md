@@ -76,6 +76,16 @@ La visita V1 aplica todos los requerimientos iniciales del Método Certeza®:
 7. Los ajustes aplicados deben generar nueva versión comercial y actualizar el saldo pendiente sin borrar pagos históricos.
 8. Si un ajuste aumenta el saldo, el certificado no podrá liberarse hasta que la condición financiera correspondiente quede resuelta, salvo una política futura expresamente aprobada por Dirección.
 
+## Trazabilidad y documentación obligatoria
+
+1. Ningún cambio relevante debe sobrescribir la historia previa.
+2. Cada modificación debe registrar, cuando corresponda: usuario, rol, fecha/hora, entidad afectada, dato anterior, dato nuevo, motivo, origen, autorización/rechazo, inspección/cotización relacionada, IP y navegador.
+3. La bitácora estructurada es **inmutable**: la operación normal del sistema no puede editar ni eliminar registros históricos.
+4. La auditoría narrativa existente se conserva y se complementa con un historial estructurado de antes/después.
+5. Los cambios que deben quedar documentados incluyen, como mínimo: versiones de cotización, cargos, descuentos, pagos, cambios de alcance, reasignaciones, cambios de agenda, apertura/cierre/reapertura de inspección, edición de hallazgos, seguimientos V2+, selección de evidencias, modificaciones de reporte, autorizaciones, rechazos, emisión y revocación de certificados.
+6. Cuando un cambio afecte una condición ya aceptada por el cliente, el sistema deberá conservar la aceptación anterior como antecedente y solicitar nueva aceptación cuando la regla comercial aplicable lo requiera.
+7. El historial debe permitir reconstruir cronológicamente el expediente completo para aclaraciones del cliente, auditoría interna o defensa de Certeza Habitacional.
+
 ## Reporte
 
 Se conserva la identidad visual actualmente autorizada. En una fase posterior se ajustarán únicamente portada, índice, resumen, paginación, bibliografía, control de saltos de página y selección editorial de evidencias, evitando duplicidad de información.
