@@ -1,4 +1,5 @@
 import { RolUsuario } from "@prisma/client";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -20,12 +21,10 @@ export type UsuarioConAlcanceZona = {
   inspector: { id: string } | null;
 };
 
-export async function obtenerUsuarioConAlcanceZona(
-  callbackUrl = "/panel",
-): Promise<UsuarioConAlcanceZona> {
+const cargarUsuarioConAlcanceZona = cache(async () => {
   const session = await auth();
   if (!session?.user?.id) {
-    redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    return { autenticado: false as const, usuario: null };
   }
 
   const usuario = await prisma.usuario.findUnique({
@@ -48,6 +47,18 @@ export async function obtenerUsuarioConAlcanceZona(
       inspector: { select: { id: true } },
     },
   });
+
+  return { autenticado: true as const, usuario };
+});
+
+export async function obtenerUsuarioConAlcanceZona(
+  callbackUrl = "/panel",
+): Promise<UsuarioConAlcanceZona> {
+  const { autenticado, usuario } = await cargarUsuarioConAlcanceZona();
+
+  if (!autenticado) {
+    redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+  }
 
   if (!usuario?.activo) redirect("/acceso");
 
