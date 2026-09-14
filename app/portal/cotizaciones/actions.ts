@@ -10,9 +10,9 @@ import { prisma } from "@/lib/prisma";
 function texto(formData: FormData, campo: string) { return String(formData.get(campo) ?? "").trim(); }
 function versionFormulario(formData: FormData) { const v = Number(texto(formData, "version")); return Number.isInteger(v) && v > 0 ? v : null; }
 
-async function cotizacionClienteVigente(clienteId: string, id: string) {
+async function cotizacionClienteVigente(clienteId: string, zonaId: string, id: string) {
   return prisma.cotizacion.findFirst({
-    where: { id, clienteId },
+    where: { id, clienteId, zonaId },
     select: {
       id: true,
       folio: true,
@@ -25,7 +25,7 @@ async function cotizacionClienteVigente(clienteId: string, id: string) {
 }
 
 function validarVersionVista(cotizacion: Awaited<ReturnType<typeof cotizacionClienteVigente>>, versionVista: number | null) {
-  if (!cotizacion) throw new Error("La cotización no existe o no pertenece a tu cuenta.");
+  if (!cotizacion) throw new Error("La cotización no existe o no pertenece a tu cuenta y zona.");
   const ultima = cotizacion.versiones[0];
   if (!ultima || ultima.version !== cotizacion.versionActual) {
     throw new Error("La cotización fue actualizada y requiere recargarse antes de responder.");
@@ -44,9 +44,9 @@ export async function aceptarCotizacionCliente(formData: FormData) {
   if (!id) throw new Error("Cotización inválida.");
   if (!aceptaTerminos) throw new Error("Debes confirmar que revisaste la cotización antes de aceptarla.");
 
-  const cotizacion = await cotizacionClienteVigente(cliente.id, id);
+  const cotizacion = await cotizacionClienteVigente(cliente.id, cliente.zonaId, id);
   validarVersionVista(cotizacion, versionVista);
-  if (!cotizacion) throw new Error("La cotización no existe o no pertenece a tu cuenta.");
+  if (!cotizacion) throw new Error("La cotización no existe o no pertenece a tu cuenta y zona.");
   if (cotizacion.estado !== EstadoCotizacion.ENVIADA) throw new Error("Esta cotización ya no está disponible para aceptación.");
   if (cotizacion.vigenciaHasta && cotizacion.vigenciaHasta < new Date()) throw new Error("La vigencia de esta cotización terminó. Contacta a Certeza Habitacional para actualizarla.");
 
@@ -77,9 +77,9 @@ export async function rechazarCotizacionCliente(formData: FormData) {
   const motivo = texto(formData, "motivo") || null;
   if (!id) throw new Error("Cotización inválida.");
 
-  const cotizacion = await cotizacionClienteVigente(cliente.id, id);
+  const cotizacion = await cotizacionClienteVigente(cliente.id, cliente.zonaId, id);
   validarVersionVista(cotizacion, versionVista);
-  if (!cotizacion) throw new Error("La cotización no existe o no pertenece a tu cuenta.");
+  if (!cotizacion) throw new Error("La cotización no existe o no pertenece a tu cuenta y zona.");
   if (cotizacion.estado !== EstadoCotizacion.ENVIADA) throw new Error("Esta cotización ya no está disponible para rechazo.");
 
   await prisma.cotizacion.update({ where: { id }, data: { estado: EstadoCotizacion.RECHAZADA, motivoRechazo: motivo } });
