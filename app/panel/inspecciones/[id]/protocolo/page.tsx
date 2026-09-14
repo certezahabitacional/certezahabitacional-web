@@ -3,6 +3,7 @@ import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { obtenerResultadosPruebas, type ResultadoPrueba } from "@/lib/protocolo-pruebas";
 import { prisma } from "@/lib/prisma";
 import { actualizarPasoProtocolo, inicializarProtocoloV1 } from "./actions";
 
@@ -21,6 +22,35 @@ type Paso = {
 };
 
 const estadosTerminados = ["COMPLETADO", "NO_APLICA"];
+
+function textoResultado(resultado: ResultadoPrueba) {
+  if (resultado.resultado === "NO_APLICA") return "No aplica";
+  if (resultado.resultado === "NO_EVALUABLE") return "Pendiente de cierre";
+  if (resultado.resultado === "CAIDA_DETECTADA") return "Caída de presión detectada";
+  return "Sin caída de presión detectada";
+}
+
+function colorResultado(resultado: ResultadoPrueba) {
+  if (resultado.resultado === "CAIDA_DETECTADA") return "border-rose-300/20 bg-rose-300/5 text-rose-200";
+  if (resultado.resultado === "SIN_CAIDA_DETECTADA") return "border-emerald-300/20 bg-emerald-300/5 text-emerald-200";
+  return "border-white/10 bg-slate-900 text-slate-300";
+}
+
+function TarjetaPrueba({ titulo, resultado }: { titulo: string; resultado: ResultadoPrueba }) {
+  return (
+    <article className={`rounded-3xl border p-5 ${colorResultado(resultado)}`}>
+      <p className="text-xs font-black uppercase tracking-wider opacity-70">{titulo}</p>
+      <p className="mt-2 text-lg font-black">{textoResultado(resultado)}</p>
+      <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+        <p>Inicial: <strong>{resultado.lecturaInicial ?? "—"} {resultado.unidad ?? ""}</strong></p>
+        <p>Final: <strong>{resultado.lecturaFinal ?? "—"} {resultado.unidad ?? ""}</strong></p>
+        <p>Diferencia: <strong>{resultado.diferencia ?? "—"} {resultado.unidad ?? ""}</strong></p>
+        <p>Variación: <strong>{resultado.variacionPorcentual === null ? "—" : `${resultado.variacionPorcentual}%`}</strong></p>
+      </div>
+      <p className="mt-4 text-xs opacity-70">Resultado descriptivo. La aceptación normativa se definirá con el criterio técnico autorizado del protocolo.</p>
+    </article>
+  );
+}
 
 export default async function ProtocoloPage({
   params,
@@ -73,6 +103,7 @@ export default async function ProtocoloPage({
   const siguiente = pasos.find((paso) => paso.obligatorio && !estadosTerminados.includes(paso.estado));
   const completos = pasos.filter((paso) => estadosTerminados.includes(paso.estado)).length;
   const puedeCapturar = esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const resultados = obtenerResultadosPruebas(pasos);
 
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
@@ -88,6 +119,13 @@ export default async function ProtocoloPage({
 
         {query.error ? <p className="mt-5 rounded-2xl bg-rose-400/10 p-4 font-bold text-rose-300">{query.error}</p> : null}
         {query.ok ? <p className="mt-5 rounded-2xl bg-emerald-400/10 p-4 font-bold text-emerald-300">{query.ok}</p> : null}
+
+        {pasos.length > 0 ? (
+          <section className="mt-7 grid gap-4 md:grid-cols-2">
+            <TarjetaPrueba titulo="Prueba hidráulica" resultado={resultados.hidraulica} />
+            <TarjetaPrueba titulo="Hermeticidad de gas" resultado={resultados.gas} />
+          </section>
+        ) : null}
 
         {pasos.length === 0 ? (
           <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
