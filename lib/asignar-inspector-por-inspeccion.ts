@@ -32,7 +32,9 @@ export async function asignarInspectorPorInspeccion(formData: FormData): Promise
   if (!inspectorId) error(inspeccionId, "Selecciona un Inspector para continuar.");
 
   const usuarioGestor = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { id: true, rol: true, activo: true } });
-  if (!usuarioGestor?.activo || ![RolUsuario.GERENTE, RolUsuario.ADMINISTRADOR, RolUsuario.DIRECTOR].includes(usuarioGestor.rol)) redirect("/acceso");
+  if (!usuarioGestor?.activo) redirect("/acceso");
+  const rolPermitido = usuarioGestor.rol === RolUsuario.GERENTE || usuarioGestor.rol === RolUsuario.ADMINISTRADOR || usuarioGestor.rol === RolUsuario.DIRECTOR;
+  if (!rolPermitido) redirect("/acceso");
   if (usuarioGestor.rol === RolUsuario.GERENTE && !(await usuarioAsignadoAInspeccion(inspeccionId, usuarioGestor.id, "GERENTE"))) error(inspeccionId, "Esta inspección no está asignada a tu Gerencia.");
 
   const inspeccion = await prisma.inspeccion.findUnique({
@@ -59,13 +61,14 @@ export async function asignarInspectorPorInspeccion(formData: FormData): Promise
     ok(inspeccionId, `Inspector asignado correctamente: ${nombreNuevo}.`);
   }
 
+  const inspectorAnteriorId = inspeccion.inspectorId;
   if (motivo.length < 10) error(inspeccionId, "Indica un motivo de al menos 10 caracteres para solicitar o realizar la reasignación.");
   const pendiente = await prisma.reasignacionInspector.findFirst({ where: { inspeccionId, estado: EstadoReasignacionInspector.PENDIENTE }, select: { id: true } });
   if (pendiente) error(inspeccionId, "Ya existe una solicitud de reasignación pendiente para esta inspección.");
 
   if (usuarioGestor.rol === RolUsuario.DIRECTOR || usuarioGestor.rol === RolUsuario.ADMINISTRADOR) {
     await prisma.$transaction(async (tx) => {
-      await tx.reasignacionInspector.create({ data: { inspeccionId, inspectorAnteriorId: inspeccion.inspectorId, inspectorPropuestoId: inspectorNuevo.id, solicitadaPorId: usuarioGestor.id, resueltaPorId: usuarioGestor.id, estado: EstadoReasignacionInspector.AUTORIZADA, motivo, comentarioResolucion: `Reasignación autorizada y ejecutada directamente por ${usuarioGestor.rol}.`, resueltaEn: new Date() } });
+      await tx.reasignacionInspector.create({ data: { inspeccionId, inspectorAnteriorId, inspectorPropuestoId: inspectorNuevo.id, solicitadaPorId: usuarioGestor.id, resueltaPorId: usuarioGestor.id, estado: EstadoReasignacionInspector.AUTORIZADA, motivo, comentarioResolucion: `Reasignación autorizada y ejecutada directamente por ${usuarioGestor.rol}.`, resueltaEn: new Date() } });
       await tx.inspeccion.update({ where: { id: inspeccionId }, data: { inspectorId: inspectorNuevo.id } });
     });
     await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "Inspeccion", entidadId: inspeccion.id, inspeccionId, usuarioId: usuarioGestor.id, origen: "ASIGNACION_POR_INSPECCION", descripcion: `${usuarioGestor.rol} reasignó ${inspeccion.folio} de ${nombreAnterior} a ${nombreNuevo}. Motivo: ${motivo}` });
@@ -73,7 +76,7 @@ export async function asignarInspectorPorInspeccion(formData: FormData): Promise
     ok(inspeccionId, `Inspector reasignado: ${nombreNuevo}.`);
   }
 
-  const solicitud = await prisma.reasignacionInspector.create({ data: { inspeccionId, inspectorAnteriorId: inspeccion.inspectorId, inspectorPropuestoId: inspectorNuevo.id, solicitadaPorId: usuarioGestor.id, estado: EstadoReasignacionInspector.PENDIENTE, motivo } });
+  const solicitud = await prisma.reasignacionInspector.create({ data: { inspeccionId, inspectorAnteriorId, inspectorPropuestoId: inspectorNuevo.id, solicitadaPorId: usuarioGestor.id, estado: EstadoReasignacionInspector.PENDIENTE, motivo } });
   await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "ReasignacionInspector", entidadId: solicitud.id, inspeccionId, usuarioId: usuarioGestor.id, origen: "ASIGNACION_POR_INSPECCION", descripcion: `Gerencia solicitó reasignar ${inspeccion.folio} de ${nombreAnterior} a ${nombreNuevo}. Motivo: ${motivo}` });
   revalidar(inspeccionId);
   ok(inspeccionId, "Solicitud de reasignación enviada a Administración. El Inspector actual continúa asignado hasta que sea autorizada.");
