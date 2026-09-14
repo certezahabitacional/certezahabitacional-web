@@ -37,9 +37,7 @@ async function exigirInspectorAsignado(inspeccionId: string) {
     select: { id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true },
   });
 
-  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.id) {
-    redirect("/acceso");
-  }
+  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.id) redirect("/acceso");
   if (!inspeccion || inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "El protocolo integral corresponde a la inspección inicial V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "El protocolo solo puede capturarse con la inspección EN PROCESO.");
@@ -116,9 +114,7 @@ export async function actualizarPasoProtocolo(formData: FormData) {
   const previosPendientes = pasos.filter(
     (p) => p.orden < paso.orden && p.obligatorio && !["COMPLETADO", "NO_APLICA"].includes(p.estado),
   );
-  if (previosPendientes.length > 0) {
-    volver(inspeccionId, "error", `Primero completa: ${previosPendientes[0].nombre}.`);
-  }
+  if (previosPendientes.length > 0) volver(inspeccionId, "error", `Primero completa: ${previosPendientes[0].nombre}.`);
 
   if (accion === "NO_APLICA") {
     await prisma.$executeRaw`
@@ -127,23 +123,20 @@ export async function actualizarPasoProtocolo(formData: FormData) {
       WHERE "id"=${pasoId}::uuid AND "inspeccionId"=${inspeccionId}
     `;
   } else if (accion === "INICIAR") {
-    if (paso.tipo === "PRUEBA_INICIAL" && lectura === null) {
-      volver(inspeccionId, "error", "Registra la lectura inicial antes de abrir la prueba.");
-    }
+    if (paso.tipo === "PRUEBA_INICIAL" && lectura === null) volver(inspeccionId, "error", "Registra la lectura inicial antes de abrir la prueba.");
     await prisma.$executeRaw`
       UPDATE "ProtocoloInspeccionPaso"
-      SET "estado"='EN_PROCESO',
+      SET "estado"='COMPLETADO',
           "lecturaInicial"=COALESCE(${lectura},"lecturaInicial"),
           "unidad"=COALESCE(${unidad},"unidad"),
           "comentario"=COALESCE(${comentario || null},"comentario"),
           "iniciadoEn"=COALESCE("iniciadoEn",NOW()),
+          "completadoEn"=NOW(),
           "actualizadoEn"=NOW()
       WHERE "id"=${pasoId}::uuid AND "inspeccionId"=${inspeccionId}
     `;
   } else if (accion === "COMPLETAR") {
-    if (paso.tipo === "PRUEBA_FINAL" && lectura === null) {
-      volver(inspeccionId, "error", "Registra la lectura final de la prueba antes de cerrarla.");
-    }
+    if (paso.tipo === "PRUEBA_FINAL" && lectura === null) volver(inspeccionId, "error", "Registra la lectura final de la prueba antes de cerrarla.");
     await prisma.$executeRaw`
       UPDATE "ProtocoloInspeccionPaso"
       SET "estado"='COMPLETADO',
