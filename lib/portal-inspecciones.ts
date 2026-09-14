@@ -7,15 +7,17 @@ import {
 
 /**
  * Regla única de publicación al Portal del Cliente.
- * Una inspección solo es visible cuando el expediente está cerrado,
- * no tiene bloqueo directivo, cuenta con una aprobación vigente y
- * tiene certificado vigente.
+ * Una inspección solo es visible cuando pertenece al cliente y a la zona
+ * de su cuenta, el expediente está cerrado, no tiene bloqueo directivo,
+ * cuenta con una aprobación vigente y tiene certificado vigente.
  */
 export function inspeccionLiberadaParaCliente(
   clienteId: string,
+  zonaId: string,
 ): Prisma.InspeccionWhereInput {
   return {
     clienteId,
+    zonaId,
     estado: EstadoInspeccion.FINALIZADA,
     liberacionBloqueada: false,
     revisiones: {
