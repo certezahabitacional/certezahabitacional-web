@@ -171,8 +171,8 @@ export default async function CampoV1Page({ params, searchParams }: {
 
                     <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/5 p-4">
                       <p className="font-black text-emerald-200">Cierre rápido sin hallazgos</p>
-                      <p className="mt-1 text-xs text-slate-400">Si todos los puntos aplicables quedaron revisados, basta evidencia representativa para cerrar.</p>
-                      <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.pendientes)>0 || Number(areaSeleccionada.fotos)<1 || Number(areaSeleccionada.hallazgos)>0} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SIN HALLAZGOS · CERRAR ÁREA</button></form>
+                      <p className="mt-1 text-xs text-slate-400">Confirma que revisaste todos los puntos aplicables del área. Los puntos pendientes se marcarán automáticamente como revisados.</p>
+                      <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1 || Number(areaSeleccionada.hallazgos)>0} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SIN HALLAZGOS · CERRAR ÁREA</button></form>
                     </div>
                   </div>
                 )}
