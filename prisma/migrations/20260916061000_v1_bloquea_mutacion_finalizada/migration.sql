@@ -64,8 +64,7 @@ BEGIN
     'Hallazgo',
     'Fotografia',
     'Firma',
-    'DocumentoProyectoInspeccion',
-    'InspeccionControlV2'
+    'DocumentoProyectoInspeccion'
   ]
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS trg_v1_bloquea_mutacion_finalizada ON %I', tabla);
