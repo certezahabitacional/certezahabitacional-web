@@ -116,14 +116,31 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
   `;
   if (!area) volver(inspeccionId, "error", "Área no encontrada.");
   if (area.hallazgos > 0) volver(inspeccionId, "error", "El área contiene hallazgos y debe cerrarse por el flujo correspondiente.");
-  if (area.pendientes > 0) volver(inspeccionId, "error", `Faltan ${area.pendientes} punto(s) por revisar o marcar No aplica.`);
   if (area.fotos < 1) volver(inspeccionId, "error", "Toma al menos una fotografía representativa del área.");
-  if (area.seleccionadas === 0) await prisma.$executeRaw`UPDATE "FotografiaArea" SET "seleccionadaReporte"=true WHERE "id" IN (SELECT "id" FROM "FotografiaArea" WHERE "areaId"=${areaId}::uuid ORDER BY "orden","creadoEn" LIMIT 4)`;
-  const [auto] = await prisma.$queryRaw<Array<{ texto:string }>>`
-    SELECT 'Se realizó la inspección de '||a."nombre"||' conforme al plan establecido y a los puntos mínimos aplicables. No se identificaron anomalías relevantes en los elementos revisados, de acuerdo con el alcance de la inspección y el criterio técnico del Inspector.' "texto" FROM "AreaInspeccion" a WHERE a."id"=${areaId}::uuid
-  `;
-  await prisma.$executeRaw`UPDATE "AreaInspeccion" SET "resultado"='SIN_HALLAZGOS',"estado"='REVISADA',"textoSinHallazgo"=${auto?.texto ?? ''},"comentarioFinal"=${auto?.texto ?? ''},"revisadaEn"=NOW(),"cerradaEn"=NOW(),"cerradaPorId"=${usuario.id},"actualizadoEn"=NOW() WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}`;
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `Área “${area.nombre}” cerrada SIN HALLAZGOS mediante cierre rápido V1.` });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='REVISADO',"completado"=true,"cerradoEn"=NOW(),"actualizadoEn"=NOW()
+      WHERE "areaId"=${areaId}::uuid AND "inspeccionId"=${inspeccionId} AND "estadoV3"='PENDIENTE'
+    `;
+    if (area.seleccionadas === 0) {
+      await tx.$executeRaw`
+        UPDATE "FotografiaArea" SET "seleccionadaReporte"=true
+        WHERE "id" IN (SELECT "id" FROM "FotografiaArea" WHERE "areaId"=${areaId}::uuid ORDER BY "orden","creadoEn" LIMIT 4)
+      `;
+    }
+    const [auto] = await tx.$queryRaw<Array<{ texto:string }>>`
+      SELECT 'Se realizó la inspección de '||a."nombre"||' conforme al plan establecido y a los puntos mínimos aplicables. No se identificaron anomalías relevantes en los elementos revisados, de acuerdo con el alcance de la inspección y el criterio técnico del Inspector.' "texto" FROM "AreaInspeccion" a WHERE a."id"=${areaId}::uuid
+    `;
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "resultado"='SIN_HALLAZGOS',"estado"='REVISADA',"textoSinHallazgo"=${auto?.texto ?? ''},"comentarioFinal"=${auto?.texto ?? ''},"revisadaEn"=NOW(),"cerradaEn"=NOW(),"cerradaPorId"=${usuario.id},"actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `Área “${area.nombre}” cerrada SIN HALLAZGOS; los puntos aplicables pendientes quedaron confirmados como revisados.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", `${area.nombre} cerrada sin hallazgos.`);
 }
