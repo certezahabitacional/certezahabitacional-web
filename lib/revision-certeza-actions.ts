@@ -12,8 +12,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { validarAjustesParaCertificado } from "@/lib/ajustes-comerciales";
 import { usuarioAsignadoAInspeccion } from "@/lib/asignaciones-inspeccion";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { prepararCertificadoV1 } from "@/lib/certificado-v1";
 import { prisma } from "@/lib/prisma";
 import { obtenerEstadoExpedienteRevision } from "@/lib/validacion-expediente-certeza";
 
@@ -32,6 +34,9 @@ function ok(inspeccionId: string, mensaje: string): never {
 function revalidar(inspeccionId: string) {
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/certificado`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  revalidatePath(`/portal/inspecciones/${inspeccionId}`);
+  revalidatePath("/portal/inspecciones");
   revalidatePath("/panel/inspecciones");
   revalidatePath("/panel");
 }
@@ -187,17 +192,54 @@ export async function aprobarDireccionMetodoCerteza(formData: FormData): Promise
   if (inspeccion.liberacionBloqueada) error(inspeccionId, "Existe un bloqueo directivo; usa «Levantar bloqueo y aprobar».");
   await exigirExpedienteCompleto(inspeccionId);
   exigirPagoOperativo(inspeccionId, inspeccion);
+  await validarAjustesParaCertificado(inspeccionId);
+  const preparado = await prepararCertificadoV1(inspeccionId);
   const comentario = texto(formData, "comentario");
 
   await prisma.$transaction(async (tx) => {
     await tx.revisionInspeccion.updateMany({ where: { inspeccionId, rol: RolUsuario.DIRECTOR, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
     await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.DIRECTOR, decision: TipoDecisionRevision.APROBADO, comentario: comentario || null } });
-    await tx.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.FINALIZADA } });
+
+    if (preparado && !preparado.existente) {
+      await tx.certificado.create({ data: { inspeccionId, ...preparado.certificado } });
+    }
+
+    await tx.inspeccion.update({
+      where: { id: inspeccionId },
+      data: {
+        estado: EstadoInspeccion.FINALIZADA,
+        ...(preparado ? { ish: preparado.metricas.calificacion, semaforo: preparado.metricas.semaforo } : {}),
+      },
+    });
+
+    if (preparado) {
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "calificacionFinal"=${preparado.metricas.calificacion},
+            "coberturaPorcentaje"=${preparado.metricas.cobertura},
+            "resumenEstadistico"=${JSON.stringify({
+              prioridades: preparado.metricas.resumenPrioridades,
+              hallazgos: preparado.metricas.totalHallazgos,
+              cargaSeveridad: preparado.metricas.cargaSeveridad,
+              areas: preparado.metricas.areas,
+              areasSinHallazgos: preparado.metricas.areasSinHallazgos,
+              puntosDefinidos: preparado.metricas.definidos,
+              puntosNoAplica: preparado.metricas.noAplica,
+              puntosAplicables: preparado.metricas.aplicables,
+              puntosRevisados: preparado.metricas.revisados,
+            })}::jsonb,
+            "actualizadoEn"=now()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+    }
   });
 
   await registrarAuditoria({ tipo: TipoEvento.REVISION_INSPECCION, entidad: "RevisionInspeccion", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección aprobó y cerró la inspección ${inspeccion.folio}.` });
+  if (preparado && !preparado.existente) {
+    await registrarAuditoria({ tipo: TipoEvento.EMITIR_CERTIFICADO, entidad: "Certificado", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA_V1", descripcion: `Dirección autorizó y emitió automáticamente el Certificado V1 de ${inspeccion.folio} con calificación técnica ${preparado.metricas.calificacion}/100 y cobertura ${preparado.metricas.cobertura}%.` });
+  }
   revalidar(inspeccionId);
-  ok(inspeccionId, "Dirección aprobó la inspección. El expediente quedó FINALIZADO.");
+  ok(inspeccionId, preparado ? "Dirección autorizó V1. El reporte, la calificación final y el certificado quedaron liberados al cliente." : "Dirección aprobó la inspección. El expediente quedó FINALIZADO.");
 }
 
 export async function levantarBloqueoYAprobarMetodoCerteza(formData: FormData): Promise<boolean> {
@@ -213,15 +255,56 @@ export async function levantarBloqueoYAprobarMetodoCerteza(formData: FormData): 
   if (!inspeccion.liberacionBloqueada) error(inspeccionId, "Esta inspección no tiene un bloqueo directivo vigente.");
   await exigirExpedienteCompleto(inspeccionId);
   exigirPagoOperativo(inspeccionId, inspeccion);
+  await validarAjustesParaCertificado(inspeccionId);
+  const preparado = await prepararCertificadoV1(inspeccionId);
 
   await prisma.$transaction(async (tx) => {
     await tx.revisionInspeccion.updateMany({ where: { inspeccionId, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
     await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.DIRECTOR, decision: TipoDecisionRevision.LEVANTAR_BLOQUEO, comentario, estado: EstadoDecisionRevision.SUPERADA } });
     await tx.revisionInspeccion.create({ data: { inspeccionId, usuarioId: usuario.id, rol: RolUsuario.DIRECTOR, decision: TipoDecisionRevision.APROBADO, comentario: `Bloqueo levantado. ${comentario}` } });
-    await tx.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.FINALIZADA, liberacionBloqueada: false, bloqueadaPorId: null, bloqueadaEn: null, motivoBloqueoLiberacion: null } });
+
+    if (preparado && !preparado.existente) {
+      await tx.certificado.create({ data: { inspeccionId, ...preparado.certificado } });
+    }
+
+    await tx.inspeccion.update({
+      where: { id: inspeccionId },
+      data: {
+        estado: EstadoInspeccion.FINALIZADA,
+        liberacionBloqueada: false,
+        bloqueadaPorId: null,
+        bloqueadaEn: null,
+        motivoBloqueoLiberacion: null,
+        ...(preparado ? { ish: preparado.metricas.calificacion, semaforo: preparado.metricas.semaforo } : {}),
+      },
+    });
+
+    if (preparado) {
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "calificacionFinal"=${preparado.metricas.calificacion},
+            "coberturaPorcentaje"=${preparado.metricas.cobertura},
+            "resumenEstadistico"=${JSON.stringify({
+              prioridades: preparado.metricas.resumenPrioridades,
+              hallazgos: preparado.metricas.totalHallazgos,
+              cargaSeveridad: preparado.metricas.cargaSeveridad,
+              areas: preparado.metricas.areas,
+              areasSinHallazgos: preparado.metricas.areasSinHallazgos,
+              puntosDefinidos: preparado.metricas.definidos,
+              puntosNoAplica: preparado.metricas.noAplica,
+              puntosAplicables: preparado.metricas.aplicables,
+              puntosRevisados: preparado.metricas.revisados,
+            })}::jsonb,
+            "actualizadoEn"=now()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+    }
   });
 
   await registrarAuditoria({ tipo: TipoEvento.DESBLOQUEAR_LIBERACION, entidad: "Inspeccion", entidadId: inspeccion.id, inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección levantó el bloqueo y aprobó ${inspeccion.folio}. Motivo: ${comentario}` });
+  if (preparado && !preparado.existente) {
+    await registrarAuditoria({ tipo: TipoEvento.EMITIR_CERTIFICADO, entidad: "Certificado", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA_V1", descripcion: `Dirección levantó el bloqueo, autorizó V1 y emitió automáticamente el certificado con calificación técnica ${preparado.metricas.calificacion}/100.` });
+  }
   revalidar(inspeccionId);
-  ok(inspeccionId, "Dirección levantó el bloqueo y aprobó la inspección.");
+  ok(inspeccionId, preparado ? "Dirección levantó el bloqueo, autorizó V1 y liberó el certificado al cliente." : "Dirección levantó el bloqueo y aprobó la inspección.");
 }
