@@ -3,12 +3,14 @@ import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { bloquearContenidoTecnicoV1Finalizado } from "@/lib/acceso-v1-final";
 import { prisma } from "@/lib/prisma";
 import { enviarReporteDireccionV1, terminarTrabajoCampoV1 } from "./actions";
 
 type Estado = {
   campoFinalizadoEn: Date | null;
   reporteLimiteEn: Date | null;
+  reabiertaEn: Date | null;
   areasTotal: number;
   areasCompletas: number;
   procesosTotal: number;
@@ -26,6 +28,9 @@ export default async function CierreV1Page({ params, searchParams }: {
 }) {
   const { id } = await params;
   const query = await searchParams;
+
+  await bloquearContenidoTecnicoV1Finalizado(id);
+
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -45,7 +50,7 @@ export default async function CierreV1Page({ params, searchParams }: {
       inspectorId: true,
       cliente: { select: { nombre: true } },
       inmueble: { select: { alias: true, direccion: true } },
-      firmas: { select: { tipo: true } },
+      firmas: { select: { tipo: true, firmadaEn: true } },
     },
   });
   if (!inspeccion) notFound();
@@ -57,7 +62,7 @@ export default async function CierreV1Page({ params, searchParams }: {
 
   const [estado] = await prisma.$queryRaw<Estado[]>`
     SELECT
-      c."campoFinalizadoEn", c."reporteLimiteEn",
+      c."campoFinalizadoEn", c."reporteLimiteEn", c."reabiertaEn",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true) AS "areasTotal",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "procesosTotal",
@@ -70,13 +75,19 @@ export default async function CierreV1Page({ params, searchParams }: {
     FROM "InspeccionControlV2" c WHERE c."inspeccionId"=${id} LIMIT 1
   `;
 
-  const firmaInspector = inspeccion.firmas.some((f) => f.tipo.toLowerCase().includes("inspector"));
-  const firmaCliente = inspeccion.firmas.some((f) => f.tipo.toLowerCase().includes("cliente"));
+  const reabiertaEn = estado?.reabiertaEn ? new Date(estado.reabiertaEn) : null;
+  const firmasVigentes = inspeccion.firmas.filter(
+    (firma) => !reabiertaEn || new Date(firma.firmadaEn) >= reabiertaEn,
+  );
+  const firmaInspector = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("inspector"));
+  const firmaCliente = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("cliente"));
+  const firmasListas = firmaInspector && firmaCliente;
+
   const listoCampo = Boolean(
     estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal &&
     estado.procesosTotal > 0 && estado.procesosCompletos === estado.procesosTotal &&
     estado.hallazgos === estado.hallazgosCompletos && estado.fotosFachada >= 4 &&
-    estado.portadaFachada === 1 && estado.syncPendientes === 0 && firmaInspector && firmaCliente
+    estado.portadaFachada === 1 && estado.syncPendientes === 0 && firmasListas
   );
   const campoTerminado = Boolean(estado?.campoFinalizadoEn);
   const ahora = new Date();
@@ -102,11 +113,20 @@ export default async function CierreV1Page({ params, searchParams }: {
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
 
+        {reabiertaEn && !firmasListas && (
+          <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-amber-300">Reporte devuelto por Dirección</p>
+            <h2 className="mt-2 text-lg font-black">Las firmas anteriores ya no son vigentes</h2>
+            <p className="mt-2 text-sm text-amber-100">Después de corregir el reporte, el Inspector y el cliente deben firmar nuevamente antes de reenviarlo a Dirección.</p>
+            <Link href={`/panel/inspecciones/${id}/firmas`} className="mt-4 inline-block rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-slate-950">Registrar nuevas firmas →</Link>
+          </section>
+        )}
+
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card titulo="Áreas" valor={`${estado?.areasCompletas ?? 0}/${estado?.areasTotal ?? 0}`} ok={Boolean(estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal)} />
           <Card titulo="Procesos" valor={`${estado?.procesosCompletos ?? 0}/${estado?.procesosTotal ?? 0}`} ok={Boolean(estado && estado.procesosTotal > 0 && estado.procesosCompletos === estado.procesosTotal)} />
           <Card titulo="Hallazgos completos" valor={`${estado?.hallazgosCompletos ?? 0}/${estado?.hallazgos ?? 0}`} ok={Boolean(estado && estado.hallazgosCompletos === estado.hallazgos)} />
-          <Card titulo="Firmas" valor={`${Number(firmaInspector) + Number(firmaCliente)}/2`} ok={firmaInspector && firmaCliente} />
+          <Card titulo="Firmas vigentes" valor={`${Number(firmaInspector) + Number(firmaCliente)}/2`} ok={firmasListas} />
         </section>
 
         <section className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
@@ -115,9 +135,9 @@ export default async function CierreV1Page({ params, searchParams }: {
             <Linea ok={(estado?.fotosFachada ?? 0) >= 4} texto={`Fachada: ${estado?.fotosFachada ?? 0}/4 fotografías`} />
             <Linea ok={(estado?.portadaFachada ?? 0) === 1} texto={`Foto de portada: ${(estado?.portadaFachada ?? 0) === 1 ? "seleccionada" : "pendiente"}`} />
             <Linea ok={(estado?.syncPendientes ?? 0) === 0} texto={`Sincronización: ${estado?.syncPendientes ?? 0} pendientes`} />
-            <Linea ok={firmaInspector} texto={`Firma Inspector: ${firmaInspector ? "lista" : "pendiente"}`} />
-            <Linea ok={firmaCliente} texto={`Firma cliente: ${firmaCliente ? "lista" : "pendiente"}`} />
-            <Linea ok={listoCampo} texto={listoCampo ? "Visita lista para terminar" : "Aún existen requisitos pendientes"} />
+            <Linea ok={firmaInspector} texto={`Firma Inspector: ${firmaInspector ? "vigente" : "pendiente"}`} />
+            <Linea ok={firmaCliente} texto={`Firma cliente: ${firmaCliente ? "vigente" : "pendiente"}`} />
+            <Linea ok={listoCampo} texto={listoCampo ? "Visita lista para terminar o reenviar" : "Aún existen requisitos pendientes"} />
           </div>
         </section>
 
@@ -139,7 +159,12 @@ export default async function CierreV1Page({ params, searchParams }: {
               <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Revisar reporte V1</Link>
               <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Editar evidencias</Link>
             </div>
-            {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && <form action={enviarReporteDireccionV1} className="mt-5"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950">ENVIAR REPORTE A DIRECCIÓN</button></form>}
+            {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+              <form action={enviarReporteDireccionV1} className="mt-5">
+                <input type="hidden" name="inspeccionId" value={id}/>
+                <button disabled={!firmasListas} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">ENVIAR REPORTE A DIRECCIÓN</button>
+              </form>
+            )}
           </section>
         )}
       </div>
