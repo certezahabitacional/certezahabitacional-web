@@ -27,7 +27,17 @@ async function signedUrl(path: string | null) {
   return error ? null : data.signedUrl;
 }
 
-type Area = { id:string; nombre:string; resultado:string|null; comentarioFinal:string|null; puntos:number; noAplica:number; hallazgos:number };
+type Area = {
+  id:string;
+  nombre:string;
+  resultado:string|null;
+  comentarioFinal:string|null;
+  definidos:number;
+  aplicables:number;
+  revisados:number;
+  noAplica:number;
+  hallazgos:number;
+};
 type Proceso = { orden:number; nombre:string; estado:string; lecturaInicial:number|null; lecturaFinal:number|null; unidad:string|null; comentario:string|null };
 type FotoArea = { areaId:string; url:string; descripcion:string|null };
 
@@ -70,9 +80,11 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
 
   const areas = await prisma.$queryRaw<Area[]>`
     SELECT a."id"::text,a."nombre",a."resultado",a."comentarioFinal",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "puntos",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='REVISADO') "revisados",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') "noAplica",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."areaId"=a."id") "hallazgos"
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
     FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true ORDER BY a."orden",a."nombre"
   `;
 
@@ -100,9 +112,12 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
 
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:inspeccion.hallazgos.filter(h=>h.prioridad===prioridad).length}));
-  const puntosAplicables = areas.reduce((s,a)=>s+Number(a.puntos),0);
+  const puntosDefinidos = areas.reduce((s,a)=>s+Number(a.definidos),0);
+  const puntosNoAplica = areas.reduce((s,a)=>s+Number(a.noAplica),0);
+  const puntosAplicables = areas.reduce((s,a)=>s+Number(a.aplicables),0);
+  const puntosRevisados = areas.reduce((s,a)=>s+Number(a.revisados),0);
   const areasSinHallazgo = areas.filter(a=>a.resultado==='SIN_HALLAZGOS').length;
-  const cobertura = areas.length ? Math.round(areas.filter(a=>a.resultado==='SIN_HALLAZGOS'||a.resultado==='CON_HALLAZGOS').length/areas.length*100) : 0;
+  const cobertura = puntosAplicables > 0 ? Math.round((puntosRevisados / puntosAplicables) * 100) : 0;
   const fecha = new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"});
 
   let qr:string|null=null;
@@ -130,7 +145,8 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
         </Seccion>
 
         <Seccion n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
-          <div className="grid gap-3 sm:grid-cols-4"><Metrica label="Cobertura" value={`${cobertura}%`}/><Metrica label="Áreas" value={String(areas.length)}/><Metrica label="Puntos aplicables" value={String(puntosAplicables)}/><Metrica label="Áreas sin hallazgos" value={String(areasSinHallazgo)}/></div>
+          <div className="grid gap-3 sm:grid-cols-4"><Metrica label="Cobertura" value={`${cobertura}%`}/><Metrica label="Áreas" value={String(areas.length)}/><Metrica label="Puntos revisados" value={String(puntosRevisados)}/><Metrica label="Áreas sin hallazgos" value={String(areasSinHallazgo)}/></div>
+          <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {puntosDefinidos} · No aplica: {puntosNoAplica} · Aplicables: {puntosAplicables} · Revisados: {puntosRevisados}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
           <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La inspección V1 documenta el funcionamiento de los principales sistemas, el recorrido por las áreas contratadas, los puntos mínimos aplicables, los hallazgos detectados y las áreas verificadas sin anomalías relevantes. La interpretación final se apoya en evidencia de campo, tecnología utilizada y criterio profesional del Inspector.</p>
         </Seccion>
@@ -145,11 +161,12 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
         </Seccion>
 
         <Seccion n="05" titulo="Desarrollo por áreas" subtitulo="Conceptos revisados, resultados, hallazgos y evidencia">
-          <div className="space-y-6">{areas.map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.puntos} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-900'}`}>{(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
+          <div className="space-y-6">{areas.map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.aplicables} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-900'}`}>{(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
         </Seccion>
 
         <Seccion n="06" titulo="Resumen estadístico" subtitulo="Cobertura y distribución de resultados">
-          <div className="grid gap-3 sm:grid-cols-4"><Metrica label="Cobertura efectiva" value={`${cobertura}%`}/><Metrica label="Puntos aplicables" value={String(puntosAplicables)}/><Metrica label="Hallazgos" value={String(inspeccion.hallazgos.length)}/><Metrica label="Áreas satisfactorias" value={String(areasSinHallazgo)}/></div>
+          <div className="grid gap-3 sm:grid-cols-4"><Metrica label="Cobertura efectiva" value={`${cobertura}%`}/><Metrica label="Puntos aplicables" value={String(puntosAplicables)}/><Metrica label="Puntos revisados" value={String(puntosRevisados)}/><Metrica label="Hallazgos" value={String(inspeccion.hallazgos.length)}/></div>
+          <p className="mt-3 text-xs font-bold text-slate-500">Áreas satisfactorias: {areasSinHallazgo}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
         </Seccion>
 
