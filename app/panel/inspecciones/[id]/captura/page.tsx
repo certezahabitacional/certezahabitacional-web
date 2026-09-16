@@ -9,6 +9,7 @@ import { actualizarHallazgo, crearHallazgo, registrarSeguimientoHallazgo } from 
 type SearchParams = Promise<{
   hallazgoId?: string;
   editar?: string;
+  area?: string;
   ok?: string;
   error?: string;
 }>;
@@ -149,6 +150,17 @@ export default async function CapturaPage({
   }
 
   const esSeguimiento = inspeccion.numeroInspeccion > 1;
+  const areasV1 = !esSeguimiento
+    ? await prisma.$queryRaw<Array<{ nombre: string }>>`
+        SELECT "nombre" FROM "AreaInspeccion"
+        WHERE "inspeccionId"=${id} AND "obligatoria"=true
+        ORDER BY "orden","nombre"
+      `
+    : [];
+  const areaDesdeFlujo =
+    !esSeguimiento && query.area && areasV1.some((area) => area.nombre === query.area)
+      ? query.area
+      : "";
 
   const hallazgosAntecedentes =
     esSeguimiento && inspeccion.inspeccionAnteriorId
@@ -254,16 +266,22 @@ export default async function CapturaPage({
   const editandoSeguimiento = Boolean(
     hallazgoEnEdicion?.hallazgoAnteriorId,
   );
+  const areaContexto =
+    hallazgoEnEdicion?.area ?? hallazgoRecienCreado?.area ?? areaDesdeFlujo;
+  const nuevoHallazgoHref =
+    !esSeguimiento && areaContexto
+      ? `/panel/inspecciones/${id}/captura?area=${encodeURIComponent(areaContexto)}#nuevo-hallazgo`
+      : `/panel/inspecciones/${id}/captura#nuevo-hallazgo`;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
-            href={`/panel/inspecciones/${id}`}
+            href={esSeguimiento ? `/panel/inspecciones/${id}` : `/panel/inspecciones/${id}/campo-v1`}
             className="text-sm font-bold text-cyan-300"
           >
-            ← Volver al expediente
+            ← {esSeguimiento ? "Volver al expediente" : "Volver al recorrido V1"}
           </Link>
 
           <Link
@@ -321,12 +339,12 @@ export default async function CapturaPage({
               </Link>
 
               <Link
-                href={`/panel/inspecciones/${id}/captura#nuevo-hallazgo`}
+                href={nuevoHallazgoHref}
                 className="rounded-2xl border border-white/15 px-4 py-3 text-center font-black text-slate-200"
               >
                 {esSeguimiento
                   ? "+ Nuevo hallazgo / solicitud especial"
-                  : "+ Capturar siguiente hallazgo"}
+                  : "+ Capturar siguiente hallazgo en esta área"}
               </Link>
             </div>
           </section>
@@ -555,7 +573,7 @@ export default async function CapturaPage({
                     ? "Corrige la información del hallazgo y guarda los cambios. Las evidencias existentes se conservarán."
                     : esSeguimiento
                       ? "Utiliza esta opción únicamente si durante la visita aparece una condición nueva o el cliente solicita una revisión especial fuera de los pendientes heredados."
-                      : "Guarda el hallazgo y decide inmediatamente si agregas evidencia o continúas con el siguiente."}
+                      : "El área proviene del recorrido V1. Guarda el hallazgo y agrega inmediatamente sus cuatro evidencias iniciales."}
               </p>
             </div>
 
@@ -572,7 +590,7 @@ export default async function CapturaPage({
             key={
               hallazgoEnEdicion
                 ? `editar-${hallazgoEnEdicion.id}`
-                : "nuevo-hallazgo"
+                : `nuevo-hallazgo-${areaContexto || "sin-area"}`
             }
             action={hallazgoEnEdicion ? actualizarHallazgo : crearHallazgo}
             className="mt-6 grid gap-4 md:grid-cols-2"
@@ -639,12 +657,29 @@ export default async function CapturaPage({
               </>
             )}
 
-            <Campo
-              name="area"
-              label="Área *"
-              placeholder="Instalación eléctrica"
-              defaultValue={hallazgoEnEdicion?.area ?? ""}
-            />
+            {!esSeguimiento ? (
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold">Área *</span>
+                <select
+                  name="area"
+                  required
+                  defaultValue={areaContexto}
+                  className="w-full rounded-2xl border border-cyan-400/20 bg-slate-950 px-4 py-3 text-base"
+                >
+                  <option value="" disabled>Selecciona un área del recorrido V1</option>
+                  {areasV1.map((area) => (
+                    <option key={area.nombre} value={area.nombre}>{area.nombre}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <Campo
+                name="area"
+                label="Área *"
+                placeholder="Instalación eléctrica"
+                defaultValue={hallazgoEnEdicion?.area ?? ""}
+              />
+            )}
 
             <Campo
               name="titulo"
@@ -753,7 +788,7 @@ export default async function CapturaPage({
 
             {hallazgoEnEdicion && (
               <Link
-                href={`/panel/inspecciones/${id}/captura`}
+                href={nuevoHallazgoHref}
                 className="md:col-span-2 rounded-full border border-white/15 px-5 py-3 text-center font-black text-slate-300"
               >
                 Cancelar edición
@@ -775,7 +810,7 @@ export default async function CapturaPage({
             </div>
 
             <Link
-              href={`/panel/inspecciones/${id}/captura#nuevo-hallazgo`}
+              href={nuevoHallazgoHref}
               className="rounded-full border border-cyan-400/30 px-4 py-2 text-sm font-black text-cyan-300"
             >
               {esSeguimiento
@@ -890,7 +925,7 @@ export default async function CapturaPage({
 
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
           <Link
-            href={`/panel/inspecciones/${id}/captura#nuevo-hallazgo`}
+            href={nuevoHallazgoHref}
             className="rounded-full bg-cyan-400 px-5 py-3 text-center font-black text-slate-950"
           >
             {esSeguimiento
@@ -899,10 +934,10 @@ export default async function CapturaPage({
           </Link>
 
           <Link
-            href={`/panel/inspecciones/${id}`}
+            href={esSeguimiento ? `/panel/inspecciones/${id}` : `/panel/inspecciones/${id}/campo-v1`}
             className="rounded-full border border-white/15 px-5 py-3 text-center font-black text-slate-300"
           >
-            Terminar y volver al expediente
+            {esSeguimiento ? "Terminar y volver al expediente" : "Volver al recorrido V1"}
           </Link>
         </div>
       </div>
