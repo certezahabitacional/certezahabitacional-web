@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+type ControlPublicoV1 = { coberturaPorcentaje: number | null };
+
 export default async function VerificarCertificadoPage({
   params,
 }: {
@@ -70,6 +72,17 @@ export default async function VerificarCertificadoPage({
 
   const inspeccion = certificado.inspeccion;
   const vigente = certificado.vigente;
+  const esV1 = inspeccion.numeroInspeccion === 1;
+  const [controlV1] = esV1
+    ? await prisma.$queryRaw<ControlPublicoV1[]>`
+        SELECT "coberturaPorcentaje"
+        FROM "InspeccionControlV2"
+        WHERE "inspeccionId"=${inspeccion.id}
+        LIMIT 1
+      `
+    : [];
+  const coberturaV1 = Number(controlV1?.coberturaPorcentaje ?? 0).toFixed(2);
+  const calificacion = Number(certificado.ish).toFixed(esV1 ? 2 : 0);
 
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-10 text-white">
@@ -110,23 +123,22 @@ export default async function VerificarCertificadoPage({
           </div>
 
           {!vigente && certificado.motivoRevocacion && (
-  <div className="mt-7 rounded-3xl border border-rose-400/30 bg-rose-400/10 p-6 text-rose-200">
-    <p className="text-xs font-black uppercase tracking-widest">
-      Motivo de revocación
-    </p>
+            <div className="mt-7 rounded-3xl border border-rose-400/30 bg-rose-400/10 p-6 text-rose-200">
+              <p className="text-xs font-black uppercase tracking-widest">
+                Motivo de revocación
+              </p>
 
-    <p className="mt-3 leading-7">
-      {certificado.motivoRevocacion}
-    </p>
+              <p className="mt-3 leading-7">
+                {certificado.motivoRevocacion}
+              </p>
 
-    {certificado.revocadoEn && (
-      <p className="mt-3 text-sm text-rose-300">
-        Revocado el{" "}
-        {certificado.revocadoEn.toLocaleString("es-MX")}
-      </p>
-    )}
-  </div>
-)}
+              {certificado.revocadoEn && (
+                <p className="mt-3 text-sm text-rose-300">
+                  Revocado el {certificado.revocadoEn.toLocaleString("es-MX")}
+                </p>
+              )}
+            </div>
+          )}
 
           <dl className="mt-7 grid gap-4 sm:grid-cols-2">
             <Dato label="Certificado" value={certificado.folio} />
@@ -142,29 +154,37 @@ export default async function VerificarCertificadoPage({
             />
 
             <Dato
-              label="Índice de Salud Habitacional"
-              value={`${Math.round(Number(certificado.ish))} / 100`}
+              label={esV1 ? "Calificación Técnica Certeza" : "Índice de Salud Habitacional"}
+              value={`${calificacion} / 100`}
             />
 
-            <Dato label="Cliente" value={inspeccion.cliente.nombre} />
-
-            <Dato
-              label="Inmueble"
-              value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}
-            />
-
-            <Dato
-              label="Dirección"
-              value={`${inspeccion.direccion}, ${inspeccion.ciudad}`}
-            />
-
-            <Dato
-              label="Inspector"
-              value={
-                inspeccion.inspector?.usuario.nombre ??
-                "Inspector no especificado"
-              }
-            />
+            {esV1 ? (
+              <>
+                <Dato label="Cobertura" value={`${coberturaV1}%`} />
+                <Dato label="Tipo de inmueble" value={inspeccion.tipoInmueble} />
+                <Dato label="Ciudad" value={inspeccion.ciudad} />
+                <Dato label="Versión de inspección" value="V1 · Inspección integral" />
+              </>
+            ) : (
+              <>
+                <Dato label="Cliente" value={inspeccion.cliente.nombre} />
+                <Dato
+                  label="Inmueble"
+                  value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}
+                />
+                <Dato
+                  label="Dirección"
+                  value={`${inspeccion.direccion}, ${inspeccion.ciudad}`}
+                />
+                <Dato
+                  label="Inspector"
+                  value={
+                    inspeccion.inspector?.usuario.nombre ??
+                    "Inspector no especificado"
+                  }
+                />
+              </>
+            )}
           </dl>
 
           <div className="mt-7 rounded-3xl border border-white/10 bg-slate-950 p-6">
@@ -178,14 +198,13 @@ export default async function VerificarCertificadoPage({
           </div>
 
           <div className="mt-7 rounded-3xl bg-amber-400/10 p-5 text-sm leading-6 text-amber-200">
-            La validación confirma que el certificado está registrado en la
-            plataforma. El documento debe interpretarse junto con el reporte
-            técnico completo de la inspección.
+            {esV1
+              ? "Esta consulta pública confirma autenticidad y vigencia con información limitada. El reporte técnico completo y los datos del cliente permanecen en el portal autenticado de Certeza Habitacional."
+              : "La validación confirma que el certificado está registrado en la plataforma. El documento debe interpretarse junto con el reporte técnico completo de la inspección."}
           </div>
 
           <footer className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-slate-500">
-            Consulta generada directamente desde el registro de Certeza
-            Habitacional.
+            Consulta generada directamente desde el registro de Certeza Habitacional.
           </footer>
         </div>
       </section>
