@@ -60,13 +60,26 @@ export async function confirmarProyectoV1(formData: FormData) {
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario } = await exigirInspectorV1(inspeccionId);
 
-  if (modalidad === "CON_PDF") {
-    const [r] = await prisma.$queryRaw<Array<{ total: number }>>`
-      SELECT COUNT(*)::int AS "total" FROM "DocumentoProyectoInspeccion" WHERE "inspeccionId"=${inspeccionId}
-    `;
-    if (Number(r?.total ?? 0) === 0) volver(inspeccionId, "error", "No hay PDF de proyecto cargado. Cárgalo en Guía técnica o declara formalmente que no existe proyecto disponible.");
-  }
   if (!['CON_PDF','SIN_PDF'].includes(modalidad)) volver(inspeccionId, "error", "Selecciona una modalidad de proyecto válida.");
+
+  if (modalidad === "CON_PDF") {
+    const [estado] = await prisma.$queryRaw<Array<{
+      total: number;
+      pendientes: number;
+      sinDatos: number;
+      puntosProyecto: number;
+    }>>`
+      SELECT
+        (SELECT COUNT(*)::int FROM "DocumentoProyectoInspeccion" d WHERE d."inspeccionId"=${inspeccionId}) AS "total",
+        (SELECT COUNT(*)::int FROM "DocumentoProyectoInspeccion" d WHERE d."inspeccionId"=${inspeccionId} AND d."estadoAnalisis" <> 'COMPLETADO') AS "pendientes",
+        (SELECT COUNT(*)::int FROM "DocumentoProyectoInspeccion" d WHERE d."inspeccionId"=${inspeccionId} AND d."datosExtraidos" IS NULL) AS "sinDatos",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."inspeccionId"=${inspeccionId} AND g."origen"='PROYECTO') AS "puntosProyecto"
+    `;
+    if (Number(estado?.total ?? 0) === 0) volver(inspeccionId, "error", "No hay PDF de proyecto cargado. Abre Proyecto PDF · IA para cargarlo o declara formalmente que no existe proyecto disponible.");
+    if (Number(estado?.pendientes ?? 0) > 0) volver(inspeccionId, "error", `Falta completar el análisis de ${estado.pendientes} PDF(s). Abre Proyecto PDF · IA y analiza todos los documentos antes de confirmar.`);
+    if (Number(estado?.sinDatos ?? 0) > 0) volver(inspeccionId, "error", `Hay ${estado.sinDatos} PDF(s) sin datos estructurados válidos. Reanalízalos antes de confirmar el proyecto.`);
+    if (Number(estado?.puntosProyecto ?? 0) === 0) volver(inspeccionId, "error", "Los PDF ya fueron analizados, pero todavía no se ha generado la guía desde el proyecto. Abre Proyecto PDF · IA y usa «Generar guía desde análisis». ");
+  }
 
   await prisma.$executeRaw`
     INSERT INTO "InspeccionControlV2" ("inspeccionId","categoria","versionProtocolo","proyectoConfirmado")
@@ -79,11 +92,12 @@ export async function confirmarProyectoV1(formData: FormData) {
     entidad: "InspeccionControlV2",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: modalidad === "CON_PDF" ? "Inspector confirmó proyecto PDF disponible para V1." : "Inspector declaró formalmente V1 SIN PROYECTO PDF disponible.",
+    descripcion: modalidad === "CON_PDF" ? "Inspector confirmó proyecto PDF analizado y convertido a guía para V1." : "Inspector declaró formalmente V1 SIN PROYECTO PDF disponible.",
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
-  volver(inspeccionId, "ok", modalidad === "CON_PDF" ? "Proyecto PDF confirmado." : "Quedó documentado que la inspección se realizará sin proyecto PDF disponible.");
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/proyecto-v1`);
+  volver(inspeccionId, "ok", modalidad === "CON_PDF" ? "Proyecto PDF analizado y guía técnica confirmados." : "Quedó documentado que la inspección se realizará sin proyecto PDF disponible.");
 }
 
 export async function generarAreasDesdeGuia(formData: FormData) {
