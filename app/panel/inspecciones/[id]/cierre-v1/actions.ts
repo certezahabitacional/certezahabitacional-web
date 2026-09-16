@@ -147,7 +147,7 @@ export async function enviarReporteDireccionV1(formData: FormData) {
       inspeccionId,
       "error",
       reabiertaEn
-        ? "Después de una devolución de Dirección, el Inspector y el cliente deben registrar nuevas firmas antes de reenviar el reporte."
+        ? "Después de una reapertura técnica de Dirección, el Inspector y el cliente deben registrar nuevas firmas antes de reenviar el reporte."
         : "Antes de enviar el reporte a Dirección deben estar registradas las firmas del Inspector y del cliente.",
     );
   }
@@ -192,7 +192,11 @@ export async function enviarReporteDireccionV1(formData: FormData) {
 export async function devolverReporteInspectorV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const comentario = texto(formData, "comentario");
+  const tipoCorreccion = texto(formData, "tipoCorreccion").toUpperCase();
   if (!inspeccionId) redirect("/panel/inspecciones");
+  if (!['DOCUMENTAL','TECNICA'].includes(tipoCorreccion)) {
+    redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent("Selecciona si la devolución requiere corrección documental o reapertura técnica.")}`);
+  }
   if (comentario.length < 10) {
     redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent("Indica un motivo de al menos 10 caracteres para devolver el reporte al Inspector.")}`);
   }
@@ -219,6 +223,9 @@ export async function devolverReporteInspectorV1(formData: FormData) {
     redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent("La inspección no tiene Inspector asignado.")}`);
   }
 
+  const reaperturaTecnica = tipoCorreccion === 'TECNICA';
+  const comentarioRevision = `${reaperturaTecnica ? '[REAPERTURA TÉCNICA]' : '[CORRECCIÓN DOCUMENTAL]'} ${comentario}`;
+
   await prisma.$transaction(async (tx) => {
     await tx.revisionInspeccion.updateMany({
       where: { inspeccionId, estado: EstadoDecisionRevision.VIGENTE },
@@ -230,24 +237,37 @@ export async function devolverReporteInspectorV1(formData: FormData) {
         usuarioId: usuario.id,
         rol: RolUsuario.DIRECTOR,
         decision: TipoDecisionRevision.DEVUELTO_INSPECTOR,
-        comentario,
+        comentario: comentarioRevision,
       },
     });
     await tx.inspeccion.update({
       where: { id: inspeccionId },
       data: { estado: EstadoInspeccion.EN_PROCESO },
     });
-    await tx.$executeRaw`
-      UPDATE "InspeccionControlV2"
-      SET "capturaCerrada"=false,
-          "capturaCerradaEn"=NULL,
-          "capturaCerradaPorId"=NULL,
-          "reabiertaEn"=NOW(),
-          "reabiertaPorId"=${usuario.id},
-          "motivoReapertura"=${comentario},
-          "actualizadoEn"=NOW()
-      WHERE "inspeccionId"=${inspeccionId}
-    `;
+
+    if (reaperturaTecnica) {
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "capturaCerrada"=false,
+            "capturaCerradaEn"=NULL,
+            "capturaCerradaPorId"=NULL,
+            "reabiertaEn"=NOW(),
+            "reabiertaPorId"=${usuario.id},
+            "motivoReapertura"=${comentario},
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+    } else {
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "capturaCerrada"=false,
+            "capturaCerradaEn"=NULL,
+            "capturaCerradaPorId"=NULL,
+            "motivoReapertura"=${`Corrección documental: ${comentario}`},
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+    }
   });
 
   await registrarAuditoria({
@@ -255,12 +275,18 @@ export async function devolverReporteInspectorV1(formData: FormData) {
     entidad: "RevisionInspeccion",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Dirección devolvió el reporte V1 ${inspeccion.folio} al Inspector para corrección. Motivo: ${comentario}`,
+    descripcion: reaperturaTecnica
+      ? `Dirección devolvió el reporte V1 ${inspeccion.folio} como REAPERTURA TÉCNICA. Las firmas previas dejan de ser vigentes. Motivo: ${comentario}`
+      : `Dirección devolvió el reporte V1 ${inspeccion.folio} para CORRECCIÓN DOCUMENTAL. Se conservan las firmas vigentes. Motivo: ${comentario}`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
-  redirect(`/panel/inspecciones/${inspeccionId}/revision?ok=${encodeURIComponent("Reporte V1 devuelto al Inspector para corrección.")}`);
+  redirect(`/panel/inspecciones/${inspeccionId}/revision?ok=${encodeURIComponent(
+    reaperturaTecnica
+      ? "Reporte V1 devuelto como reapertura técnica. Se requerirán nuevas firmas antes del reenvío."
+      : "Reporte V1 devuelto para corrección documental. Las firmas vigentes se conservaron."
+  )}`);
 }
