@@ -37,7 +37,7 @@ async function exigirInspectorV1(inspeccionId: string) {
       estado: true,
       inspectorId: true,
       cotizacionId: true,
-      firmas: { select: { tipo: true } },
+      firmas: { select: { tipo: true, firmadaEn: true } },
     },
   });
 
@@ -124,10 +124,33 @@ export async function enviarReporteDireccionV1(formData: FormData) {
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, inspeccion } = await exigirInspectorV1(inspeccionId);
 
-  const [control] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null; reporteLimiteEn: Date | null }>>`
-    SELECT "campoFinalizadoEn","reporteLimiteEn" FROM "InspeccionControlV2" WHERE "inspeccionId"=${inspeccionId} LIMIT 1
+  const [control] = await prisma.$queryRaw<Array<{
+    campoFinalizadoEn: Date | null;
+    reporteLimiteEn: Date | null;
+    reabiertaEn: Date | null;
+  }>>`
+    SELECT "campoFinalizadoEn","reporteLimiteEn","reabiertaEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
   `;
   if (!control?.campoFinalizadoEn) volver(inspeccionId, "error", "Primero debes terminar formalmente el trabajo de campo.");
+
+  const reabiertaEn = control.reabiertaEn ? new Date(control.reabiertaEn) : null;
+  const firmasVigentes = inspeccion.firmas.filter(
+    (firma) => !reabiertaEn || new Date(firma.firmadaEn) >= reabiertaEn,
+  );
+  const firmaInspector = firmasVigentes.some((firma) => firma.tipo.toLowerCase().includes("inspector"));
+  const firmaCliente = firmasVigentes.some((firma) => firma.tipo.toLowerCase().includes("cliente"));
+  if (!firmaInspector || !firmaCliente) {
+    volver(
+      inspeccionId,
+      "error",
+      reabiertaEn
+        ? "Después de una devolución de Dirección, el Inspector y el cliente deben registrar nuevas firmas antes de reenviar el reporte."
+        : "Antes de enviar el reporte a Dirección deben estar registradas las firmas del Inspector y del cliente.",
+    );
+  }
 
   const fueraDePlazo = Boolean(control.reporteLimiteEn && new Date() > new Date(control.reporteLimiteEn));
 
