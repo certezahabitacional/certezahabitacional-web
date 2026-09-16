@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -29,6 +30,7 @@ type Area = {
 type FotoFachada = {
   fotografiaId: string;
   descripcion: string | null;
+  ruta: string;
   candidataPortada: boolean;
   orden: number;
   creadaEn: Date;
@@ -38,6 +40,21 @@ type Control = {
   proyectoConfirmado: boolean;
   areasConfirmadas: boolean;
 } | null;
+
+function supabaseAdmin() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+async function urlTemporalFoto(ruta: string) {
+  const sb = supabaseAdmin();
+  if (!sb) return null;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 15);
+  return error ? null : data.signedUrl;
+}
 
 export default async function AreasPage({
   params,
@@ -93,7 +110,7 @@ export default async function AreasPage({
       ORDER BY a."orden",a."nombre"
     `,
     prisma.$queryRaw<FotoFachada[]>`
-      SELECT fa."fotografiaId",f."descripcion",fa."candidataPortada",fa."orden",fa."creadoEn"
+      SELECT fa."fotografiaId",f."descripcion",f."url" AS "ruta",fa."candidataPortada",fa."orden",fa."creadoEn"
       FROM "FotografiaArea" fa
       JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
       JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
@@ -101,6 +118,13 @@ export default async function AreasPage({
       ORDER BY fa."orden",fa."creadoEn"
     `,
   ]);
+
+  const fotosFachadaConUrl = await Promise.all(
+    fotosFachada.map(async (foto) => ({
+      ...foto,
+      urlTemporal: await urlTemporalFoto(foto.ruta),
+    })),
+  );
 
   const control = controlRows[0] ?? null;
   const puedeCapturar = esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
@@ -186,22 +210,30 @@ export default async function AreasPage({
                     {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Resultado del recorrido:</strong> {area.comentarioFinal}</p>}
                     <p className="mt-3 text-xs text-slate-500">El cierre técnico del área se realiza únicamente desde Recorrido V1.</p>
 
-                    {fachada && fotosFachada.length > 0 && (
+                    {fachada && fotosFachadaConUrl.length > 0 && (
                       <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-slate-950/60 p-4">
                         <p className="text-sm font-black text-cyan-200">Seleccionar foto de portada</p>
                         <p className="mt-1 text-xs text-slate-400">Elige una de las fotografías de fachada. El sistema mantendrá exactamente una como portada.</p>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {fotosFachada.map((foto, fotoIndex) => (
-                            <form key={foto.fotografiaId} action={seleccionarPortadaFachadaV1} className={`rounded-xl border p-3 ${foto.candidataPortada ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-950"}`}>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {fotosFachadaConUrl.map((foto, fotoIndex) => (
+                            <form key={foto.fotografiaId} action={seleccionarPortadaFachadaV1} className={`overflow-hidden rounded-xl border ${foto.candidataPortada ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-950"}`}>
                               <input type="hidden" name="inspeccionId" value={id}/>
                               <input type="hidden" name="fotografiaId" value={foto.fotografiaId}/>
-                              <p className="text-xs font-black">Foto {fotoIndex + 1} {foto.candidataPortada ? "· PORTADA ACTUAL" : ""}</p>
-                              <p className="mt-1 min-h-8 text-xs text-slate-500">{foto.descripcion || "Sin descripción"}</p>
-                              {puedeCapturar && (
-                                <button disabled={foto.candidataPortada} className="mt-2 w-full rounded-lg border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-200 disabled:border-emerald-300/20 disabled:text-emerald-300 disabled:opacity-70">
-                                  {foto.candidataPortada ? "PORTADA SELECCIONADA" : "USAR COMO PORTADA"}
-                                </button>
+                              {foto.urlTemporal ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={foto.urlTemporal} alt={`Foto ${fotoIndex + 1} de fachada`} className="h-36 w-full object-cover" />
+                              ) : (
+                                <div className="flex h-36 items-center justify-center bg-white/5 px-4 text-center text-xs font-bold text-slate-500">Vista previa no disponible</div>
                               )}
+                              <div className="p-3">
+                                <p className="text-xs font-black">Foto {fotoIndex + 1} {foto.candidataPortada ? "· PORTADA ACTUAL" : ""}</p>
+                                <p className="mt-1 min-h-8 text-xs text-slate-500">{foto.descripcion || "Sin descripción"}</p>
+                                {puedeCapturar && (
+                                  <button disabled={foto.candidataPortada} className="mt-2 w-full rounded-lg border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-200 disabled:border-emerald-300/20 disabled:text-emerald-300 disabled:opacity-70">
+                                    {foto.candidataPortada ? "PORTADA SELECCIONADA" : "USAR COMO PORTADA"}
+                                  </button>
+                                )}
+                              </div>
                             </form>
                           ))}
                         </div>
