@@ -205,12 +205,9 @@ export async function subirFotoArea(formData: FormData) {
       const foto = await tx.fotografia.create({
         data: { inspeccionId, hallazgoId: null, url: ruta, subidaPorId: session.user.id, descripcion: descripcion || `${area.nombre} · evidencia de recorrido` },
       });
-      const [portada] = area.codigo === 'FACHADA_PRINCIPAL'
-        ? await tx.$queryRaw<Array<{ existe: boolean }>>`SELECT EXISTS(SELECT 1 FROM "FotografiaArea" fa JOIN "AreaInspeccion" a ON a."id"=fa."areaId" WHERE a."inspeccionId"=${inspeccionId} AND fa."candidataPortada"=true) AS "existe"`
-        : [{ existe: true }];
       await tx.$executeRaw`
         INSERT INTO "FotografiaArea" ("fotografiaId","areaId","tipoEvidencia","orden","candidataReporte","candidataPortada")
-        VALUES (${foto.id},${areaId}::uuid,${area.codigo === 'FACHADA_PRINCIPAL' ? 'IDENTIFICACION' : 'RECORRIDO'},0,true,${area.codigo === 'FACHADA_PRINCIPAL' && !portada?.existe})
+        VALUES (${foto.id},${areaId}::uuid,${area.codigo === 'FACHADA_PRINCIPAL' ? 'IDENTIFICACION' : 'RECORRIDO'},0,true,false)
       `;
     });
   } catch (e) {
@@ -218,10 +215,10 @@ export async function subirFotoArea(formData: FormData) {
     throw e;
   }
 
-  await registrarAuditoria({ tipo: TipoEvento.SUBIR_EVIDENCIA, entidad: "FotografiaArea", inspeccionId, usuarioId: usuario.id, descripcion: `Inspector agregó evidencia del área “${area.nombre}”${area.codigo === 'FACHADA_PRINCIPAL' ? ' (fachada/identificación)' : ''}.` });
+  await registrarAuditoria({ tipo: TipoEvento.SUBIR_EVIDENCIA, entidad: "FotografiaArea", inspeccionId, usuarioId: usuario.id, descripcion: `Inspector agregó evidencia del área “${area.nombre}”${area.codigo === 'FACHADA_PRINCIPAL' ? ' (fachada/identificación; portada pendiente de selección explícita)' : ''}.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
-  volver(inspeccionId, "ok", `Fotografía agregada a ${area.nombre}.`);
+  volver(inspeccionId, "ok", area.codigo === 'FACHADA_PRINCIPAL' ? "Fotografía de fachada agregada. Selecciona explícitamente una de las fotos como portada antes del cierre." : `Fotografía agregada a ${area.nombre}.`);
 }
 
 export async function cerrarAreaV1(formData: FormData) {
