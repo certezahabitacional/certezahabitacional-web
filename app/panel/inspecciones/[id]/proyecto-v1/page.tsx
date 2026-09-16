@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { puedeAbrirExpedienteTecnico } from "@/lib/permisos";
 import { prisma } from "@/lib/prisma";
-import { eliminarProyectoV1, subirProyectosV1 } from "./actions";
+import { analizarProyectoV1, eliminarProyectoV1, generarGuiaDesdeProyectoV1, subirProyectosV1 } from "./actions";
 
 type DocumentoProyecto = {
   id: string;
@@ -132,7 +132,7 @@ export default async function ProyectoV1Page({
   );
   if (!acceso) redirect("/acceso");
 
-  const [controlRows, documentos] = await Promise.all([
+  const [controlRows, documentos, guiaRows] = await Promise.all([
     prisma.$queryRaw<ControlProyecto[]>`
       SELECT "proyectoConfirmado"
       FROM "InspeccionControlV2"
@@ -144,6 +144,11 @@ export default async function ProyectoV1Page({
       FROM "DocumentoProyectoInspeccion"
       WHERE "inspeccionId"=${id}
       ORDER BY "creadoEn" ASC
+    `,
+    prisma.$queryRaw<Array<{ total: number }>>`
+      SELECT COUNT(*)::int AS "total"
+      FROM "GuiaInspeccionItem"
+      WHERE "inspeccionId"=${id} AND "origen"='PROYECTO'
     `,
   ]);
 
@@ -159,8 +164,11 @@ export default async function ProyectoV1Page({
   );
 
   const totalPaginas = documentos.reduce((suma, documento) => suma + Number(documento.numeroPaginas ?? 0), 0);
-  const pendientes = documentos.filter((documento) => documento.estadoAnalisis === "PENDIENTE").length;
+  const pendientes = documentos.filter((documento) => documento.estadoAnalisis === "PENDIENTE" || documento.estadoAnalisis === "ERROR").length;
   const procesados = documentos.filter((documento) => documento.estadoAnalisis === "COMPLETADO").length;
+  const analizando = documentos.filter((documento) => documento.estadoAnalisis === "ANALIZANDO").length;
+  const todosAnalizados = documentos.length > 0 && procesados === documentos.length;
+  const puntosProyecto = Number(guiaRows[0]?.total ?? 0);
 
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
@@ -180,12 +188,17 @@ export default async function ProyectoV1Page({
           </div>
         )}
 
-        <section className="mt-7 grid gap-4 sm:grid-cols-4">
+        <section className="mt-7 grid gap-4 sm:grid-cols-5">
           <Resumen titulo="PDF cargados" valor={String(documentos.length)} />
           <Resumen titulo="Páginas" valor={String(totalPaginas)} />
-          <Resumen titulo="Pendientes de análisis" valor={String(pendientes)} />
+          <Resumen titulo="Pendientes / error" valor={String(pendientes)} />
           <Resumen titulo="Analizados" valor={String(procesados)} />
+          <Resumen titulo="Puntos de proyecto" valor={String(puntosProyecto)} />
         </section>
+
+        {analizando > 0 && (
+          <div className="mt-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm font-bold text-cyan-200">Hay {analizando} documento(s) marcado(s) como ANALIZANDO. Si un análisis se interrumpió, vuelve a ejecutarlo desde el documento.</div>
+        )}
 
         {control?.proyectoConfirmado && (
           <div className="mt-6 rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-5 text-emerald-200">
@@ -196,7 +209,7 @@ export default async function ProyectoV1Page({
 
         {editable && (
           <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
-            <h2 className="text-xl font-black">Cargar uno o varios PDF</h2>
+            <h2 className="text-xl font-black">1. Cargar uno o varios PDF</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">Selecciona el tipo de proyecto y carga varios archivos en el mismo lote. El lote completo debe ser menor a 11 MB y cada archivo menor a 10 MB.</p>
             <form action={subirProyectosV1} className="mt-5 grid gap-4 lg:grid-cols-[260px_1fr_auto] lg:items-end">
               <input type="hidden" name="inspeccionId" value={id} />
@@ -218,12 +231,9 @@ export default async function ProyectoV1Page({
         <section className="mt-7">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-black">Expediente de proyecto</h2>
-              <p className="mt-1 text-sm text-slate-400">Cada documento conserva tipo, páginas, tamaño y estado de análisis.</p>
+              <h2 className="text-2xl font-black">2. Analizar documentos</h2>
+              <p className="mt-1 text-sm text-slate-400">La IA extrae únicamente información explícita del documento. El Inspector conserva la autoridad técnica final.</p>
             </div>
-            {documentos.length > 0 && !control?.proyectoConfirmado && (
-              <p className="text-xs font-bold text-amber-300">Confirma el proyecto desde Áreas V1 cuando la documentación esté completa.</p>
-            )}
           </div>
 
           {documentosConUrl.length === 0 ? (
@@ -232,7 +242,7 @@ export default async function ProyectoV1Page({
             <div className="mt-4 space-y-3">
               {documentosConUrl.map((documento) => (
                 <article key={documento.id} className="rounded-3xl border border-white/10 bg-slate-900 p-5">
-                  <div className="grid gap-4 lg:grid-cols-[1fr_180px_180px_auto] lg:items-center">
+                  <div className="grid gap-4 lg:grid-cols-[1fr_150px_130px_auto] lg:items-center">
                     <div>
                       <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wider">
                         <span className="rounded-full bg-cyan-300/10 px-2 py-1 text-cyan-300">{etiquetaTipo(documento.tipo)}</span>
@@ -245,6 +255,13 @@ export default async function ProyectoV1Page({
                     <div className="text-sm text-slate-300">{formatoBytes(documento.bytes)}</div>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       {documento.url && <a href={documento.url} target="_blank" rel="noreferrer" className="rounded-lg border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-200">Abrir PDF</a>}
+                      {editable && documento.estadoAnalisis !== "ANALIZANDO" && (
+                        <form action={analizarProyectoV1}>
+                          <input type="hidden" name="inspeccionId" value={id} />
+                          <input type="hidden" name="documentoId" value={documento.id} />
+                          <button className="rounded-lg border border-violet-300/30 px-3 py-2 text-xs font-black text-violet-200">{documento.estadoAnalisis === "COMPLETADO" ? "Reanalizar" : "Analizar IA"}</button>
+                        </form>
+                      )}
                       {editable && (
                         <form action={eliminarProyectoV1}>
                           <input type="hidden" name="inspeccionId" value={id} />
@@ -260,10 +277,23 @@ export default async function ProyectoV1Page({
           )}
         </section>
 
-        <section className="mt-7 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-300">Siguiente etapa del módulo</p>
-          <h2 className="mt-2 text-xl font-black">Análisis automático del proyecto</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-300">La estructura ya deja cada PDF listo para análisis. El motor de IA deberá extraer áreas, dimensiones, especificaciones, ubicaciones y elementos, y convertirlos en datos estructurados que complementen la Biblioteca Certeza. Hasta que ese motor esté conectado, los documentos permanecerán en estado PENDIENTE.</p>
+        {editable && documentos.length > 0 && (
+          <section className="mt-7 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-[.2em] text-violet-300">3. Convertir análisis en plan de inspección</p>
+            <h2 className="mt-2 text-xl font-black">Generar guía desde proyecto</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Cuando todos los PDF estén analizados correctamente, convierte las áreas, dimensiones, especificaciones y elementos detectados en puntos de inspección. Después, en Áreas V1, la Biblioteca Certeza añadirá los puntos mínimos estándar.</p>
+            <form action={generarGuiaDesdeProyectoV1} className="mt-5">
+              <input type="hidden" name="inspeccionId" value={id} />
+              <button disabled={!todosAnalizados} className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">Generar / actualizar guía de proyecto</button>
+            </form>
+            {!todosAnalizados && <p className="mt-3 text-xs font-bold text-amber-300">Analiza correctamente todos los documentos antes de generar la guía.</p>}
+            {puntosProyecto > 0 && <p className="mt-3 text-sm font-bold text-emerald-300">La guía contiene actualmente {puntosProyecto} punto(s) provenientes del proyecto.</p>}
+          </section>
+        )}
+
+        <section className="mt-7 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
+          <p className="text-xs font-black uppercase tracking-[.2em] text-amber-300">Control técnico</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">La IA es una ayuda de interpretación. No sustituye el criterio del Inspector, no debe inferir elementos no visibles y no autoriza por sí sola el proyecto. La confirmación del proyecto y del ecosistema de áreas sigue siendo responsabilidad del Inspector.</p>
         </section>
       </div>
     </main>
