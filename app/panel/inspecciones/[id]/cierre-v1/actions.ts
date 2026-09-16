@@ -1,6 +1,12 @@
 "use server";
 
-import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
+import {
+  EstadoDecisionRevision,
+  EstadoInspeccion,
+  RolUsuario,
+  TipoDecisionRevision,
+  TipoEvento,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -158,4 +164,77 @@ export async function enviarReporteDireccionV1(formData: FormData) {
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision`);
   redirect(`/panel/inspecciones/${inspeccionId}?ok=${encodeURIComponent("Reporte enviado a Dirección. El Inspector queda en modo de solo lectura hasta nueva indicación.")}`);
+}
+
+export async function devolverReporteInspectorV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const comentario = texto(formData, "comentario");
+  if (!inspeccionId) redirect("/panel/inspecciones");
+  if (comentario.length < 10) {
+    redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent("Indica un motivo de al menos 10 caracteres para devolver el reporte al Inspector.")}`);
+  }
+
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, rol: true, activo: true },
+  });
+  if (!usuario?.activo || usuario.rol !== RolUsuario.DIRECTOR) redirect("/acceso");
+
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id: inspeccionId },
+    select: { id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true },
+  });
+  if (!inspeccion || inspeccion.numeroInspeccion !== 1) {
+    redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent("La devolución directa de Dirección corresponde únicamente a V1.")}`);
+  }
+  if (inspeccion.estado !== EstadoInspeccion.REPORTE_PENDIENTE) {
+    redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent("Dirección solo puede devolver una V1 que esté pendiente de revisión.")}`);
+  }
+  if (!inspeccion.inspectorId) {
+    redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent("La inspección no tiene Inspector asignado.")}`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.revisionInspeccion.updateMany({
+      where: { inspeccionId, estado: EstadoDecisionRevision.VIGENTE },
+      data: { estado: EstadoDecisionRevision.SUPERADA },
+    });
+    await tx.revisionInspeccion.create({
+      data: {
+        inspeccionId,
+        usuarioId: usuario.id,
+        rol: RolUsuario.DIRECTOR,
+        decision: TipoDecisionRevision.DEVUELTO_INSPECTOR,
+        comentario,
+      },
+    });
+    await tx.inspeccion.update({
+      where: { id: inspeccionId },
+      data: { estado: EstadoInspeccion.EN_PROCESO },
+    });
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "capturaCerrada"=false,
+          "capturaCerradaEn"=NULL,
+          "capturaCerradaPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.REVISION_INSPECCION,
+    entidad: "RevisionInspeccion",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `Dirección devolvió el reporte V1 ${inspeccion.folio} al Inspector para corrección. Motivo: ${comentario}`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/revision`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+  redirect(`/panel/inspecciones/${inspeccionId}/revision?ok=${encodeURIComponent("Reporte V1 devuelto al Inspector para corrección.")}`);
 }
