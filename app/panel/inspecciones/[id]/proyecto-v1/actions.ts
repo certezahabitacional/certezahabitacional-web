@@ -355,6 +355,17 @@ export async function generarGuiaDesdeProyectoV1(formData: FormData) {
     resultado: validarResultadoDocumentoProyectoV1(documento.datosExtraidos),
   }));
 
+  const totalPuntosEsperados = resultados.reduce((total, { resultado }) => (
+    total + resultado.areas.reduce((subtotal, area) => {
+      const puntosArea = area.dimensiones.length + area.especificaciones.length + area.elementos.length;
+      return subtotal + (puntosArea > 0 ? puntosArea : 1);
+    }, 0)
+  ), 0);
+
+  if (totalPuntosEsperados === 0) {
+    volver(inspeccionId, "error", "El análisis no produjo áreas o elementos utilizables para la guía. Se conserva la guía de proyecto anterior, si existe. Revisa las advertencias de los documentos.");
+  }
+
   let orden = 100;
   let totalPuntos = 0;
   await prisma.$transaction(async (tx) => {
