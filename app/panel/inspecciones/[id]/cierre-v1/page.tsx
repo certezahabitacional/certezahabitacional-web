@@ -52,7 +52,7 @@ export default async function CierreV1Page({ params, searchParams }: {
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const consulta = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR].includes(usuario.rol);
+  const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
   const [estado] = await prisma.$queryRaw<Estado[]>`
