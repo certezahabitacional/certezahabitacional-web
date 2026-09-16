@@ -81,7 +81,11 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
   const portada = await signedUrl(foto?.url ?? null);
 
   const { resultados } = extraerResultadosInstrumentales(inspeccion.observaciones);
-  const prioridades = [1,2,3,4,5].map((p) => ({ p, total: inspeccion.hallazgos.filter((h) => h.prioridad === p).length }));
+  const prioridades = ["P1", "P2", "P3", "P4", "P5"] as const;
+  const resumenPrioridades = prioridades.map((prioridad) => ({
+    prioridad,
+    total: inspeccion.hallazgos.filter((h) => h.prioridad === prioridad).length,
+  }));
   const sinHallazgos = areas.filter((a) => a.resultado === "SIN_HALLAZGOS").length;
   const puntos = areas.reduce((s,a) => s + Number(a.puntos), 0);
   const cobertura = control.coberturaPorcentaje ?? (areas.length ? 100 : 0);
@@ -122,7 +126,7 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
         <section className="border-t border-slate-200 px-7 py-7">
           <h2 className="text-2xl font-black">Hallazgos detectados</h2>
           <div className="mt-4 grid grid-cols-5 gap-2">
-            {prioridades.map(({p,total}) => <Metrica key={p} label={`P${p}`} value={String(total)} />)}
+            {resumenPrioridades.map(({prioridad,total}) => <Metrica key={prioridad} label={prioridad} value={String(total)} />)}
           </div>
           {inspeccion.hallazgos.length === 0 ? (
             <p className="mt-4 rounded-2xl bg-emerald-50 p-5 font-bold text-emerald-900">No se registraron hallazgos durante la visita.</p>
@@ -130,7 +134,7 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
             <div className="mt-4 space-y-3">
               {inspeccion.hallazgos.slice(0, 6).map((h) => (
                 <article key={h.id} className="rounded-2xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between gap-3"><h3 className="font-black">{h.titulo}</h3><span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">P{h.prioridad}</span></div>
+                  <div className="flex items-center justify-between gap-3"><h3 className="font-black">{h.titulo}</h3><span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">{h.prioridad}</span></div>
                   <p className="mt-2 text-sm text-slate-600">{h.area}{h.ubicacion ? ` · ${h.ubicacion}` : ""}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-700">{h.descripcion}</p>
                 </article>
