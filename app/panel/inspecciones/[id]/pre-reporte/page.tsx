@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
+import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import { prisma } from "@/lib/prisma";
 import DecisionClienteSitioV1 from "./DecisionClienteSitioV1";
@@ -38,7 +39,6 @@ type AreaResumen = {
 };
 
 type Control = { campoFinalizadoEn: Date | null; coberturaPorcentaje: number | null };
-
 type DecisionPreReporte = { decisionCliente: string | null; decisionRegistradaEn: Date | null };
 
 export default async function PreReportePage({ params, searchParams }: {
@@ -91,7 +91,7 @@ export default async function PreReportePage({ params, searchParams }: {
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='REVISADO') "revisados",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')) "revisados",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') "noAplica"
     FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true ORDER BY a."orden",a."nombre"
   `;
@@ -106,17 +106,12 @@ export default async function PreReportePage({ params, searchParams }: {
   const portada = await signedUrl(foto?.url ?? null);
 
   const { resultados } = extraerResultadosInstrumentales(inspeccion.observaciones);
+  const metricas = await obtenerMetricasV1(id);
   const prioridades = ["P1", "P2", "P3", "P4", "P5"] as const;
   const resumenPrioridades = prioridades.map((prioridad) => ({
     prioridad,
-    total: inspeccion.hallazgos.filter((h) => h.prioridad === prioridad).length,
+    total: metricas.resumenPrioridades[prioridad],
   }));
-  const sinHallazgos = areas.filter((a) => a.resultado === "SIN_HALLAZGOS").length;
-  const puntosDefinidos = areas.reduce((s,a) => s + Number(a.definidos), 0);
-  const puntosNoAplica = areas.reduce((s,a) => s + Number(a.noAplica), 0);
-  const puntosAplicables = areas.reduce((s,a) => s + Number(a.aplicables), 0);
-  const puntosRevisados = areas.reduce((s,a) => s + Number(a.revisados), 0);
-  const cobertura = puntosAplicables > 0 ? Math.round((puntosRevisados / puntosAplicables) * 100) : 0;
 
   return (
     <main className="min-h-screen bg-slate-200 px-3 py-5 text-slate-950">
@@ -146,15 +141,16 @@ export default async function PreReportePage({ params, searchParams }: {
         <section className="px-7 py-7">
           <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-700">Resultado inmediato de la visita</p>
           <h2 className="mt-2 text-3xl font-black">Inspección de campo completada</h2>
-          <div className="mt-5 grid gap-3 sm:grid-cols-4">
-            <Metrica label="Cobertura" value={`${cobertura}%`} />
-            <Metrica label="Áreas" value={String(areas.length)} />
-            <Metrica label="Puntos revisados" value={String(puntosRevisados)} />
-            <Metrica label="Sin hallazgos" value={String(sinHallazgos)} />
+          <div className="mt-5 grid gap-3 sm:grid-cols-5">
+            <Metrica label="Cobertura" value={`${metricas.cobertura}%`} />
+            <Metrica label="Calificación técnica preliminar" value={`${Math.round(metricas.calificacion)}/100`} />
+            <Metrica label="Áreas" value={String(metricas.areas)} />
+            <Metrica label="Puntos revisados" value={String(metricas.revisados)} />
+            <Metrica label="Sin hallazgos" value={String(metricas.areasSinHallazgos)} />
           </div>
-          <p className="mt-4 text-xs font-bold text-slate-500">Puntos definidos: {puntosDefinidos} · No aplica: {puntosNoAplica} · Aplicables: {puntosAplicables} · Revisados: {puntosRevisados}</p>
+          <p className="mt-4 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · No aplica: {metricas.noAplica} · Aplicables: {metricas.aplicables} · Revisados: {metricas.revisados}</p>
           <p className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-            Este documento es un resumen preliminar de lo observado en campo. El reporte formal puede recibir ajustes de redacción, selección de evidencias y revisión por Dirección antes de su autorización definitiva.
+            Este documento es un resumen preliminar de lo observado en campo. La cobertura y la calificación técnica son indicadores separados. La calificación puede cambiar antes de la autorización final si el Inspector corrige información o Dirección solicita ajustes al expediente.
           </p>
         </section>
 
