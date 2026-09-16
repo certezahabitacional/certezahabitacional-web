@@ -6,7 +6,6 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   agregarAreaManual,
-  cerrarAreaV1,
   confirmarAreasV1,
   confirmarProyectoV1,
   generarAreasDesdeGuia,
@@ -88,7 +87,7 @@ export default async function AreasPage({
 
   const control = controlRows[0] ?? null;
   const puedeCapturar = esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
-  const completas = areas.filter((a) => a.estado === "REVISADA" && Number(a.fotos) >= 4).length;
+  const completas = areas.filter((a) => a.estado === "REVISADA").length;
   const avance = areas.length ? Math.round((completas / areas.length) * 100) : 0;
 
   return (
@@ -96,10 +95,13 @@ export default async function AreasPage({
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo de campo</Link>
-          <Link href={`/panel/inspecciones/${id}/protocolo`} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-amber-300">Protocolo V1</Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300">Recorrido V1</Link>
+            <Link href={`/panel/inspecciones/${id}/protocolo`} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-amber-300">Protocolo V1</Link>
+          </div>
         </div>
 
-        <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-emerald-300">Cobertura integral V1</p>
+        <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-emerald-300">Preparación y evidencia V1</p>
         <h1 className="mt-2 text-4xl font-black">Áreas de la vivienda</h1>
         <p className="mt-2 text-slate-400">{inspeccion.folio} · {inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? "Inmueble"}</p>
 
@@ -112,7 +114,7 @@ export default async function AreasPage({
         <section className="mt-7 grid gap-4 sm:grid-cols-4">
           <Resumen titulo="Proyecto" valor={control?.proyectoConfirmado ? "Confirmado" : "Pendiente"} />
           <Resumen titulo="Áreas" valor={String(areas.length)} />
-          <Resumen titulo="Revisadas" valor={`${completas}/${areas.length}`} />
+          <Resumen titulo="Cerradas" valor={`${completas}/${areas.length}`} />
           <Resumen titulo="Avance" valor={`${avance}%`} />
         </section>
 
@@ -152,8 +154,10 @@ export default async function AreasPage({
         <div className="mt-7 space-y-4">
           {areas.map((area, index) => {
             const fotos = Number(area.fotos);
-            const completa = area.estado === "REVISADA" && fotos >= 4;
+            const completa = area.estado === "REVISADA";
             const fachada = area.codigo === "FACHADA_PRINCIPAL";
+            const minimo = fachada ? 4 : 1;
+            const evidenciaLista = fotos >= minimo;
             return (
               <article key={area.id} className={`rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-white/10 bg-slate-900"}`}>
                 <div className="grid gap-4 lg:grid-cols-[65px_1fr_300px]">
@@ -161,11 +165,12 @@ export default async function AreasPage({
                   <div>
                     <div className="flex flex-wrap gap-2 text-xs font-black"><span className="rounded-full bg-white/5 px-2 py-1 text-slate-400">{area.tipo}</span><span className="rounded-full bg-white/5 px-2 py-1 text-slate-400">{area.origen}</span>{fachada && <span className="rounded-full bg-cyan-300/10 px-2 py-1 text-cyan-300">IDENTIFICACIÓN / PORTADA</span>}</div>
                     <h2 className="mt-2 text-xl font-black">{area.nombre}</h2>
-                    <p className={`mt-2 text-sm font-bold ${fotos >= 4 ? "text-emerald-300" : "text-amber-300"}`}>{fotos}/4 fotografías {area.portada ? "· portada seleccionada" : ""}</p>
-                    {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Comentario final:</strong> {area.comentarioFinal}</p>}
+                    <p className={`mt-2 text-sm font-bold ${evidenciaLista ? "text-emerald-300" : "text-amber-300"}`}>{fotos}/{minimo} fotografía{minimo === 1 ? " mínima" : "s mínimas"}{area.portada ? " · portada seleccionada" : fachada ? " · portada pendiente" : ""}</p>
+                    {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Resultado del recorrido:</strong> {area.comentarioFinal}</p>}
+                    <p className="mt-3 text-xs text-slate-500">El cierre técnico del área se realiza únicamente desde Recorrido V1.</p>
                   </div>
 
-                  {puedeCapturar && control?.areasConfirmadas && !completa ? (
+                  {puedeCapturar && control?.areasConfirmadas ? (
                     <div className="space-y-3">
                       <form action={subirFotoArea} className="rounded-2xl border border-white/10 bg-slate-950 p-4">
                         <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={area.id}/>
@@ -173,16 +178,10 @@ export default async function AreasPage({
                         <input name="descripcion" placeholder="Descripción opcional" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
                         <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-sm font-black text-slate-950">Tomar / agregar foto</button>
                       </form>
-                      {fotos >= 4 && (
-                        <form action={cerrarAreaV1} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-4">
-                          <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={area.id}/>
-                          <textarea name="comentarioFinal" required rows={3} placeholder="Ej. Área revisada; todo aparentemente en orden." className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
-                          <button className="mt-3 w-full rounded-xl bg-emerald-300 px-3 py-2 text-sm font-black text-slate-950">Cerrar área revisada</button>
-                        </form>
-                      )}
+                      <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block rounded-xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-300">{completa ? "Ver resultado en Recorrido V1" : "Continuar revisión en Recorrido V1"}</Link>
                     </div>
                   ) : (
-                    <div className={`rounded-2xl p-4 text-sm font-bold ${completa ? "bg-emerald-300/10 text-emerald-300" : "bg-white/5 text-slate-500"}`}>{completa ? "Área completa ✓" : control?.areasConfirmadas ? "Pendiente de documentación" : "Confirma primero el ecosistema de áreas"}</div>
+                    <div className={`rounded-2xl p-4 text-sm font-bold ${completa ? "bg-emerald-300/10 text-emerald-300" : "bg-white/5 text-slate-500"}`}>{completa ? "Área cerrada ✓" : control?.areasConfirmadas ? "Pendiente de recorrido" : "Confirma primero el ecosistema de áreas"}</div>
                   )}
                 </div>
               </article>
@@ -192,8 +191,8 @@ export default async function AreasPage({
 
         {areas.length > 0 && completas === areas.length && control?.areasConfirmadas && (
           <div className="mt-7 rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-6 text-emerald-200">
-            <p className="font-black">Cobertura integral completa</p>
-            <p className="mt-2 text-sm">Todas las áreas obligatorias tienen comentario final y al menos 4 fotografías. La fachada cuenta además con evidencia candidata a portada.</p>
+            <p className="font-black">Recorrido por áreas completo</p>
+            <p className="mt-2 text-sm">Todas las áreas obligatorias están cerradas desde el recorrido V1. El cierre formal validará además procesos, hallazgos, fachada, portada, firmas y sincronización.</p>
           </div>
         )}
       </div>
