@@ -38,8 +38,8 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },
     select: {
-      id: true, folio: true, estado: true,
-      inspector: { select: { usuario: { select: { gerenteId: true, coordinadorId: true } } } },
+      id: true, folio: true, estado: true, numeroInspeccion: true,
+      inspector: { select: { usuario: { select: { id: true, gerenteId: true, coordinadorId: true } } } },
       hallazgos: {
         orderBy: [{ prioridad: "asc" }, { creadoEn: "asc" }],
         select: {
@@ -51,10 +51,30 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
   });
   if (!inspeccion) notFound();
 
+  const [devolucionDocumental] = inspeccion.numeroInspeccion === 1
+    ? await prisma.$queryRaw<Array<{ existe: boolean }>>`
+        SELECT EXISTS(
+          SELECT 1
+          FROM "RevisionInspeccion" r
+          WHERE r."inspeccionId"=${id}
+            AND r."rol"='DIRECTOR'
+            AND r."decision"='DEVUELTO_INSPECTOR'
+            AND r."estado"='VIGENTE'
+            AND r."comentario" LIKE '[CORRECCIÓN DOCUMENTAL]%'
+        ) AS "existe"
+      `
+    : [{ existe: false }];
+
+  const inspectorDocumental =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    inspeccion.inspector?.usuario.id === usuario.id &&
+    Boolean(devolucionDocumental?.existe);
+
   const puedeEditar =
     usuario.rol === RolUsuario.DIRECTOR ||
     (usuario.rol === RolUsuario.GERENTE && inspeccion.inspector?.usuario.gerenteId === usuario.id) ||
-    (usuario.rol === RolUsuario.COORDINADOR && inspeccion.inspector?.usuario.coordinadorId === usuario.id);
+    (usuario.rol === RolUsuario.COORDINADOR && inspeccion.inspector?.usuario.coordinadorId === usuario.id) ||
+    inspectorDocumental;
   if (!puedeEditar) redirect("/acceso");
 
   const seleccion = await leerSelecciones(id);
@@ -96,6 +116,7 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
           <p className="text-xs font-black uppercase tracking-[.18em] text-violet-300">Edición del reporte · {inspeccion.folio}</p>
           <h1 className="mt-2 text-3xl font-black">Selección de evidencias</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Las fotografías originales del expediente no se eliminan. Aquí únicamente se decide cuáles aparecerán en el reporte final y en qué orden.</p>
+          {inspectorDocumental && <p className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm font-bold text-cyan-200">Corrección documental: puedes ajustar selección, orden y notas editoriales. La evidencia técnica original, hallazgos y resultados permanecen bloqueados y las firmas vigentes se conservan.</p>}
           <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
             <span className="rounded-full bg-white/5 px-3 py-2">Estado: {inspeccion.estado}</span>
             <span className="rounded-full bg-violet-400/10 px-3 py-2 text-violet-300">Seleccionadas: {seleccionadas.length}</span>
