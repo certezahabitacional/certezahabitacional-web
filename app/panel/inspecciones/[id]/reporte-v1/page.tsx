@@ -42,6 +42,7 @@ type Area = {
 type Proceso = { orden:number; nombre:string; estado:string; lecturaInicial:number|null; lecturaFinal:number|null; unidad:string|null; comentario:string|null };
 type FotoArea = { areaId:string; url:string; descripcion:string|null };
 type ControlReporte = { campoFinalizadoEn: Date | null };
+type AutorizacionDireccion = { nombre: string; creadaEn: Date };
 
 const GLOSARIO = [
   ["P1", "Prioridad crítica o urgente; requiere atención inmediata por la relevancia de la condición observada."],
@@ -122,9 +123,25 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
   const calificacionTexto = Number(calificacion).toFixed(2);
   const coberturaTexto = metricas.cobertura.toFixed(2);
   const autorizado = Boolean(inspeccion.certificado);
+  const [autorizacionDireccion] = autorizado
+    ? await prisma.$queryRaw<AutorizacionDireccion[]>`
+        SELECT u."nombre", r."creadaEn"
+        FROM "RevisionInspeccion" r
+        JOIN "Usuario" u ON u."id"=r."usuarioId"
+        WHERE r."inspeccionId"=${id}
+          AND r."rol"='DIRECTOR'
+          AND r."decision"='APROBADO'
+          AND r."estado"='VIGENTE'
+        ORDER BY r."creadaEn" DESC
+        LIMIT 1
+      `
+    : [];
   const etiquetaCalificacion = autorizado ? "Calificación técnica final" : "Calificación técnica preliminar";
   const fechaEfectiva = controlReporte?.campoFinalizadoEn ?? inspeccion.fechaProgramada;
   const fecha = new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",timeZone:inspeccion.zonaHoraria}).format(fechaEfectiva);
+  const fechaAutorizacion = autorizacionDireccion
+    ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
+    : null;
   const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Reporte de Inspección V1";
   const estadoReporte = autorizado ? "REPORTE FINAL AUTORIZADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
 
@@ -146,6 +163,13 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
           <div className="mt-8 grid gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 sm:grid-cols-2">
             <Dato label="Cliente" value={inspeccion.cliente.nombre}/><Dato label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Dato label="Dirección" value={`${inspeccion.direccion}, ${inspeccion.ciudad}`}/><Dato label="Fecha de inspección" value={fecha}/><Dato label="Inspector" value={inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}/><Dato label="Cotización" value={inspeccion.cotizacion?.folio ?? "Sin folio"}/>
           </div>
+          {autorizacionDireccion && fechaAutorizacion && (
+            <div className="mt-5 rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-5 py-4">
+              <p className="text-[10px] font-black uppercase tracking-[.2em] text-emerald-200">Autorizado por Dirección</p>
+              <p className="mt-1 font-black text-white">{autorizacionDireccion.nombre}</p>
+              <p className="mt-1 text-xs text-slate-300">{fechaAutorizacion}</p>
+            </div>
+          )}
           <p className="mt-8 text-xs font-black uppercase tracking-[.24em] text-amber-300">Certeza Habitacional · Documento técnico de inspección</p>
         </section>
 
@@ -190,7 +214,7 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
 
         <section className="page-break px-10 py-10">
           <ReportBrandHeader title="Certificado Certeza Habitacional" folio={inspeccion.certificado?.folio ?? inspeccion.folio} eyebrow="Resultado final autorizado" />
-          {inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/><Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
+          {inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
         </section>
       </article>
     </main>
