@@ -22,8 +22,8 @@ BEGIN
   SELECT a."id" INTO area_id
   FROM public."AreaInspeccion" a
   WHERE a."inspeccionId" = NEW."inspeccionId"
-    AND regexp_replace(upper(unaccent(btrim(a."nombre"))), '[^A-Z0-9]+', '_', 'g') =
-        regexp_replace(upper(unaccent(btrim(NEW."area"))), '[^A-Z0-9]+', '_', 'g')
+    AND regexp_replace(translate(upper(btrim(a."nombre")), 'ÁÉÍÓÚÜÑ', 'AEIOUUN'), '[^A-Z0-9]+', '_', 'g') =
+        regexp_replace(translate(upper(btrim(NEW."area")), 'ÁÉÍÓÚÜÑ', 'AEIOUUN'), '[^A-Z0-9]+', '_', 'g')
   ORDER BY a."orden", a."id"
   LIMIT 1;
 
@@ -56,8 +56,8 @@ BEGIN
         "actualizadoEn" = NOW()
     WHERE g."inspeccionId" = NEW."inspeccionId"
       AND g."areaId" IS NULL
-      AND regexp_replace(upper(unaccent(btrim(g."area"))), '[^A-Z0-9]+', '_', 'g') =
-          regexp_replace(upper(unaccent(btrim(NEW."nombre"))), '[^A-Z0-9]+', '_', 'g');
+      AND regexp_replace(translate(upper(btrim(g."area")), 'ÁÉÍÓÚÜÑ', 'AEIOUUN'), '[^A-Z0-9]+', '_', 'g') =
+          regexp_replace(translate(upper(btrim(NEW."nombre")), 'ÁÉÍÓÚÜÑ', 'AEIOUUN'), '[^A-Z0-9]+', '_', 'g');
   END IF;
 
   RETURN NEW;
@@ -84,5 +84,5 @@ FROM public."AreaInspeccion" a
 JOIN public."Inspeccion" i ON i."id" = a."inspeccionId" AND i."numeroInspeccion" = 1
 WHERE g."inspeccionId" = a."inspeccionId"
   AND g."areaId" IS NULL
-  AND regexp_replace(upper(unaccent(btrim(g."area"))), '[^A-Z0-9]+', '_', 'g') =
-      regexp_replace(upper(unaccent(btrim(a."nombre"))), '[^A-Z0-9]+', '_', 'g');
+  AND regexp_replace(translate(upper(btrim(g."area")), 'ÁÉÍÓÚÜÑ', 'AEIOUUN'), '[^A-Z0-9]+', '_', 'g') =
+      regexp_replace(translate(upper(btrim(a."nombre")), 'ÁÉÍÓÚÜÑ', 'AEIOUUN'), '[^A-Z0-9]+', '_', 'g');
