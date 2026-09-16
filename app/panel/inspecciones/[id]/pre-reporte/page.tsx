@@ -8,6 +8,7 @@ import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import { prisma } from "@/lib/prisma";
+import DecisionClienteSitioV1 from "./DecisionClienteSitioV1";
 
 function supabaseAdmin() {
   const url = process.env.SUPABASE_URL;
@@ -38,8 +39,14 @@ type AreaResumen = {
 
 type Control = { campoFinalizadoEn: Date | null; coberturaPorcentaje: number | null };
 
-export default async function PreReportePage({ params }: { params: Promise<{ id: string }> }) {
+type DecisionPreReporte = { decisionCliente: string | null; decisionRegistradaEn: Date | null };
+
+export default async function PreReportePage({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ ok?: string; error?: string }>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -70,6 +77,14 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
     SELECT "campoFinalizadoEn","coberturaPorcentaje" FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
   `;
   if (!control?.campoFinalizadoEn) redirect(`/panel/inspecciones/${id}/cierre-v1?error=${encodeURIComponent("El pre-reporte se habilita al terminar formalmente el trabajo de campo.")}`);
+
+  const [decisionPreReporte] = await prisma.$queryRaw<DecisionPreReporte[]>`
+    SELECT "decisionCliente","decisionRegistradaEn"
+    FROM "PreReporteInspeccion"
+    WHERE "inspeccionId"=${id}
+    ORDER BY "generadoEn" DESC
+    LIMIT 1
+  `;
 
   const areas = await prisma.$queryRaw<AreaResumen[]>`
     SELECT a."nombre",a."resultado",
@@ -109,6 +124,12 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
         <Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link>
         <span className="rounded-full bg-amber-100 px-4 py-2 text-xs font-black text-amber-900">PRELIMINAR · PENDIENTE DE REVISIÓN Y AUTORIZACIÓN</span>
       </div>
+
+      {(query.ok || query.error) && (
+        <div className={`mx-auto mb-4 max-w-4xl rounded-2xl px-5 py-4 text-sm font-bold print:hidden ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>
+          {query.error ?? query.ok}
+        </div>
+      )}
 
       <article className="mx-auto max-w-4xl overflow-hidden bg-white shadow-xl">
         <section className="bg-slate-950 px-7 py-7 text-white">
@@ -172,6 +193,12 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
           <p className="mt-2 text-sm leading-6 text-slate-600">Se muestran las tecnologías y equipos con resultados registrados durante esta visita. La aplicación Certeza Habitacional guía y documenta todo el proceso.</p>
           <div className="mt-5"><TecnologiaInspeccionV1 resultados={resultados} compact /></div>
         </section>
+
+        <DecisionClienteSitioV1
+          inspeccionId={id}
+          decisionActual={decisionPreReporte?.decisionCliente ?? null}
+          puedeRegistrar={esInspector && inspeccion.estado === "EN_PROCESO"}
+        />
 
         <section className="border-t border-slate-200 bg-slate-50 px-7 py-7">
           <h2 className="text-2xl font-black">Qué sigue</h2>
