@@ -26,7 +26,15 @@ async function signedUrl(path: string | null) {
   return error ? null : data.signedUrl;
 }
 
-type AreaResumen = { nombre: string; resultado: string | null; hallazgos: number; puntos: number; noAplica: number };
+type AreaResumen = {
+  nombre: string;
+  resultado: string | null;
+  hallazgos: number;
+  definidos: number;
+  aplicables: number;
+  revisados: number;
+  noAplica: number;
+};
 
 type Control = { campoFinalizadoEn: Date | null; coberturaPorcentaje: number | null };
 
@@ -65,8 +73,10 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
 
   const areas = await prisma.$queryRaw<AreaResumen[]>`
     SELECT a."nombre",a."resultado",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."areaId"=a."id") "hallazgos",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "puntos",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='REVISADO') "revisados",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') "noAplica"
     FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true ORDER BY a."orden",a."nombre"
   `;
@@ -87,8 +97,11 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
     total: inspeccion.hallazgos.filter((h) => h.prioridad === prioridad).length,
   }));
   const sinHallazgos = areas.filter((a) => a.resultado === "SIN_HALLAZGOS").length;
-  const puntos = areas.reduce((s,a) => s + Number(a.puntos), 0);
-  const cobertura = control.coberturaPorcentaje ?? (areas.length ? 100 : 0);
+  const puntosDefinidos = areas.reduce((s,a) => s + Number(a.definidos), 0);
+  const puntosNoAplica = areas.reduce((s,a) => s + Number(a.noAplica), 0);
+  const puntosAplicables = areas.reduce((s,a) => s + Number(a.aplicables), 0);
+  const puntosRevisados = areas.reduce((s,a) => s + Number(a.revisados), 0);
+  const cobertura = puntosAplicables > 0 ? Math.round((puntosRevisados / puntosAplicables) * 100) : 0;
 
   return (
     <main className="min-h-screen bg-slate-200 px-3 py-5 text-slate-950">
@@ -113,11 +126,12 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
           <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-700">Resultado inmediato de la visita</p>
           <h2 className="mt-2 text-3xl font-black">Inspección de campo completada</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-4">
-            <Metrica label="Cobertura" value={`${Math.round(Number(cobertura))}%`} />
+            <Metrica label="Cobertura" value={`${cobertura}%`} />
             <Metrica label="Áreas" value={String(areas.length)} />
-            <Metrica label="Puntos revisados" value={String(puntos)} />
+            <Metrica label="Puntos revisados" value={String(puntosRevisados)} />
             <Metrica label="Sin hallazgos" value={String(sinHallazgos)} />
           </div>
+          <p className="mt-4 text-xs font-bold text-slate-500">Puntos definidos: {puntosDefinidos} · No aplica: {puntosNoAplica} · Aplicables: {puntosAplicables} · Revisados: {puntosRevisados}</p>
           <p className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">
             Este documento es un resumen preliminar de lo observado en campo. El reporte formal puede recibir ajustes de redacción, selección de evidencias y revisión por Dirección antes de su autorización definitiva.
           </p>
@@ -147,7 +161,7 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
           <h2 className="text-2xl font-black">Áreas revisadas satisfactoriamente</h2>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {areas.filter((a) => a.resultado === "SIN_HALLAZGOS").map((a) => (
-              <div key={a.nombre} className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">✓ {a.nombre} · {a.puntos} puntos aplicables</div>
+              <div key={a.nombre} className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">✓ {a.nombre} · {a.aplicables} puntos aplicables</div>
             ))}
           </div>
         </section>
