@@ -14,6 +14,7 @@ import {
   devolverACoordinacionPorAsignacion,
   devolverAInspectorPorAsignacion,
 } from "@/lib/revision-asignacion-actions";
+import { aprobarGerenciaV1SinFinalizar } from "@/lib/revision-v1-gerencia";
 import * as legacy from "./actions-legacy";
 
 function inspeccionId(formData: FormData) {
@@ -48,6 +49,8 @@ export async function devolverAInspector(formData: FormData) {
 }
 export async function aprobarGerencia(formData: FormData) {
   await exigirZonaInspeccionForm(formData);
+  const manejadaV1 = await aprobarGerenciaV1SinFinalizar(formData);
+  if (manejadaV1) return;
   const manejadaPorMetodo = await aprobarGerenciaMetodoCerteza(formData);
   if (!manejadaPorMetodo) return legacy.aprobarGerencia(formData);
 }
