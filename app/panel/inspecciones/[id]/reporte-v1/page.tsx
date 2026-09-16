@@ -7,6 +7,7 @@ import QRCode from "qrcode";
 import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
+import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import { prisma } from "@/lib/prisma";
 
@@ -82,7 +83,7 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
     SELECT a."id"::text,a."nombre",a."resultado",a."comentarioFinal",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='REVISADO') "revisados",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')) "revisados",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') "noAplica",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
     FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true ORDER BY a."orden",a."nombre"
@@ -109,16 +110,13 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
   `;
   const portada = await signedUrl(fachada?.url ?? null);
   const { resultados } = extraerResultadosInstrumentales(inspeccion.observaciones);
+  const metricas = await obtenerMetricasV1(id);
 
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
-  const hallazgosP = prioridades.map(prioridad => ({prioridad,total:inspeccion.hallazgos.filter(h=>h.prioridad===prioridad).length}));
-  const puntosDefinidos = areas.reduce((s,a)=>s+Number(a.definidos),0);
-  const puntosNoAplica = areas.reduce((s,a)=>s+Number(a.noAplica),0);
-  const puntosAplicables = areas.reduce((s,a)=>s+Number(a.aplicables),0);
-  const puntosRevisados = areas.reduce((s,a)=>s+Number(a.revisados),0);
-  const areasSinHallazgo = areas.filter(a=>a.resultado==='SIN_HALLAZGOS').length;
-  const cobertura = puntosAplicables > 0 ? Math.round((puntosRevisados / puntosAplicables) * 100) : 0;
-  const fecha = new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"});
+  const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
+  const calificacion = inspeccion.certificado ? Number(inspeccion.certificado.ish) : metricas.calificacion;
+  const etiquetaCalificacion = inspeccion.certificado ? "Calificación técnica final" : "Calificación técnica preliminar";
+  const fecha = new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",timeZone:inspeccion.zonaHoraria}).format(inspeccion.fechaProgramada);
 
   let qr:string|null=null;
   if (inspeccion.certificado) {
@@ -145,10 +143,10 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
         </Seccion>
 
         <Seccion n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
-          <div className="grid gap-3 sm:grid-cols-4"><Metrica label="Cobertura" value={`${cobertura}%`}/><Metrica label="Áreas" value={String(areas.length)}/><Metrica label="Puntos revisados" value={String(puntosRevisados)}/><Metrica label="Áreas sin hallazgos" value={String(areasSinHallazgo)}/></div>
-          <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {puntosDefinidos} · No aplica: {puntosNoAplica} · Aplicables: {puntosAplicables} · Revisados: {puntosRevisados}</p>
+          <div className="grid gap-3 sm:grid-cols-5"><Metrica label="Cobertura" value={`${metricas.cobertura}%`}/><Metrica label={etiquetaCalificacion} value={`${Math.round(calificacion)}/100`}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
+          <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · No aplica: {metricas.noAplica} · Aplicables: {metricas.aplicables} · Revisados: {metricas.revisados}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
-          <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La inspección V1 documenta el funcionamiento de los principales sistemas, el recorrido por las áreas contratadas, los puntos mínimos aplicables, los hallazgos detectados y las áreas verificadas sin anomalías relevantes. La interpretación final se apoya en evidencia de campo, tecnología utilizada y criterio profesional del Inspector.</p>
+          <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La Calificación Técnica Certeza es un indicador distinto y refleja la severidad acumulada de los hallazgos P1–P5. Una inspección puede alcanzar 100% de cobertura y, al mismo tiempo, obtener una calificación técnica baja si se detectaron condiciones relevantes.</p>
         </Seccion>
 
         <Seccion n="03" titulo="Procedimiento y alcance" subtitulo="Cómo se ejecutó la inspección">
@@ -164,9 +162,9 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
           <div className="space-y-6">{areas.map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.aplicables} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-900'}`}>{(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
         </Seccion>
 
-        <Seccion n="06" titulo="Resumen estadístico" subtitulo="Cobertura y distribución de resultados">
-          <div className="grid gap-3 sm:grid-cols-4"><Metrica label="Cobertura efectiva" value={`${cobertura}%`}/><Metrica label="Puntos aplicables" value={String(puntosAplicables)}/><Metrica label="Puntos revisados" value={String(puntosRevisados)}/><Metrica label="Hallazgos" value={String(inspeccion.hallazgos.length)}/></div>
-          <p className="mt-3 text-xs font-bold text-slate-500">Áreas satisfactorias: {areasSinHallazgo}</p>
+        <Seccion n="06" titulo="Resumen estadístico" subtitulo="Cobertura, calificación y distribución de resultados">
+          <div className="grid gap-3 sm:grid-cols-5"><Metrica label="Cobertura efectiva" value={`${metricas.cobertura}%`}/><Metrica label="Calificación técnica" value={`${Math.round(calificacion)}/100`}/><Metrica label="Puntos aplicables" value={String(metricas.aplicables)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Hallazgos" value={String(metricas.totalHallazgos)}/></div>
+          <p className="mt-3 text-xs font-bold text-slate-500">Áreas satisfactorias: {metricas.areasSinHallazgos} · Carga de severidad: {metricas.cargaSeveridad}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
         </Seccion>
 
@@ -181,7 +179,7 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
 
         <section className="page-break px-10 py-10">
           <ReportBrandHeader title="Certificado Certeza Habitacional" folio={inspeccion.certificado?.folio ?? inspeccion.folio} eyebrow="Resultado final autorizado" />
-          {inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado de Estado Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha" value={fecha}/><Fila label="Calificación final" value={`${Math.round(Number(inspeccion.certificado.ish))}/100`}/><Fila label="Hallazgos" value={String(inspeccion.hallazgos.length)}/><Fila label="Áreas sin hallazgos" value={String(areasSinHallazgo)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl bg-amber-50 p-8 text-amber-900">El certificado se generará cuando Dirección autorice el reporte final.</div>}
+          {inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha" value={fecha}/><Fila label="Cobertura" value={`${metricas.cobertura}%`}/><Fila label="Calificación Técnica Certeza" value={`${Math.round(Number(inspeccion.certificado.ish))}/100`}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`${metricas.resumenPrioridades.P1} · ${metricas.resumenPrioridades.P2} · ${metricas.resumenPrioridades.P3} · ${metricas.resumenPrioridades.P4} · ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl bg-amber-50 p-8 text-amber-900">El certificado se generará cuando Dirección autorice el reporte final.</div>}
         </section>
       </article>
     </main>
