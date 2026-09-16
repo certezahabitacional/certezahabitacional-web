@@ -136,7 +136,7 @@ export default async function CierreV1Page({ params, searchParams }: {
             {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href={`/panel/inspecciones/${id}/pre-reporte`} className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950">Ver pre-reporte</Link>
-              <Link href={`/panel/inspecciones/${id}/reporte`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Revisar reporte</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Revisar reporte V1</Link>
               <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Editar evidencias</Link>
             </div>
             {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && <form action={enviarReporteDireccionV1} className="mt-5"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950">ENVIAR REPORTE A DIRECCIÓN</button></form>}
