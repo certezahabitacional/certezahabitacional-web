@@ -15,6 +15,7 @@ type ControlV1 = {
   protocoloTotal: number;
   protocoloCompleto: number;
   fachadaPortada: boolean;
+  reabiertaEn: Date | null;
 };
 
 type ControlV2 = {
@@ -29,6 +30,7 @@ async function controlV1(id: string): Promise<ControlV1> {
     SELECT
       COALESCE(c."proyectoConfirmado",false) AS "proyectoConfirmado",
       COALESCE(c."areasConfirmadas",false) AS "areasConfirmadas",
+      c."reabiertaEn",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true) AS "areasTotal",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a
         WHERE a."inspeccionId"=${id}
@@ -46,7 +48,7 @@ async function controlV1(id: string): Promise<ControlV1> {
     WHERE c."inspeccionId"=${id}
     LIMIT 1
   `;
-  return r ?? { proyectoConfirmado: false, areasConfirmadas: false, areasTotal: 0, areasCompletas: 0, protocoloTotal: 0, protocoloCompleto: 0, fachadaPortada: false };
+  return r ?? { proyectoConfirmado: false, areasConfirmadas: false, areasTotal: 0, areasCompletas: 0, protocoloTotal: 0, protocoloCompleto: 0, fachadaPortada: false, reabiertaEn: null };
 }
 
 async function controlV2(id: string, anteriorId: string | null): Promise<ControlV2> {
@@ -96,7 +98,7 @@ export default async function FlujoCampoPage({
       inspectorId: true,
       cliente: { select: { nombre: true } },
       inmueble: { select: { alias: true } },
-      firmas: { select: { tipo: true } },
+      firmas: { select: { tipo: true, firmadaEn: true } },
     },
   });
   if (!inspeccion) notFound();
@@ -109,9 +111,6 @@ export default async function FlujoCampoPage({
   if (!esInspector && !consulta) redirect("/acceso");
 
   const liberacionCaja = inspeccion.estado === EstadoInspeccion.PROGRAMADA ? await validarInicioCampoPorCaja(id) : null;
-  const firmaInspector = inspeccion.firmas.some((f) => f.tipo.toLowerCase().includes("inspector"));
-  const firmaCliente = inspeccion.firmas.some((f) => f.tipo.toLowerCase().includes("cliente"));
-  const firmasListas = firmaInspector && firmaCliente;
 
   const [sync] = await prisma.$queryRaw<Array<{ pendientes: number }>>`
     SELECT COUNT(*)::int AS "pendientes" FROM "OperacionCampoSync" WHERE "inspeccionId"=${id} AND "estado" <> 'PROCESADA'
@@ -122,6 +121,14 @@ export default async function FlujoCampoPage({
   const v1 = esV1 ? await controlV1(id) : null;
   const v2 = !esV1 ? await controlV2(id, inspeccion.inspeccionAnteriorId) : null;
 
+  const reabiertaEn = esV1 && v1?.reabiertaEn ? new Date(v1.reabiertaEn) : null;
+  const firmasVigentes = inspeccion.firmas.filter(
+    (firma) => !reabiertaEn || new Date(firma.firmadaEn) >= reabiertaEn,
+  );
+  const firmaInspector = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("inspector"));
+  const firmaCliente = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("cliente"));
+  const firmasListas = firmaInspector && firmaCliente;
+
   const v2Tecnico = Boolean(v2 && v2.pendientesAtendidos === v2.pendientesPrevios && v2.hallazgosConEvidencia === v2.hallazgosActuales);
   const listoV2 = inspeccion.estado === EstadoInspeccion.EN_PROCESO && !esV1 && v2Tecnico && firmasListas && syncPendientes === 0;
 
@@ -131,7 +138,7 @@ export default async function FlujoCampoPage({
         { n: 2, t: "Protocolo secuencial", ok: Boolean(v1 && v1.protocoloTotal > 0 && v1.protocoloCompleto === v1.protocoloTotal), d: `${v1?.protocoloCompleto ?? 0}/${v1?.protocoloTotal ?? 0} pasos obligatorios completos`, href: `/panel/inspecciones/${id}/protocolo` },
         { n: 3, t: "Recorrido guiado por áreas", ok: Boolean(v1 && v1.areasTotal > 0 && v1.areasCompletas === v1.areasTotal && v1.fachadaPortada), d: `${v1?.areasCompletas ?? 0}/${v1?.areasTotal ?? 0} áreas cerradas · fachada/portada: ${v1?.fachadaPortada ? "sí" : "pendiente"}`, href: `/panel/inspecciones/${id}/campo-v1` },
         { n: 4, t: "Hallazgos", ok: true, d: "Solo registra defectos reales. V1 puede cerrar con cero hallazgos.", href: `/panel/inspecciones/${id}/captura` },
-        { n: 5, t: "Firmas", ok: firmasListas, d: `Inspector: ${firmaInspector ? "sí" : "pendiente"} · Cliente: ${firmaCliente ? "sí" : "pendiente"}`, href: `/panel/inspecciones/${id}/firmas` },
+        { n: 5, t: reabiertaEn ? "Nuevas firmas" : "Firmas", ok: firmasListas, d: `Inspector: ${firmaInspector ? "vigente" : "pendiente"} · Cliente: ${firmaCliente ? "vigente" : "pendiente"}`, href: `/panel/inspecciones/${id}/firmas` },
       ]
     : [
         { n: 1, t: `Pendientes heredados de V${inspeccion.numeroInspeccion - 1}`, ok: Boolean(v2 && v2.pendientesAtendidos === v2.pendientesPrevios), d: `${v2?.pendientesAtendidos ?? 0}/${v2?.pendientesPrevios ?? 0} pendientes verificados`, href: `/panel/inspecciones/${id}/captura` },
@@ -149,6 +156,13 @@ export default async function FlujoCampoPage({
         <p className="mt-2 text-slate-400">{inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? "Inmueble"}</p>
 
         {(query.ok || query.error) && <p className={`mt-5 rounded-2xl p-4 font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</p>}
+
+        {reabiertaEn && !firmasListas && (
+          <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5">
+            <p className="font-black text-amber-300">Dirección devolvió esta V1 para corrección.</p>
+            <p className="mt-2 text-sm text-amber-100">Las firmas anteriores dejaron de ser válidas para la nueva autorización. Después de corregir, registra nuevamente las firmas del Inspector y del cliente.</p>
+          </section>
+        )}
 
         {inspeccion.estado === EstadoInspeccion.PROGRAMADA && (
           <section className={`mt-7 rounded-3xl border p-6 ${liberacionCaja?.ok ? "border-emerald-300/25 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
@@ -172,7 +186,7 @@ export default async function FlujoCampoPage({
             {esV1 ? (
               <section className="mt-7 rounded-3xl border border-cyan-300/25 bg-cyan-300/5 p-6">
                 <h2 className="text-xl font-black">Cierre de trabajo de campo V1</h2>
-                <p className="mt-2 text-sm text-cyan-100">El cierre formal valida áreas, procesos, hallazgos, 4 fotografías de fachada, una sola portada, firmas y sincronización. Después inicia la ventana de 12 horas para revisar el reporte antes de enviarlo a Dirección.</p>
+                <p className="mt-2 text-sm text-cyan-100">El cierre formal valida áreas, procesos, hallazgos, 4 fotografías de fachada, una sola portada, firmas vigentes y sincronización. Después inicia la ventana de 12 horas para revisar el reporte antes de enviarlo a Dirección.</p>
                 <Link href={`/panel/inspecciones/${id}/cierre-v1`} className="mt-5 inline-block rounded-full bg-cyan-300 px-6 py-3 font-black text-slate-950">Revisar cierre V1 →</Link>
               </section>
             ) : (
