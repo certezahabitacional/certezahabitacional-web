@@ -219,6 +219,9 @@ export async function devolverReporteInspectorV1(formData: FormData) {
       SET "capturaCerrada"=false,
           "capturaCerradaEn"=NULL,
           "capturaCerradaPorId"=NULL,
+          "reabiertaEn"=NOW(),
+          "reabiertaPorId"=${usuario.id},
+          "motivoReapertura"=${comentario},
           "actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId}
     `;
