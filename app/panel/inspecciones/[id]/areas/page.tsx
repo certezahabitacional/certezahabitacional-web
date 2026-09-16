@@ -11,6 +11,7 @@ import {
   generarAreasDesdeGuia,
   subirFotoArea,
 } from "./actions";
+import { seleccionarPortadaFachadaV1 } from "./portada-actions";
 
 type Area = {
   id: string;
@@ -23,6 +24,14 @@ type Area = {
   comentarioFinal: string | null;
   fotos: number;
   portada: boolean;
+};
+
+type FotoFachada = {
+  fotografiaId: string;
+  descripcion: string | null;
+  candidataPortada: boolean;
+  orden: number;
+  creadaEn: Date;
 };
 
 type Control = {
@@ -68,7 +77,7 @@ export default async function AreasPage({
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const [controlRows, areas] = await Promise.all([
+  const [controlRows, areas, fotosFachada] = await Promise.all([
     prisma.$queryRaw<Control[]>`
       SELECT "proyectoConfirmado","areasConfirmadas"
       FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
@@ -82,6 +91,14 @@ export default async function AreasPage({
       WHERE a."inspeccionId"=${id}
       GROUP BY a."id"
       ORDER BY a."orden",a."nombre"
+    `,
+    prisma.$queryRaw<FotoFachada[]>`
+      SELECT fa."fotografiaId",f."descripcion",fa."candidataPortada",fa."orden",fa."creadoEn"
+      FROM "FotografiaArea" fa
+      JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
+      JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+      WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL'
+      ORDER BY fa."orden",fa."creadoEn"
     `,
   ]);
 
@@ -168,6 +185,28 @@ export default async function AreasPage({
                     <p className={`mt-2 text-sm font-bold ${evidenciaLista ? "text-emerald-300" : "text-amber-300"}`}>{fotos}/{minimo} fotografía{minimo === 1 ? " mínima" : "s mínimas"}{area.portada ? " · portada seleccionada" : fachada ? " · portada pendiente" : ""}</p>
                     {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Resultado del recorrido:</strong> {area.comentarioFinal}</p>}
                     <p className="mt-3 text-xs text-slate-500">El cierre técnico del área se realiza únicamente desde Recorrido V1.</p>
+
+                    {fachada && fotosFachada.length > 0 && (
+                      <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-slate-950/60 p-4">
+                        <p className="text-sm font-black text-cyan-200">Seleccionar foto de portada</p>
+                        <p className="mt-1 text-xs text-slate-400">Elige una de las fotografías de fachada. El sistema mantendrá exactamente una como portada.</p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {fotosFachada.map((foto, fotoIndex) => (
+                            <form key={foto.fotografiaId} action={seleccionarPortadaFachadaV1} className={`rounded-xl border p-3 ${foto.candidataPortada ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-950"}`}>
+                              <input type="hidden" name="inspeccionId" value={id}/>
+                              <input type="hidden" name="fotografiaId" value={foto.fotografiaId}/>
+                              <p className="text-xs font-black">Foto {fotoIndex + 1} {foto.candidataPortada ? "· PORTADA ACTUAL" : ""}</p>
+                              <p className="mt-1 min-h-8 text-xs text-slate-500">{foto.descripcion || "Sin descripción"}</p>
+                              {puedeCapturar && (
+                                <button disabled={foto.candidataPortada} className="mt-2 w-full rounded-lg border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-200 disabled:border-emerald-300/20 disabled:text-emerald-300 disabled:opacity-70">
+                                  {foto.candidataPortada ? "PORTADA SELECCIONADA" : "USAR COMO PORTADA"}
+                                </button>
+                              )}
+                            </form>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {puedeCapturar && control?.areasConfirmadas ? (
