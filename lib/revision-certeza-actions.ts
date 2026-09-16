@@ -195,6 +195,7 @@ export async function aprobarDireccionMetodoCerteza(formData: FormData): Promise
   await validarAjustesParaCertificado(inspeccionId);
   const preparado = await prepararCertificadoV1(inspeccionId);
   const comentario = texto(formData, "comentario");
+  const reactivarCertificado = Boolean(preparado?.existente && !preparado.vigente);
 
   await prisma.$transaction(async (tx) => {
     await tx.revisionInspeccion.updateMany({ where: { inspeccionId, rol: RolUsuario.DIRECTOR, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
@@ -202,6 +203,14 @@ export async function aprobarDireccionMetodoCerteza(formData: FormData): Promise
 
     if (preparado && !preparado.existente) {
       await tx.certificado.create({ data: { inspeccionId, ...preparado.certificado } });
+    } else if (preparado?.existente) {
+      await tx.certificado.update({
+        where: { id: preparado.certificadoId },
+        data: {
+          ...preparado.certificadoActualizado,
+          ...(preparado.vigente ? {} : { vigente: true, motivoRevocacion: null, revocadoEn: null }),
+        },
+      });
     }
 
     await tx.inspeccion.update({
@@ -237,6 +246,8 @@ export async function aprobarDireccionMetodoCerteza(formData: FormData): Promise
   await registrarAuditoria({ tipo: TipoEvento.REVISION_INSPECCION, entidad: "RevisionInspeccion", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección aprobó y cerró la inspección ${inspeccion.folio}.` });
   if (preparado && !preparado.existente) {
     await registrarAuditoria({ tipo: TipoEvento.EMITIR_CERTIFICADO, entidad: "Certificado", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA_V1", descripcion: `Dirección autorizó y emitió automáticamente el Certificado V1 de ${inspeccion.folio} con calificación técnica ${preparado.metricas.calificacion}/100 y cobertura ${preparado.metricas.cobertura}%.` });
+  } else if (preparado?.existente && reactivarCertificado) {
+    await registrarAuditoria({ tipo: TipoEvento.REACTIVAR_CERTIFICADO, entidad: "Certificado", entidadId: preparado.certificadoId, inspeccionId, usuarioId: usuario.id, origen: "REAUTORIZACION_DIRECCION_V1", descripcion: `Dirección reautorizó V1 y reactivó el certificado existente de ${inspeccion.folio} con calificación técnica ${preparado.metricas.calificacion}/100 y cobertura ${preparado.metricas.cobertura}%.` });
   }
   revalidar(inspeccionId);
   ok(inspeccionId, preparado ? "Dirección autorizó V1. El reporte, la calificación final y el certificado quedaron liberados al cliente." : "Dirección aprobó la inspección. El expediente quedó FINALIZADO.");
@@ -257,6 +268,7 @@ export async function levantarBloqueoYAprobarMetodoCerteza(formData: FormData): 
   exigirPagoOperativo(inspeccionId, inspeccion);
   await validarAjustesParaCertificado(inspeccionId);
   const preparado = await prepararCertificadoV1(inspeccionId);
+  const reactivarCertificado = Boolean(preparado?.existente && !preparado.vigente);
 
   await prisma.$transaction(async (tx) => {
     await tx.revisionInspeccion.updateMany({ where: { inspeccionId, estado: EstadoDecisionRevision.VIGENTE }, data: { estado: EstadoDecisionRevision.SUPERADA } });
@@ -265,6 +277,14 @@ export async function levantarBloqueoYAprobarMetodoCerteza(formData: FormData): 
 
     if (preparado && !preparado.existente) {
       await tx.certificado.create({ data: { inspeccionId, ...preparado.certificado } });
+    } else if (preparado?.existente) {
+      await tx.certificado.update({
+        where: { id: preparado.certificadoId },
+        data: {
+          ...preparado.certificadoActualizado,
+          ...(preparado.vigente ? {} : { vigente: true, motivoRevocacion: null, revocadoEn: null }),
+        },
+      });
     }
 
     await tx.inspeccion.update({
@@ -304,6 +324,8 @@ export async function levantarBloqueoYAprobarMetodoCerteza(formData: FormData): 
   await registrarAuditoria({ tipo: TipoEvento.DESBLOQUEAR_LIBERACION, entidad: "Inspeccion", entidadId: inspeccion.id, inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección levantó el bloqueo y aprobó ${inspeccion.folio}. Motivo: ${comentario}` });
   if (preparado && !preparado.existente) {
     await registrarAuditoria({ tipo: TipoEvento.EMITIR_CERTIFICADO, entidad: "Certificado", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA_V1", descripcion: `Dirección levantó el bloqueo, autorizó V1 y emitió automáticamente el certificado con calificación técnica ${preparado.metricas.calificacion}/100.` });
+  } else if (preparado?.existente && reactivarCertificado) {
+    await registrarAuditoria({ tipo: TipoEvento.REACTIVAR_CERTIFICADO, entidad: "Certificado", entidadId: preparado.certificadoId, inspeccionId, usuarioId: usuario.id, origen: "REAUTORIZACION_DIRECCION_V1", descripcion: `Dirección levantó el bloqueo, reautorizó V1 y reactivó el certificado existente con calificación técnica ${preparado.metricas.calificacion}/100.` });
   }
   revalidar(inspeccionId);
   ok(inspeccionId, preparado ? "Dirección levantó el bloqueo, autorizó V1 y liberó el certificado al cliente." : "Dirección levantó el bloqueo y aprobó la inspección.");
