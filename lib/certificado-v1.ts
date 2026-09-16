@@ -20,7 +20,7 @@ export async function prepararCertificadoV1(inspeccionId: string) {
       id: true,
       folio: true,
       numeroInspeccion: true,
-      certificado: { select: { id: true } },
+      certificado: { select: { id: true, vigente: true } },
       cotizacion: {
         select: {
           total: true,
@@ -33,8 +33,10 @@ export async function prepararCertificadoV1(inspeccionId: string) {
 
   if (!inspeccion) error(inspeccionId, "La inspección no existe.");
   if (inspeccion.numeroInspeccion !== 1) return null;
-  if (inspeccion.certificado) return { existente: true as const, metricas: await obtenerMetricasV1(inspeccionId) };
 
+  // Toda autorización o reautorización V1 vuelve a validar liquidación completa.
+  // Una excepción administrativa puede liberar el trabajo de campo, pero nunca
+  // la emisión/reactivación del certificado final.
   if (inspeccion.cotizacion) {
     const total = Number(inspeccion.cotizacion.total);
     const pagado = Number(inspeccion.cotizacion.montoPagado);
@@ -54,9 +56,25 @@ export async function prepararCertificadoV1(inspeccionId: string) {
     }
   }
 
+  // La cobertura y la calificación se recalculan en cada autorización. Esto es
+  // indispensable cuando un certificado previo fue revocado y el expediente se
+  // corrigió antes de someterlo otra vez a Dirección.
   const metricas = await obtenerMetricasV1(inspeccionId);
   if (metricas.aplicables <= 0) error(inspeccionId, "No existen puntos aplicables para calcular la cobertura V1.");
   if (metricas.cobertura < 100) error(inspeccionId, `La cobertura V1 debe ser 100% antes de la autorización final. Cobertura actual: ${metricas.cobertura}%.`);
+
+  if (inspeccion.certificado) {
+    return {
+      existente: true as const,
+      vigente: inspeccion.certificado.vigente,
+      certificadoId: inspeccion.certificado.id,
+      metricas,
+      certificadoActualizado: {
+        dictamen: metricas.dictamen,
+        ish: metricas.calificacion,
+      },
+    };
+  }
 
   const year = new Date().getFullYear();
   const folio = `CERT-${year}-${inspeccion.folio.replaceAll("CH-", "")}`;
