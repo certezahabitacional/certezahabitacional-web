@@ -1,9 +1,12 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { exigirZonaInspeccionForm } from "@/lib/alcance-zona-inspeccion";
 import { validarAjustesParaCertificado } from "@/lib/ajustes-comerciales";
 import { asignarInspectorPorInspeccion } from "@/lib/asignar-inspector-por-inspeccion";
 import { finalizarCapturaMetodoCerteza } from "@/lib/cierre-captura";
+import { prisma } from "@/lib/prisma";
 import {
   aprobarDireccionMetodoCerteza,
   aprobarGerenciaMetodoCerteza,
@@ -77,6 +80,16 @@ export async function cancelarInspeccion(formData: FormData) { await exigirZonaI
 export async function emitirCertificado(formData: FormData) {
   await exigirZonaInspeccionForm(formData);
   const id = inspeccionId(formData);
-  if (id) await validarAjustesParaCertificado(id);
+  if (!id) return legacy.emitirCertificado(formData);
+
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id },
+    select: { numeroInspeccion: true },
+  });
+  if (inspeccion?.numeroInspeccion === 1) {
+    redirect(`/panel/inspecciones/${id}/certificado?error=${encodeURIComponent("En V1 el certificado se genera exclusivamente cuando Dirección autoriza el reporte final.")}`);
+  }
+
+  await validarAjustesParaCertificado(id);
   return legacy.emitirCertificado(formData);
 }
