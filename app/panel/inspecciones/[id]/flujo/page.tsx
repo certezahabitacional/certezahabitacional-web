@@ -31,9 +31,10 @@ async function controlV1(id: string): Promise<ControlV1> {
       COALESCE(c."areasConfirmadas",false) AS "areasConfirmadas",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true) AS "areasTotal",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a
-        WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA'
-          AND nullif(btrim(coalesce(a."comentarioFinal",'')),'') IS NOT NULL
-          AND (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") >= 4) AS "areasCompletas",
+        WHERE a."inspeccionId"=${id}
+          AND a."obligatoria"=true
+          AND a."estado"='REVISADA'
+          AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "protocoloTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "protocoloCompleto",
       EXISTS(
@@ -121,15 +122,14 @@ export default async function FlujoCampoPage({
   const v1 = esV1 ? await controlV1(id) : null;
   const v2 = !esV1 ? await controlV2(id, inspeccion.inspeccionAnteriorId) : null;
 
-  const v1Tecnico = Boolean(v1 && v1.proyectoConfirmado && v1.areasConfirmadas && v1.areasTotal > 0 && v1.areasCompletas === v1.areasTotal && v1.protocoloTotal > 0 && v1.protocoloCompleto === v1.protocoloTotal && v1.fachadaPortada);
   const v2Tecnico = Boolean(v2 && v2.pendientesAtendidos === v2.pendientesPrevios && v2.hallazgosConEvidencia === v2.hallazgosActuales);
-  const listo = inspeccion.estado === EstadoInspeccion.EN_PROCESO && (esV1 ? v1Tecnico : v2Tecnico) && firmasListas && syncPendientes === 0;
+  const listoV2 = inspeccion.estado === EstadoInspeccion.EN_PROCESO && !esV1 && v2Tecnico && firmasListas && syncPendientes === 0;
 
   const pasos = esV1
     ? [
         { n: 1, t: "Proyecto y áreas", ok: Boolean(v1?.proyectoConfirmado && v1?.areasConfirmadas), d: `Proyecto: ${v1?.proyectoConfirmado ? "confirmado" : "pendiente"} · áreas: ${v1?.areasConfirmadas ? "confirmadas" : "pendientes"}`, href: `/panel/inspecciones/${id}/areas` },
         { n: 2, t: "Protocolo secuencial", ok: Boolean(v1 && v1.protocoloTotal > 0 && v1.protocoloCompleto === v1.protocoloTotal), d: `${v1?.protocoloCompleto ?? 0}/${v1?.protocoloTotal ?? 0} pasos obligatorios completos`, href: `/panel/inspecciones/${id}/protocolo` },
-        { n: 3, t: "Cobertura por áreas", ok: Boolean(v1 && v1.areasTotal > 0 && v1.areasCompletas === v1.areasTotal && v1.fachadaPortada), d: `${v1?.areasCompletas ?? 0}/${v1?.areasTotal ?? 0} áreas completas · fachada/portada: ${v1?.fachadaPortada ? "sí" : "pendiente"}`, href: `/panel/inspecciones/${id}/areas` },
+        { n: 3, t: "Recorrido guiado por áreas", ok: Boolean(v1 && v1.areasTotal > 0 && v1.areasCompletas === v1.areasTotal && v1.fachadaPortada), d: `${v1?.areasCompletas ?? 0}/${v1?.areasTotal ?? 0} áreas cerradas · fachada/portada: ${v1?.fachadaPortada ? "sí" : "pendiente"}`, href: `/panel/inspecciones/${id}/campo-v1` },
         { n: 4, t: "Hallazgos", ok: true, d: "Solo registra defectos reales. V1 puede cerrar con cero hallazgos.", href: `/panel/inspecciones/${id}/captura` },
         { n: 5, t: "Firmas", ok: firmasListas, d: `Inspector: ${firmaInspector ? "sí" : "pendiente"} · Cliente: ${firmaCliente ? "sí" : "pendiente"}`, href: `/panel/inspecciones/${id}/firmas` },
       ]
@@ -169,10 +169,18 @@ export default async function FlujoCampoPage({
               <p className="mt-2 text-sm text-slate-300">{syncPendientes === 0 ? "No hay operaciones pendientes de sincronizar." : `${syncPendientes} operación(es) siguen pendientes. El cierre permanecerá bloqueado hasta sincronizarlas.`}</p>
             </section>
 
-            <section className={`mt-7 rounded-3xl border p-6 ${listo ? "border-emerald-300/25 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
-              <h2 className="text-xl font-black">Entrega a revisión</h2>
-              {listo ? <><p className="mt-2 text-sm text-emerald-100">La visita cumple los requisitos técnicos, firmas y sincronización. El Inspector puede entregar el expediente.</p>{esInspector && <form action={finalizarCapturaGuiada} className="mt-5"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-full bg-emerald-300 px-6 py-3 font-black text-slate-950">Finalizar captura y enviar a revisión</button></form>}</> : <p className="mt-2 text-sm text-amber-100">Completa los pasos pendientes. El sistema no habilitará la entrega mientras falte un requisito.</p>}
-            </section>
+            {esV1 ? (
+              <section className="mt-7 rounded-3xl border border-cyan-300/25 bg-cyan-300/5 p-6">
+                <h2 className="text-xl font-black">Cierre de trabajo de campo V1</h2>
+                <p className="mt-2 text-sm text-cyan-100">El cierre formal valida áreas, procesos, hallazgos, 4 fotografías de fachada, una sola portada, firmas y sincronización. Después inicia la ventana de 12 horas para revisar el reporte antes de enviarlo a Dirección.</p>
+                <Link href={`/panel/inspecciones/${id}/cierre-v1`} className="mt-5 inline-block rounded-full bg-cyan-300 px-6 py-3 font-black text-slate-950">Revisar cierre V1 →</Link>
+              </section>
+            ) : (
+              <section className={`mt-7 rounded-3xl border p-6 ${listoV2 ? "border-emerald-300/25 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
+                <h2 className="text-xl font-black">Entrega a revisión</h2>
+                {listoV2 ? <><p className="mt-2 text-sm text-emerald-100">La visita cumple los requisitos técnicos, firmas y sincronización. El Inspector puede entregar el expediente.</p>{esInspector && <form action={finalizarCapturaGuiada} className="mt-5"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-full bg-emerald-300 px-6 py-3 font-black text-slate-950">Finalizar captura y enviar a revisión</button></form>}</> : <p className="mt-2 text-sm text-amber-100">Completa los pasos pendientes. El sistema no habilitará la entrega mientras falte un requisito.</p>}
+              </section>
+            )}
           </>
         )}
       </div>
