@@ -55,7 +55,7 @@ export default async function PreReportePage({ params }: { params: Promise<{ id:
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const puedeVer = esInspector || [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR].includes(usuario.rol);
+  const puedeVer = esInspector || ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!puedeVer) redirect("/acceso");
 
   const [control] = await prisma.$queryRaw<Control[]>`
