@@ -37,10 +37,12 @@ async function obtenerEditor(inspeccionId: string) {
     where: { id: inspeccionId },
     select: {
       id: true,
+      numeroInspeccion: true,
       inspector: {
         select: {
           usuario: {
             select: {
+              id: true,
               gerenteId: true,
               coordinadorId: true,
             },
@@ -51,10 +53,30 @@ async function obtenerEditor(inspeccionId: string) {
   });
   if (!inspeccion) volver(inspeccionId, "error", "La inspección no existe.");
 
+  const [devolucionDocumental] = inspeccion.numeroInspeccion === 1
+    ? await prisma.$queryRaw<Array<{ existe: boolean }>>`
+        SELECT EXISTS(
+          SELECT 1
+          FROM "RevisionInspeccion" r
+          WHERE r."inspeccionId"=${inspeccionId}
+            AND r."rol"='DIRECTOR'
+            AND r."decision"='DEVUELTO_INSPECTOR'
+            AND r."estado"='VIGENTE'
+            AND r."comentario" LIKE '[CORRECCIÓN DOCUMENTAL]%'
+        ) AS "existe"
+      `
+    : [{ existe: false }];
+
+  const inspectorDocumental =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    inspeccion.inspector?.usuario.id === usuario.id &&
+    Boolean(devolucionDocumental?.existe);
+
   const permitido =
     usuario.rol === RolUsuario.DIRECTOR ||
     (usuario.rol === RolUsuario.GERENTE && inspeccion.inspector?.usuario.gerenteId === usuario.id) ||
-    (usuario.rol === RolUsuario.COORDINADOR && inspeccion.inspector?.usuario.coordinadorId === usuario.id);
+    (usuario.rol === RolUsuario.COORDINADOR && inspeccion.inspector?.usuario.coordinadorId === usuario.id) ||
+    inspectorDocumental;
 
   if (!permitido) redirect("/acceso");
   return usuario;
