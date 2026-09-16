@@ -13,6 +13,8 @@ import { emitirCertificado } from "../actions";
 import PrintButton from "./PrintButton";
 import { reactivarCertificado, revocarCertificado } from "./actions";
 
+type ControlV1Certificado = { campoFinalizadoEn: Date | null };
+
 export default async function CertificadoPage({
   params,
   searchParams,
@@ -85,6 +87,17 @@ export default async function CertificadoPage({
 
   const inspeccionFinalizada = inspeccion.estado === EstadoInspeccion.FINALIZADA;
   const metricasV1 = esV1 ? await obtenerMetricasV1(inspeccion.id) : null;
+  const controlV1 = esV1
+    ? (await prisma.$queryRaw<ControlV1Certificado[]>`
+        SELECT "campoFinalizadoEn" FROM "InspeccionControlV2" WHERE "inspeccionId"=${inspeccion.id} LIMIT 1
+      `)[0] ?? null
+    : null;
+  const fechaInspeccion = new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: inspeccion.zonaHoraria,
+  }).format(controlV1?.campoFinalizadoEn ?? inspeccion.fechaProgramada);
 
   // V1 se certifica exclusivamente dentro de la autorización final de Dirección.
   // La emisión manual se conserva solo para expedientes heredados/no V1.
@@ -115,8 +128,8 @@ export default async function CertificadoPage({
           </p>
           <div className="mt-6 rounded-3xl bg-slate-950 p-6">
             <p className="text-sm text-slate-400">{esV1 ? "Calificación Técnica Certeza preliminar" : "Índice de Salud Habitacional"}</p>
-            <p className="mt-2 text-6xl font-black text-cyan-300">{Math.round(Number(calificacionMostrada ?? 0))}</p>
-            {esV1 && metricasV1 ? <p className="mt-2 text-sm font-bold text-slate-400">Cobertura: {metricasV1.cobertura}%</p> : <p className="font-black">{inspeccion.semaforo ?? "SIN EVALUAR"}</p>}
+            <p className="mt-2 text-6xl font-black text-cyan-300">{Number(calificacionMostrada ?? 0).toFixed(esV1 ? 2 : 0)}</p>
+            {esV1 && metricasV1 ? <p className="mt-2 text-sm font-bold text-slate-400">Cobertura: {metricasV1.cobertura.toFixed(2)}%</p> : <p className="font-black">{inspeccion.semaforo ?? "SIN EVALUAR"}</p>}
           </div>
 
           {puedeEmitirManual ? (
@@ -146,6 +159,7 @@ export default async function CertificadoPage({
 
   return (
     <main className="min-h-screen bg-slate-200 px-4 py-8 text-slate-950 print:bg-white print:p-0">
+      <style>{`@page{size:Letter;margin:10mm} @media print{.certificate-shell{min-height:245mm!important}}`}</style>
       <div className="mx-auto mb-5 flex max-w-5xl items-center justify-between print:hidden">
         <Link href={`/panel/inspecciones/${inspeccion.id}`} className="font-bold text-slate-700">← Volver al expediente</Link>
         {puedeImprimir && <PrintButton />}
@@ -154,13 +168,25 @@ export default async function CertificadoPage({
       {query.ok && <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-emerald-100 px-5 py-4 font-bold text-emerald-800 print:hidden">{query.ok}</div>}
       {query.error && <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-rose-100 px-5 py-4 font-bold text-rose-800 print:hidden">{query.error}</div>}
 
-      <article className="mx-auto min-h-[900px] max-w-5xl border-[12px] border-slate-950 bg-white p-12 shadow-2xl print:min-h-screen print:max-w-none print:shadow-none">
+      <article className="certificate-shell mx-auto min-h-[900px] max-w-5xl border-[12px] border-slate-950 bg-white p-12 shadow-2xl print:min-h-screen print:max-w-none print:shadow-none">
         <div className="border-2 border-amber-500 p-10 text-center">
           <ReportBrandHeader
             title={esV1 ? "Certificado Certeza Habitacional" : "Certificado de Estado Habitacional"}
             folio={certificado.folio}
             eyebrow="Documento oficial de inspección"
           />
+
+          <div className={`mt-6 rounded-2xl border px-5 py-4 text-xs font-black uppercase tracking-[.2em] ${certificado.vigente ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-rose-400 bg-rose-50 text-rose-800"}`}>
+            {certificado.vigente ? "CERTIFICADO VIGENTE" : "CERTIFICADO REVOCADO"}
+          </div>
+          {!certificado.vigente && (
+            <div className="mt-3 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-left text-sm text-rose-900">
+              <p className="font-black">Este documento perdió vigencia y no debe utilizarse como certificado vigente.</p>
+              {certificado.motivoRevocacion && <p className="mt-2">Motivo: {certificado.motivoRevocacion}</p>}
+              {certificado.revocadoEn && <p className="mt-1 text-xs">Revocado el {certificado.revocadoEn.toLocaleString("es-MX")}</p>}
+            </div>
+          )}
+
           <div className="mt-8 flex justify-end"><LogoCerteza variant="badge" width={135} className="max-h-32" /></div>
           <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-600">
             Se hace constar que el inmueble descrito fue objeto de una inspección conforme al alcance y expediente técnico identificados en este certificado.
@@ -174,16 +200,20 @@ export default async function CertificadoPage({
               <Data label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble} />
               <Data label="Dirección" value={`${inspeccion.direccion}, ${inspeccion.ciudad}`} />
               <Data label="Inspector" value={inspeccion.inspector?.usuario.nombre ?? "Sin asignar"} />
-              {esV1 && metricasV1 && <Data label="Cobertura" value={`${metricasV1.cobertura}%`} />}
+              {esV1 && <Data label="Fecha de inspección" value={fechaInspeccion} />}
+              {esV1 && metricasV1 && <Data label="Cobertura" value={`${metricasV1.cobertura.toFixed(2)}%`} />}
+              {esV1 && metricasV1 && <Data label="Áreas revisadas" value={String(metricasV1.areas)} />}
               {esV1 && metricasV1 && <Data label="Puntos revisados" value={String(metricasV1.revisados)} />}
+              {esV1 && metricasV1 && <Data label="Áreas sin hallazgos" value={String(metricasV1.areasSinHallazgos)} />}
             </dl>
           </div>
 
           <div className="mx-auto mt-10 grid max-w-3xl items-center gap-8 md:grid-cols-[220px_1fr]">
             <div className="rounded-3xl bg-cyan-300 p-8 text-slate-950">
               <p className="text-xs font-black uppercase tracking-widest">{esV1 ? "Calificación Técnica Certeza" : "Índice"}</p>
-              <p className="text-7xl font-black">{Math.round(Number(certificado.ish))}</p>
-              <p className="font-black">{inspeccion.semaforo ?? "EVALUADO"}</p>
+              <p className="text-6xl font-black">{Number(certificado.ish).toFixed(esV1 ? 2 : 0)}</p>
+              <p className="mt-1 text-sm font-black">{esV1 ? "/100" : (inspeccion.semaforo ?? "EVALUADO")}</p>
+              {esV1 && <p className="mt-3 text-xs font-black uppercase tracking-wider">Semáforo técnico: {inspeccion.semaforo ?? "EVALUADO"}</p>}
             </div>
             <div className="text-left">
               <h2 className="text-2xl font-black">Dictamen</h2>
