@@ -3,7 +3,6 @@
 import {
   EstadoDecisionRevision,
   EstadoInspeccion,
-  EstadoPago,
   RolUsuario,
   TipoDecisionRevision,
   TipoEvento,
@@ -39,8 +38,6 @@ export async function aprobarGerenciaV1SinFinalizar(formData: FormData): Promise
       requiereCoordinador: true,
       requiereGerenteZona: true,
       liberacionBloqueada: true,
-      inicioLiberadoSinPago: true,
-      cotizacion: { select: { total: true, montoPagado: true, estadoPago: true } },
     },
   });
   if (!inspeccion || inspeccion.numeroInspeccion !== 1) return false;
@@ -74,16 +71,6 @@ export async function aprobarGerenciaV1SinFinalizar(formData: FormData): Promise
     if (!vistoBueno) error(inspeccionId, "Esta V1 requiere visto bueno técnico vigente de Coordinación.");
   }
 
-  if (inspeccion.cotizacion && !inspeccion.inicioLiberadoSinPago) {
-    const total = Number(inspeccion.cotizacion.total);
-    const pagado = Number(inspeccion.cotizacion.montoPagado);
-    const saldo = Math.max(0, total - pagado);
-    if (inspeccion.cotizacion.estadoPago !== EstadoPago.PAGADO || saldo > 0.01) {
-      const saldoFormateado = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(saldo);
-      error(inspeccionId, `Existe un saldo pendiente de ${saldoFormateado}.`);
-    }
-  }
-
   const comentario = texto(formData, "comentario");
   await prisma.$transaction(async (tx) => {
     await tx.revisionInspeccion.updateMany({
@@ -107,7 +94,7 @@ export async function aprobarGerenciaV1SinFinalizar(formData: FormData): Promise
     inspeccionId,
     usuarioId: usuario.id,
     origen: "METODO_CERTEZA_V1",
-    descripcion: `Gerencia aprobó la revisión previa de ${inspeccion.folio}. La V1 permanece pendiente de autorización final de Dirección.`,
+    descripcion: `Gerencia aprobó la revisión previa de ${inspeccion.folio}. La V1 permanece pendiente de autorización final de Dirección; la liquidación total se valida en esa autorización final.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
