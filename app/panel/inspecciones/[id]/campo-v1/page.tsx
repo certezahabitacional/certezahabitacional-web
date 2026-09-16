@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   agregarPuntoInspectorV1,
+  cerrarAreaConHallazgosV1,
   cerrarAreaSinHallazgosV1,
   inicializarPlanAreasV1,
   marcarPuntoNoAplicaV1,
@@ -169,18 +170,26 @@ export default async function CampoV1Page({ params, searchParams }: {
                       <button className="mt-3 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-black text-violet-200">Agregar al área</button>
                     </form>
 
-                    <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/5 p-4">
-                      <p className="font-black text-emerald-200">Cierre rápido sin hallazgos</p>
-                      <p className="mt-1 text-xs text-slate-400">Confirma que revisaste todos los puntos aplicables del área. Los puntos pendientes se marcarán automáticamente como revisados.</p>
-                      <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1 || Number(areaSeleccionada.hallazgos)>0} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SIN HALLAZGOS · CERRAR ÁREA</button></form>
-                    </div>
+                    {Number(areaSeleccionada.hallazgos) === 0 ? (
+                      <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/5 p-4">
+                        <p className="font-black text-emerald-200">Cierre rápido sin hallazgos</p>
+                        <p className="mt-1 text-xs text-slate-400">Confirma que revisaste todos los puntos aplicables del área. Los puntos pendientes se marcarán automáticamente como revisados.</p>
+                        <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SIN HALLAZGOS · CERRAR ÁREA</button></form>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
+                        <p className="font-black text-amber-200">Cierre con hallazgos</p>
+                        <p className="mt-1 text-xs text-slate-400">El sistema comprobará que cada hallazgo tenga descripción y mínimo 4 evidencias antes de cerrar el área.</p>
+                        <form action={cerrarAreaConHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button className="w-full rounded-xl bg-amber-300 px-4 py-3 font-black text-slate-950">CERRAR ÁREA CON {areaSeleccionada.hallazgos} HALLAZGO(S)</button></form>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
                   <div className="mt-4 flex flex-wrap gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-4">
                     <Link href={`/panel/inspecciones/${id}/areas`} className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">Tomar / agregar fotografías</Link>
-                    <Link href={`/panel/inspecciones/${id}/captura`} className="rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Registrar hallazgo</Link>
+                    <Link href={`/panel/inspecciones/${id}/captura?area=${encodeURIComponent(areaSeleccionada.nombre)}`} className="rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Registrar hallazgo</Link>
                   </div>
                 )}
               </div>
