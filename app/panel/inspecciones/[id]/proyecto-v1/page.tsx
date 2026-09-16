@@ -97,6 +97,8 @@ export default async function ProyectoV1Page({
       zonaId: true,
       inspectorId: true,
       clienteId: true,
+      requiereGerenteZona: true,
+      requiereCoordinador: true,
       inspector: {
         select: {
           usuarioId: true,
@@ -128,6 +130,8 @@ export default async function ProyectoV1Page({
       inspectorZonaId: inspeccion.inspector?.usuario.zonaId ?? null,
       coordinadorUsuarioId: inspeccion.inspector?.usuario.coordinadorId ?? null,
       gerenteUsuarioId: inspeccion.inspector?.usuario.gerenteId ?? null,
+      requiereGerenteZona: inspeccion.requiereGerenteZona,
+      requiereCoordinador: inspeccion.requiereCoordinador,
     },
   );
   if (!acceso) redirect("/acceso");
