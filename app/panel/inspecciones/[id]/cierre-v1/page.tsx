@@ -113,7 +113,7 @@ export default async function CierreV1Page({ params, searchParams }: {
           <h2 className="text-xl font-black">Semáforo de salida</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Linea ok={(estado?.fotosFachada ?? 0) >= 4} texto={`Fachada: ${estado?.fotosFachada ?? 0}/4 fotografías`} />
-            <Linea ok={(estado?.portadaFachada ?? 0) === 1} texto={`Foto de portada: ${estado?.portadaFachada ?? 0 === 1 ? "seleccionada" : "pendiente"}`} />
+            <Linea ok={(estado?.portadaFachada ?? 0) === 1} texto={`Foto de portada: ${(estado?.portadaFachada ?? 0) === 1 ? "seleccionada" : "pendiente"}`} />
             <Linea ok={(estado?.syncPendientes ?? 0) === 0} texto={`Sincronización: ${estado?.syncPendientes ?? 0} pendientes`} />
             <Linea ok={firmaInspector} texto={`Firma Inspector: ${firmaInspector ? "lista" : "pendiente"}`} />
             <Linea ok={firmaCliente} texto={`Firma cliente: ${firmaCliente ? "lista" : "pendiente"}`} />
