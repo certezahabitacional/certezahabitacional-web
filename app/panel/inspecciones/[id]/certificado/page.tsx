@@ -213,7 +213,6 @@ export default async function CertificadoPage({
               <p className="text-xs font-black uppercase tracking-widest">{esV1 ? "Calificación Técnica Certeza" : "Índice"}</p>
               <p className="text-6xl font-black">{Number(certificado.ish).toFixed(esV1 ? 2 : 0)}</p>
               <p className="mt-1 text-sm font-black">{esV1 ? "/100" : (inspeccion.semaforo ?? "EVALUADO")}</p>
-              {esV1 && <p className="mt-3 text-xs font-black uppercase tracking-wider">Semáforo técnico: {inspeccion.semaforo ?? "EVALUADO"}</p>}
             </div>
             <div className="text-left">
               <h2 className="text-2xl font-black">Dictamen</h2>
