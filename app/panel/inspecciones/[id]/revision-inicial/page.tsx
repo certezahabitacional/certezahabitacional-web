@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import {
   iniciarInspeccionConfirmada,
   resolverSolicitudCorreccion,
+  seleccionarMejorFachada,
   solicitarCorreccionPrevia,
   subirFotoFachadaPrevia,
 } from "./actions";
@@ -16,6 +17,7 @@ type FotoFachada = {
   fotografiaId: string;
   ruta: string;
   orden: number;
+  candidataPortada: boolean;
   creadaEn: Date;
 };
 
@@ -138,7 +140,7 @@ export default async function RevisionInicialPage({
 
   const [fotos, solicitudes] = await Promise.all([
     prisma.$queryRaw<FotoFachada[]>`
-      SELECT fa."fotografiaId",f."url" AS "ruta",fa."orden",fa."creadoEn"
+      SELECT fa."fotografiaId",f."url" AS "ruta",fa."orden",fa."candidataPortada",fa."creadoEn"
       FROM "FotografiaArea" fa
       JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
       JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
@@ -159,9 +161,11 @@ export default async function RevisionInicialPage({
     fotos.map(async (foto) => ({ ...foto, urlTemporal: await urlTemporal(foto.ruta) })),
   );
   const pendientes = solicitudes.filter((s) => s.estado === "PENDIENTE");
-  const cuatroFotos = fotos.length >= 4;
+  const fotoDefinitiva = fotos.length === 1 && fotos[0]?.candidataPortada;
+  const etapaSeleccion = fotos.length === 4 && !fotos.some((f) => f.candidataPortada);
+  const puedeTomarFotos = inspectorAsignado || (esDirector && !inspeccion.inspectorId);
   const puedeSolicitar = inspectorAsignado || esDirector;
-  const puedeIniciar = (inspectorAsignado || esDirector) && cuatroFotos && pendientes.length === 0;
+  const puedeIniciar = (inspectorAsignado || esDirector) && Boolean(fotoDefinitiva) && pendientes.length === 0;
 
   const areasDeclaradas = AREAS_BOOLEANAS
     .filter(([campo]) => snapshot[campo] === true)
@@ -191,36 +195,51 @@ export default async function RevisionInicialPage({
 
         <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
           <div className="text-center">
-            <h2 className="text-xl font-black">4 fotografías obligatorias de la fachada principal</h2>
-            <p className="mt-2 text-sm text-slate-400">Estas fotografías quedarán en el expediente. Después se elegirá la mejor para portada.</p>
-            <p className={`mt-3 font-black ${cuatroFotos ? "text-emerald-300" : "text-amber-300"}`}>{Math.min(fotos.length, 4)}/4 registradas</p>
+            <h2 className="text-xl font-black">Fotografía definitiva de la fachada principal</h2>
+            {!fotoDefinitiva ? (
+              <p className="mt-2 text-sm text-slate-400">Toma exactamente 4 fotografías. Después el Inspector debe elegir la mejor; al seleccionarla, las otras tres se eliminarán.</p>
+            ) : (
+              <p className="mt-2 text-sm font-bold text-emerald-300">Selección terminada: quedó una sola fotografía definitiva de fachada/portada.</p>
+            )}
+            <p className={`mt-3 font-black ${fotoDefinitiva ? "text-emerald-300" : fotos.length === 4 ? "text-cyan-300" : "text-amber-300"}`}>
+              {fotoDefinitiva ? "1 fotografía definitiva" : `${fotos.length}/4 tomadas`}
+            </p>
           </div>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((indice) => {
-              const foto = fotosConUrl[indice];
-              return (
-                <article key={indice} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950">
-                  {foto?.urlTemporal ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={foto.urlTemporal} alt={`Fachada ${indice + 1}`} className="h-40 w-full object-cover" />
-                  ) : (
-                    <div className="grid h-40 place-items-center text-3xl text-slate-600">📷</div>
+          <div className={`mt-5 grid gap-4 ${fotoDefinitiva ? "mx-auto max-w-md" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
+            {(fotoDefinitiva ? fotosConUrl : [0, 1, 2, 3].map((indice) => fotosConUrl[indice] ?? null)).map((foto, indice) => (
+              <article key={foto?.fotografiaId ?? indice} className={`overflow-hidden rounded-2xl border ${foto?.candidataPortada ? "border-emerald-300/40 bg-emerald-300/5" : "border-white/10 bg-slate-950"}`}>
+                {foto?.urlTemporal ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={foto.urlTemporal} alt={`Fachada ${indice + 1}`} className="h-44 w-full object-cover" />
+                ) : (
+                  <div className="grid h-44 place-items-center text-3xl text-slate-600">📷</div>
+                )}
+                <div className="p-3">
+                  <p className="text-xs font-black text-slate-300">{fotoDefinitiva ? "FOTOGRAFÍA DEFINITIVA" : `Fotografía ${indice + 1}`}</p>
+                  {!foto && puedeTomarFotos && (
+                    <form action={subirFotoFachadaPrevia} className="mt-3">
+                      <input type="hidden" name="inspeccionId" value={id} />
+                      <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="block w-full text-xs text-slate-400" />
+                      <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950">TOMAR FOTO</button>
+                    </form>
                   )}
-                  <div className="p-3">
-                    <p className="text-xs font-black text-slate-300">Fotografía {indice + 1}</p>
-                    {!foto && (inspectorAsignado || esDirector) && (
-                      <form action={subirFotoFachadaPrevia} className="mt-3">
-                        <input type="hidden" name="inspeccionId" value={id} />
-                        <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="block w-full text-xs text-slate-400" />
-                        <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950">TOMAR FOTO</button>
-                      </form>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+                  {foto && etapaSeleccion && puedeTomarFotos && (
+                    <form action={seleccionarMejorFachada} className="mt-3">
+                      <input type="hidden" name="inspeccionId" value={id} />
+                      <input type="hidden" name="fotografiaId" value={foto.fotografiaId} />
+                      <button className="w-full rounded-xl border border-emerald-300/40 px-3 py-2 text-xs font-black text-emerald-300">ELEGIR COMO MEJOR</button>
+                    </form>
+                  )}
+                  {foto?.candidataPortada && <p className="mt-3 text-xs font-black text-emerald-300">PORTADA DEFINITIVA ✓</p>}
+                </div>
+              </article>
+            ))}
           </div>
+
+          {etapaSeleccion && puedeTomarFotos && (
+            <p className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-center text-sm font-black text-amber-200">No puedes iniciar la inspección hasta elegir una de estas 4 fotografías.</p>
+          )}
         </section>
 
         <Bloque titulo="Datos del cliente">
@@ -267,9 +286,7 @@ export default async function RevisionInicialPage({
             <h2 className="text-xl font-black">Solicitudes de corrección</h2>
             <div className="mt-4 space-y-3">
               {solicitudes.map((s) => {
-                const puedeResolver =
-                  s.estado === "PENDIENTE" &&
-                  (esDirector || (esAdministrador && s.asignadaAId === usuario.id));
+                const puedeResolver = s.estado === "PENDIENTE" && (esDirector || (esAdministrador && s.asignadaAId === usuario.id));
                 return (
                   <article key={s.id} className={`rounded-2xl border p-4 ${s.estado === "PENDIENTE" ? "border-amber-300/20 bg-amber-300/5" : "border-emerald-300/20 bg-emerald-300/5"}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -316,9 +333,9 @@ export default async function RevisionInicialPage({
         {(inspectorAsignado || esDirector) && (
           <section className={`mt-7 rounded-3xl border p-6 text-center ${puedeIniciar ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-900"}`}>
             <h2 className="text-2xl font-black">Inicio físico de la inspección</h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">Al presionar INICIAR confirmas que la información fue revisada con el cliente, que las 4 fotografías de fachada están completas y que no existe ninguna corrección pendiente.</p>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">INICIAR solo se habilita cuando la información fue revisada con el cliente, existe una sola fotografía definitiva elegida entre las 4 tomadas y no hay correcciones pendientes.</p>
             {pendientes.length > 0 && <p className="mt-3 font-black text-amber-300">Bloqueado: hay {pendientes.length} corrección(es) pendiente(s).</p>}
-            {!cuatroFotos && <p className="mt-3 font-black text-amber-300">Bloqueado: faltan fotografías de fachada.</p>}
+            {!fotoDefinitiva && <p className="mt-3 font-black text-amber-300">Bloqueado: debes completar el proceso de 4 fotografías y elegir la mejor.</p>}
             <form action={iniciarInspeccionConfirmada} className="mt-5">
               <input type="hidden" name="inspeccionId" value={id} />
               <button disabled={!puedeIniciar} className="rounded-full bg-emerald-300 px-10 py-4 text-lg font-black text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">INICIAR</button>
