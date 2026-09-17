@@ -252,7 +252,7 @@ export async function resolverSolicitudCorreccion(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const usuario = await prisma.usuario.findUnique({ where: { id: session.user.id }, select: { id: true, rol: true, activo: true } });
-  if (!usuario?.activo || ![RolUsuario.ADMINISTRADOR, RolUsuario.DIRECTOR].includes(usuario.rol)) redirect("/acceso");
+  if (!usuario?.activo || (usuario.rol !== RolUsuario.ADMINISTRADOR && usuario.rol !== RolUsuario.DIRECTOR)) redirect("/acceso");
 
   const [solicitud] = await prisma.$queryRaw<Array<{ asignadaAId: string | null; estado: string }>>`
     SELECT "asignadaAId","estado" FROM "SolicitudCorreccionInspeccion"
