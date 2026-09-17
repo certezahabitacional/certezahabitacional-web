@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
-import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
+import { eliminarArchivoStorage, subirArchivoStorage } from "@/lib/storage-gateway";
 
 function texto(fd: FormData, campo: string) {
   return String(fd.get(campo) ?? "").trim();
@@ -55,19 +55,6 @@ async function contextoTecnico(inspeccionId: string) {
   return { session, usuario, inspeccion };
 }
 
-function clienteStorage(inspeccionId: string) {
-  try {
-    return obtenerSupabaseAdmin();
-  } catch (error) {
-    console.error("Storage de revisión inicial no configurado:", error instanceof Error ? error.message : "error desconocido");
-    volver(
-      inspeccionId,
-      "error",
-      "El almacenamiento de evidencias no está configurado correctamente. La fotografía no fue guardada; intenta de nuevo cuando quede corregida la configuración.",
-    );
-  }
-}
-
 export async function subirFotoExistenteComoFachada(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const archivo = formData.get("archivo");
@@ -105,14 +92,10 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
 
   const extension = archivo.name.split(".").pop()?.toLowerCase() || archivo.type.split("/").pop() || "jpg";
   const ruta = `${inspeccionId}/areas/${area.id}/${randomUUID()}.${extension}`;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const sb = clienteStorage(inspeccionId);
-  const { error } = await sb.storage.from(bucket).upload(ruta, Buffer.from(await archivo.arrayBuffer()), {
-    contentType: archivo.type,
-    upsert: false,
-  });
-  if (error) {
-    console.error("Error de Storage al cargar fachada desde galería:", error.message);
+  try {
+    await subirArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta, archivo });
+  } catch (error) {
+    console.error("Error de Storage al cargar fachada desde galería:", error instanceof Error ? error.message : error);
     volver(inspeccionId, "error", "No se pudo guardar la fotografía seleccionada. Intenta nuevamente.");
   }
 
@@ -133,7 +116,7 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
       `;
     });
   } catch (errorDb) {
-    await sb.storage.from(bucket).remove([ruta]);
+    await eliminarArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta }).catch(() => undefined);
     throw errorDb;
   }
 
@@ -174,11 +157,10 @@ export async function eliminarFotoGaleriaFachada(formData: FormData) {
     volver(inspeccionId, "error", "Esta opción sólo elimina la fotografía definitiva cargada desde galería/archivos.");
   }
 
-  const sb = clienteStorage(inspeccionId);
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const { error: errorStorage } = await sb.storage.from(bucket).remove([foto.ruta]);
-  if (errorStorage) {
-    console.error("Error de Storage al quitar fachada de galería:", errorStorage.message);
+  try {
+    await eliminarArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta: foto.ruta });
+  } catch (error) {
+    console.error("Error de Storage al quitar fachada de galería:", error instanceof Error ? error.message : error);
     volver(inspeccionId, "error", "No fue posible quitar la fotografía del almacenamiento. Intenta nuevamente.");
   }
 

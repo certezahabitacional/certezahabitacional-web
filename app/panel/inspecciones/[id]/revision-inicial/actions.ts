@@ -4,13 +4,13 @@ import { randomUUID } from "node:crypto";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { obtenerAsignacionesInspeccion } from "@/lib/asignaciones-inspeccion";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { validarLiberacionCampoDesdeCaja } from "@/lib/caja-validaciones";
 import { prisma } from "@/lib/prisma";
+import { eliminarArchivoStorage, subirArchivoStorage } from "@/lib/storage-gateway";
 
 const TIPOS = new Set([
   "AREAS_DECLARADAS",
@@ -25,13 +25,6 @@ function texto(fd: FormData, campo: string) {
 
 function volver(id: string, tipo: "ok" | "error", mensaje: string): never {
   redirect(`/panel/inspecciones/${id}/revision-inicial?${tipo}=${encodeURIComponent(mensaje)}`);
-}
-
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Faltan credenciales de almacenamiento.");
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 async function contextoResponsable(inspeccionId: string) {
@@ -103,13 +96,12 @@ export async function subirFotoFachadaPrevia(formData: FormData) {
 
   const extension = archivo.name.split(".").pop()?.toLowerCase() || archivo.type.split("/").pop() || "jpg";
   const ruta = `${inspeccionId}/areas/${area.id}/${randomUUID()}.${extension}`;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const sb = supabaseAdmin();
-  const { error } = await sb.storage.from(bucket).upload(ruta, Buffer.from(await archivo.arrayBuffer()), {
-    contentType: archivo.type,
-    upsert: false,
-  });
-  if (error) volver(inspeccionId, "error", "No se pudo guardar la fotografía de fachada.");
+  try {
+    await subirArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta, archivo });
+  } catch (error) {
+    console.error("Error de Storage al cargar fachada:", error instanceof Error ? error.message : error);
+    volver(inspeccionId, "error", "No se pudo guardar la fotografía de fachada. Intenta nuevamente.");
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -131,7 +123,7 @@ export async function subirFotoFachadaPrevia(formData: FormData) {
       `;
     });
   } catch (errorDb) {
-    await sb.storage.from(bucket).remove([ruta]);
+    await eliminarArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta }).catch(() => undefined);
     throw errorDb;
   }
 
@@ -164,10 +156,14 @@ export async function seleccionarMejorFachada(formData: FormData) {
   if (!fotos.some((f) => f.fotografiaId === fotografiaId)) volver(inspeccionId, "error", "La fotografía seleccionada no pertenece a esta inspección.");
 
   const descartadas = fotos.filter((f) => f.fotografiaId !== fotografiaId);
-  const sb = supabaseAdmin();
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const { error: errorStorage } = await sb.storage.from(bucket).remove(descartadas.map((f) => f.ruta));
-  if (errorStorage) volver(inspeccionId, "error", "No se pudieron eliminar las tres fotografías descartadas. Intenta nuevamente.");
+  try {
+    for (const foto of descartadas) {
+      await eliminarArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta: foto.ruta });
+    }
+  } catch (error) {
+    console.error("Error de Storage al depurar fachadas:", error instanceof Error ? error.message : error);
+    volver(inspeccionId, "error", "No se pudieron eliminar las tres fotografías descartadas. Intenta nuevamente.");
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.fotografia.deleteMany({ where: { id: { in: descartadas.map((f) => f.fotografiaId) }, inspeccionId } });
