@@ -61,7 +61,7 @@ export async function validarCotizacionParaNuevaInspeccion({
   if (!inspeccion || inspeccion.estado !== EstadoInspeccion.PROGRAMADA) {
     return {
       ok: false as const,
-      error: `La cotización ${cotizacion.folio} ya está vinculada a la inspección ${cotizacion.inspeccion.folio} y ya no puede retomarse desde Agendar Inspección.`,
+      error: `La cotización ${cotizacion.folio} ya está vinculada a la inspección ${cotizacion.inspeccion.folio} y ya no puede reagendarse porque dejó el estado PROGRAMADA.`,
     };
   }
 
@@ -74,22 +74,9 @@ export async function validarCotizacionParaNuevaInspeccion({
     Boolean(inspeccion.plantilla?.requiereCoordinador);
 
   const faltantes: string[] = [];
-  if (!inspeccion.inspectorId || !asignaciones.inspectorUsuarioId) {
-    faltantes.push("Inspector");
-  }
-  if (requiereGerente && !asignaciones.gerenteId) {
-    faltantes.push("Gerente");
-  }
-  if (requiereCoordinador && !asignaciones.coordinadorId) {
-    faltantes.push("Coordinador");
-  }
-
-  if (faltantes.length === 0) {
-    return {
-      ok: false as const,
-      error: `La cotización ${cotizacion.folio} ya está vinculada a la inspección ${inspeccion.folio} y su programación ya tiene completas las asignaciones requeridas.`,
-    };
-  }
+  if (!inspeccion.inspectorId || !asignaciones.inspectorUsuarioId) faltantes.push("Inspector");
+  if (requiereGerente && !asignaciones.gerenteId) faltantes.push("Gerente");
+  if (requiereCoordinador && !asignaciones.coordinadorId) faltantes.push("Coordinador");
 
   return {
     ok: true as const,
