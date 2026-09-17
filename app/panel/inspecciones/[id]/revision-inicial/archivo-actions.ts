@@ -60,8 +60,8 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
     Boolean(usuario.inspector?.activo) &&
     inspeccion.inspectorId === usuario.inspector?.id &&
     inspeccion.inspector?.usuarioId === usuario.id;
-  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
-  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
+  const director = usuario.rol === RolUsuario.DIRECTOR;
+  if (!inspectorAsignado && !director) redirect("/acceso");
 
   if (!(archivo instanceof File) || archivo.size === 0) {
     volver(inspeccionId, "error", "Selecciona una fotografía existente.");
