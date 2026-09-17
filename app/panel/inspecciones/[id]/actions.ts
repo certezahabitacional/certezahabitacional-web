@@ -98,11 +98,15 @@ export async function iniciarInspeccion(formData: FormData) {
   if(!usuario||!usuario.activo)redirect("/acceso");
   if(usuario.rol!==RolUsuario.DIRECTOR&&usuario.rol!==RolUsuario.INSPECTOR)errorInicio(id,"Solo Dirección o el Inspector asignado pueden iniciar una inspección.");
 
-  const inspeccion=await prisma.inspeccion.findUnique({where:{id},select:{id:true,folio:true,estado:true,cotizacionId:true,inspectorId:true,requiereGerenteZona:true,requiereCoordinador:true,inspector:{select:{usuarioId:true}}}});
+  const inspeccion=await prisma.inspeccion.findUnique({where:{id},select:{id:true,folio:true,estado:true,numeroInspeccion:true,cotizacionId:true,inspectorId:true,requiereGerenteZona:true,requiereCoordinador:true,inspector:{select:{usuarioId:true}}}});
   if(!inspeccion)errorInicio(id,"La inspección no existe.");
   if(inspeccion.estado!==EstadoInspeccion.PROGRAMADA)errorInicio(id,"Solo una inspección PROGRAMADA puede iniciarse.");
-  if(!inspeccion.inspectorId||!inspeccion.inspector?.usuarioId)errorInicio(id,"La inspección no puede iniciar hasta tener un Inspector asignado.");
-  if(usuario.rol===RolUsuario.INSPECTOR&&inspeccion.inspector.usuarioId!==usuario.id)errorInicio(id,"Esta inspección está asignada a otro Inspector.");
+
+  const directorPorAusencia=usuario.rol===RolUsuario.DIRECTOR&&!inspeccion.inspectorId;
+  if(usuario.rol===RolUsuario.INSPECTOR){
+    if(!inspeccion.inspectorId||!inspeccion.inspector?.usuarioId)errorInicio(id,"La inspección no puede ser iniciada por un Inspector hasta que esté asignada.");
+    if(inspeccion.inspector.usuarioId!==usuario.id)errorInicio(id,"Esta inspección está asignada a otro Inspector.");
+  }
 
   const asignaciones=await obtenerAsignacionesInspeccion(id);
   if(inspeccion.requiereGerenteZona&&!asignaciones.gerenteId)errorInicio(id,"La inspección requiere Gerente y todavía no tiene uno asignado.");
@@ -113,9 +117,9 @@ export async function iniciarInspeccion(formData: FormData) {
   if(!liberacion.ok)errorInicio(id,liberacion.error);
 
   await prisma.inspeccion.update({where:{id},data:{estado:EstadoInspeccion.EN_PROCESO}});
-  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Inspeccion",entidadId:id,inspeccionId:id,usuarioId:usuario.id,descripcion:`${usuario.rol} inició la inspección ${inspeccion.folio} después de validar equipo asignado y liberación financiera.`});
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Inspeccion",entidadId:id,inspeccionId:id,usuarioId:usuario.id,descripcion:directorPorAusencia?`DIRECTOR inició y asumió la ejecución de ${inspeccion.folio} como Director por ausencia de Inspector.`:`${usuario.rol} inició la inspección ${inspeccion.folio} después de validar equipo asignado y liberación financiera.`});
   revalidatePath(`/panel/inspecciones/${id}`);revalidatePath("/panel/inspecciones");revalidatePath("/panel/agenda");revalidatePath("/panel");
-  redirect(`/panel/inspecciones/${id}/captura`);
+  redirect(inspeccion.numeroInspeccion===1?`/panel/inspecciones/${id}/flujo`:`/panel/inspecciones/${id}/captura`);
 }
 
 export async function cancelarInspeccion(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.cancelarInspeccion(formData); }

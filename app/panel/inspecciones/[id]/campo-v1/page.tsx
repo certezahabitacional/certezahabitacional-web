@@ -64,6 +64,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/flujo`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
+  const esDirectorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
@@ -89,14 +90,17 @@ export default async function CampoV1Page({ params, searchParams }: {
   const totalPendientes = areas.reduce((s, a) => s + Number(a.pendientes), 0);
   const cerradas = areas.filter((a) => a.estado === "REVISADA").length;
   const avance = areas.length ? Math.round((cerradas / areas.length) * 100) : 0;
-  const puedeCapturar = esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo V1</Link>
-          <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {esDirectorPorAusencia && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR POR AUSENCIA</span>}
+            <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
+          </div>
         </div>
 
         <div className="mt-6">
@@ -146,7 +150,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                   {puntos.map((punto) => (
                     <article key={punto.id} className={`rounded-2xl border p-4 ${punto.estadoV3 === "NO_APLICA" ? "border-slate-700 bg-slate-950/50 opacity-70" : punto.estadoV3 === "PENDIENTE" ? "border-amber-300/15 bg-amber-300/5" : "border-emerald-300/15 bg-emerald-300/5"}`}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div><div className="flex flex-wrap gap-2"><span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{punto.grupo ?? "ADICIONAL"}</span>{punto.origenV3 === "INSPECTOR" && <span className="rounded-full bg-violet-300/10 px-2 py-0.5 text-[10px] font-black text-violet-300">AGREGADO POR INSPECTOR</span>}</div><p className="mt-1 font-bold">{punto.concepto}</p>{punto.herramientaSugerida && <p className="mt-1 text-xs text-slate-500">Herramienta sugerida: {punto.herramientaSugerida}</p>}{punto.motivoNoAplica && <p className="mt-1 text-xs text-slate-500">Motivo: {punto.motivoNoAplica}</p>}</div>
+                        <div><div className="flex flex-wrap gap-2"><span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{punto.grupo ?? "ADICIONAL"}</span>{punto.origenV3 === "INSPECTOR" && <span className="rounded-full bg-violet-300/10 px-2 py-0.5 text-[10px] font-black text-violet-300">AGREGADO EN CAMPO</span>}</div><p className="mt-1 font-bold">{punto.concepto}</p>{punto.herramientaSugerida && <p className="mt-1 text-xs text-slate-500">Herramienta sugerida: {punto.herramientaSugerida}</p>}{punto.motivoNoAplica && <p className="mt-1 text-xs text-slate-500">Motivo: {punto.motivoNoAplica}</p>}</div>
                         <span className={`text-xs font-black ${punto.estadoV3 === "PENDIENTE" ? "text-amber-300" : "text-emerald-300"}`}>{punto.estadoV3.replaceAll("_"," ")}</span>
                       </div>
                       {puedeCapturar && punto.estadoV3 === "PENDIENTE" && (

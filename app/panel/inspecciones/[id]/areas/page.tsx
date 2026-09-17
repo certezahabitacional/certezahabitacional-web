@@ -90,6 +90,7 @@ export default async function AreasPage({
   if (inspeccion.numeroInspeccion > 1) redirect(`/panel/inspecciones/${id}/captura`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
+  const esDirectorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
   const rolesConsulta: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR];
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
@@ -127,7 +128,7 @@ export default async function AreasPage({
   );
 
   const control = controlRows[0] ?? null;
-  const puedeCapturar = esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
   const completas = areas.filter((a) => a.estado === "REVISADA").length;
   const avance = areas.length ? Math.round((completas / areas.length) * 100) : 0;
 
@@ -137,6 +138,7 @@ export default async function AreasPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo de campo</Link>
           <div className="flex flex-wrap gap-2">
+            {esDirectorPorAusencia && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR POR AUSENCIA</span>}
             <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300">Recorrido V1</Link>
             <Link href={`/panel/inspecciones/${id}/protocolo`} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-amber-300">Protocolo V1</Link>
           </div>

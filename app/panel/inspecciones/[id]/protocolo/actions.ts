@@ -23,13 +23,13 @@ function volver(id: string, tipo: "ok" | "error", mensaje: string): never {
   redirect(`/panel/inspecciones/${id}/protocolo?${tipo}=${encodeURIComponent(mensaje)}`);
 }
 
-async function exigirInspectorAsignado(inspeccionId: string) {
+async function exigirResponsableAsignado(inspeccionId: string) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: session.user.id },
-    select: { id: true, activo: true, rol: true, inspector: { select: { id: true } } },
+    select: { id: true, activo: true, rol: true, inspector: { select: { id: true, activo: true } } },
   });
 
   const inspeccion = await prisma.inspeccion.findUnique({
@@ -37,18 +37,20 @@ async function exigirInspectorAsignado(inspeccionId: string) {
     select: { id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true },
   });
 
-  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.id) redirect("/acceso");
-  if (!inspeccion || inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
+  if (!usuario?.activo || !inspeccion) redirect("/acceso");
+  const inspectorAsignado = usuario.rol === RolUsuario.INSPECTOR && Boolean(usuario.inspector?.activo) && inspeccion.inspectorId === usuario.inspector?.id;
+  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "El protocolo integral corresponde a la inspección inicial V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "El protocolo solo puede capturarse con la inspección EN PROCESO.");
 
-  return { usuario, inspeccion };
+  return { usuario, inspeccion, responsable: directorPorAusencia ? "Director por ausencia" : "Inspector" };
 }
 
 export async function inicializarProtocoloV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
-  const { usuario, inspeccion } = await exigirInspectorAsignado(inspeccionId);
+  const { usuario, inspeccion, responsable } = await exigirResponsableAsignado(inspeccionId);
 
   const pasos = [
     ["FACHADA_PRINCIPAL", "Fachada principal e identificación", "FACHADA", 10, true],
@@ -82,7 +84,7 @@ export async function inicializarProtocoloV1(formData: FormData) {
     entidad: "ProtocoloInspeccionPaso",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Inspector inicializó el protocolo secuencial V1 para ${inspeccion.folio}.`,
+    descripcion: `${responsable} inicializó el protocolo secuencial V1 para ${inspeccion.folio}.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/protocolo`);
@@ -98,7 +100,7 @@ export async function actualizarPasoProtocolo(formData: FormData) {
   const unidad = texto(formData, "unidad") || null;
 
   if (!inspeccionId || !pasoId) redirect("/panel/inspecciones");
-  const { usuario, inspeccion } = await exigirInspectorAsignado(inspeccionId);
+  const { usuario, inspeccion, responsable } = await exigirResponsableAsignado(inspeccionId);
 
   const pasos = await prisma.$queryRaw<Array<{
     id: string; clave: string; nombre: string; tipo: string; orden: number; obligatorio: boolean; estado: string;
@@ -158,7 +160,7 @@ export async function actualizarPasoProtocolo(formData: FormData) {
     entidadId: pasoId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${accion} · ${paso.nombre} · ${inspeccion.folio}${lectura === null ? "" : ` · lectura ${lectura}${unidad ? ` ${unidad}` : ""}`}${comentario ? ` · ${comentario}` : ""}`,
+    descripcion: `${responsable} · ${accion} · ${paso.nombre} · ${inspeccion.folio}${lectura === null ? "" : ` · lectura ${lectura}${unidad ? ` ${unidad}` : ""}`}${comentario ? ` · ${comentario}` : ""}`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/protocolo`);

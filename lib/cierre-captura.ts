@@ -67,12 +67,7 @@ export async function finalizarCapturaMetodoCerteza(
     },
   });
 
-  if (
-    !usuario ||
-    !usuario.activo ||
-    usuario.rol !== RolUsuario.INSPECTOR ||
-    !usuario.inspector?.activo
-  ) {
+  if (!usuario || !usuario.activo) {
     redirect("/acceso");
   }
 
@@ -103,15 +98,22 @@ export async function finalizarCapturaMetodoCerteza(
 
   if (!inspeccion) volverError(inspeccionId, "La inspección no existe.");
 
+  const inspectorAsignado =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    Boolean(usuario.inspector?.activo) &&
+    inspeccion.inspectorId === usuario.inspector?.id;
+  const directorPorAusencia =
+    usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+
+  if (!inspectorAsignado && !directorPorAusencia) {
+    redirect("/acceso");
+  }
+
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) {
     volverError(
       inspeccionId,
       "La captura solo puede finalizarse mientras la inspección está EN PROCESO.",
     );
-  }
-
-  if (inspeccion.inspectorId !== usuario.inspector.id) {
-    volverError(inspeccionId, "Esta inspección está asignada a otro inspector.");
   }
 
   if (inspeccion.cotizacion) {
@@ -187,6 +189,8 @@ export async function finalizarCapturaMetodoCerteza(
     );
   }
 
+  const responsable = directorPorAusencia ? "Director por ausencia" : "Inspector";
+
   await registrarAuditoria({
     tipo: TipoEvento.FINALIZAR_CAPTURA,
     entidad: "Inspeccion",
@@ -197,7 +201,7 @@ export async function finalizarCapturaMetodoCerteza(
     origen: "METODO_CERTEZA",
     motivo: `Cierre técnico de V${inspeccion.numeroInspeccion}`,
     descripcion:
-      `Inspector cerró la captura de ${inspeccion.folio} como V${inspeccion.numeroInspeccion}. ` +
+      `${responsable} cerró la captura de ${inspeccion.folio} como V${inspeccion.numeroInspeccion}. ` +
       `${totalHallazgos} hallazgo(s) registrados.`,
     valorAnterior: {
       estado: EstadoInspeccion.EN_PROCESO,
@@ -209,6 +213,7 @@ export async function finalizarCapturaMetodoCerteza(
       numeroInspeccion: inspeccion.numeroInspeccion,
       totalHallazgos,
       hallazgosConMenosDeCuatroFotos,
+      responsable,
     },
   });
 
