@@ -1,0 +1,50 @@
+{
+  "fixture": {
+    "descripcion": "Plano estructural real de cimentacion y detalles generales usado para aceptacion IA V1",
+    "archivo_origen": "PHN-E-01-1N2R1B 49M2 ESTRUCTURAL",
+    "tipo_esperado": "ESTRUCTURAL",
+    "subtipo_esperado": "CIMENTACION",
+    "area_construida_m2": 49.0,
+    "ubicacion": "Hermosillo, Sonora, Mexico",
+    "proyecto": "Monteregio Residencial",
+    "fecha_plano": "2024-07-24"
+  },
+  "debe_extraer": [
+    "Planta de cimentacion",
+    "Desplante de muros y castillos en cimentacion",
+    "Castillo K-1",
+    "Castillo K-2",
+    "Dentellon D-1",
+    "Dentellon D-2",
+    "Losa de cimentacion de 10 cm de espesor",
+    "Malla electrosoldada 6x6-6/6 en ambos lechos",
+    "Block 12x20x40",
+    "Concreto f'c=200 kg/cm2 para cimentaciones, castillos, columnas, cadenas y trabes",
+    "Acero corrugado #3 en adelante fy=4200 kg/cm2",
+    "Recubrimiento 7.5 cm para concreto en contacto con suelo colado sin cimbra",
+    "Recubrimiento 2.5 cm para cadenas, castillos y losas sin contacto con suelo",
+    "Referencia a ACI-318 vigente",
+    "Amarres en muros de block"
+  ],
+  "no_debe_inventar": [
+    "Planta de azotea",
+    "Viguetas",
+    "Instalaciones hidraulicas",
+    "Instalaciones sanitarias",
+    "Instalaciones de gas",
+    "Instalaciones electricas",
+    "Recamaras",
+    "Sala",
+    "Cocina",
+    "Distribucion arquitectonica",
+    "Dimensiones no claramente legibles o confirmadas"
+  ],
+  "criterios": {
+    "estadoAnalisis": "COMPLETADO",
+    "datosExtraidos_no_nulo": true,
+    "tipoProyectoDetectado_debe_incluir": "ESTRUCTURAL",
+    "incertidumbres_deben_ir_a": "advertencias",
+    "no_inventar": true,
+    "guia_proyecto_debe_generar_al_menos_un_punto": true
+  }
+}
