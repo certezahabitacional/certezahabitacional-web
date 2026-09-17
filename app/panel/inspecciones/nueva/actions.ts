@@ -93,5 +93,6 @@ export async function crearInspeccion(formData:FormData){
   ]);
   await registrarAuditoria({tipo:TipoEvento.CREAR,entidad:"Inspeccion",entidadId:inspeccion.id,inspeccionId:inspeccion.id,usuarioId:usuarioActual.id,descripcion:`${usuarioActual.rol} ${iniciarAhora?"agendó e inició":"agendó"} ${inspeccion.folio} V${inspeccion.numeroInspeccion} en ${zona.nombre}. Equipo: Inspector ${inspectorSeleccionado?.usuario.nombre??"sin asignar"}; Coordinador ${coordinador?.nombre??"sin asignar"}; Gerente ${gerente?.nombre??"sin asignar"}.`});
   revalidatePath("/panel");revalidatePath("/panel/agenda");revalidatePath("/panel/inspecciones");revalidatePath("/panel/caja");revalidatePath("/portal/inspecciones");
-  redirect(`/panel/inspecciones/${inspeccion.id}?ok=${encodeURIComponent(iniciarAhora?"Inspección agendada e iniciada por Dirección.":"Inspección agendada correctamente.")}`);
+  if(iniciarAhora)redirect(`/panel/inspecciones/${inspeccion.id}/captura`);
+  redirect(`/panel/inspecciones/${inspeccion.id}?ok=${encodeURIComponent("Inspección agendada correctamente.")}`);
 }
