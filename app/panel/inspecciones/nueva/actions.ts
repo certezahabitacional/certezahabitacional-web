@@ -25,8 +25,7 @@ async function validarUsuarioAsignable(id:string,rol:RolUsuario,zonaId:string,et
 export async function crearInspeccion(formData:FormData){
   const usuarioActual=await obtenerUsuarioConAlcanceZona("/panel/inspecciones/nueva");
   if(!ROLES_CREACION.has(usuarioActual.rol))redirect("/acceso");
-  const antecedenteId=texto(formData,"antecedenteId"),cotizacionId=texto(formData,"cotizacionId"),clienteId=texto(formData,"clienteId"),inmuebleId=texto(formData,"inmuebleId"),inspectorId=texto(formData,"inspectorId"),gerenteFormulario=texto(formData,"gerenteId"),coordinadorId=texto(formData,"coordinadorId"),plantillaId=texto(formData,"plantillaId"),zonaId=texto(formData,"zonaId"),fechaProgramadaTexto=texto(formData,"fechaProgramada"),observaciones=texto(formData,"observaciones"),accion=texto(formData,"accion");
-  const iniciarSolicitado=accion==="crear_iniciar";
+  const antecedenteId=texto(formData,"antecedenteId"),cotizacionId=texto(formData,"cotizacionId"),clienteId=texto(formData,"clienteId"),inmuebleId=texto(formData,"inmuebleId"),inspectorId=texto(formData,"inspectorId"),gerenteFormulario=texto(formData,"gerenteId"),coordinadorId=texto(formData,"coordinadorId"),plantillaId=texto(formData,"plantillaId"),zonaId=texto(formData,"zonaId"),fechaProgramadaTexto=texto(formData,"fechaProgramada"),observaciones=texto(formData,"observaciones");
   const gerenteId=usuarioActual.rol===RolUsuario.GERENTE?usuarioActual.id:gerenteFormulario;
   if(!cotizacionId)errorNuevaInspeccion("Selecciona la cotización autorizada que origina esta inspección.",antecedenteId||undefined);
   if(!clienteId||!inmuebleId||!plantillaId||!zonaId||!fechaProgramadaTexto)errorNuevaInspeccion("Completa los campos obligatorios.",antecedenteId||undefined);
@@ -34,11 +33,6 @@ export async function crearInspeccion(formData:FormData){
 
   const validacion=await validarCotizacionParaNuevaInspeccion({cotizacionId,clienteId,inmuebleId}); if(!validacion.ok)errorNuevaInspeccion(validacion.error,antecedenteId||undefined);
   const cotizacionZona=await prisma.cotizacion.findUnique({where:{id:cotizacionId},select:{zonaId:true}}); if(!cotizacionZona?.zonaId||cotizacionZona.zonaId!==zonaId)errorNuevaInspeccion("La zona de la inspección debe coincidir con la zona de la cotización.",antecedenteId||undefined);
-
-  const totalCotizacion=Number(validacion.cotizacion.total);
-  const pagadoCotizacion=Number(validacion.cotizacion.montoPagado);
-  const liquidada=totalCotizacion>0&&Math.max(0,totalCotizacion-pagadoCotizacion)<=0.01;
-  const inicioAutorizado=liquidada||Boolean(validacion.cotizacion.excepcionInicio);
 
   const [plantilla,zona,inmueble]=await Promise.all([
     prisma.plantillaInspeccion.findFirst({where:{id:plantillaId,activa:true},select:{id:true,tipoServicio:true}}),
@@ -57,21 +51,12 @@ export async function crearInspeccion(formData:FormData){
 
   const fechaProgramada=fromZonedTime(fechaProgramadaTexto,zona.zonaHoraria);if(Number.isNaN(fechaProgramada.getTime()))errorNuevaInspeccion("Selecciona una fecha y hora válidas.",antecedenteId||undefined);
   const year=fechaProgramada.getFullYear(),inicioYear=new Date(Date.UTC(year,0,1)),inicioSiguienteYear=new Date(Date.UTC(year+1,0,1));let consecutivo=(await prisma.inspeccion.count({where:{creadoEn:{gte:inicioYear,lt:inicioSiguienteYear}}}))+1;let folio=`CH-${year}-${String(consecutivo).padStart(4,"0")}`;while(await prisma.inspeccion.findUnique({where:{folio},select:{id:true}})){consecutivo++;folio=`CH-${year}-${String(consecutivo).padStart(4,"0")}`;}
-  const estadoInicial=iniciarSolicitado&&inicioAutorizado?EstadoInspeccion.EN_PROCESO:EstadoInspeccion.PROGRAMADA;
-  const inspeccion=await prisma.inspeccion.create({data:{folio,plantillaId:plantilla.id,requiereGerenteZona:Boolean(gerente),requiereCoordinador:Boolean(coordinador),zonaId:zona.id,clienteId,inmuebleId,cotizacionId,numeroInspeccion,inspeccionAnteriorId:inspeccionAnterior?.id??null,inspectorId:inspectorSeleccionado?.id??null,agendadaPorId:usuarioActual.id,tipoServicio:plantilla.tipoServicio,tipoInmueble:inmueble.tipo,direccion:inmueble.direccion,ciudad:inmueble.ciudad,superficieM2:decimalANumero(inmueble.superficieConstruccionM2),fechaProgramada,zonaHoraria:zona.zonaHoraria,estado:estadoInicial,observaciones:observaciones||null,inicioLiberadoSinPago:validacion.cotizacion.excepcionInicio},select:{id:true,folio:true,numeroInspeccion:true}});
+  const inspeccion=await prisma.inspeccion.create({data:{folio,plantillaId:plantilla.id,requiereGerenteZona:Boolean(gerente),requiereCoordinador:Boolean(coordinador),zonaId:zona.id,clienteId,inmuebleId,cotizacionId,numeroInspeccion,inspeccionAnteriorId:inspeccionAnterior?.id??null,inspectorId:inspectorSeleccionado?.id??null,agendadaPorId:usuarioActual.id,tipoServicio:plantilla.tipoServicio,tipoInmueble:inmueble.tipo,direccion:inmueble.direccion,ciudad:inmueble.ciudad,superficieM2:decimalANumero(inmueble.superficieConstruccionM2),fechaProgramada,zonaHoraria:zona.zonaHoraria,estado:EstadoInspeccion.PROGRAMADA,observaciones:observaciones||null,inicioLiberadoSinPago:validacion.cotizacion.excepcionInicio},select:{id:true,folio:true,numeroInspeccion:true}});
   await Promise.all([
     establecerAsignacionInspeccion(inspeccion.id,"GERENTE",gerente?.id??null),
     establecerAsignacionInspeccion(inspeccion.id,"COORDINADOR",coordinador?.id??null),
     establecerAsignacionInspeccion(inspeccion.id,"INSPECTOR",inspectorSeleccionado?.usuario.id??null),
   ]);
-  await registrarAuditoria({tipo:TipoEvento.CREAR,entidad:"Inspeccion",entidadId:inspeccion.id,inspeccionId:inspeccion.id,usuarioId:usuarioActual.id,descripcion:`${usuarioActual.rol} creó ${inspeccion.folio} V${inspeccion.numeroInspeccion} en ${zona.nombre}. Estado inicial: ${estadoInicial}. Equipo: Inspector ${inspectorSeleccionado?.usuario.nombre??"sin asignar"}; Coordinador ${coordinador?.nombre??"sin asignar"}; Gerente ${gerente?.nombre??"sin asignar"}.`});
-  revalidatePath("/panel");revalidatePath("/panel/agenda");revalidatePath("/panel/inspecciones");revalidatePath("/panel/caja");revalidatePath("/portal/inspecciones");
-
-  if(iniciarSolicitado&&!inicioAutorizado){
-    const saldo=Math.max(0,totalCotizacion-pagadoCotizacion);
-    const saldoFormateado=new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(saldo);
-    redirect(`/panel/inspecciones/${inspeccion.id}?error=${encodeURIComponent(`INSPECCIÓN SIN LIBERAR POR ADEUDO PENDIENTE. La cotización tiene un saldo de ${saldoFormateado} y no cuenta con autorización especial de Dirección o Administración. La inspección quedó PROGRAMADA y no puede avanzar a inicio. Usa el menú del sistema para continuar en otra sección o cerrar sesión.`)}`);
-  }
-  if(iniciarSolicitado&&inicioAutorizado)redirect(`/panel/inspecciones/${inspeccion.id}?ok=${encodeURIComponent("Inspección creada, programada e iniciada correctamente.")}`);
-  redirect(`/panel/inspecciones/${inspeccion.id}?ok=${encodeURIComponent("Inspección creada y equipo operativo vinculado correctamente.")}`);
+  await registrarAuditoria({tipo:TipoEvento.CREAR,entidad:"Inspeccion",entidadId:inspeccion.id,inspeccionId:inspeccion.id,usuarioId:usuarioActual.id,descripcion:`${usuarioActual.rol} creó ${inspeccion.folio} V${inspeccion.numeroInspeccion} en ${zona.nombre}. Equipo: Inspector ${inspectorSeleccionado?.usuario.nombre??"sin asignar"}; Coordinador ${coordinador?.nombre??"sin asignar"}; Gerente ${gerente?.nombre??"sin asignar"}.`});
+  revalidatePath("/panel");revalidatePath("/panel/agenda");revalidatePath("/panel/inspecciones");revalidatePath("/panel/caja");revalidatePath("/portal/inspecciones");redirect(`/panel/inspecciones/${inspeccion.id}?ok=${encodeURIComponent("Inspección creada y equipo operativo vinculado correctamente.")}`);
 }
