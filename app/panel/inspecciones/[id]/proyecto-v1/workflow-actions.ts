@@ -135,7 +135,10 @@ async function analizarPdfConGemini(nombre: string, bytes: Blob) {
     throw new Error("El análisis automático con Gemini no está configurado: falta GEMINI_API_KEY en el servidor.");
   }
 
-  const modelo = process.env.GEMINI_PROYECTO_MODEL || "gemini-2.5-flash-lite";
+  const modeloConfigurado = process.env.GEMINI_PROYECTO_MODEL || "gemini-3.5-flash-lite";
+  const modelo = /gemini-2\.5-flash-lite/i.test(modeloConfigurado)
+    ? "gemini-3.5-flash-lite"
+    : modeloConfigurado;
   const pdfBase64 = Buffer.from(await bytes.arrayBuffer()).toString("base64");
   const instruccion = [
     "Analiza este plano o documento técnico para una inspección habitacional.",
