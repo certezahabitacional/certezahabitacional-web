@@ -4,11 +4,11 @@ import { randomUUID } from "node:crypto";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
+import { eliminarArchivoStorage, subirArchivoStorage, urlFirmadaStorage } from "@/lib/storage-gateway";
 
 function texto(fd: FormData, campo: string) {
   return String(fd.get(campo) ?? "").trim();
@@ -16,13 +16,6 @@ function texto(fd: FormData, campo: string) {
 
 function volver(id: string, tipo: "ok" | "error", mensaje: string): never {
   redirect(`/panel/inspecciones/${id}/revision-inicial?${tipo}=${encodeURIComponent(mensaje)}`);
-}
-
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Faltan credenciales de almacenamiento.");
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 export async function importarFotoFachadaDesdeBase(formData: FormData) {
@@ -101,17 +94,20 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
 
   const extension = origen.ruta.split(".").pop()?.toLowerCase() || "jpg";
   const rutaNueva = `${inspeccionId}/areas/${area.id}/${randomUUID()}.${extension}`;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const sb = supabaseAdmin();
-  const { data: archivoOrigen, error: errorDescarga } = await sb.storage.from(bucket).download(origen.ruta);
-  if (errorDescarga || !archivoOrigen) volver(inspeccionId, "error", "No fue posible recuperar la fotografía histórica.");
 
-  const contenido = Buffer.from(await archivoOrigen.arrayBuffer());
-  const { error: errorSubida } = await sb.storage.from(bucket).upload(rutaNueva, contenido, {
-    contentType: archivoOrigen.type || "image/jpeg",
-    upsert: false,
-  });
-  if (errorSubida) volver(inspeccionId, "error", "No fue posible copiar la fotografía al expediente actual.");
+  try {
+    const url = await urlFirmadaStorage({ usuarioId: usuario.id, inspeccionId, ruta: origen.ruta }, 300);
+    if (!url) volver(inspeccionId, "error", "No fue posible recuperar la fotografía histórica.");
+    const respuesta = await fetch(url, { cache: "no-store" });
+    if (!respuesta.ok) volver(inspeccionId, "error", "No fue posible recuperar la fotografía histórica.");
+    const blob = await respuesta.blob();
+    const tipo = blob.type || "image/jpeg";
+    const archivo = new File([blob], `fachada-historica.${extension}`, { type: tipo });
+    await subirArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta: rutaNueva, archivo });
+  } catch (error) {
+    console.error("Error al copiar fachada histórica:", error instanceof Error ? error.message : error);
+    volver(inspeccionId, "error", "No fue posible copiar la fotografía al expediente actual.");
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -130,7 +126,7 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
       `;
     });
   } catch (errorDb) {
-    await sb.storage.from(bucket).remove([rutaNueva]);
+    await eliminarArchivoStorage({ usuarioId: usuario.id, inspeccionId, ruta: rutaNueva }).catch(() => undefined);
     throw errorDb;
   }
 
