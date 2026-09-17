@@ -132,8 +132,8 @@ export default async function RevisionInicialPage({
     inspeccion.inspector?.usuarioId === usuario.id;
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const esAdministrador = usuario.rol === RolUsuario.ADMINISTRADOR;
-  const directorPorAusencia = esDirector && !inspeccion.inspectorId;
   if (!inspectorAsignado && !esDirector && !esAdministrador) redirect("/acceso");
+  const responsableRevision = inspectorAsignado || esDirector;
 
   const snapshotRaw = inspeccion.cotizacion?.versiones[0]?.datos;
   const snapshot = snapshotRaw && typeof snapshotRaw === "object" && !Array.isArray(snapshotRaw)
@@ -165,9 +165,9 @@ export default async function RevisionInicialPage({
   const pendientes = solicitudes.filter((s) => s.estado === "PENDIENTE");
   const fotoDefinitiva = fotos.length === 1 && fotos[0]?.candidataPortada;
   const etapaSeleccion = fotos.length === 4 && !fotos.some((f) => f.candidataPortada);
-  const puedeTomarFotos = inspectorAsignado || directorPorAusencia;
-  const puedeSolicitar = inspectorAsignado || directorPorAusencia;
-  const puedeIniciar = (inspectorAsignado || directorPorAusencia) && Boolean(fotoDefinitiva) && pendientes.length === 0;
+  const puedeTomarFotos = responsableRevision;
+  const puedeSolicitar = responsableRevision;
+  const puedeIniciar = responsableRevision && Boolean(fotoDefinitiva) && pendientes.length === 0;
 
   const areasDeclaradas = AREAS_BOOLEANAS
     .filter(([campo]) => snapshot[campo] === true)
@@ -184,6 +184,7 @@ export default async function RevisionInicialPage({
 
         <section className="mt-6 text-center">
           <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 text-4xl" aria-label="Cámara">📷</div>
+          <p className="mt-2 text-xs font-bold text-cyan-200">Toca la cámara para tomar fotografía en sitio</p>
           <p className="mt-5 text-xs font-black uppercase tracking-[.28em] text-cyan-300">Revisión final con el cliente</p>
           <h1 className="mt-2 text-3xl font-black sm:text-4xl">Confirmación previa al inicio físico</h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-400">Revisa con el cliente la información proporcionada desde la precotización. La inspección seguirá PROGRAMADA hasta presionar INICIAR al final.</p>
@@ -215,7 +216,7 @@ export default async function RevisionInicialPage({
           {!fotoDefinitiva && puedeTomarFotos && (
             <div className="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-center">
               <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Tomar en sitio · 4 fotografías obligatorias</p>
-              <p className="mt-2 text-sm text-slate-300">Si eliges esta ruta, deberás completar las 4 tomas y después seleccionar la mejor. Las otras tres se eliminarán.</p>
+              <p className="mt-2 text-sm text-slate-300">Si eliges esta ruta, deberás completar las 4 tomas y después seleccionar la mejor. Las otras tres se eliminarán y no podrás cerrar esta revisión hasta definir la fotografía definitiva.</p>
             </div>
           )}
 
@@ -251,7 +252,7 @@ export default async function RevisionInicialPage({
           </div>
 
           {etapaSeleccion && puedeTomarFotos && (
-            <p className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-center text-sm font-black text-amber-200">Ya completaste las 4 fotografías en sitio. Debes elegir una como definitiva antes de continuar.</p>
+            <p className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-center text-sm font-black text-amber-200">Ya completaste las 4 fotografías en sitio. Debes elegir una como definitiva antes de continuar. Al elegirla, las otras tres se eliminarán.</p>
           )}
         </section>
 
@@ -327,7 +328,7 @@ export default async function RevisionInicialPage({
         {puedeSolicitar && (
           <section className="mt-7 rounded-3xl border border-rose-300/20 bg-rose-300/5 p-5 sm:p-6">
             <h2 className="text-xl font-black">¿El cliente detectó un dato incorrecto?</h2>
-            <p className="mt-2 text-sm text-slate-300">El Inspector no modifica ningún dato. Selecciona la sección y el sistema enviará la instrucción al Administrador; si no hay uno disponible, al Director.</p>
+            <p className="mt-2 text-sm text-slate-300">El responsable de la revisión no modifica directamente los datos. Selecciona la sección y el sistema enviará la instrucción al Administrador; si no hay uno disponible, al Director.</p>
             <form action={solicitarCorreccionPrevia} className="mt-4 grid gap-3">
               <input type="hidden" name="inspeccionId" value={id} />
               <select name="tipoCorreccion" required defaultValue="" className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3 font-bold">
@@ -343,7 +344,7 @@ export default async function RevisionInicialPage({
           </section>
         )}
 
-        {(inspectorAsignado || directorPorAusencia) && (
+        {responsableRevision && (
           <section className={`mt-7 rounded-3xl border p-6 text-center ${puedeIniciar ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-900"}`}>
             <h2 className="text-2xl font-black">Inicio físico de la inspección</h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">INICIAR solo se habilita cuando la información fue revisada con el cliente, existe una sola fotografía definitiva —elegida entre 4 tomadas en sitio o cargada como 1 foto existente— y no hay correcciones pendientes.</p>

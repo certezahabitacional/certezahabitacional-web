@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { ActivadorCamaraRevision } from "./activador-camara";
 import { BloqueoSalidaRevision } from "./bloqueo-salida";
 
 export default async function RevisionInicialLayout({
@@ -50,13 +51,15 @@ export default async function RevisionInicialLayout({
     Boolean(usuario.inspector?.activo) &&
     inspeccion.inspectorId === usuario.inspector?.id &&
     inspeccion.inspector?.usuarioId === usuario.id;
-  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
-  const responsableCampo = inspectorAsignado || directorPorAusencia;
+  const director = usuario.rol === RolUsuario.DIRECTOR;
+  const responsableCampo = inspectorAsignado || director;
   const fotoDefinitiva = fotos.length === 1 && fotos[0]?.candidataPortada === true;
-  const bloquearSalida = responsableCampo && !fotoDefinitiva;
+  const serieEnSitioIniciada = fotos.length > 0 && !fotoDefinitiva;
+  const bloquearSalida = responsableCampo && serieEnSitioIniciada;
 
   return (
     <>
+      <ActivadorCamaraRevision activo={responsableCampo && !fotoDefinitiva && fotos.length < 4} />
       <BloqueoSalidaRevision activo={bloquearSalida} />
       {children}
     </>

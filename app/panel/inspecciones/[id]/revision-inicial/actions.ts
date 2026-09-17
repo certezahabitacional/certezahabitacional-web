@@ -66,12 +66,12 @@ async function contextoResponsable(inspeccionId: string) {
     Boolean(usuario.inspector?.activo) &&
     inspeccion.inspectorId === usuario.inspector?.id &&
     inspeccion.inspector?.usuarioId === usuario.id;
-  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
-  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
+  const director = usuario.rol === RolUsuario.DIRECTOR;
+  if (!inspectorAsignado && !director) redirect("/acceso");
   if (inspeccion.estado !== EstadoInspeccion.PROGRAMADA) {
     volver(inspeccionId, "error", "La revisión final solo se realiza antes de iniciar físicamente la inspección.");
   }
-  return { session, usuario, inspeccion, inspectorAsignado, directorPorAusencia };
+  return { session, usuario, inspeccion, inspectorAsignado, director };
 }
 
 export async function subirFotoFachadaPrevia(formData: FormData) {
@@ -150,8 +150,7 @@ export async function seleccionarMejorFachada(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const fotografiaId = texto(formData, "fotografiaId");
   if (!inspeccionId || !fotografiaId) redirect("/panel/inspecciones");
-  const { usuario, inspeccion, inspectorAsignado, directorPorAusencia } = await contextoResponsable(inspeccionId);
-  if (!inspectorAsignado && !directorPorAusencia) volver(inspeccionId, "error", "La fotografía definitiva debe ser elegida por el Inspector responsable.");
+  const { usuario, inspeccion } = await contextoResponsable(inspeccionId);
 
   const fotos = await prisma.$queryRaw<Array<{ fotografiaId: string; ruta: string }>>`
     SELECT fa."fotografiaId",f."url" AS "ruta"
@@ -274,7 +273,7 @@ export async function resolverSolicitudCorreccion(formData: FormData) {
     descripcion: `${usuario.rol} marcó como resuelta una corrección previa al inicio de la inspección.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision-inicial`);
-  volver(inspeccionId, "ok", "Corrección marcada como resuelta. El Inspector puede volver a revisar la información con el cliente.");
+  volver(inspeccionId, "ok", "Corrección marcada como resuelta. El responsable puede volver a revisar la información con el cliente.");
 }
 
 export async function iniciarInspeccionConfirmada(formData: FormData) {
