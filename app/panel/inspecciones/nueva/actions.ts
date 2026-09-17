@@ -33,7 +33,6 @@ export async function crearInspeccion(formData:FormData){
   if(iniciarAhora&&usuarioActual.rol!==RolUsuario.DIRECTOR)errorNuevaInspeccion("Solo Dirección puede iniciar una inspección desde Agendar Inspección.",antecedenteId||undefined);
   if(!cotizacionId)errorNuevaInspeccion("Selecciona la cotización autorizada que origina esta inspección.",antecedenteId||undefined);
   if(!clienteId||!inmuebleId||!plantillaId||!zonaId||!fechaProgramadaTexto)errorNuevaInspeccion("Completa los campos obligatorios para agendar la inspección.",antecedenteId||undefined);
-  if(iniciarAhora&&!inspectorId)errorNuevaInspeccion("Para iniciar la inspección debes asignar primero un Inspector.",antecedenteId||undefined);
   if(!puedeAccederZona(usuarioActual,zonaId))errorNuevaInspeccion("No puedes crear una inspección en una zona distinta a la asignada a tu usuario.",antecedenteId||undefined);
 
   const validacion=await validarCotizacionParaNuevaInspeccion({cotizacionId,clienteId,inmuebleId});
@@ -91,8 +90,9 @@ export async function crearInspeccion(formData:FormData){
     establecerAsignacionInspeccion(inspeccion.id,"COORDINADOR",coordinador?.id??null),
     establecerAsignacionInspeccion(inspeccion.id,"INSPECTOR",inspectorSeleccionado?.usuario.id??null),
   ]);
-  await registrarAuditoria({tipo:TipoEvento.CREAR,entidad:"Inspeccion",entidadId:inspeccion.id,inspeccionId:inspeccion.id,usuarioId:usuarioActual.id,descripcion:`${usuarioActual.rol} ${iniciarAhora?"agendó e inició":"agendó"} ${inspeccion.folio} V${inspeccion.numeroInspeccion} en ${zona.nombre}. Equipo: Inspector ${inspectorSeleccionado?.usuario.nombre??"sin asignar"}; Coordinador ${coordinador?.nombre??"sin asignar"}; Gerente ${gerente?.nombre??"sin asignar"}.`});
+  const responsable=inspectorSeleccionado?.usuario.nombre??(iniciarAhora&&usuarioActual.rol===RolUsuario.DIRECTOR?"Director por ausencia":"sin asignar");
+  await registrarAuditoria({tipo:TipoEvento.CREAR,entidad:"Inspeccion",entidadId:inspeccion.id,inspeccionId:inspeccion.id,usuarioId:usuarioActual.id,descripcion:`${usuarioActual.rol} ${iniciarAhora?"agendó e inició":"agendó"} ${inspeccion.folio} V${inspeccion.numeroInspeccion} en ${zona.nombre}. Responsable de campo: ${responsable}; Coordinador ${coordinador?.nombre??"sin asignar"}; Gerente ${gerente?.nombre??"sin asignar"}.`});
   revalidatePath("/panel");revalidatePath("/panel/agenda");revalidatePath("/panel/inspecciones");revalidatePath("/panel/caja");revalidatePath("/portal/inspecciones");
-  if(iniciarAhora)redirect(`/panel/inspecciones/${inspeccion.id}/captura`);
+  if(iniciarAhora)redirect(inspeccion.numeroInspeccion===1?`/panel/inspecciones/${inspeccion.id}/flujo`:`/panel/inspecciones/${inspeccion.id}/captura`);
   redirect(`/panel/inspecciones/${inspeccion.id}?ok=${encodeURIComponent("Inspección agendada correctamente.")}`);
 }
