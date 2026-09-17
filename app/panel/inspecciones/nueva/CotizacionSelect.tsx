@@ -12,6 +12,9 @@ export type CotizacionDisponible = {
   total: number;
   montoPagado: number;
   excepcionApertura: boolean;
+  modo?: "NUEVA" | "RETOMAR";
+  inspeccionFolio?: string | null;
+  fechaProgramada?: string | null;
 };
 
 export default function CotizacionSelect({ cotizaciones }: { cotizaciones: CotizacionDisponible[] }) {
@@ -32,12 +35,13 @@ export default function CotizacionSelect({ cotizaciones }: { cotizaciones: Cotiz
           onChange={(event) => setCotizacionId(event.target.value)}
           className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
         >
-          <option value="" disabled>Selecciona el folio que origina la inspección</option>
+          <option value="" disabled>Selecciona el folio que origina o retoma la inspección</option>
           {cotizaciones.map((c) => {
             const porcentaje = c.total > 0 ? (c.montoPagado / c.total) * 100 : 0;
+            const retomar = c.inspeccionFolio ? ` · REAGENDAR / COMPLETAR ${c.inspeccionFolio}` : "";
             return (
               <option key={c.id} value={c.id}>
-                {c.folio} · {c.clienteNombre} · {c.inmuebleAlias} · pagado {porcentaje.toFixed(0)}%{c.excepcionApertura ? " · excepción Dirección" : ""}
+                {c.folio} · {c.clienteNombre} · {c.inmuebleAlias} · pagado {porcentaje.toFixed(0)}%{c.excepcionApertura ? " · excepción Dirección" : ""}{retomar}
               </option>
             );
           })}
@@ -54,12 +58,25 @@ export default function CotizacionSelect({ cotizaciones }: { cotizaciones: Cotiz
             <p className="text-xs font-black uppercase tracking-wider text-slate-500">Inmueble</p>
             <p className="mt-1 font-bold">{seleccionada.inmuebleAlias}</p>
           </div>
+          {seleccionada.inspeccionFolio && (
+            <div className="md:col-span-2 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
+              <p className="text-xs font-black uppercase tracking-wider text-amber-300">
+                Inspección PROGRAMADA existente · se actualizará, no se duplicará
+              </p>
+              <p className="mt-2 font-bold text-white">{seleccionada.inspeccionFolio}</p>
+              <p className="mt-1 text-sm text-amber-100">
+                Puedes completar asignaciones o cambiar la fecha/hora. Si dejas un dato sin cambio, se conserva el valor actual.
+              </p>
+            </div>
+          )}
           <input type="hidden" name="clienteId" value={seleccionada.clienteId} />
           <input type="hidden" name="inmuebleId" value={seleccionada.inmuebleId} />
         </div>
       )}
 
-      <p className="text-xs text-slate-500">Solo aparecen cotizaciones autorizadas, con inmueble y con al menos 50% pagado, salvo excepción expresa de Dirección.</p>
+      <p className="text-xs text-slate-500">
+        Aparecen cotizaciones autorizadas y financieramente habilitadas sin inspección y también las vinculadas a una inspección que todavía permanezca PROGRAMADA.
+      </p>
     </div>
   );
 }
