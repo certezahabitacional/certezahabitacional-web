@@ -33,7 +33,7 @@ function supabaseAdmin() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-async function exigirInspectorV1(inspeccionId: string) {
+async function exigirResponsableV1(inspeccionId: string) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -46,19 +46,21 @@ async function exigirInspectorV1(inspeccionId: string) {
     select: { id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true },
   });
 
-  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.activo) redirect("/acceso");
-  if (!inspeccion || inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
+  if (!usuario?.activo || !inspeccion) redirect("/acceso");
+  const inspectorAsignado = usuario.rol === RolUsuario.INSPECTOR && Boolean(usuario.inspector?.activo) && inspeccion.inspectorId === usuario.inspector?.id;
+  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "La cobertura integral por áreas corresponde a V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "Las áreas solo pueden documentarse mientras la inspección está EN PROCESO.");
 
-  return { session, usuario, inspeccion };
+  return { session, usuario, inspeccion, responsable: directorPorAusencia ? "Director por ausencia" : "Inspector" };
 }
 
 export async function confirmarProyectoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const modalidad = texto(formData, "modalidad");
   if (!inspeccionId) redirect("/panel/inspecciones");
-  const { usuario } = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
   if (!["CON_PDF", "SIN_PDF"].includes(modalidad)) volver(inspeccionId, "error", "Selecciona una modalidad de proyecto válida.");
 
@@ -99,7 +101,7 @@ export async function confirmarProyectoV1(formData: FormData) {
     entidad: "InspeccionControlV2",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: modalidad === "CON_PDF" ? "Inspector confirmó proyecto PDF analizado y convertido a guía para V1." : "Inspector declaró formalmente V1 SIN PROYECTO PDF disponible.",
+    descripcion: modalidad === "CON_PDF" ? `${responsable} confirmó proyecto PDF analizado y convertido a guía para V1.` : `${responsable} declaró formalmente V1 SIN PROYECTO PDF disponible.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
@@ -110,7 +112,7 @@ export async function confirmarProyectoV1(formData: FormData) {
 export async function generarAreasDesdeGuia(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
-  const { usuario } = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
   const items = await prisma.$queryRaw<Array<{ area: string }>>`
     SELECT DISTINCT btrim("area") AS "area"
@@ -150,7 +152,7 @@ export async function generarAreasDesdeGuia(formData: FormData) {
     entidad: "AreaInspeccion",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Inspector generó ecosistema V1 desde la guía técnica: fachada + ${items.length} área(s) fuente.`,
+    descripcion: `${responsable} generó ecosistema V1 desde la guía técnica: fachada + ${items.length} área(s) fuente.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
@@ -162,7 +164,7 @@ export async function agregarAreaManual(formData: FormData) {
   const nombre = texto(formData, "nombre");
   const tipo = texto(formData, "tipo") || "INTERIOR";
   if (!inspeccionId || !nombre) redirect("/panel/inspecciones");
-  const { usuario } = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
   const codigo = `${slug(nombre) || 'AREA'}_${randomUUID().slice(0, 6).toUpperCase()}`;
   const [r] = await prisma.$queryRaw<Array<{ siguiente: number }>>`
@@ -173,7 +175,7 @@ export async function agregarAreaManual(formData: FormData) {
     VALUES (${inspeccionId},${codigo},${nombre},${tipo},${Number(r?.siguiente ?? 10)},'MANUAL',true)
   `;
 
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "AreaInspeccion", inspeccionId, usuarioId: usuario.id, descripcion: `Inspector agregó manualmente el área obligatoria “${nombre}”.` });
+  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "AreaInspeccion", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó manualmente el área obligatoria “${nombre}”.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   volver(inspeccionId, "ok", `Área “${nombre}” agregada.`);
 }
@@ -181,7 +183,7 @@ export async function agregarAreaManual(formData: FormData) {
 export async function confirmarAreasV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
-  const { usuario } = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
   const [r] = await prisma.$queryRaw<Array<{ total: number; fachada: number }>>`
     SELECT COUNT(*) FILTER (WHERE "obligatoria")::int AS "total",
@@ -193,7 +195,7 @@ export async function confirmarAreasV1(formData: FormData) {
   await prisma.$executeRaw`
     UPDATE "InspeccionControlV2" SET "areasConfirmadas"=true,"actualizadoEn"=NOW() WHERE "inspeccionId"=${inspeccionId}
   `;
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "InspeccionControlV2", inspeccionId, usuarioId: usuario.id, descripcion: `Inspector confirmó el ecosistema de ${Number(r.total)} área(s) obligatoria(s) de V1.` });
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "InspeccionControlV2", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} confirmó el ecosistema de ${Number(r.total)} área(s) obligatoria(s) de V1.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   volver(inspeccionId, "ok", "Ecosistema de áreas confirmado. A partir de ahora documenta todas las áreas antes del cierre.");
 }
@@ -204,7 +206,7 @@ export async function subirFotoArea(formData: FormData) {
   const descripcion = texto(formData, "descripcion");
   const archivo = formData.get("archivo");
   if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
-  const { session, usuario } = await exigirInspectorV1(inspeccionId);
+  const { session, usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
   const [area] = await prisma.$queryRaw<Array<{ id: string; codigo: string; nombre: string }>>`
     SELECT "id","codigo","nombre" FROM "AreaInspeccion" WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
@@ -236,7 +238,7 @@ export async function subirFotoArea(formData: FormData) {
     throw e;
   }
 
-  await registrarAuditoria({ tipo: TipoEvento.SUBIR_EVIDENCIA, entidad: "FotografiaArea", inspeccionId, usuarioId: usuario.id, descripcion: `Inspector agregó evidencia del área “${area.nombre}”${area.codigo === 'FACHADA_PRINCIPAL' ? ' (fachada/identificación; portada pendiente de selección explícita)' : ''}.` });
+  await registrarAuditoria({ tipo: TipoEvento.SUBIR_EVIDENCIA, entidad: "FotografiaArea", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó evidencia del área “${area.nombre}”${area.codigo === 'FACHADA_PRINCIPAL' ? ' (fachada/identificación; portada pendiente de selección explícita)' : ''}.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
   volver(inspeccionId, "ok", area.codigo === 'FACHADA_PRINCIPAL' ? "Fotografía de fachada agregada. Selecciona explícitamente una de las fotos como portada antes del cierre." : `Fotografía agregada a ${area.nombre}.`);
@@ -247,7 +249,7 @@ export async function cerrarAreaV1(formData: FormData) {
   const areaId = texto(formData, "areaId");
   const comentario = texto(formData, "comentarioFinal");
   if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
-  const { usuario } = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
   if (comentario.length < 5) volver(inspeccionId, "error", "Registra un comentario final del área, incluso cuando todo esté aparentemente en orden.");
 
   const [r] = await prisma.$queryRaw<Array<{ nombre: string; fotos: number }>>`
@@ -263,7 +265,7 @@ export async function cerrarAreaV1(formData: FormData) {
     UPDATE "AreaInspeccion" SET "estado"='REVISADA',"comentarioFinal"=${comentario},"revisadaEn"=NOW(),"actualizadoEn"=NOW()
     WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
   `;
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `Inspector cerró el área “${r.nombre}” con ${r.fotos} fotografías. Comentario final: ${comentario}` });
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} cerró el área “${r.nombre}” con ${r.fotos} fotografías. Comentario final: ${comentario}` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
   volver(inspeccionId, "ok", `${r.nombre} quedó revisada y documentada.`);
