@@ -8,6 +8,14 @@ export function BloqueoSalidaRevision({ activo }: { activo: boolean }) {
 
     const mensaje = "Debes tomar las 4 fotografías y elegir la fachada definitiva antes de salir de esta revisión.";
     const urlActual = window.location.href;
+    const enlaces = Array.from(document.querySelectorAll<HTMLAnchorElement>("a"));
+    const estilosPrevios = enlaces.map((enlace) => ({ enlace, display: enlace.style.display }));
+
+    enlaces.forEach((enlace) => {
+      enlace.style.display = "none";
+      enlace.setAttribute("aria-hidden", "true");
+      enlace.tabIndex = -1;
+    });
 
     window.history.pushState({ revisionInicialBloqueada: true }, "", urlActual);
 
@@ -37,6 +45,11 @@ export function BloqueoSalidaRevision({ activo }: { activo: boolean }) {
     window.addEventListener("beforeunload", advertirCierre);
 
     return () => {
+      estilosPrevios.forEach(({ enlace, display }) => {
+        enlace.style.display = display;
+        enlace.removeAttribute("aria-hidden");
+        enlace.removeAttribute("tabindex");
+      });
       document.removeEventListener("click", bloquearEnlace, true);
       window.removeEventListener("popstate", bloquearAtras);
       window.removeEventListener("beforeunload", advertirCierre);
