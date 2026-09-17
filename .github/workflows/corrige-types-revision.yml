@@ -1,0 +1,35 @@
+name: Corrige types revision
+on:
+  push:
+    branches:
+      - codex/revision-final-cliente
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/revision-final-cliente
+      - name: Corregir TypeScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/panel/inspecciones/[id]/revision-inicial/actions.ts')
+          s=p.read_text()
+          old='if (!usuario?.activo || ![RolUsuario.ADMINISTRADOR, RolUsuario.DIRECTOR].includes(usuario.rol)) redirect("/acceso");'
+          new='if (!usuario?.activo || (usuario.rol !== RolUsuario.ADMINISTRADOR && usuario.rol !== RolUsuario.DIRECTOR)) redirect("/acceso");'
+          if old not in s:
+              raise SystemExit('Patron TypeScript no encontrado')
+          p.write_text(s.replace(old,new))
+          PY
+          rm .github/workflows/corrige-types-revision.yml
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app .github/workflows/corrige-types-revision.yml
+          git commit -m "Corrige tipos de roles en revision inicial"
+          git push origin HEAD:codex/revision-final-cliente
