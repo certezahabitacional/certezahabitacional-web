@@ -15,7 +15,7 @@ function volver(id: string, tipo: "ok" | "error", mensaje: string): never {
   redirect(`/panel/inspecciones/${id}/campo-v1?${tipo}=${encodeURIComponent(mensaje)}`);
 }
 
-async function exigirInspectorV1(inspeccionId: string) {
+async function exigirResponsableV1(inspeccionId: string) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const usuario = await prisma.usuario.findUnique({
@@ -26,17 +26,19 @@ async function exigirInspectorV1(inspeccionId: string) {
     where: { id: inspeccionId },
     select: { id: true, numeroInspeccion: true, estado: true, inspectorId: true },
   });
-  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.activo) redirect("/acceso");
-  if (!inspeccion || inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
+  if (!usuario?.activo || !inspeccion) redirect("/acceso");
+  const inspectorAsignado = usuario.rol === RolUsuario.INSPECTOR && Boolean(usuario.inspector?.activo) && inspeccion.inspectorId === usuario.inspector?.id;
+  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "Este recorrido guiado corresponde únicamente a V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "La captura técnica solo está disponible mientras V1 está EN PROCESO.");
-  return usuario;
+  return { usuario, responsable: directorPorAusencia ? "Director por ausencia" : "Inspector" };
 }
 
 export async function inicializarPlanAreasV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
-  const usuario = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
@@ -65,7 +67,7 @@ export async function inicializarPlanAreasV1(formData: FormData) {
       }
     }
   });
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", inspeccionId, usuarioId: usuario.id, descripcion: "Se inicializó el plan V1 desde la Biblioteca Certeza." });
+  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} inicializó el plan V1 desde la Biblioteca Certeza.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", "Plan técnico V1 preparado con los puntos mínimos aplicables.");
 }
@@ -75,11 +77,11 @@ export async function marcarPuntoNoAplicaV1(formData: FormData) {
   const itemId = texto(formData, "itemId");
   const motivo = texto(formData, "motivo");
   if (!inspeccionId || !itemId) redirect("/panel/inspecciones");
-  const usuario = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
   if (motivo.length < 3) volver(inspeccionId, "error", "Indica brevemente por qué el punto no aplica.");
   const n = await prisma.$executeRaw`UPDATE "GuiaInspeccionItem" SET "estadoV3"='NO_APLICA',"motivoNoAplica"=${motivo},"completado"=true,"cerradoEn"=NOW(),"actualizadoEn"=NOW() WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId} AND "estadoV3"='PENDIENTE'`;
   if (!n) volver(inspeccionId, "error", "El punto ya fue atendido o no pertenece a esta inspección.");
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "GuiaInspeccionItem", entidadId: itemId, inspeccionId, usuarioId: usuario.id, descripcion: `Punto V1 marcado NO APLICA. Motivo: ${motivo}` });
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "GuiaInspeccionItem", entidadId: itemId, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} marcó punto V1 NO APLICA. Motivo: ${motivo}` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", "Punto excluido justificadamente del alcance efectivo.");
 }
@@ -89,14 +91,14 @@ export async function agregarPuntoInspectorV1(formData: FormData) {
   const areaId = texto(formData, "areaId");
   const concepto = texto(formData, "concepto");
   if (!inspeccionId || !areaId || !concepto) redirect("/panel/inspecciones");
-  const usuario = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
   const [area] = await prisma.$queryRaw<Array<{ nombre:string; siguiente:number }>>`
     SELECT a."nombre",COALESCE(MAX(g."orden"),0)::int+10 "siguiente" FROM "AreaInspeccion" a LEFT JOIN "GuiaInspeccionItem" g ON g."areaId"=a."id" WHERE a."id"=${areaId}::uuid AND a."inspeccionId"=${inspeccionId} GROUP BY a."id",a."nombre"
   `;
   if (!area) volver(inspeccionId, "error", "Área no encontrada.");
   const id = randomUUID();
   await prisma.$executeRaw`INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","orden","obligatorio","completado","creadoPorId","areaId","estadoV3","origenV3","creadoEn","actualizadoEn") VALUES (${id},${inspeccionId},'INSPECTOR',${area.nombre},${concepto},${area.siguiente},true,false,${usuario.id},${areaId}::uuid,'PENDIENTE','INSPECTOR',NOW(),NOW())`;
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", entidadId: id, inspeccionId, usuarioId: usuario.id, descripcion: `Inspector agregó el punto adicional “${concepto}” en ${area.nombre}.` });
+  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", entidadId: id, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó el punto adicional “${concepto}” en ${area.nombre}.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", "Punto adicional incorporado al plan V1.");
 }
@@ -105,7 +107,7 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const areaId = texto(formData, "areaId");
   if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
-  const usuario = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
   const [area] = await prisma.$queryRaw<Array<{ nombre:string; fotos:number; seleccionadas:number; pendientes:number; hallazgos:number }>>`
     SELECT a."nombre",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") "fotos",
@@ -130,8 +132,9 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
         WHERE "id" IN (SELECT "id" FROM "FotografiaArea" WHERE "areaId"=${areaId}::uuid ORDER BY "orden","creadoEn" LIMIT 4)
       `;
     }
+    const textoResponsable = responsable === "Director por ausencia" ? "criterio técnico de Dirección por ausencia" : "criterio técnico del Inspector";
     const [auto] = await tx.$queryRaw<Array<{ texto:string }>>`
-      SELECT 'Se realizó la inspección de '||a."nombre"||' conforme al plan establecido y a los puntos mínimos aplicables. No se identificaron anomalías relevantes en los elementos revisados, de acuerdo con el alcance de la inspección y el criterio técnico del Inspector.' "texto" FROM "AreaInspeccion" a WHERE a."id"=${areaId}::uuid
+      SELECT 'Se realizó la inspección de '||a."nombre"||' conforme al plan establecido y a los puntos mínimos aplicables. No se identificaron anomalías relevantes en los elementos revisados, de acuerdo con el alcance de la inspección y el '||${textoResponsable}||'.' "texto" FROM "AreaInspeccion" a WHERE a."id"=${areaId}::uuid
     `;
     await tx.$executeRaw`
       UPDATE "AreaInspeccion"
@@ -140,7 +143,7 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
     `;
   });
 
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `Área “${area.nombre}” cerrada SIN HALLAZGOS; los puntos aplicables pendientes quedaron confirmados como revisados.` });
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} cerró el área “${area.nombre}” SIN HALLAZGOS; los puntos aplicables pendientes quedaron confirmados como revisados.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", `${area.nombre} cerrada sin hallazgos.`);
 }
@@ -149,7 +152,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const areaId = texto(formData, "areaId");
   if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
-  const usuario = await exigirInspectorV1(inspeccionId);
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
   const [area] = await prisma.$queryRaw<Array<{ nombre:string; hallazgos:number; completos:number }>>`
     SELECT a."nombre",
@@ -183,7 +186,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
     `;
   });
 
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `Área “${area.nombre}” cerrada CON HALLAZGOS. Hallazgos documentados: ${area.hallazgos}.` });
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} cerró el área “${area.nombre}” CON HALLAZGOS. Hallazgos documentados: ${area.hallazgos}.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
