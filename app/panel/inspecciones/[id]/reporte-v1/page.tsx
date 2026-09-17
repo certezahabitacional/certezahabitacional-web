@@ -136,7 +136,7 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
         LIMIT 1
       `
     : [];
-  const etiquetaCalificacion = autorizado ? "Calificación técnica final" : "Calificación técnica preliminar";
+  const etiquetaCalificacion = autorizado ? "Calificación Técnica Certeza final" : "Calificación Técnica Certeza preliminar";
   const fechaEfectiva = controlReporte?.campoFinalizadoEn ?? inspeccion.fechaProgramada;
   const fecha = new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",timeZone:inspeccion.zonaHoraria}).format(fechaEfectiva);
   const fechaAutorizacion = autorizacionDireccion
@@ -198,7 +198,7 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
         </Seccion>
 
         <Seccion n="06" titulo="Resumen estadístico" subtitulo="Cobertura, calificación y distribución de resultados">
-          <div className="grid gap-3 sm:grid-cols-5"><Metrica label="Cobertura efectiva" value={`${coberturaTexto}%`}/><Metrica label="Calificación técnica" value={`${calificacionTexto}/100`}/><Metrica label="Puntos aplicables" value={String(metricas.aplicables)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Hallazgos" value={String(metricas.totalHallazgos)}/></div>
+          <div className="grid gap-3 sm:grid-cols-5"><Metrica label="Cobertura efectiva" value={`${coberturaTexto}%`}/><Metrica label="Calificación Técnica Certeza" value={`${calificacionTexto}/100`}/><Metrica label="Puntos aplicables" value={String(metricas.aplicables)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Hallazgos" value={String(metricas.totalHallazgos)}/></div>
           <p className="mt-3 text-xs font-bold text-slate-500">Áreas satisfactorias: {metricas.areasSinHallazgos} · Carga de severidad: {metricas.cargaSeveridad}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
         </Seccion>
