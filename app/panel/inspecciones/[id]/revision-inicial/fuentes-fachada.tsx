@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { prisma } from "@/lib/prisma";
-import { subirFotoFachadaPrevia } from "./actions";
+import { subirFotoExistenteComoFachada } from "./archivo-actions";
 import { importarFotoFachadaDesdeBase } from "./fuentes-actions";
 
 type FotoHistorica = {
@@ -59,14 +59,14 @@ export async function FuentesAlternasFachada({
   return (
     <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 p-4 sm:p-5">
       <div>
-        <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Fuentes alternas</p>
-        <h3 className="mt-1 text-lg font-black">Si no puedes tomar la foto en ese momento</h3>
+        <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Usar foto existente · 1 sola fotografía</p>
+        <h3 className="mt-1 text-lg font-black">Alternativa a tomar 4 fotografías en sitio</h3>
         <p className="mt-2 text-sm text-slate-400">
-          Puedes cargarla desde la galería/archivos del dispositivo o reutilizar una fachada histórica del mismo inmueble. La imagen elegida se copiará al expediente actual y conservará trazabilidad.
+          Si no puedes tomar la fachada en ese momento, puedes elegir una fotografía existente. Una sola foto será suficiente y quedará inmediatamente como fachada/portada definitiva. Las 4 fotografías solo son obligatorias cuando se toman en sitio.
         </p>
       </div>
 
-      <form action={subirFotoFachadaPrevia} className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+      <form action={subirFotoExistenteComoFachada} className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
         <input type="hidden" name="inspeccionId" value={inspeccionId} />
         <label className="block text-sm font-black text-cyan-200">Galería o archivos del dispositivo</label>
         <input
@@ -77,7 +77,7 @@ export async function FuentesAlternasFachada({
           className="mt-3 block w-full text-xs text-slate-300"
         />
         <button className="mt-3 rounded-xl bg-cyan-300 px-4 py-2 text-xs font-black text-slate-950">
-          AGREGAR DESDE GALERÍA / ARCHIVOS
+          USAR ESTA FOTO COMO DEFINITIVA
         </button>
       </form>
 
@@ -85,7 +85,7 @@ export async function FuentesAlternasFachada({
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h4 className="text-sm font-black">Base de evidencias del inmueble</h4>
-            <p className="mt-1 text-xs text-slate-500">Muestra fachadas registradas en inspecciones anteriores del mismo inmueble.</p>
+            <p className="mt-1 text-xs text-slate-500">Fachadas registradas en inspecciones anteriores del mismo inmueble.</p>
           </div>
           <span className="text-xs font-bold text-slate-500">{historicasConUrl.length} disponibles</span>
         </div>
@@ -114,7 +114,7 @@ export async function FuentesAlternasFachada({
                     <input type="hidden" name="inspeccionId" value={inspeccionId} />
                     <input type="hidden" name="fotografiaOrigenId" value={foto.fotografiaId} />
                     <button className="w-full rounded-xl border border-emerald-300/30 px-3 py-2 text-xs font-black text-emerald-300">
-                      USAR ESTA FOTO
+                      USAR COMO FOTO DEFINITIVA
                     </button>
                   </form>
                 </div>
