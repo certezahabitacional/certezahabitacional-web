@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import {
   agregarAreaManual,
   confirmarAreasV1,
-  confirmarProyectoV1,
   generarAreasDesdeGuia,
   subirFotoArea,
 } from "./actions";
@@ -41,15 +40,8 @@ type Control = {
   areasConfirmadas: boolean;
 } | null;
 
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
 async function urlTemporalFoto(ruta: string) {
-  const sb = supabaseAdmin();
+  const sb = obtenerSupabaseAdminOpcional();
   if (!sb) return null;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 15);
@@ -120,6 +112,11 @@ export default async function AreasPage({
     `,
   ]);
 
+  const control = controlRows[0] ?? null;
+  if (inspeccion.estado === EstadoInspeccion.EN_PROCESO && !control?.proyectoConfirmado) {
+    redirect(`/panel/inspecciones/${id}/proyecto-v1`);
+  }
+
   const fotosFachadaConUrl = await Promise.all(
     fotosFachada.map(async (foto) => ({
       ...foto,
@@ -127,7 +124,6 @@ export default async function AreasPage({
     })),
   );
 
-  const control = controlRows[0] ?? null;
   const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
   const completas = areas.filter((a) => a.estado === "REVISADA").length;
   const avance = areas.length ? Math.round((completas / areas.length) * 100) : 0;
@@ -144,7 +140,7 @@ export default async function AreasPage({
           </div>
         </div>
 
-        <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-emerald-300">Preparación y evidencia V1</p>
+        <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-emerald-300">Paso 2 · Ecosistema físico</p>
         <h1 className="mt-2 text-4xl font-black">Áreas de la vivienda</h1>
         <p className="mt-2 text-slate-400">{inspeccion.folio} · {inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? "Inmueble"}</p>
 
@@ -155,35 +151,24 @@ export default async function AreasPage({
         )}
 
         <section className="mt-7 grid gap-4 sm:grid-cols-4">
-          <Resumen titulo="Proyecto" valor={control?.proyectoConfirmado ? "Confirmado" : "Pendiente"} />
+          <Resumen titulo="Proyecto / Plantilla" valor={control?.proyectoConfirmado ? "Confirmado" : "Pendiente"} />
           <Resumen titulo="Áreas" valor={String(areas.length)} />
           <Resumen titulo="Cerradas" valor={`${completas}/${areas.length}`} />
           <Resumen titulo="Avance" valor={`${avance}%`} />
         </section>
 
-        {puedeCapturar && !control?.proyectoConfirmado && (
-          <section className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
-            <h2 className="text-xl font-black">1. Confirmar información de proyecto</h2>
-            <p className="mt-2 text-sm text-slate-300">Antes del recorrido, documenta si existe proyecto PDF o si la inspección se realizará formalmente sin proyecto disponible.</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <form action={confirmarProyectoV1}><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="modalidad" value="CON_PDF"/><button className="w-full rounded-xl bg-cyan-300 px-4 py-3 font-black text-slate-950">Confirmar PDF cargado</button></form>
-              <form action={confirmarProyectoV1}><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="modalidad" value="SIN_PDF"/><button className="w-full rounded-xl border border-white/15 px-4 py-3 font-black text-slate-200">Declarar sin proyecto PDF</button></form>
-            </div>
-          </section>
-        )}
-
         {puedeCapturar && areas.length === 0 && (
           <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
-            <h2 className="text-xl font-black">2. Construir ecosistema físico</h2>
-            <p className="mt-2 text-sm text-slate-300">Genera las áreas a partir de la guía técnica. El sistema añadirá siempre la Fachada principal como primera área.</p>
+            <h2 className="text-xl font-black">1. Construir ecosistema físico</h2>
+            <p className="mt-2 text-sm text-slate-300">Genera cualquier área adicional desde la guía técnica. La correlación Proyecto/Plantilla ya incorporó al expediente las áreas identificadas antes de llegar a esta pantalla.</p>
             <form action={generarAreasDesdeGuia} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950">Generar áreas desde guía</button></form>
           </section>
         )}
 
         {puedeCapturar && areas.length > 0 && !control?.areasConfirmadas && (
           <section className="mt-6 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
-            <h2 className="text-xl font-black">3. Verificar y confirmar áreas</h2>
-            <p className="mt-2 text-sm text-slate-300">Antes de confirmar, agrega cualquier recámara, baño, estancia, patio, cochera u otra área física que no haya surgido de la guía.</p>
+            <h2 className="text-xl font-black">2. Verificar y confirmar áreas</h2>
+            <p className="mt-2 text-sm text-slate-300">Antes de confirmar, agrega cualquier recámara, baño, estancia, patio, cochera u otra área física que no haya surgido del proyecto, la cotización o la guía.</p>
             <form action={agregarAreaManual} className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]">
               <input type="hidden" name="inspeccionId" value={id}/>
               <input name="nombre" required placeholder="Ej. Recámara 3" className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3"/>
