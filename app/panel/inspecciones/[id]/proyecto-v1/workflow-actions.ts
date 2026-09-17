@@ -72,7 +72,7 @@ async function exigirResponsableProyecto(inspeccionId: string) {
   return { session, usuario, inspeccion, responsable: director ? "Director" : "Inspector" };
 }
 
-function esquemaOpenAIProyectoV1() {
+function esquemaGeminiProyectoV1() {
   const dimension = {
     type: "object",
     additionalProperties: false,
@@ -129,69 +129,93 @@ function esquemaOpenAIProyectoV1() {
   };
 }
 
-function extraerTextoRespuestaOpenAI(respuesta: unknown) {
-  if (!respuesta || typeof respuesta !== "object") return "";
-  const salida = (respuesta as { output?: unknown[] }).output;
-  if (!Array.isArray(salida)) return "";
-  for (const item of salida) {
-    if (!item || typeof item !== "object") continue;
-    const contenidos = (item as { content?: unknown[] }).content;
-    if (!Array.isArray(contenidos)) continue;
-    for (const contenido of contenidos) {
-      if (!contenido || typeof contenido !== "object") continue;
-      const bloque = contenido as { type?: string; text?: string };
-      if (bloque.type === "output_text" && typeof bloque.text === "string") return bloque.text;
-    }
+async function analizarPdfConGemini(nombre: string, bytes: Blob) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("El análisis automático con Gemini no está configurado: falta GEMINI_API_KEY en el servidor.");
   }
-  return "";
-}
 
-async function analizarPdfConOpenAI(nombre: string, bytes: Blob) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("El análisis automático aún no está configurado: falta OPENAI_API_KEY en el servidor.");
-  const modelo = process.env.OPENAI_PROYECTO_MODEL || "gpt-5.6-luna";
-  const form = new FormData();
-  form.append("purpose", "user_data");
-  form.append("file", bytes, nombre);
+  const modelo = process.env.GEMINI_PROYECTO_MODEL || "gemini-2.5-flash-lite";
+  const pdfBase64 = Buffer.from(await bytes.arrayBuffer()).toString("base64");
+  const instruccion = [
+    "Analiza este plano o documento técnico para una inspección habitacional.",
+    "Extrae únicamente información visible o explícitamente indicada en el PDF.",
+    "No inventes elementos ocultos, dimensiones, materiales ni especificaciones faltantes.",
+    "Identifica áreas, dimensiones, especificaciones, ubicaciones y elementos verificables en campo.",
+    "Si una lectura es incierta, colócala en advertencias.",
+    "Las referencias deben permitir al Inspector ubicar el dato dentro del documento.",
+    "Devuelve exclusivamente el objeto JSON definido por el esquema de respuesta."
+  ].join(" ");
 
-  const carga = await fetch("https://api.openai.com/v1/files", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form,
-  });
-  const archivoOpenAI = await carga.json() as { id?: string; error?: { message?: string } };
-  if (!carga.ok || !archivoOpenAI.id) throw new Error(archivoOpenAI.error?.message || "OpenAI no pudo recibir el PDF.");
-
-  try {
-    const respuesta = await fetch("https://api.openai.com/v1/responses", {
+  const respuesta = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`,
+    {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       body: JSON.stringify({
-        model: modelo,
-        store: false,
-        input: [{
+        contents: [{
           role: "user",
-          content: [
+          parts: [
             {
-              type: "input_text",
-              text: "Analiza este plano o documento técnico para una inspección habitacional. Extrae únicamente información visible o explícitamente indicada. No inventes elementos ocultos ni dimensiones faltantes. Identifica áreas, dimensiones, especificaciones, ubicaciones y elementos verificables en campo. Si una lectura es incierta, colócala en advertencias. Las referencias deben permitir al Inspector ubicar el dato en el documento. Devuelve exclusivamente el JSON solicitado.",
+              inlineData: {
+                mimeType: "application/pdf",
+                data: pdfBase64,
+              },
             },
-            { type: "input_file", file_id: archivoOpenAI.id },
+            { text: instruccion },
           ],
         }],
-        text: { format: { type: "json_schema", name: "proyecto_habitacional_v1", strict: true, schema: esquemaOpenAIProyectoV1() } },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseJsonSchema: esquemaGeminiProyectoV1(),
+          temperature: 0.1,
+        },
       }),
-    });
-    const cuerpo = await respuesta.json() as { error?: { message?: string }; output?: unknown[] };
-    if (!respuesta.ok) throw new Error(cuerpo.error?.message || "El motor de IA no pudo analizar el PDF.");
-    const textoJson = extraerTextoRespuestaOpenAI(cuerpo);
-    if (!textoJson) throw new Error("El motor de IA no devolvió un resultado estructurado.");
+      cache: "no-store",
+    },
+  );
+
+  const cuerpo = await respuesta.json().catch(() => ({})) as {
+    error?: { message?: string; status?: string; code?: number };
+    candidates?: Array<{
+      finishReason?: string;
+      content?: { parts?: Array<{ text?: string }> };
+    }>;
+    promptFeedback?: { blockReason?: string };
+  };
+
+  if (!respuesta.ok) {
+    const detalle = cuerpo.error?.message || "Gemini no pudo analizar el PDF.";
+    if (respuesta.status === 429) {
+      throw new Error("Se alcanzó temporalmente la cuota gratuita de Gemini. Intenta nuevamente más tarde.");
+    }
+    if (/api key not valid|api_key_invalid|invalid api key/i.test(detalle)) {
+      throw new Error("La clave GEMINI_API_KEY configurada en Vercel no es válida. Revisa la clave de Google AI Studio.");
+    }
+    if (respuesta.status === 403) {
+      throw new Error(`Gemini rechazó la solicitud por permisos: ${detalle}`);
+    }
+    throw new Error(`Gemini no pudo analizar el PDF: ${detalle}`);
+  }
+
+  const textoJson = cuerpo.candidates?.[0]?.content?.parts
+    ?.map((parte) => parte.text || "")
+    .filter(Boolean)
+    .join("\n")
+    .trim() || "";
+
+  if (!textoJson) {
+    const motivo = cuerpo.promptFeedback?.blockReason || cuerpo.candidates?.[0]?.finishReason || "sin contenido";
+    throw new Error(`Gemini no devolvió un resultado estructurado (${motivo}).`);
+  }
+
+  try {
     return validarResultadoDocumentoProyectoV1(JSON.parse(textoJson));
-  } finally {
-    await fetch(`https://api.openai.com/v1/files/${archivoOpenAI.id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${apiKey}` },
-    }).catch(() => undefined);
+  } catch {
+    throw new Error(`Gemini devolvió un resultado que no cumple el formato técnico requerido para “${nombre}”.`);
   }
 }
 
@@ -268,7 +292,7 @@ export async function analizarProyectoV1(formData: FormData) {
     const sb = obtenerSupabaseAdmin();
     const { data, error } = await sb.storage.from(documento.bucket).download(documento.ruta);
     if (error || !data) throw new Error("No fue posible recuperar el PDF desde el almacenamiento.");
-    const resultado = await analizarPdfConOpenAI(documento.nombreOriginal, data);
+    const resultado = await analizarPdfConGemini(documento.nombreOriginal, data);
     const observaciones = resultado.advertencias.length > 0
       ? `${resultado.advertencias.length} advertencia(s): ${resultado.advertencias.slice(0, 3).join(" · ")}`
       : "Análisis automático completado sin advertencias declaradas.";
