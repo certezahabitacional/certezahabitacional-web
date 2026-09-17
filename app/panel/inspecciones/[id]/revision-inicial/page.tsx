@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { urlFirmadaStorage } from "@/lib/storage-gateway";
 import {
   iniciarInspeccionConfirmada,
   resolverSolicitudCorreccion,
@@ -71,21 +71,6 @@ function dinero(valor: unknown) {
     currency: "MXN",
     minimumFractionDigits: 2,
   }).format(Number(valor ?? 0));
-}
-
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
-async function urlTemporal(ruta: string) {
-  const sb = supabaseAdmin();
-  if (!sb) return null;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 15);
-  return error ? null : data.signedUrl;
 }
 
 export default async function RevisionInicialPage({
@@ -160,7 +145,10 @@ export default async function RevisionInicialPage({
   ]);
 
   const fotosConUrl = await Promise.all(
-    fotos.map(async (foto) => ({ ...foto, urlTemporal: await urlTemporal(foto.ruta) })),
+    fotos.map(async (foto) => ({
+      ...foto,
+      urlTemporal: await urlFirmadaStorage({ usuarioId: usuario.id, inspeccionId: id, ruta: foto.ruta }).catch(() => null),
+    })),
   );
   const pendientes = solicitudes.filter((s) => s.estado === "PENDIENTE");
   const fotoDefinitiva = fotos.length === 1 && fotos[0]?.candidataPortada;
