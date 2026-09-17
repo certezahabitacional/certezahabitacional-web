@@ -31,8 +31,10 @@ export async function seleccionarPortadaFachadaV1(formData: FormData) {
     select: { id: true, numeroInspeccion: true, estado: true, inspectorId: true },
   });
 
-  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.activo) redirect("/acceso");
-  if (!inspeccion || inspeccion.numeroInspeccion !== 1 || inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
+  if (!usuario?.activo || !inspeccion || inspeccion.numeroInspeccion !== 1) redirect("/acceso");
+  const inspectorAsignado = usuario.rol === RolUsuario.INSPECTOR && Boolean(usuario.inspector?.activo) && inspeccion.inspectorId === usuario.inspector?.id;
+  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "La portada solo puede cambiarse mientras V1 está EN PROCESO.");
 
   const [foto] = await prisma.$queryRaw<Array<{ areaId: string; nombre: string }>>`
@@ -68,7 +70,7 @@ export async function seleccionarPortadaFachadaV1(formData: FormData) {
     entidadId: fotografiaId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Inspector seleccionó explícitamente una fotografía de ${foto.nombre} como portada V1.`,
+    descripcion: `${directorPorAusencia ? "Director por ausencia" : "Inspector"} seleccionó explícitamente una fotografía de ${foto.nombre} como portada V1.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
