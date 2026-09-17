@@ -4,11 +4,11 @@ import { randomUUID } from "node:crypto";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 
 function texto(fd: FormData, campo: string) {
   return String(fd.get(campo) ?? "").trim();
@@ -18,18 +18,7 @@ function volver(id: string, tipo: "ok" | "error", mensaje: string): never {
   redirect(`/panel/inspecciones/${id}/revision-inicial?${tipo}=${encodeURIComponent(mensaje)}`);
 }
 
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Faltan credenciales de almacenamiento.");
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
-export async function subirFotoExistenteComoFachada(formData: FormData) {
-  const inspeccionId = texto(formData, "inspeccionId");
-  const archivo = formData.get("archivo");
-  if (!inspeccionId) redirect("/panel/inspecciones");
-
+async function contextoTecnico(inspeccionId: string) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -52,7 +41,7 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
 
   if (!usuario?.activo || !inspeccion) redirect("/acceso");
   if (inspeccion.estado !== EstadoInspeccion.PROGRAMADA) {
-    volver(inspeccionId, "error", "La fachada solo puede definirse antes de iniciar la inspección.");
+    volver(inspeccionId, "error", "La fotografía de fachada solo puede modificarse antes de iniciar la inspección.");
   }
 
   const inspectorAsignado =
@@ -62,6 +51,29 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
     inspeccion.inspector?.usuarioId === usuario.id;
   const director = usuario.rol === RolUsuario.DIRECTOR;
   if (!inspectorAsignado && !director) redirect("/acceso");
+
+  return { session, usuario, inspeccion };
+}
+
+function clienteStorage(inspeccionId: string) {
+  try {
+    return obtenerSupabaseAdmin();
+  } catch (error) {
+    console.error("Storage de revisión inicial no configurado:", error instanceof Error ? error.message : "error desconocido");
+    volver(
+      inspeccionId,
+      "error",
+      "El almacenamiento de evidencias no está configurado correctamente. La fotografía no fue guardada; intenta de nuevo cuando quede corregida la configuración.",
+    );
+  }
+}
+
+export async function subirFotoExistenteComoFachada(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const archivo = formData.get("archivo");
+  if (!inspeccionId) redirect("/panel/inspecciones");
+
+  const { usuario, inspeccion } = await contextoTecnico(inspeccionId);
 
   if (!(archivo instanceof File) || archivo.size === 0) {
     volver(inspeccionId, "error", "Selecciona una fotografía existente.");
@@ -80,7 +92,7 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
     WHERE a."inspeccionId" = ${inspeccionId} AND a."codigo" = 'FACHADA_PRINCIPAL'
   `;
   if (existentes.length > 0) {
-    volver(inspeccionId, "error", "Ya existen fotografías de fachada. Si comenzaste la toma en sitio, completa las 4 y elige la mejor.");
+    volver(inspeccionId, "error", "Ya existe evidencia de fachada. Si comenzaste la toma en sitio, completa las 4 y elige la mejor; si cargaste una foto de galería, elimínala primero para cambiarla.");
   }
 
   const [area] = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -94,12 +106,15 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
   const extension = archivo.name.split(".").pop()?.toLowerCase() || archivo.type.split("/").pop() || "jpg";
   const ruta = `${inspeccionId}/areas/${area.id}/${randomUUID()}.${extension}`;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const sb = supabaseAdmin();
+  const sb = clienteStorage(inspeccionId);
   const { error } = await sb.storage.from(bucket).upload(ruta, Buffer.from(await archivo.arrayBuffer()), {
     contentType: archivo.type,
     upsert: false,
   });
-  if (error) volver(inspeccionId, "error", "No se pudo guardar la fotografía existente.");
+  if (error) {
+    console.error("Error de Storage al cargar fachada desde galería:", error.message);
+    volver(inspeccionId, "error", "No se pudo guardar la fotografía seleccionada. Intenta nuevamente.");
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -132,5 +147,61 @@ export async function subirFotoExistenteComoFachada(formData: FormData) {
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision-inicial`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
-  volver(inspeccionId, "ok", "Fotografía existente establecida como fachada definitiva.");
+  volver(inspeccionId, "ok", "Fotografía de galería establecida como fachada definitiva. Puedes quitarla y cargar otra mientras la inspección siga PROGRAMADA.");
+}
+
+export async function eliminarFotoGaleriaFachada(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const fotografiaId = texto(formData, "fotografiaId");
+  if (!inspeccionId || !fotografiaId) redirect("/panel/inspecciones");
+
+  const { usuario, inspeccion } = await contextoTecnico(inspeccionId);
+
+  const [foto] = await prisma.$queryRaw<Array<{ fotografiaId: string; ruta: string; areaId: string; origen: string | null }>>`
+    SELECT fa."fotografiaId", f."url" AS "ruta", a."id"::text AS "areaId", a."origen"::text AS "origen"
+    FROM "FotografiaArea" fa
+    JOIN "AreaInspeccion" a ON a."id" = fa."areaId"
+    JOIN "Fotografia" f ON f."id" = fa."fotografiaId"
+    WHERE a."inspeccionId" = ${inspeccionId}
+      AND a."codigo" = 'FACHADA_PRINCIPAL'
+      AND fa."fotografiaId" = ${fotografiaId}
+      AND fa."candidataPortada" = true
+    LIMIT 1
+  `;
+
+  if (!foto) volver(inspeccionId, "error", "No se encontró la fotografía definitiva que intentas quitar.");
+  if (foto.origen !== "ARCHIVO_EXISTENTE") {
+    volver(inspeccionId, "error", "Esta opción sólo elimina la fotografía definitiva cargada desde galería/archivos.");
+  }
+
+  const sb = clienteStorage(inspeccionId);
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  const { error: errorStorage } = await sb.storage.from(bucket).remove([foto.ruta]);
+  if (errorStorage) {
+    console.error("Error de Storage al quitar fachada de galería:", errorStorage.message);
+    volver(inspeccionId, "error", "No fue posible quitar la fotografía del almacenamiento. Intenta nuevamente.");
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`DELETE FROM "FotografiaArea" WHERE "fotografiaId" = ${foto.fotografiaId}`;
+      await tx.fotografia.delete({ where: { id: foto.fotografiaId } });
+    });
+  } catch (errorDb) {
+    console.error("La fotografía se borró de Storage pero falló el registro de base de datos:", errorDb);
+    volver(inspeccionId, "error", "La fotografía se quitó del almacenamiento, pero no fue posible actualizar el expediente. Revisa la bitácora antes de continuar.");
+  }
+
+  await registrarAuditoria({
+    tipo: TipoEvento.ELIMINAR_EVIDENCIA,
+    entidad: "Fotografia",
+    entidadId: foto.fotografiaId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${usuario.rol} quitó la fotografía de fachada cargada desde galería/archivos de ${inspeccion.folio} para permitir sustituirla antes del inicio físico.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/revision-inicial`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  volver(inspeccionId, "ok", "Fotografía de galería eliminada. Ya puedes seleccionar otra o cambiar de ruta de evidencia.");
 }

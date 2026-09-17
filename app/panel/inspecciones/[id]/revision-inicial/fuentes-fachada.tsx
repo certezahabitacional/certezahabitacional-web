@@ -1,6 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
-
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import { subirFotoExistenteComoFachada } from "./archivo-actions";
 import { importarFotoFachadaDesdeBase } from "./fuentes-actions";
 
@@ -12,15 +11,8 @@ type FotoHistorica = {
   candidataPortada: boolean;
 };
 
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
 async function urlTemporal(ruta: string) {
-  const sb = supabaseAdmin();
+  const sb = obtenerSupabaseAdminOpcional();
   if (!sb) return null;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 15);
