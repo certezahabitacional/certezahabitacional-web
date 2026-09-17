@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export type CotizacionDisponible = {
   id: string;
@@ -9,20 +10,48 @@ export type CotizacionDisponible = {
   clienteNombre: string;
   inmuebleId: string;
   inmuebleAlias: string;
+  zonaId: string | null;
   total: number;
   montoPagado: number;
   excepcionApertura: boolean;
   modo?: "NUEVA" | "RETOMAR";
   inspeccionFolio?: string | null;
+  plantillaId?: string | null;
+  inspectorId?: string | null;
+  gerenteId?: string | null;
+  coordinadorId?: string | null;
   fechaProgramada?: string | null;
+  fechaProgramadaLocal?: string | null;
+  observaciones?: string | null;
 };
 
-export default function CotizacionSelect({ cotizaciones }: { cotizaciones: CotizacionDisponible[] }) {
-  const [cotizacionId, setCotizacionId] = useState("");
+export default function CotizacionSelect({
+  cotizaciones,
+  cotizacionInicialId = "",
+}: {
+  cotizaciones: CotizacionDisponible[];
+  cotizacionInicialId?: string;
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [cotizacionId, setCotizacionId] = useState(cotizacionInicialId);
+
+  useEffect(() => {
+    setCotizacionId(cotizacionInicialId);
+  }, [cotizacionInicialId]);
+
   const seleccionada = useMemo(
     () => cotizaciones.find((c) => c.id === cotizacionId) ?? null,
     [cotizacionId, cotizaciones],
   );
+
+  function cambiarCotizacion(id: string) {
+    setCotizacionId(id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("cotizacionId", id);
+    params.delete("error");
+    router.replace(`/panel/inspecciones/nueva?${params.toString()}`, { scroll: false });
+  }
 
   return (
     <div className="space-y-4">
@@ -32,7 +61,7 @@ export default function CotizacionSelect({ cotizaciones }: { cotizaciones: Cotiz
           name="cotizacionId"
           required
           value={cotizacionId}
-          onChange={(event) => setCotizacionId(event.target.value)}
+          onChange={(event) => cambiarCotizacion(event.target.value)}
           className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-300"
         >
           <option value="" disabled>Selecciona el folio que origina o retoma la inspección</option>
@@ -65,7 +94,7 @@ export default function CotizacionSelect({ cotizaciones }: { cotizaciones: Cotiz
               </p>
               <p className="mt-2 font-bold text-white">{seleccionada.inspeccionFolio}</p>
               <p className="mt-1 text-sm text-amber-100">
-                Puedes completar asignaciones o cambiar la fecha/hora. Si dejas un dato sin cambio, se conserva el valor actual.
+                El formulario muestra la última programación guardada. Modifica únicamente lo que necesites completar o reagendar.
               </p>
             </div>
           )}
