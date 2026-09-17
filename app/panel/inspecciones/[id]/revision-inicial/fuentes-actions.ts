@@ -61,8 +61,8 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
     Boolean(usuario.inspector?.activo) &&
     inspeccion.inspectorId === usuario.inspector?.id &&
     inspeccion.inspector?.usuarioId === usuario.id;
-  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
-  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
+  const director = usuario.rol === RolUsuario.DIRECTOR;
+  if (!inspectorAsignado && !director) redirect("/acceso");
   if (!inspeccion.inmuebleId) volver(inspeccionId, "error", "La inspección no tiene un inmueble vinculado para consultar evidencias históricas.");
 
   const existentes = await prisma.$queryRaw<Array<{ fotografiaId: string; ruta: string }>>`
@@ -73,7 +73,7 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
     WHERE a."inspeccionId" = ${inspeccionId} AND a."codigo" = 'FACHADA_PRINCIPAL'
   `;
   if (existentes.length > 0) {
-    volver(inspeccionId, "error", "Ya existen fotografías de fachada en esta revisión. Para usar una foto de la base de datos debe elegirse antes de iniciar la toma de fotografías en sitio.");
+    volver(inspeccionId, "error", "Ya existen fotografías de fachada en esta revisión. Si comenzaste la toma en sitio, debes completar las 4 y elegir la definitiva.");
   }
 
   const [origen] = await prisma.$queryRaw<Array<{ ruta: string; folio: string; inmuebleId: string | null }>>`
