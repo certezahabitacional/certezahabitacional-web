@@ -18,8 +18,8 @@ function baseUrl() {
   if (explicita) return explicita.replace(/\/$/, "");
 
   const urlsDb = `${process.env.DIRECT_URL ?? ""} ${process.env.DATABASE_URL ?? ""}`;
-  const coincidencia = urlsDb.match(/(?:db\.|postgres\.)?([a-z0-9]{20})\.supabase\.co/i)
-    ?? urlsDb.match(/([a-z0-9]{20})/i);
+  const coincidencia = urlsDb.match(/db\.([a-z0-9]{20})\.supabase\.co/i)
+    ?? urlsDb.match(/postgres\.([a-z0-9]{20})(?=[:@/?]|$)/i);
   if (!coincidencia?.[1]) {
     throw new Error("No fue posible determinar el proyecto de almacenamiento desde la configuración del servidor.");
   }
