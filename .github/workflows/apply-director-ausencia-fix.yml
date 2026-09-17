@@ -1,0 +1,73 @@
+name: Aplicar ajuste Director por ausencia
+
+on:
+  push:
+    branches:
+      - fix/inicio-directo-captura
+    paths:
+      - .github/workflows/apply-director-ausencia-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/inicio-directo-captura
+          fetch-depth: 0
+
+      - name: Aplicar ajuste puntual
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/panel/inspecciones/[id]/page.tsx')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  '''  const puedeIniciarInspeccion =\n    rolActual === RolUsuario.INSPECTOR;\n  const puedeFinalizarCaptura =\n    rolActual === RolUsuario.INSPECTOR;\n''',
+                  '''  const inspectorResponsable =\n    rolActual === RolUsuario.INSPECTOR &&\n    inspeccion.inspector?.usuarioId === usuarioActual.id;\n  const directorPorAusencia =\n    rolActual === RolUsuario.DIRECTOR &&\n    !inspeccion.inspectorId &&\n    inspeccion.estado === EstadoInspeccion.EN_PROCESO;\n  const puedeIniciarInspeccion =\n    rolActual === RolUsuario.DIRECTOR || inspectorResponsable;\n  const puedeFinalizarCaptura =\n    inspectorResponsable || directorPorAusencia;\n  const responsableCampo =\n    inspeccion.inspector?.usuario.nombre ??\n    (directorPorAusencia ? "Director por ausencia" : "Sin asignar");\n'''
+              ),
+              (
+                  '''                Inspector: {inspeccion.inspector?.usuario.nombre ?? "Sin asignar"}\n''',
+                  '''                Responsable de campo: {responsableCampo}\n'''
+              ),
+              (
+                  '''                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">\n                    Inspector actual\n                  </p>\n                  <p className="mt-2 font-black text-white">\n                    {inspeccion.inspector?.usuario.nombre ?? "Sin asignar"}\n                  </p>\n''',
+                  '''                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">\n                    Responsable de campo\n                  </p>\n                  <p className="mt-2 font-black text-white">\n                    {responsableCampo}\n                  </p>\n'''
+              ),
+              (
+                  '''              ) : puedeIniciarInspeccion && (inspeccion.estado === "PROGRAMADA" || inspeccion.estado === "EN_PROCESO") ? (\n                <form action={iniciarInspeccion}>\n                  <input type="hidden" name="id" value={inspeccion.id} />\n                  <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300">\n                    {inspeccion.estado === "PROGRAMADA"\n                      ? "Iniciar inspección"\n                      : "Continuar captura"}\n                  </button>\n                </form>\n              ) : null}\n''',
+                  '''              ) : puedeIniciarInspeccion && inspeccion.estado === "PROGRAMADA" ? (\n                <form action={iniciarInspeccion}>\n                  <input type="hidden" name="id" value={inspeccion.id} />\n                  <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300">\n                    Iniciar inspección\n                  </button>\n                </form>\n              ) : inspeccion.estado === "EN_PROCESO" &&\n                (inspectorResponsable || directorPorAusencia) ? (\n                <Link\n                  href={inspeccion.numeroInspeccion === 1\n                    ? `/panel/inspecciones/${inspeccion.id}/flujo`\n                    : `/panel/inspecciones/${inspeccion.id}/captura`}\n                  className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300"\n                >\n                  Continuar captura\n                </Link>\n              ) : null}\n'''
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Patron esperado exactamente una vez; encontrado {count}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Verificar cambios
+        run: |
+          git diff --check
+          grep -n "Director por ausencia" 'app/panel/inspecciones/[id]/page.tsx'
+          grep -n "Responsable de campo" 'app/panel/inspecciones/[id]/page.tsx'
+
+      - name: Commit del ajuste y limpieza del workflow temporal
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-director-ausencia-fix.yml
+          git add 'app/panel/inspecciones/[id]/page.tsx'
+          git commit -m "Alinea expediente con Director por ausencia"
+          git push origin HEAD:fix/inicio-directo-captura
