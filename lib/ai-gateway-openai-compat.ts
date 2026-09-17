@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 type ArchivoTemporalIA = {
   nombre: string;
   base64: string;
@@ -6,6 +8,7 @@ type ArchivoTemporalIA = {
 
 const MARCA_INSTALADA = Symbol.for("certeza.aiGatewayOpenAICompat.instalada");
 const ARCHIVOS_TEMPORALES = Symbol.for("certeza.aiGatewayOpenAICompat.archivos");
+const CLAVE_COMPAT = "__CERTEZA_VERCEL_AI_GATEWAY_OIDC__";
 
 type GlobalCompat = typeof globalThis & {
   [MARCA_INSTALADA]?: boolean;
@@ -20,8 +23,20 @@ function respuestaJson(cuerpo: unknown, status = 200) {
 }
 
 function normalizarModeloGateway(modelo: unknown) {
-  const valor = String(modelo || "gpt-5.6-luna").trim();
+  const valor = String(modelo || "gpt-5.6-sol").trim();
   return valor.includes("/") ? valor : `openai/${valor}`;
+}
+
+async function obtenerTokenGatewayRuntime() {
+  if (process.env.AI_GATEWAY_API_KEY) return process.env.AI_GATEWAY_API_KEY;
+  if (process.env.VERCEL_OIDC_TOKEN) return process.env.VERCEL_OIDC_TOKEN;
+
+  try {
+    const requestHeaders = await headers();
+    return requestHeaders.get("x-vercel-oidc-token");
+  } catch {
+    return null;
+  }
 }
 
 function sustituirArchivosEnInput(input: unknown, archivos: Map<string, ArchivoTemporalIA>) {
@@ -49,7 +64,7 @@ function sustituirArchivosEnInput(input: unknown, archivos: Map<string, ArchivoT
 
         return {
           type: "input_file",
-          file_data: archivo.base64,
+          file_data: `data:application/pdf;base64,${archivo.base64}`,
           filename: archivo.nombre,
         };
       }),
@@ -62,19 +77,17 @@ export function instalarCompatibilidadOpenAIGateway() {
   if (globalCompat[MARCA_INSTALADA]) return;
 
   // Si existe una clave OpenAI real, se respeta íntegramente el flujo directo actual.
-  if (process.env.OPENAI_API_KEY) return;
-
-  const tokenGateway = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
-  if (!tokenGateway) return;
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== CLAVE_COMPAT) return;
 
   globalCompat[MARCA_INSTALADA] = true;
   globalCompat[ARCHIVOS_TEMPORALES] ??= new Map<string, ArchivoTemporalIA>();
   const archivos = globalCompat[ARCHIVOS_TEMPORALES]!;
   const fetchOriginal = globalThis.fetch.bind(globalThis);
 
-  // El código legado verifica esta variable antes de hacer la llamada. El valor es
-  // un token OIDC/API-key de AI Gateway y nunca se entrega al navegador.
-  process.env.OPENAI_API_KEY = tokenGateway;
+  // El flujo legado valida la existencia de OPENAI_API_KEY antes de hacer fetch.
+  // Esta marca nunca sale al navegador ni se usa como credencial real; el token
+  // OIDC se obtiene del contexto de la petición justo al invocar AI Gateway.
+  process.env.OPENAI_API_KEY = CLAVE_COMPAT;
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const urlTexto = typeof input === "string" || input instanceof URL
@@ -130,6 +143,15 @@ export function instalarCompatibilidadOpenAIGateway() {
         cuerpo = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
       } catch {
         return respuestaJson({ error: { message: "No fue posible preparar la solicitud de análisis." } }, 400);
+      }
+
+      const tokenGateway = await obtenerTokenGatewayRuntime();
+      if (!tokenGateway) {
+        return respuestaJson({
+          error: {
+            message: "El análisis automático no pudo obtener la credencial OIDC de Vercel para AI Gateway.",
+          },
+        }, 500);
       }
 
       const solicitud = {
