@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { prisma } from "@/lib/prisma";
-import { importarFotoFachadaDesdeBase, subirFotoFachadaPrevia } from "./actions";
+import { subirFotoFachadaPrevia } from "./actions";
+import { importarFotoFachadaDesdeBase } from "./fuentes-actions";
 
 type FotoHistorica = {
   fotografiaId: string;
