@@ -65,14 +65,16 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
   if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
   if (!inspeccion.inmuebleId) volver(inspeccionId, "error", "La inspección no tiene un inmueble vinculado para consultar evidencias históricas.");
 
-  const [conteo] = await prisma.$queryRaw<Array<{ total: number; portada: number }>>`
-    SELECT COUNT(*)::int AS "total", COUNT(*) FILTER (WHERE fa."candidataPortada"=true)::int AS "portada"
+  const existentes = await prisma.$queryRaw<Array<{ fotografiaId: string; ruta: string }>>`
+    SELECT fa."fotografiaId", f."url" AS "ruta"
     FROM "FotografiaArea" fa
     JOIN "AreaInspeccion" a ON a."id" = fa."areaId"
+    JOIN "Fotografia" f ON f."id" = fa."fotografiaId"
     WHERE a."inspeccionId" = ${inspeccionId} AND a."codigo" = 'FACHADA_PRINCIPAL'
   `;
-  if (Number(conteo?.portada ?? 0) === 1) volver(inspeccionId, "error", "La fotografía definitiva de fachada ya fue seleccionada.");
-  if (Number(conteo?.total ?? 0) >= 4) volver(inspeccionId, "error", "Ya están registradas las 4 fotografías de fachada. Selecciona la mejor.");
+  if (existentes.length > 0) {
+    volver(inspeccionId, "error", "Ya existen fotografías de fachada en esta revisión. Para usar una foto de la base de datos debe elegirse antes de iniciar la toma de fotografías en sitio.");
+  }
 
   const [origen] = await prisma.$queryRaw<Array<{ ruta: string; folio: string; inmuebleId: string | null }>>`
     SELECT f."url" AS "ruta", i."folio", i."inmuebleId"
@@ -91,8 +93,8 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
 
   const [area] = await prisma.$queryRaw<Array<{ id: string }>>`
     INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
-    VALUES (${inspeccionId},'FACHADA_PRINCIPAL','Fachada principal','EXTERIOR',0,'REVISION_CLIENTE',true)
-    ON CONFLICT ("inspeccionId","codigo") DO UPDATE SET "nombre" = EXCLUDED."nombre"
+    VALUES (${inspeccionId},'FACHADA_PRINCIPAL','Fachada principal','EXTERIOR',0,'BASE_DATOS_INMUEBLE',true)
+    ON CONFLICT ("inspeccionId","codigo") DO UPDATE SET "nombre" = EXCLUDED."nombre", "origen" = EXCLUDED."origen"
     RETURNING "id"::text
   `;
   if (!area?.id) volver(inspeccionId, "error", "No fue posible preparar la evidencia de fachada.");
@@ -119,17 +121,12 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
           hallazgoId: null,
           url: rutaNueva,
           subidaPorId: usuario.id,
-          descripcion: `Fachada principal · reutilizada de ${origen.folio} durante revisión final`,
+          descripcion: `Fachada principal definitiva · reutilizada de ${origen.folio} durante revisión final`,
         },
       });
-      const [orden] = await tx.$queryRaw<Array<{ siguiente: number }>>`
-        SELECT COALESCE(MAX("orden"),0)::int + 1 AS "siguiente"
-        FROM "FotografiaArea"
-        WHERE "areaId" = ${area.id}::uuid
-      `;
       await tx.$executeRaw`
         INSERT INTO "FotografiaArea" ("fotografiaId","areaId","tipoEvidencia","orden","candidataReporte","candidataPortada")
-        VALUES (${foto.id},${area.id}::uuid,'IDENTIFICACION',${Number(orden?.siguiente ?? 1)},true,false)
+        VALUES (${foto.id},${area.id}::uuid,'IDENTIFICACION',1,true,true)
       `;
     });
   } catch (errorDb) {
@@ -142,9 +139,10 @@ export async function importarFotoFachadaDesdeBase(formData: FormData) {
     entidad: "Fotografia",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${usuario.rol} reutilizó una fotografía histórica de fachada proveniente de ${origen.folio}; se creó una copia independiente en ${inspeccion.folio}.`,
+    descripcion: `${usuario.rol} seleccionó una fotografía histórica de fachada proveniente de ${origen.folio}; se copió al expediente ${inspeccion.folio} y quedó como fachada definitiva sin requerir cuatro tomas en sitio.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision-inicial`);
-  volver(inspeccionId, "ok", `Fotografía histórica de ${origen.folio} agregada como candidata de fachada.`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  volver(inspeccionId, "ok", `Fotografía histórica de ${origen.folio} establecida como fachada definitiva.`);
 }
