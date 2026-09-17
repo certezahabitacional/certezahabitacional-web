@@ -84,15 +84,15 @@ export async function crearInspeccion(formData:FormData){
   let folio=`CH-${year}-${String(consecutivo).padStart(4,"0")}`;
   while(await prisma.inspeccion.findUnique({where:{folio},select:{id:true}})){consecutivo++;folio=`CH-${year}-${String(consecutivo).padStart(4,"0")}`;}
 
-  const inspeccion=await prisma.inspeccion.create({data:{folio,plantillaId:plantilla.id,requiereGerenteZona:Boolean(gerente),requiereCoordinador:Boolean(coordinador),zonaId:zona.id,clienteId,inmuebleId,cotizacionId,numeroInspeccion,inspeccionAnteriorId:inspeccionAnterior?.id??null,inspectorId:inspectorSeleccionado?.id??null,agendadaPorId:usuarioActual.id,tipoServicio:plantilla.tipoServicio,tipoInmueble:inmueble.tipo,direccion:inmueble.direccion,ciudad:inmueble.ciudad,superficieM2:decimalANumero(inmueble.superficieConstruccionM2),fechaProgramada,zonaHoraria:zona.zonaHoraria,estado:iniciarAhora?EstadoInspeccion.EN_PROCESO:EstadoInspeccion.PROGRAMADA,observaciones:observaciones||null,inicioLiberadoSinPago:validacion.cotizacion.excepcionInicio},select:{id:true,folio:true,numeroInspeccion:true}});
+  const inspeccion=await prisma.inspeccion.create({data:{folio,plantillaId:plantilla.id,requiereGerenteZona:Boolean(gerente),requiereCoordinador:Boolean(coordinador),zonaId:zona.id,clienteId,inmuebleId,cotizacionId,numeroInspeccion,inspeccionAnteriorId:inspeccionAnterior?.id??null,inspectorId:inspectorSeleccionado?.id??null,agendadaPorId:usuarioActual.id,tipoServicio:plantilla.tipoServicio,tipoInmueble:inmueble.tipo,direccion:inmueble.direccion,ciudad:inmueble.ciudad,superficieM2:decimalANumero(inmueble.superficieConstruccionM2),fechaProgramada,zonaHoraria:zona.zonaHoraria,estado:EstadoInspeccion.PROGRAMADA,observaciones:observaciones||null,inicioLiberadoSinPago:validacion.cotizacion.excepcionInicio},select:{id:true,folio:true,numeroInspeccion:true}});
   await Promise.all([
     establecerAsignacionInspeccion(inspeccion.id,"GERENTE",gerente?.id??null),
     establecerAsignacionInspeccion(inspeccion.id,"COORDINADOR",coordinador?.id??null),
     establecerAsignacionInspeccion(inspeccion.id,"INSPECTOR",inspectorSeleccionado?.usuario.id??null),
   ]);
   const responsable=inspectorSeleccionado?.usuario.nombre??(iniciarAhora&&usuarioActual.rol===RolUsuario.DIRECTOR?"Director por ausencia":"sin asignar");
-  await registrarAuditoria({tipo:TipoEvento.CREAR,entidad:"Inspeccion",entidadId:inspeccion.id,inspeccionId:inspeccion.id,usuarioId:usuarioActual.id,descripcion:`${usuarioActual.rol} ${iniciarAhora?"agendó e inició":"agendó"} ${inspeccion.folio} V${inspeccion.numeroInspeccion} en ${zona.nombre}. Responsable de campo: ${responsable}; Coordinador ${coordinador?.nombre??"sin asignar"}; Gerente ${gerente?.nombre??"sin asignar"}.`});
+  await registrarAuditoria({tipo:TipoEvento.CREAR,entidad:"Inspeccion",entidadId:inspeccion.id,inspeccionId:inspeccion.id,usuarioId:usuarioActual.id,descripcion:`${usuarioActual.rol} ${iniciarAhora?"agendó y abrió revisión final":"agendó"} ${inspeccion.folio} V${inspeccion.numeroInspeccion} en ${zona.nombre}. Responsable de campo: ${responsable}; Coordinador ${coordinador?.nombre??"sin asignar"}; Gerente ${gerente?.nombre??"sin asignar"}.`});
   revalidatePath("/panel");revalidatePath("/panel/agenda");revalidatePath("/panel/inspecciones");revalidatePath("/panel/caja");revalidatePath("/portal/inspecciones");
-  if(iniciarAhora)redirect(inspeccion.numeroInspeccion===1?`/panel/inspecciones/${inspeccion.id}/flujo`:`/panel/inspecciones/${inspeccion.id}/captura`);
+  if(iniciarAhora)redirect(`/panel/inspecciones/${inspeccion.id}/revision-inicial`);
   redirect(`/panel/inspecciones/${inspeccion.id}?ok=${encodeURIComponent("Inspección agendada correctamente.")}`);
 }

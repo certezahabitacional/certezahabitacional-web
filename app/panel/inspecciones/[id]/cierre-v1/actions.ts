@@ -74,7 +74,7 @@ async function validarCierreCampo(inspeccionId: string) {
   if (!v || v.areasTotal === 0) return "No existen áreas obligatorias configuradas para la V1.";
   if (v.areasCompletas !== v.areasTotal) return `Faltan ${v.areasTotal - v.areasCompletas} área(s) por cerrar.`;
   if (v.protocoloTotal === 0 || v.protocoloCompleto !== v.protocoloTotal) return "Faltan procesos técnicos obligatorios por completar.";
-  if (v.fachadaFotos < 4) return "La fachada principal requiere 4 fotografías antes de terminar la visita.";
+  if (v.fachadaFotos !== 1) return "La fachada principal debe conservar exactamente una fotografía definitiva elegida en la revisión inicial.";
   if (v.fachadaPortadas !== 1) return "Debes seleccionar exactamente una fotografía de fachada para la portada.";
   if (v.hallazgosIncompletos > 0) return `Existen ${v.hallazgosIncompletos} hallazgo(s) sin 4 evidencias o descripción completa.`;
   if (v.syncPendientes > 0) return `Existen ${v.syncPendientes} operación(es) pendientes de sincronizar.`;
@@ -115,7 +115,7 @@ export async function terminarTrabajoCampoV1(formData: FormData) {
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
-  revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   volver(inspeccionId, "ok", "Trabajo de campo terminado. Ya corre la ventana de 12 horas para revisar el reporte y enviarlo a Dirección.");
 }
 

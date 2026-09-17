@@ -136,7 +136,7 @@ export default async function AreasPage({
     <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo de campo</Link>
+          <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente</Link>
           <div className="flex flex-wrap gap-2">
             {esDirectorPorAusencia && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR POR AUSENCIA</span>}
             <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300">Recorrido V1</Link>
@@ -199,7 +199,7 @@ export default async function AreasPage({
             const fotos = Number(area.fotos);
             const completa = area.estado === "REVISADA";
             const fachada = area.codigo === "FACHADA_PRINCIPAL";
-            const minimo = fachada ? 4 : 1;
+            const minimo = 1;
             const evidenciaLista = fotos >= minimo;
             return (
               <article key={area.id} className={`rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-white/10 bg-slate-900"}`}>
