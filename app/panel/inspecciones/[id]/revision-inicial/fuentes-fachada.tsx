@@ -47,7 +47,7 @@ export async function FuentesAlternasFachada({
         WHERE i."inmuebleId" = ${inspeccion.inmuebleId}
           AND i."id" <> ${inspeccionId}
           AND a."codigo" = 'FACHADA_PRINCIPAL'
-        ORDER BY fa."candidataPortada" DESC, i."fechaProgramada" DESC, f."creadoEn" DESC
+        ORDER BY fa."candidataPortada" DESC, i."fechaProgramada" DESC, f."creadaEn" DESC
         LIMIT 12
       `
     : [];
