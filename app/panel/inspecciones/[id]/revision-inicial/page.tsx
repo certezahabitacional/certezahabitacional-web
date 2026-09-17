@@ -12,6 +12,7 @@ import {
   solicitarCorreccionPrevia,
   subirFotoFachadaPrevia,
 } from "./actions";
+import { FuentesAlternasFachada } from "./fuentes-fachada";
 
 type FotoFachada = {
   fotografiaId: string;
@@ -197,14 +198,25 @@ export default async function RevisionInicialPage({
           <div className="text-center">
             <h2 className="text-xl font-black">Fotografía definitiva de la fachada principal</h2>
             {!fotoDefinitiva ? (
-              <p className="mt-2 text-sm text-slate-400">Toma exactamente 4 fotografías. Después el Inspector debe elegir la mejor; al seleccionarla, las otras tres se eliminarán.</p>
+              <p className="mt-2 text-sm text-slate-400">Elige una ruta: tomar 4 fotografías en sitio y seleccionar la mejor, o usar 1 fotografía existente desde la base de evidencias o desde galería/archivos.</p>
             ) : (
               <p className="mt-2 text-sm font-bold text-emerald-300">Selección terminada: quedó una sola fotografía definitiva de fachada/portada.</p>
             )}
             <p className={`mt-3 font-black ${fotoDefinitiva ? "text-emerald-300" : fotos.length === 4 ? "text-cyan-300" : "text-amber-300"}`}>
-              {fotoDefinitiva ? "1 fotografía definitiva" : `${fotos.length}/4 tomadas`}
+              {fotoDefinitiva ? "1 fotografía definitiva" : fotos.length > 0 ? `${fotos.length}/4 tomadas en sitio` : "Sin fotografía definitiva"}
             </p>
           </div>
+
+          {!fotoDefinitiva && fotos.length === 0 && puedeTomarFotos && (
+            <FuentesAlternasFachada inspeccionId={id} />
+          )}
+
+          {!fotoDefinitiva && puedeTomarFotos && (
+            <div className="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-center">
+              <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Tomar en sitio · 4 fotografías obligatorias</p>
+              <p className="mt-2 text-sm text-slate-300">Si eliges esta ruta, deberás completar las 4 tomas y después seleccionar la mejor. Las otras tres se eliminarán.</p>
+            </div>
+          )}
 
           <div className={`mt-5 grid gap-4 ${fotoDefinitiva ? "mx-auto max-w-md" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
             {(fotoDefinitiva ? fotosConUrl : [0, 1, 2, 3].map((indice) => fotosConUrl[indice] ?? null)).map((foto, indice) => (
@@ -221,7 +233,7 @@ export default async function RevisionInicialPage({
                     <form action={subirFotoFachadaPrevia} className="mt-3">
                       <input type="hidden" name="inspeccionId" value={id} />
                       <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="block w-full text-xs text-slate-400" />
-                      <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950">TOMAR FOTO</button>
+                      <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950">TOMAR FOTO EN SITIO</button>
                     </form>
                   )}
                   {foto && etapaSeleccion && puedeTomarFotos && (
@@ -238,7 +250,7 @@ export default async function RevisionInicialPage({
           </div>
 
           {etapaSeleccion && puedeTomarFotos && (
-            <p className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-center text-sm font-black text-amber-200">No puedes iniciar la inspección hasta elegir una de estas 4 fotografías.</p>
+            <p className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-center text-sm font-black text-amber-200">Ya completaste las 4 fotografías en sitio. Debes elegir una como definitiva antes de continuar.</p>
           )}
         </section>
 
@@ -333,9 +345,9 @@ export default async function RevisionInicialPage({
         {(inspectorAsignado || esDirector) && (
           <section className={`mt-7 rounded-3xl border p-6 text-center ${puedeIniciar ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-900"}`}>
             <h2 className="text-2xl font-black">Inicio físico de la inspección</h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">INICIAR solo se habilita cuando la información fue revisada con el cliente, existe una sola fotografía definitiva elegida entre las 4 tomadas y no hay correcciones pendientes.</p>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">INICIAR solo se habilita cuando la información fue revisada con el cliente, existe una sola fotografía definitiva —elegida entre 4 tomadas en sitio o cargada como 1 foto existente— y no hay correcciones pendientes.</p>
             {pendientes.length > 0 && <p className="mt-3 font-black text-amber-300">Bloqueado: hay {pendientes.length} corrección(es) pendiente(s).</p>}
-            {!fotoDefinitiva && <p className="mt-3 font-black text-amber-300">Bloqueado: debes completar el proceso de 4 fotografías y elegir la mejor.</p>}
+            {!fotoDefinitiva && <p className="mt-3 font-black text-amber-300">Bloqueado: define la fachada mediante 4 fotografías en sitio o 1 fotografía existente.</p>}
             <form action={iniciarInspeccionConfirmada} className="mt-5">
               <input type="hidden" name="inspeccionId" value={id} />
               <button disabled={!puedeIniciar} className="rounded-full bg-emerald-300 px-10 py-4 text-lg font-black text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">INICIAR</button>
