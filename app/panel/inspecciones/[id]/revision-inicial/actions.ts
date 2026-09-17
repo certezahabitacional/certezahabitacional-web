@@ -66,12 +66,12 @@ async function contextoResponsable(inspeccionId: string) {
     Boolean(usuario.inspector?.activo) &&
     inspeccion.inspectorId === usuario.inspector?.id &&
     inspeccion.inspector?.usuarioId === usuario.id;
-  const director = usuario.rol === RolUsuario.DIRECTOR;
-  if (!inspectorAsignado && !director) redirect("/acceso");
+  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
   if (inspeccion.estado !== EstadoInspeccion.PROGRAMADA) {
     volver(inspeccionId, "error", "La revisión final solo se realiza antes de iniciar físicamente la inspección.");
   }
-  return { session, usuario, inspeccion, inspectorAsignado, director };
+  return { session, usuario, inspeccion, inspectorAsignado, directorPorAusencia };
 }
 
 export async function subirFotoFachadaPrevia(formData: FormData) {
@@ -150,8 +150,7 @@ export async function seleccionarMejorFachada(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const fotografiaId = texto(formData, "fotografiaId");
   if (!inspeccionId || !fotografiaId) redirect("/panel/inspecciones");
-  const { usuario, inspeccion, inspectorAsignado } = await contextoResponsable(inspeccionId);
-  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  const { usuario, inspeccion, inspectorAsignado, directorPorAusencia } = await contextoResponsable(inspeccionId);
   if (!inspectorAsignado && !directorPorAusencia) volver(inspeccionId, "error", "La fotografía definitiva debe ser elegida por el Inspector responsable.");
 
   const fotos = await prisma.$queryRaw<Array<{ fotografiaId: string; ruta: string }>>`
