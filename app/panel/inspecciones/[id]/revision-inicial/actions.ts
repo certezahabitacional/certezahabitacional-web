@@ -296,7 +296,7 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
     `,
   ]);
   if (Number(fachada[0]?.total ?? 0) !== 1 || Number(fachada[0]?.portada ?? 0) !== 1) {
-    volver(inspeccionId, "error", "Antes de iniciar debes tomar 4 fotografías, elegir la mejor y dejar una sola como portada definitiva.");
+    volver(inspeccionId, "error", "Antes de iniciar debes definir una sola fotografía definitiva de fachada: elegir la mejor entre 4 tomadas en sitio o usar 1 fotografía existente.");
   }
   if (Number(pendientes[0]?.total ?? 0) > 0) volver(inspeccionId, "error", "Hay solicitudes de corrección pendientes. No se puede iniciar la inspección todavía.");
 
