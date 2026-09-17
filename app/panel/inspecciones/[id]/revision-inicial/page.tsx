@@ -132,6 +132,7 @@ export default async function RevisionInicialPage({
     inspeccion.inspector?.usuarioId === usuario.id;
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const esAdministrador = usuario.rol === RolUsuario.ADMINISTRADOR;
+  const directorPorAusencia = esDirector && !inspeccion.inspectorId;
   if (!inspectorAsignado && !esDirector && !esAdministrador) redirect("/acceso");
 
   const snapshotRaw = inspeccion.cotizacion?.versiones[0]?.datos;
@@ -164,9 +165,9 @@ export default async function RevisionInicialPage({
   const pendientes = solicitudes.filter((s) => s.estado === "PENDIENTE");
   const fotoDefinitiva = fotos.length === 1 && fotos[0]?.candidataPortada;
   const etapaSeleccion = fotos.length === 4 && !fotos.some((f) => f.candidataPortada);
-  const puedeTomarFotos = inspectorAsignado || (esDirector && !inspeccion.inspectorId);
-  const puedeSolicitar = inspectorAsignado || esDirector;
-  const puedeIniciar = (inspectorAsignado || esDirector) && Boolean(fotoDefinitiva) && pendientes.length === 0;
+  const puedeTomarFotos = inspectorAsignado || directorPorAusencia;
+  const puedeSolicitar = inspectorAsignado || directorPorAusencia;
+  const puedeIniciar = (inspectorAsignado || directorPorAusencia) && Boolean(fotoDefinitiva) && pendientes.length === 0;
 
   const areasDeclaradas = AREAS_BOOLEANAS
     .filter(([campo]) => snapshot[campo] === true)
@@ -342,7 +343,7 @@ export default async function RevisionInicialPage({
           </section>
         )}
 
-        {(inspectorAsignado || esDirector) && (
+        {(inspectorAsignado || directorPorAusencia) && (
           <section className={`mt-7 rounded-3xl border p-6 text-center ${puedeIniciar ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-900"}`}>
             <h2 className="text-2xl font-black">Inicio físico de la inspección</h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">INICIAR solo se habilita cuando la información fue revisada con el cliente, existe una sola fotografía definitiva —elegida entre 4 tomadas en sitio o cargada como 1 foto existente— y no hay correcciones pendientes.</p>
