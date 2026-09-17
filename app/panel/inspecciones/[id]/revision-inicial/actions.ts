@@ -84,13 +84,14 @@ export async function subirFotoFachadaPrevia(formData: FormData) {
   if (!["image/jpeg", "image/png", "image/webp"].includes(archivo.type)) volver(inspeccionId, "error", "La fotografía debe ser JPG, PNG o WEBP.");
   if (archivo.size > 10 * 1024 * 1024) volver(inspeccionId, "error", "La fotografía supera 10 MB.");
 
-  const [conteo] = await prisma.$queryRaw<Array<{ total: number }>>`
-    SELECT COUNT(*)::int AS "total"
+  const [conteo] = await prisma.$queryRaw<Array<{ total: number; portada: number }>>`
+    SELECT COUNT(*)::int AS "total", COUNT(*) FILTER (WHERE fa."candidataPortada"=true)::int AS "portada"
     FROM "FotografiaArea" fa
     JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
     WHERE a."inspeccionId"=${inspeccionId} AND a."codigo"='FACHADA_PRINCIPAL'
   `;
-  if (Number(conteo?.total ?? 0) >= 4) volver(inspeccionId, "error", "Ya están registradas las 4 fotografías obligatorias de fachada.");
+  if (Number(conteo?.portada ?? 0) === 1) volver(inspeccionId, "error", "La fotografía definitiva de fachada ya fue seleccionada.");
+  if (Number(conteo?.total ?? 0) >= 4) volver(inspeccionId, "error", "Ya están registradas las 4 fotografías obligatorias de fachada. Selecciona la mejor.");
 
   const [area] = await prisma.$queryRaw<Array<{ id: string }>>`
     INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
@@ -143,6 +144,52 @@ export async function subirFotoFachadaPrevia(formData: FormData) {
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision-inicial`);
   volver(inspeccionId, "ok", "Fotografía de fachada registrada.");
+}
+
+export async function seleccionarMejorFachada(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const fotografiaId = texto(formData, "fotografiaId");
+  if (!inspeccionId || !fotografiaId) redirect("/panel/inspecciones");
+  const { usuario, inspeccion, inspectorAsignado } = await contextoResponsable(inspeccionId);
+  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  if (!inspectorAsignado && !directorPorAusencia) volver(inspeccionId, "error", "La fotografía definitiva debe ser elegida por el Inspector responsable.");
+
+  const fotos = await prisma.$queryRaw<Array<{ fotografiaId: string; ruta: string }>>`
+    SELECT fa."fotografiaId",f."url" AS "ruta"
+    FROM "FotografiaArea" fa
+    JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
+    JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+    WHERE a."inspeccionId"=${inspeccionId} AND a."codigo"='FACHADA_PRINCIPAL'
+    ORDER BY fa."orden",fa."creadoEn"
+  `;
+  if (fotos.length !== 4) volver(inspeccionId, "error", "Debes tener exactamente 4 fotografías antes de elegir la mejor.");
+  if (!fotos.some((f) => f.fotografiaId === fotografiaId)) volver(inspeccionId, "error", "La fotografía seleccionada no pertenece a esta inspección.");
+
+  const descartadas = fotos.filter((f) => f.fotografiaId !== fotografiaId);
+  const sb = supabaseAdmin();
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  const { error: errorStorage } = await sb.storage.from(bucket).remove(descartadas.map((f) => f.ruta));
+  if (errorStorage) volver(inspeccionId, "error", "No se pudieron eliminar las tres fotografías descartadas. Intenta nuevamente.");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.fotografia.deleteMany({ where: { id: { in: descartadas.map((f) => f.fotografiaId) }, inspeccionId } });
+    await tx.$executeRaw`
+      UPDATE "FotografiaArea"
+      SET "candidataPortada"=true,"candidataReporte"=true,"orden"=1
+      WHERE "fotografiaId"=${fotografiaId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.ELIMINAR_EVIDENCIA,
+    entidad: "Fotografia",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${usuario.rol} seleccionó la mejor fotografía de fachada de ${inspeccion.folio}; se conservó una como portada definitiva y se eliminaron las otras tres fotografías de selección.`,
+  });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/revision-inicial`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  volver(inspeccionId, "ok", "Fotografía definitiva seleccionada. Las otras tres fueron eliminadas.");
 }
 
 export async function solicitarCorreccionPrevia(formData: FormData) {
@@ -236,9 +283,9 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, inspeccion } = await contextoResponsable(inspeccionId);
 
-  const [fotos, pendientes] = await Promise.all([
-    prisma.$queryRaw<Array<{ total: number }>>`
-      SELECT COUNT(*)::int AS "total"
+  const [fachada, pendientes] = await Promise.all([
+    prisma.$queryRaw<Array<{ total: number; portada: number }>>`
+      SELECT COUNT(*)::int AS "total", COUNT(*) FILTER (WHERE fa."candidataPortada"=true)::int AS "portada"
       FROM "FotografiaArea" fa
       JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
       WHERE a."inspeccionId"=${inspeccionId} AND a."codigo"='FACHADA_PRINCIPAL'
@@ -248,7 +295,9 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
       WHERE "inspeccionId"=${inspeccionId} AND "estado"='PENDIENTE'
     `,
   ]);
-  if (Number(fotos[0]?.total ?? 0) < 4) volver(inspeccionId, "error", "Debes registrar las 4 fotografías obligatorias de fachada antes de iniciar.");
+  if (Number(fachada[0]?.total ?? 0) !== 1 || Number(fachada[0]?.portada ?? 0) !== 1) {
+    volver(inspeccionId, "error", "Antes de iniciar debes tomar 4 fotografías, elegir la mejor y dejar una sola como portada definitiva.");
+  }
   if (Number(pendientes[0]?.total ?? 0) > 0) volver(inspeccionId, "error", "Hay solicitudes de corrección pendientes. No se puede iniciar la inspección todavía.");
 
   if (!inspeccion.cotizacionId) volver(inspeccionId, "error", "La inspección no tiene cotización asociada.");
