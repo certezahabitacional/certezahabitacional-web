@@ -1,5 +1,6 @@
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
+import { urlFirmadaStorage } from "@/lib/storage-gateway";
 import { subirFotoExistenteComoFachada } from "./archivo-actions";
 import { importarFotoFachadaDesdeBase } from "./fuentes-actions";
 
@@ -11,19 +12,13 @@ type FotoHistorica = {
   candidataPortada: boolean;
 };
 
-async function urlTemporal(ruta: string) {
-  const sb = obtenerSupabaseAdminOpcional();
-  if (!sb) return null;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 15);
-  return error ? null : data.signedUrl;
-}
-
 export async function FuentesAlternasFachada({
   inspeccionId,
 }: {
   inspeccionId: string;
 }) {
+  const session = await auth();
+  const usuarioId = session?.user?.id;
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id: inspeccionId },
     select: { inmuebleId: true },
@@ -45,7 +40,12 @@ export async function FuentesAlternasFachada({
     : [];
 
   const historicasConUrl = await Promise.all(
-    historicas.map(async (foto) => ({ ...foto, urlTemporal: await urlTemporal(foto.ruta) })),
+    historicas.map(async (foto) => ({
+      ...foto,
+      urlTemporal: usuarioId
+        ? await urlFirmadaStorage({ usuarioId, inspeccionId, ruta: foto.ruta }).catch(() => null)
+        : null,
+    })),
   );
 
   return (
