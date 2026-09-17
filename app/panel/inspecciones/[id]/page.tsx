@@ -328,10 +328,20 @@ export default async function ExpedientePage({
    * Dirección puede auditar y ejercer sus facultades extraordinarias, pero
    * no se presenta como Inspector ni como Coordinación.
    */
+  const inspectorResponsable =
+    rolActual === RolUsuario.INSPECTOR &&
+    inspeccion.inspector?.usuarioId === usuarioActual.id;
+  const directorPorAusencia =
+    rolActual === RolUsuario.DIRECTOR &&
+    !inspeccion.inspectorId &&
+    inspeccion.estado === EstadoInspeccion.EN_PROCESO;
   const puedeIniciarInspeccion =
-    rolActual === RolUsuario.INSPECTOR;
+    rolActual === RolUsuario.DIRECTOR || inspectorResponsable;
   const puedeFinalizarCaptura =
-    rolActual === RolUsuario.INSPECTOR;
+    inspectorResponsable || directorPorAusencia;
+  const responsableCampo =
+    inspeccion.inspector?.usuario.nombre ??
+    (directorPorAusencia ? "Director por ausencia" : "Sin asignar");
 
   const esCoordinador =
     rolActual === RolUsuario.COORDINADOR;
@@ -581,7 +591,7 @@ export default async function ExpedientePage({
                 Programada: {formatoFecha(inspeccion.fechaProgramada, inspeccion.zonaHoraria)}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Inspector: {inspeccion.inspector?.usuario.nombre ?? "Sin asignar"}
+                Responsable de campo: {responsableCampo}
               </p>
 
               {inspeccion.numeroInspeccion > 1 && inspeccion.inspeccionAnteriorId && (
@@ -617,15 +627,23 @@ export default async function ExpedientePage({
                 <span className="cursor-not-allowed rounded-full border border-amber-300/30 bg-amber-300/10 px-5 py-3 font-black text-amber-300">
                   Saldo pendiente — {dinero(saldoPendiente)}
                 </span>
-              ) : puedeIniciarInspeccion && (inspeccion.estado === "PROGRAMADA" || inspeccion.estado === "EN_PROCESO") ? (
+              ) : puedeIniciarInspeccion && inspeccion.estado === "PROGRAMADA" ? (
                 <form action={iniciarInspeccion}>
                   <input type="hidden" name="id" value={inspeccion.id} />
                   <button className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300">
-                    {inspeccion.estado === "PROGRAMADA"
-                      ? "Iniciar inspección"
-                      : "Continuar captura"}
+                    Iniciar inspección
                   </button>
                 </form>
+              ) : inspeccion.estado === "EN_PROCESO" &&
+                (inspectorResponsable || directorPorAusencia) ? (
+                <Link
+                  href={inspeccion.numeroInspeccion === 1
+                    ? `/panel/inspecciones/${inspeccion.id}/flujo`
+                    : `/panel/inspecciones/${inspeccion.id}/captura`}
+                  className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300"
+                >
+                  Continuar captura
+                </Link>
               ) : null}
               <Link
                 href={`/panel/inspecciones/${inspeccion.id}/reporte`}
@@ -765,10 +783,10 @@ export default async function ExpedientePage({
 
                 <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                    Inspector actual
+                    Responsable de campo
                   </p>
                   <p className="mt-2 font-black text-white">
-                    {inspeccion.inspector?.usuario.nombre ?? "Sin asignar"}
+                    {responsableCampo}
                   </p>
                   {inspeccion.inspector?.usuario.email && (
                     <p className="mt-1 text-sm text-slate-500">
