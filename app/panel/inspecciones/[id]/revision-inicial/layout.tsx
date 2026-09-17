@@ -3,19 +3,10 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
+import { urlFirmadaStorage } from "@/lib/storage-gateway";
 import { ActivadorCamaraRevision } from "./activador-camara";
 import { eliminarFotoGaleriaFachada } from "./archivo-actions";
 import { BloqueoSalidaRevision } from "./bloqueo-salida";
-
-async function urlTemporal(ruta: string | null) {
-  if (!ruta) return null;
-  const sb = obtenerSupabaseAdminOpcional();
-  if (!sb) return null;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 15);
-  return error ? null : data.signedUrl;
-}
 
 export default async function RevisionInicialLayout({
   children,
@@ -70,7 +61,13 @@ export default async function RevisionInicialLayout({
   const bloquearSalida = responsableCampo && serieEnSitioIniciada;
   const fotoGaleriaDefinitiva =
     responsableCampo && fotoDefinitiva && fotos[0]?.origen === "ARCHIVO_EXISTENTE" ? fotos[0] : null;
-  const vistaGaleria = fotoGaleriaDefinitiva ? await urlTemporal(fotoGaleriaDefinitiva.ruta) : null;
+  const vistaGaleria = fotoGaleriaDefinitiva?.ruta
+    ? await urlFirmadaStorage({
+        usuarioId: usuario.id,
+        inspeccionId: id,
+        ruta: fotoGaleriaDefinitiva.ruta,
+      }).catch(() => null)
+    : null;
 
   return (
     <>
@@ -82,14 +79,18 @@ export default async function RevisionInicialLayout({
             <div className="flex items-center gap-4">
               {vistaGaleria ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={vistaGaleria} alt="Fachada cargada desde galería" className="h-24 w-28 shrink-0 rounded-xl object-cover" />
+                <img
+                  src={vistaGaleria}
+                  alt="Fachada cargada desde galería"
+                  className="h-28 w-36 shrink-0 rounded-xl border border-amber-200/20 object-cover shadow-lg"
+                />
               ) : (
-                <div className="grid h-24 w-28 shrink-0 place-items-center rounded-xl border border-white/10 bg-slate-950 text-2xl">📷</div>
+                <div className="grid h-28 w-36 shrink-0 place-items-center rounded-xl border border-white/10 bg-slate-950 text-2xl">📷</div>
               )}
               <div>
                 <p className="font-black">FOTOGRAFÍA CARGADA DESDE GALERÍA</p>
                 <p className="mt-1 leading-6">
-                  Mientras la inspección siga PROGRAMADA puedes quitar esta fotografía y seleccionar otra, o cambiar a la ruta de 4 fotos en sitio.
+                  Esta es la fotografía definitiva registrada para la fachada principal. Mientras la inspección siga PROGRAMADA puedes quitarla y seleccionar otra, o cambiar a la ruta de 4 fotos en sitio.
                 </p>
               </div>
             </div>
