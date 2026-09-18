@@ -30,10 +30,34 @@ function normalizarAreaEquipo(valor: string) {
 
 function herramientaAplicaArea(codigo: CodigoHerramienta, areaCodigo: string, areaNombre: string) {
   const area = normalizarAreaEquipo(`${areaCodigo} ${areaNombre}`);
-  if (["MANOMETRO_AGUA", "DETECTOR_GAS", "HERMETICIDAD_HIDRAULICA", "HERMETICIDAD_GAS"].includes(codigo)) return false;
-  if (codigo === "CAMARA_TERMICA") return /(BANO|COCINA|LAVADO|LAVADERO|AZOTEA|SOTANO|CUARTO_SERVICIO)/.test(area);
-  if (["PROBADOR_GFCI_RCD", "DETECTOR_VOLTAJE", "MULTIMETRO"].includes(codigo)) return !/(JARDIN|PATIO|AZOTEA)/.test(area);
-  return true;
+
+  if (["MANOMETRO_AGUA", "DETECTOR_GAS", "HERMETICIDAD_HIDRAULICA", "HERMETICIDAD_GAS"].includes(codigo)) {
+    return false;
+  }
+
+  if (codigo === "CAMARA_TERMICA") {
+    return /(BANO|COCINA|LAVADO|LAVADERO|AZOTEA|SOTANO|CUARTO_SERVICIO|INSTALACION|ELECTR|DUCTO)/.test(area);
+  }
+
+  if (codigo === "AUSCULTACION_PISOS") {
+    return /(PISO|CERAM|LOSETA|PORCELAN|AZULEJO|RECUBRIMIENTO)/.test(area);
+  }
+
+  if (codigo === "NIVEL_LASER") {
+    return /(PISO|MURO|PARED|AZOTEA|TERRAZA|PATIO|COCHERA|ESCALERA|FACHADA)/.test(area);
+  }
+
+  if (codigo === "MEDIDOR_LASER") {
+    return /(RECÁMARA|RECAMARA|SALA|COMEDOR|COCINA|BANO|BAÑO|ESTANCIA|CUARTO|COCHERA|PATIO|JARDIN|TERRAZA|BALCON|BODEGA|FACHADA)/.test(area);
+  }
+
+  if (["PROBADOR_GFCI_RCD", "DETECTOR_VOLTAJE", "MULTIMETRO"].includes(codigo)) {
+    return !/(JARDIN|PATIO|AZOTEA)/.test(area);
+  }
+
+  if (codigo === "LINTERNA") return true;
+
+  return false;
 }
 
 async function herramientasCotizadas(inspeccionId: string) {
