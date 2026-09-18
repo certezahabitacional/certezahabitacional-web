@@ -281,8 +281,11 @@ export async function configurarPuntoCriticoV1(formData: FormData) {
     });
     const siguiente = siguienteCodigo(codigo);
     revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+    revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
     if (siguiente) redirect(ruta(inspeccionId, siguiente, "ok", `${punto.etiqueta} quedó NO APLICA.`));
-    redirect(ruta(inspeccionId, codigo, "ok", "Secuencia de puntos críticos terminada."));
+    redirect(
+      `/panel/inspecciones/${inspeccionId}/areas?ok=${encodeURIComponent("Puntos críticos completos. Continúa con las áreas de la vivienda.")}`,
+    );
   }
 
   const plantilla = plantillaAplicablePuntoCritico(punto, herramientas);
