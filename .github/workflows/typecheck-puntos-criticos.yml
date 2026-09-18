@@ -8,6 +8,7 @@ on:
       - fix/camara-webcam-puntos-criticos
       - fix/ocultar-enlaces-inspeccion
       - fix/continuar-flujo-v1
+      - fix/continuar-desde-lista-v1
 
 jobs:
   typecheck:
