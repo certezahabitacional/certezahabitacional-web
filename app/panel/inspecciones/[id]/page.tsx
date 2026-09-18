@@ -635,14 +635,14 @@ export default async function ExpedientePage({
                   </button>
                 </form>
               ) : inspeccion.estado === "EN_PROCESO" &&
-                (inspectorResponsable || directorPorAusencia) ? (
+                puedeIniciarInspeccion ? (
                 <Link
                   href={inspeccion.numeroInspeccion === 1
                     ? `/panel/inspecciones/${inspeccion.id}/flujo`
                     : `/panel/inspecciones/${inspeccion.id}/captura`}
                   className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300"
                 >
-                  Continuar captura
+                  Continuar inspección
                 </Link>
               ) : null}
               <Link
