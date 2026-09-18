@@ -585,14 +585,24 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   const itemId = texto(formData, "itemId");
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
+  const valorMedido = texto(formData, "valorMedido");
+  const valorProyecto = texto(formData, "valorProyecto");
+  const unidadMedida = texto(formData, "unidadMedida");
   if (!inspeccionId || !esCodigo(codigoTexto) || !itemId) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
   if (!["C", "O", "NC", "CR", "NA"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
   if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Confirma una descripción técnica de al menos 10 caracteres.");
 
-  const [item] = await prisma.$queryRaw<Array<{ concepto: string; observacion: string | null; fotos: number }>>`
-    SELECT g."concepto",g."observacion",
+  const [item] = await prisma.$queryRaw<Array<{
+    concepto: string;
+    observacion: string | null;
+    fotos: number;
+    requiereMedicion: boolean;
+    requiereComparacionProyecto: boolean;
+    origenV3: string;
+  }>>`
+    SELECT g."concepto",g."observacion",g."requiereMedicion",g."requiereComparacionProyecto",g."origenV3",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
     FROM "GuiaInspeccionItem" g
     WHERE g."id"=${itemId} AND g."inspeccionId"=${inspeccionId}
@@ -601,6 +611,15 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   `;
   if (!item) volver(inspeccionId, codigo, "error", "Concepto no encontrado.");
   if (Number(item.fotos) !== 4) volver(inspeccionId, codigo, "error", `${item.concepto} requiere exactamente 4 fotografías antes de cerrarse.`);
+  if (item.requiereMedicion && !valorMedido) {
+    volver(inspeccionId, codigo, "error", `${item.concepto} requiere registrar el valor medido.`);
+  }
+  if (item.requiereMedicion && !unidadMedida) {
+    volver(inspeccionId, codigo, "error", `${item.concepto} requiere indicar la unidad de medición.`);
+  }
+  if (item.requiereComparacionProyecto && item.origenV3 === "PROYECTO" && !valorProyecto) {
+    volver(inspeccionId, codigo, "error", `${item.concepto} requiere registrar el valor de proyecto para la comparación.`);
+  }
 
   const anterior = observacionObjeto(item.observacion);
   const observacion: ObservacionItemCritico = {
@@ -615,6 +634,8 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     await tx.$executeRaw`
       UPDATE "GuiaInspeccionItem"
       SET "observacion"=${JSON.stringify(observacion)},"estadoV3"='REVISADO',
+          "valorMedido"=${valorMedido || null},"valorProyecto"=${valorProyecto || null},
+          "unidadMedida"=${unidadMedida || null},
           "completado"=true,"cerradoEn"=NOW(),"actualizadoEn"=NOW()
       WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
     `;
