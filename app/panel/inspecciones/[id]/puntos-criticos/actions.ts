@@ -148,8 +148,8 @@ async function verificarSecuencia(inspeccionId: string, codigo: CodigoPuntoCriti
   const anteriores = PUNTOS_CRITICOS_V1.slice(0, indice).map((item) => `PC_${item.codigo}`);
   if (!anteriores.length) return;
 
-  const pasos = await prisma.$queryRaw<Array<{ clave: string; estado: string; datos: unknown }>>`
-    SELECT "clave","estado","datos" FROM "ProtocoloInspeccionPaso"
+  const pasos = await prisma.$queryRaw<Array<{ clave: string; estado: string; datos: unknown; lecturaInicial: string | null }>>`
+    SELECT "clave","estado","datos","lecturaInicial" FROM "ProtocoloInspeccionPaso"
     WHERE "inspeccionId"=${inspeccionId} AND "clave"=ANY(${anteriores}::text[])
     ORDER BY "orden"
   `;
@@ -157,14 +157,14 @@ async function verificarSecuencia(inspeccionId: string, codigo: CodigoPuntoCriti
   for (const paso of pasos) {
     if (paso.estado === "COMPLETADO" || paso.estado === "NO_APLICA") continue;
     const datos = datosObjeto(paso.datos);
-    if (paso.estado === "EN_PROCESO" && datos.pruebaProlongada) {
+    if (paso.estado === "EN_PROCESO" && datos.pruebaProlongada && paso.lecturaInicial) {
       const [inicio] = await prisma.$queryRaw<Array<{ total: number }>>`
         SELECT COUNT(*)::int AS "total"
-        FROM "GuiaInspeccionItem"
-        WHERE "inspeccionId"=${inspeccionId}
-          AND "area"=concat('__PUNTO_CRITICO__:',replace(${paso.clave},'PC_',''))
-          AND "concepto" ILIKE '%manómetro%'
-          AND "estadoV3" <> 'PENDIENTE'
+        FROM "FotografiaArea" fa
+        JOIN "GuiaInspeccionItem" g ON g."id"=fa."guiaItemId"
+        WHERE g."inspeccionId"=${inspeccionId}
+          AND g."area"=concat('__PUNTO_CRITICO__:',replace(${paso.clave},'PC_',''))
+          AND g."concepto" ILIKE '%manómetro%'
       `;
       if (Number(inicio?.total ?? 0) > 0) continue;
     }
@@ -450,6 +450,66 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
   volver(inspeccionId, codigo, "ok", "Fotografía retirada. Ya puedes repetirla.");
 }
 
+export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const codigoTexto = texto(formData, "codigo");
+  const itemId = texto(formData, "itemId");
+  const lecturaInicial = texto(formData, "lecturaInicial");
+  const unidad = texto(formData, "unidad");
+  if (!inspeccionId || !esCodigo(codigoTexto) || !itemId) redirect("/panel/inspecciones");
+  const codigo = codigoTexto;
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+
+  const [paso] = await prisma.$queryRaw<Array<{ datos: unknown; lecturaInicial: string | null }>>`
+    SELECT "datos","lecturaInicial"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
+    LIMIT 1
+  `;
+  const datos = datosObjeto(paso?.datos);
+  if (!paso || !datos.pruebaProlongada) {
+    volver(inspeccionId, codigo, "error", "Este punto crítico no tiene una prueba prolongada contratada.");
+  }
+  if (paso.lecturaInicial) {
+    volver(inspeccionId, codigo, "error", "La prueba prolongada ya tiene una lectura inicial registrada.");
+  }
+  if (!lecturaInicial || !unidad) {
+    volver(inspeccionId, codigo, "error", "Registra la lectura inicial y su unidad.");
+  }
+
+  const [item] = await prisma.$queryRaw<Array<{ concepto: string; fotos: number }>>`
+    SELECT g."concepto",
+      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."id"=${itemId} AND g."inspeccionId"=${inspeccionId}
+      AND g."area"=${`__PUNTO_CRITICO__:${codigo}`}
+      AND g."concepto" ILIKE '%manómetro%'
+    LIMIT 1
+  `;
+  if (!item) volver(inspeccionId, codigo, "error", "No se encontró el concepto inicial de manómetro.");
+  if (Number(item.fotos) < 1) {
+    volver(inspeccionId, codigo, "error", "Toma al menos una fotografía inicial del manómetro antes de arrancar la prueba.");
+  }
+
+  await prisma.$executeRaw`
+    UPDATE "ProtocoloInspeccionPaso"
+    SET "lecturaInicial"=${lecturaInicial},"unidad"=${unidad},
+        "iniciadoEn"=COALESCE("iniciadoEn",NOW()),"actualizadoEn"=NOW()
+    WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
+  `;
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "ProtocoloInspeccionPaso",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} inició la prueba prolongada de ${puntoPorCodigo(codigo).etiqueta} con lectura ${lecturaInicial} ${unidad} y evidencia fotográfica inicial.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  volver(inspeccionId, codigo, "ok", "Prueba prolongada iniciada. Ya puedes continuar con el siguiente punto y regresar después para cerrarla.");
+}
+
 export async function generarDescripcionIaPuntoCriticoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const codigoTexto = texto(formData, "codigo");
@@ -681,6 +741,16 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
         WHERE f."id" IN (SELECT fa."fotografiaId" FROM "FotografiaArea" fa WHERE fa."guiaItemId"=${itemId})
       `;
     }
+
+    if (/lectura final/i.test(item.concepto) && valorMedido) {
+      await tx.$executeRaw`
+        UPDATE "ProtocoloInspeccionPaso"
+        SET "lecturaFinal"=${valorMedido},
+            "unidad"=COALESCE(NULLIF(${unidadMedida},''),"unidad"),
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
+      `;
+    }
   });
 
   await recalcularIndice(inspeccionId);
@@ -705,19 +775,38 @@ export async function cerrarPuntoCriticoV1(formData: FormData) {
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
   const punto = puntoPorCodigo(codigo);
 
-  const [estado] = await prisma.$queryRaw<Array<{ total: number; pendientes: number; incompletosFotos: number }>>`
+  const [estado] = await prisma.$queryRaw<Array<{
+    total: number;
+    pendientes: number;
+    incompletosFotos: number;
+    pruebaProlongada: boolean;
+    lecturaInicial: string | null;
+    lecturaFinal: string | null;
+  }>>`
     SELECT
       COUNT(*)::int AS "total",
       COUNT(*) FILTER (WHERE g."estadoV3"='PENDIENTE')::int AS "pendientes",
       COUNT(*) FILTER (
         WHERE (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 4
-      )::int AS "incompletosFotos"
+      )::int AS "incompletosFotos",
+      COALESCE((SELECT ("datos"->>'pruebaProlongada')::boolean FROM "ProtocoloInspeccionPaso"
+        WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`} LIMIT 1),false) AS "pruebaProlongada",
+      (SELECT "lecturaInicial" FROM "ProtocoloInspeccionPaso"
+        WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`} LIMIT 1) AS "lecturaInicial",
+      (SELECT "lecturaFinal" FROM "ProtocoloInspeccionPaso"
+        WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`} LIMIT 1) AS "lecturaFinal"
     FROM "GuiaInspeccionItem" g
     WHERE g."inspeccionId"=${inspeccionId} AND g."area"=${`__PUNTO_CRITICO__:${codigo}`}
   `;
   if (Number(estado?.total ?? 0) === 0) volver(inspeccionId, codigo, "error", "Primero configura este punto como SI APLICA.");
   if (Number(estado?.pendientes ?? 0) > 0) volver(inspeccionId, codigo, "error", `Faltan ${estado.pendientes} concepto(s) por cerrar.`);
   if (Number(estado?.incompletosFotos ?? 0) > 0) volver(inspeccionId, codigo, "error", "Todos los conceptos requieren exactamente 4 fotografías.");
+  if (estado?.pruebaProlongada && !estado.lecturaInicial) {
+    volver(inspeccionId, codigo, "error", "Falta registrar la lectura inicial de la prueba prolongada.");
+  }
+  if (estado?.pruebaProlongada && !estado.lecturaFinal) {
+    volver(inspeccionId, codigo, "error", "Falta registrar la lectura final de la prueba prolongada.");
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
