@@ -131,8 +131,9 @@ export default async function PuntosCriticosPage({
     Boolean(usuario.inspector?.activo) &&
     usuario.inspector?.id === inspeccion.inspectorId;
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
-  const rolesConsulta: RolUsuario[] = [RolUsuario.GERENTE, RolUsuario.COORDINADOR];
-  const consulta = rolesConsulta.includes(usuario.rol);
+  const consulta =
+    usuario.rol === RolUsuario.GERENTE ||
+    usuario.rol === RolUsuario.COORDINADOR;
   if (!esInspector && !esDirector && !consulta) redirect("/acceso");
 
   const [control] = await prisma.$queryRaw<Array<{ proyectoConfirmado: boolean }>>`
