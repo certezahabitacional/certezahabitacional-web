@@ -467,16 +467,58 @@ export default async function PuntosCriticosPage({
 
                     <div className="space-y-3">
                       {!cerrado && puedeCapturar && Number(item.fotos) < 4 && (
-                        <form action={subirFotoPuntoCriticoV1} className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-4">
-                          <input type="hidden" name="inspeccionId" value={id} />
-                          <input type="hidden" name="codigo" value={codigoSolicitado} />
-                          <input type="hidden" name="itemId" value={item.id} />
-                          <label className="block cursor-pointer rounded-xl border border-dashed border-cyan-300/40 px-4 py-5 text-center font-black text-cyan-200">
-                            📷 TOMAR FOTO {Number(item.fotos) + 1}/4
-                            <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="sr-only" />
-                          </label>
-                          <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-sm font-black text-slate-950">GUARDAR FOTOGRAFÍA</button>
-                        </form>
+                        <div className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-4">
+                          <p className="text-xs font-black uppercase tracking-wider text-slate-400">
+                            Agregar fotografía {Number(item.fotos) + 1}/4
+                          </p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <form action={subirFotoPuntoCriticoV1}>
+                              <input type="hidden" name="inspeccionId" value={id} />
+                              <input type="hidden" name="codigo" value={codigoSolicitado} />
+                              <input type="hidden" name="itemId" value={item.id} />
+                              <label className="block cursor-pointer rounded-xl border border-dashed border-cyan-300/40 px-4 py-5 text-center font-black text-cyan-200">
+                                <span className="block text-2xl">📷</span>
+                                <span className="mt-1 block">TOMAR FOTO</span>
+                                <span className="mt-1 block text-[10px] font-bold text-slate-500">Abrir cámara</span>
+                                <input
+                                  name="archivo"
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  required
+                                  className="sr-only"
+                                />
+                              </label>
+                              <button className="mt-2 w-full rounded-xl bg-cyan-300 px-3 py-2 text-sm font-black text-slate-950">
+                                GUARDAR FOTO
+                              </button>
+                            </form>
+
+                            <form action={subirFotoPuntoCriticoV1}>
+                              <input type="hidden" name="inspeccionId" value={id} />
+                              <input type="hidden" name="codigo" value={codigoSolicitado} />
+                              <input type="hidden" name="itemId" value={item.id} />
+                              <label className="block cursor-pointer rounded-xl border border-dashed border-violet-300/40 px-4 py-5 text-center font-black text-violet-200">
+                                <span className="block text-2xl">🖼️</span>
+                                <span className="mt-1 block">ELEGIR DE GALERÍA</span>
+                                <span className="mt-1 block text-[10px] font-bold text-slate-500">Foto existente</span>
+                                <input
+                                  name="archivo"
+                                  type="file"
+                                  accept="image/*"
+                                  required
+                                  className="sr-only"
+                                />
+                              </label>
+                              <button className="mt-2 w-full rounded-xl bg-violet-300 px-3 py-2 text-sm font-black text-slate-950">
+                                GUARDAR DE GALERÍA
+                              </button>
+                            </form>
+                          </div>
+                          <p className="mt-3 text-[11px] leading-5 text-slate-500">
+                            Puedes combinar fotografías tomadas en el momento con imágenes seleccionadas de la galería. El concepto requiere exactamente 4 evidencias antes del análisis con IA.
+                          </p>
+                        </div>
                       )}
 
                       {!cerrado && puedeCapturar && Number(item.fotos) === 4 && !obs.descripcionIa && (

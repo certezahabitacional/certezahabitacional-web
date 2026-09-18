@@ -4,6 +4,7 @@ on:
     branches:
       - feature/puntos-criticos-equipo-v1
       - fix/mapeo-equipo-areas-v1
+      - fix/camara-galeria-puntos-criticos
 
 jobs:
   typecheck:
