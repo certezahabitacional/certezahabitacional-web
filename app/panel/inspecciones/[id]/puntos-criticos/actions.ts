@@ -14,8 +14,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import {
-  extraerConfiguracionHerramientas,
   HERRAMIENTAS_INSPECCION,
+  obtenerHerramientasCotizadasDesdeCotizacion,
   type CodigoHerramienta,
 } from "@/lib/herramientas-inspeccion";
 import {
@@ -140,7 +140,7 @@ async function herramientasDeCotizacion(inspeccionId: string) {
     where: { id: inspeccionId },
     select: { cotizacion: { select: { observacionesInternas: true } } },
   });
-  return extraerConfiguracionHerramientas(inspeccion?.cotizacion?.observacionesInternas).herramientas;
+  return obtenerHerramientasCotizadasDesdeCotizacion(inspeccion?.cotizacion?.observacionesInternas);
 }
 
 async function verificarSecuencia(inspeccionId: string, codigo: CodigoPuntoCriticoV1) {
