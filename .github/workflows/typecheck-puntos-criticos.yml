@@ -11,6 +11,7 @@ on:
       - fix/continuar-desde-lista-v1
       - fix/acciones-visibles-inspecciones
       - fix/folio-directo-flujo-v1
+      - fix/previsualizacion-fotos-puntos-criticos
 
 jobs:
   typecheck:
