@@ -82,6 +82,8 @@ type ObservacionItem = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  lecturaFinalPropuesta?: string;
+  unidadFinalPropuesta?: string;
 };
 
 function esCodigo(valor: string): valor is CodigoPuntoCriticoV1 {
