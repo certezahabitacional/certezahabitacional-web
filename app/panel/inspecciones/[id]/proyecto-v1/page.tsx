@@ -12,6 +12,7 @@ import {
   normalizarProyectoV1,
 } from "@/lib/proyecto-v1-matriz";
 import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
+import { iniciarPuntosCriticosV1 } from "../puntos-criticos/actions";
 import {
   analizarProyectoV1,
   confirmarMatrizProyectoV1,
@@ -248,7 +249,7 @@ export default async function ProyectoV1Page({
           <section className="mt-6 rounded-3xl border border-emerald-300/25 bg-emerald-300/5 p-6">
             <p className="text-xs font-black uppercase tracking-[.2em] text-emerald-300">Alcance confirmado</p>
             <h2 className="mt-2 text-2xl font-black">Proyecto/Plantilla bloqueado para trazabilidad</h2>
-            <p className="mt-2 text-sm text-slate-300">Modalidad: <strong>{guardado?.modalidad === "SIN_PDF" ? "Sin proyecto PDF" : "Con proyecto PDF"}</strong>. La inspección puede continuar a la confirmación del ecosistema físico de áreas.</p>
+            <p className="mt-2 text-sm text-slate-300">Modalidad: <strong>{guardado?.modalidad === "SIN_PDF" ? "Sin proyecto PDF" : "Con proyecto PDF"}</strong>. La siguiente etapa obligatoria es la inspección secuencial de puntos críticos.</p>
             {guardado?.matriz && (
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {guardado.matriz.map((item) => (
@@ -259,7 +260,10 @@ export default async function ProyectoV1Page({
                 ))}
               </div>
             )}
-            <Link href={`/panel/inspecciones/${id}/areas`} className="mt-5 inline-block rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">Continuar a áreas</Link>
+            <form action={iniciarPuntosCriticosV1} className="mt-5">
+              <input type="hidden" name="inspeccionId" value={id} />
+              <button className="rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950">INICIO DE INSPECCIÓN DE PUNTOS CRÍTICOS</button>
+            </form>
           </section>
         )}
 
