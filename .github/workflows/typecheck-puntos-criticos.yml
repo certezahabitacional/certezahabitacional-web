@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/puntos-criticos-equipo-v1
+      - fix/mapeo-equipo-areas-v1
 
 jobs:
   typecheck:
