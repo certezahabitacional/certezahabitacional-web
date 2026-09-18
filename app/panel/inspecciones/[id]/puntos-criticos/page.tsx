@@ -59,6 +59,7 @@ type Foto = {
   guiaItemId: string;
   orden: number;
   ruta: string;
+  descripcionArchivo: string | null;
   urlTemporal: string | null;
 };
 
@@ -77,6 +78,7 @@ type ObservacionItem = {
   justificacionIa?: string;
   descripcionFinal?: string;
   clasificacionFinal?: string;
+  prioridadFinal?: string;
 };
 
 function esCodigo(valor: string): valor is CodigoPuntoCriticoV1 {
@@ -255,7 +257,7 @@ export default async function PuntosCriticosPage({
 
   const fotosBase = items.length
     ? await prisma.$queryRaw<Array<Omit<Foto, "urlTemporal">>>`
-        SELECT fa."fotografiaId",fa."guiaItemId",fa."orden",f."url" AS "ruta"
+        SELECT fa."fotografiaId",fa."guiaItemId",fa."orden",f."url" AS "ruta",f."descripcion" AS "descripcionArchivo"
         FROM "FotografiaArea" fa
         JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
         WHERE fa."guiaItemId"=ANY(${items.map((item) => item.id)}::text[])
@@ -453,6 +455,9 @@ export default async function PuntosCriticosPage({
             {items.map((item, index) => {
               const obs = observacionItem(item.observacion);
               const fotosItem = fotos.filter((foto) => foto.guiaItemId === item.id);
+              const origenGaleria = fotosItem.some((foto) => foto.descripcionArchivo?.includes("[ORIGEN:GALERIA]"));
+              const requeridas = origenGaleria ? 1 : 4;
+              const evidenciaCompleta = fotosItem.length === requeridas;
               const cerrado = item.estadoV3 !== "PENDIENTE";
               return (
                 <article key={item.id} className={`rounded-3xl border p-5 ${cerrado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-900"}`}>
@@ -465,8 +470,8 @@ export default async function PuntosCriticosPage({
                       </div>
                       <h3 className="mt-2 text-xl font-black">{item.concepto}</h3>
                       <p className="mt-2 text-sm text-slate-300">{item.especificacion}</p>
-                      <p className={`mt-3 text-sm font-black ${Number(item.fotos) === 4 ? "text-emerald-300" : "text-amber-300"}`}>
-                        📷 Evidencia obligatoria: {item.fotos}/4 fotografías
+                      <p className={`mt-3 text-sm font-black ${evidenciaCompleta ? "text-emerald-300" : "text-amber-300"}`}>
+                        📷 Evidencia obligatoria: {origenGaleria ? "1 foto de galería" : "4 fotos tomadas desde la aplicación"} · {fotosItem.length}/{requeridas}
                       </p>
                       {fotosItem.length > 0 && (
                         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
@@ -527,35 +532,41 @@ export default async function PuntosCriticosPage({
                     </div>
 
                     <div className="space-y-3">
-                      {!cerrado && puedeCapturar && Number(item.fotos) < 4 && (
+                      {!cerrado && puedeCapturar && !evidenciaCompleta && (
                         <div className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-4">
                           <p className="text-xs font-black uppercase tracking-wider text-slate-400">
-                            Agregar fotografía {Number(item.fotos) + 1}/4
+                            {fotosItem.length === 0 ? "Elige una modalidad de evidencia" : `Agregar fotografía ${fotosItem.length + 1}/4`}
                           </p>
                           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            <CapturaCamara
-                              inspeccionId={id}
-                              codigo={codigoSolicitado}
-                              itemId={item.id}
-                              numeroFoto={Number(item.fotos) + 1}
-                              subirFoto={subirFotoPuntoCriticoV1}
-                            />
+                            {!origenGaleria && (
+                              <CapturaCamara
+                                inspeccionId={id}
+                                codigo={codigoSolicitado}
+                                itemId={item.id}
+                                numeroFoto={fotosItem.length + 1}
+                                totalFotos={4}
+                                subirFoto={subirFotoPuntoCriticoV1}
+                              />
+                            )}
 
-                            <CargaGaleriaConPreview
-                              inspeccionId={id}
-                              codigo={codigoSolicitado}
-                              itemId={item.id}
-                              numeroFoto={Number(item.fotos) + 1}
-                              subirFoto={subirFotoPuntoCriticoV1}
-                            />
+                            {fotosItem.length === 0 && (
+                              <CargaGaleriaConPreview
+                                inspeccionId={id}
+                                codigo={codigoSolicitado}
+                                itemId={item.id}
+                                numeroFoto={1}
+                                totalFotos={1}
+                                subirFoto={subirFotoPuntoCriticoV1}
+                              />
+                            )}
                           </div>
                           <p className="mt-3 text-[11px] leading-5 text-slate-500">
-                            Puedes combinar fotografías tomadas en el momento con imágenes seleccionadas de la galería. El concepto requiere exactamente 4 evidencias antes del análisis con IA.
+                            Elige una sola modalidad por concepto: 4 fotografías si las tomas desde la aplicación, o 1 fotografía si la seleccionas de la galería.
                           </p>
                         </div>
                       )}
 
-                      {!cerrado && puedeCapturar && Number(item.fotos) === 4 && !obs.descripcionIa && (
+                      {!cerrado && puedeCapturar && evidenciaCompleta && !obs.descripcionIa && (
                         <form action={generarDescripcionIaPuntoCriticoV1}>
                           <input type="hidden" name="inspeccionId" value={id} />
                           <input type="hidden" name="codigo" value={codigoSolicitado} />
@@ -566,7 +577,7 @@ export default async function PuntosCriticosPage({
                         </form>
                       )}
 
-                      {!cerrado && puedeCapturar && Number(item.fotos) === 4 && obs.descripcionIa && (
+                      {!cerrado && puedeCapturar && evidenciaCompleta && (
                         <form action={guardarResultadoPuntoCriticoV1} className="rounded-2xl border border-violet-300/20 bg-violet-300/5 p-4">
                           <input type="hidden" name="inspeccionId" value={id} />
                           <input type="hidden" name="codigo" value={codigoSolicitado} />
@@ -592,8 +603,25 @@ export default async function PuntosCriticosPage({
                               )}
                             </div>
                           )}
-                          <label className="text-xs font-black uppercase text-slate-400">Descripción técnica</label>
-                          <textarea name="descripcionFinal" required defaultValue={obs.descripcionFinal ?? obs.descripcionIa} className="mt-2 min-h-28 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm" />
+                          {obs.descripcionIa ? (
+                            <div className="mb-4 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
+                              <p className="text-xs font-black uppercase text-cyan-200">Interpretación sugerida por IA</p>
+                              <p className="mt-2 text-xs leading-5 text-cyan-50">{obs.descripcionIa}</p>
+                              {obs.justificacionIa && <p className="mt-2 text-[11px] text-cyan-200/80">{obs.justificacionIa}</p>}
+                            </div>
+                          ) : (
+                            <p className="mb-4 rounded-xl bg-white/5 p-3 text-xs text-slate-400">
+                              La IA es opcional. El inspector puede capturar directamente su interpretación y cerrar el concepto.
+                            </p>
+                          )}
+                          <label className="text-xs font-black uppercase text-slate-400">Interpretación / comentario del inspector</label>
+                          <textarea
+                            name="descripcionFinal"
+                            required
+                            defaultValue={obs.descripcionFinal ?? obs.descripcionIa ?? ""}
+                            placeholder="Describe lo observado en la evidencia, condición encontrada y criterio técnico del inspector."
+                            className="mt-2 min-h-32 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"
+                          />
                           <label className="mt-3 block text-xs font-black uppercase text-slate-400">Clasificación final del Inspector</label>
                           <select name="clasificacion" defaultValue={obs.clasificacionFinal ?? obs.clasificacionSugerida ?? "C"} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2">
                             <option value="C">C · Conforme</option>
@@ -602,7 +630,18 @@ export default async function PuntosCriticosPage({
                             <option value="CR">CR · Crítico</option>
                             <option value="NA">NA · No aplica al concepto</option>
                           </select>
-                          <p className="mt-2 text-[11px] text-slate-500">La IA sólo sugiere; la clasificación final la confirma el Inspector.</p>
+
+                          <label className="mt-3 block text-xs font-black uppercase text-slate-400">Nivel de prioridad del hallazgo</label>
+                          <select name="prioridad" defaultValue={obs.prioridadFinal ?? "P3"} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2">
+                            <option value="P1">P1 · Atención inmediata / crítica</option>
+                            <option value="P2">P2 · Muy alta</option>
+                            <option value="P3">P3 · Alta / corregir</option>
+                            <option value="P4">P4 · Media / observación</option>
+                            <option value="P5">P5 · Baja / seguimiento</option>
+                          </select>
+                          <p className="mt-2 text-[11px] text-slate-500">
+                            La IA sólo puede sugerir la interpretación y clasificación; comentario, clasificación y prioridad final los confirma el Inspector.
+                          </p>
                           <button className="mt-3 w-full rounded-xl bg-violet-300 px-3 py-2 text-sm font-black text-slate-950">CERRAR CONCEPTO</button>
                         </form>
                       )}
@@ -611,6 +650,7 @@ export default async function PuntosCriticosPage({
                         <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
                           <p className="font-black">CONCEPTO CERRADO ✓</p>
                           <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
+                          {obs.prioridadFinal && <p className="mt-1">Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
                           {item.requiereMedicion && item.valorMedido && (
                             <p className="mt-2 text-xs">
                               Medición: <strong>{item.valorMedido} {item.unidadMedida ?? ""}</strong>
@@ -632,7 +672,7 @@ export default async function PuntosCriticosPage({
                 <input type="hidden" name="codigo" value={codigoSolicitado} />
                 <p className="font-black text-emerald-200">CIERRE DEL PUNTO CRÍTICO</p>
                 <p className="mt-2 text-sm text-slate-300">
-                  Se habilita únicamente cuando todos los conceptos aplicables tienen 4 fotografías, descripción y clasificación final.
+                  Se habilita cuando todos los conceptos aplicables tienen evidencia completa, comentario técnico, clasificación y prioridad final.
                 </p>
                 <button disabled={completados !== items.length} className="mt-4 rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
                   CERRAR {punto.etiqueta} AL 100%
