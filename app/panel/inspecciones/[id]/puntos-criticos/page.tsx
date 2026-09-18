@@ -21,6 +21,7 @@ import {
   generarDescripcionIaPuntoCriticoV1,
   guardarResultadoPuntoCriticoV1,
   iniciarPuntosCriticosV1,
+  registrarInicioPruebaProlongadaV1,
   subirFotoPuntoCriticoV1,
 } from "./actions";
 
@@ -30,6 +31,9 @@ type Paso = {
   orden: number;
   estado: string;
   datos: unknown;
+  lecturaInicial: string | null;
+  lecturaFinal: string | null;
+  unidad: string | null;
 };
 
 type Item = {
@@ -150,21 +154,11 @@ export default async function PuntosCriticosPage({
   }
 
   const pasos = await prisma.$queryRaw<Paso[]>`
-    SELECT "clave","nombre","orden","estado","datos"
+    SELECT "clave","nombre","orden","estado","datos","lecturaInicial","lecturaFinal","unidad"
     FROM "ProtocoloInspeccionPaso"
     WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
     ORDER BY "orden"
   `;
-
-  const iniciosPrueba = await prisma.$queryRaw<Array<{ codigo: string }>>`
-    SELECT DISTINCT replace(g."area",'__PUNTO_CRITICO__:','') AS "codigo"
-    FROM "GuiaInspeccionItem" g
-    WHERE g."inspeccionId"=${id}
-      AND g."area" LIKE '__PUNTO_CRITICO__:%'
-      AND g."concepto" ILIKE '%manómetro%'
-      AND g."estadoV3" <> 'PENDIENTE'
-  `;
-  const pruebasProlongadasIniciadas = new Set(iniciosPrueba.map((item) => item.codigo));
 
   const puedeEntrarPunto = (codigo: CodigoPuntoCriticoV1) => {
     const indice = PUNTOS_CRITICOS_V1.findIndex((item) => item.codigo === codigo);
@@ -176,7 +170,7 @@ export default async function PuntosCriticosPage({
       if (
         pasoAnterior.estado === "EN_PROCESO" &&
         datosAnterior.pruebaProlongada &&
-        pruebasProlongadasIniciadas.has(anterior.codigo)
+        Boolean(pasoAnterior.lecturaInicial)
       ) {
         continue;
       }
@@ -241,6 +235,10 @@ export default async function PuntosCriticosPage({
         ORDER BY g."orden"
       `
     : [];
+
+  const itemManometroInicial = items.find((item) =>
+    /manómetro/i.test(item.concepto),
+  );
 
   const fotos = items.length
     ? await prisma.$queryRaw<Foto[]>`
@@ -337,6 +335,12 @@ export default async function PuntosCriticosPage({
             {datos.pruebaProlongada && (
               <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/5 p-4 text-sm text-amber-100">
                 <strong>Prueba prolongada con manómetro:</strong> inicia al arrancar este punto y puede permanecer abierta mientras continúas la inspección. Debe cerrarse con lectura final antes del cierre total.
+                {paso.lecturaInicial && (
+                  <p className="mt-2 text-xs font-bold text-emerald-200">
+                    Prueba iniciada: {paso.lecturaInicial} {paso.unidad ?? ""}.
+                    {paso.lecturaFinal ? <> Lectura final: {paso.lecturaFinal} {paso.unidad ?? ""}.</> : " Pendiente lectura final."}
+                  </p>
+                )}
               </div>
             )}
 
@@ -397,6 +401,31 @@ export default async function PuntosCriticosPage({
             </p>
           </aside>
         </section>
+
+        {datos.configurado && datos.aplica && datos.pruebaProlongada && !paso.lecturaInicial && itemManometroInicial && Number(itemManometroInicial.fotos) >= 1 && puedeCapturar && (
+          <form action={registrarInicioPruebaProlongadaV1} className="mt-7 rounded-3xl border border-amber-300/25 bg-amber-300/5 p-6">
+            <input type="hidden" name="inspeccionId" value={id} />
+            <input type="hidden" name="codigo" value={codigoSolicitado} />
+            <input type="hidden" name="itemId" value={itemManometroInicial.id} />
+            <p className="text-xs font-black uppercase tracking-wider text-amber-200">Inicio de prueba prolongada</p>
+            <p className="mt-2 text-sm text-slate-300">
+              Ya existe evidencia fotográfica inicial. Registra la lectura del manómetro para habilitar la continuación temporal al siguiente punto crítico.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-bold text-slate-400">
+                Lectura inicial
+                <input name="lecturaInicial" required className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-white" />
+              </label>
+              <label className="text-xs font-bold text-slate-400">
+                Unidad
+                <input name="unidad" required placeholder="psi, kPa, bar..." className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-white" />
+              </label>
+            </div>
+            <button className="mt-4 rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950">
+              INICIAR PRUEBA Y HABILITAR CONTINUACIÓN
+            </button>
+          </form>
+        )}
 
         {datos.configurado && datos.aplica && (
           <section className="mt-7 space-y-4">
