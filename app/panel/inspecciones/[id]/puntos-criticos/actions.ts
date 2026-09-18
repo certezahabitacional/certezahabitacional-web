@@ -695,7 +695,11 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
       WHERE "id"=ANY(${[inicial.id, final.id]}::text[])
     `;
 
-    if ([ClasificacionHallazgo.O, ClasificacionHallazgo.NC, ClasificacionHallazgo.CR].includes(clasificacion)) {
+    if (
+      clasificacion === ClasificacionHallazgo.O ||
+      clasificacion === ClasificacionHallazgo.NC ||
+      clasificacion === ClasificacionHallazgo.CR
+    ) {
       const hallazgo = await tx.hallazgo.create({
         data: {
           inspeccionId,
