@@ -24,6 +24,7 @@ import {
   configurarPuntoCriticoV1,
   eliminarFotoPuntoCriticoV1,
   generarDescripcionIaPuntoCriticoV1,
+  generarInterpretacionIaPruebaProlongadaV1,
   guardarResultadoPuntoCriticoV1,
   iniciarPuntosCriticosV1,
   registrarInicioPruebaProlongadaV1,
@@ -271,6 +272,7 @@ export default async function PuntosCriticosPage({
 
   const itemManometroInicial = items.find((item) => /manómetro/i.test(item.concepto));
   const itemLecturaFinal = items.find((item) => /lectura final/i.test(item.concepto));
+  const observacionPrueba = itemLecturaFinal ? observacionItem(itemLecturaFinal.observacion) : {};
   const idsPrueba = new Set(
     [itemManometroInicial?.id, itemLecturaFinal?.id].filter((valor): valor is string => Boolean(valor)),
   );
@@ -575,52 +577,108 @@ export default async function PuntosCriticosPage({
                       ) : null}
 
                       {fotoFinal && !paso.lecturaFinal && puedeCapturar && (
-                        <form action={cerrarPruebaProlongadaV1} className="mt-4 space-y-3">
-                          <input type="hidden" name="inspeccionId" value={id} />
-                          <input type="hidden" name="codigo" value={codigoSolicitado} />
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="text-xs font-bold text-slate-400">
-                              Lectura final
-                              <input name="lecturaFinal" required className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
+                        <div id="prueba-manometro" className="mt-4 space-y-4">
+                          <form action={generarInterpretacionIaPruebaProlongadaV1} className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+                            <input type="hidden" name="inspeccionId" value={id} />
+                            <input type="hidden" name="codigo" value={codigoSolicitado} />
+                            <p className="text-xs font-black uppercase text-cyan-200">Interpretación IA de la prueba</p>
+                            <p className="mt-2 text-xs text-cyan-50">
+                              Captura la lectura final. La IA comparará lectura inicial, lectura final y ambas fotografías.
+                            </p>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              <label className="text-xs font-bold text-slate-400">
+                                Lectura final
+                                <input
+                                  name="lecturaFinal"
+                                  required
+                                  defaultValue={observacionPrueba.lecturaFinalPropuesta ?? ""}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
+                                />
+                              </label>
+                              <label className="text-xs font-bold text-slate-400">
+                                Unidad
+                                <input
+                                  name="unidad"
+                                  required
+                                  defaultValue={observacionPrueba.unidadFinalPropuesta ?? paso.unidad ?? ""}
+                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
+                                />
+                              </label>
+                            </div>
+                            <div className="mt-3">
+                              <BotonGenerarIa />
+                            </div>
+                          </form>
+
+                          {observacionPrueba.descripcionIa && (
+                            <div className="rounded-xl border border-cyan-300/20 bg-slate-950 p-4">
+                              <p className="text-xs font-black uppercase text-cyan-200">Interpretación sugerida por IA</p>
+                              <p className="mt-2 text-sm leading-6 text-cyan-50">{observacionPrueba.descripcionIa}</p>
+                              {observacionPrueba.justificacionIa && (
+                                <p className="mt-2 text-xs text-cyan-200/80">{observacionPrueba.justificacionIa}</p>
+                              )}
+                            </div>
+                          )}
+
+                          <form action={cerrarPruebaProlongadaV1} className="space-y-3 rounded-xl border border-violet-300/20 bg-violet-300/5 p-4">
+                            <input type="hidden" name="inspeccionId" value={id} />
+                            <input type="hidden" name="codigo" value={codigoSolicitado} />
+                            <input type="hidden" name="lecturaFinal" value={observacionPrueba.lecturaFinalPropuesta ?? ""} />
+                            <input type="hidden" name="unidad" value={observacionPrueba.unidadFinalPropuesta ?? paso.unidad ?? ""} />
+
+                            <label className="block text-xs font-black uppercase text-slate-400">
+                              Interpretación / comentario del inspector
+                              <textarea
+                                name="descripcionFinal"
+                                required
+                                defaultValue={observacionPrueba.descripcionFinal ?? observacionPrueba.descripcionIa ?? ""}
+                                placeholder="Describe estabilidad o variación de presión y cualquier hallazgo observado."
+                                className="mt-2 min-h-32 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white"
+                              />
                             </label>
-                            <label className="text-xs font-bold text-slate-400">
-                              Unidad
-                              <input name="unidad" required defaultValue={paso.unidad ?? ""} className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
+
+                            <label className="block text-xs font-black uppercase text-slate-400">
+                              Clasificación final
+                              <select
+                                name="clasificacion"
+                                defaultValue={observacionPrueba.clasificacionFinal ?? observacionPrueba.clasificacionSugerida ?? "C"}
+                                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
+                              >
+                                <option value="C">C · Conforme</option>
+                                <option value="O">O · Observación</option>
+                                <option value="NC">NC · No conformidad</option>
+                                <option value="CR">CR · Crítico</option>
+                                <option value="NA">NA · No aplica</option>
+                              </select>
                             </label>
-                          </div>
-                          <label className="block text-xs font-black uppercase text-slate-400">
-                            Interpretación / comentario del inspector
-                            <textarea
-                              name="descripcionFinal"
-                              required
-                              placeholder="Describe estabilidad o variación de presión y cualquier hallazgo observado."
-                              className="mt-2 min-h-28 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white"
-                            />
-                          </label>
-                          <label className="block text-xs font-black uppercase text-slate-400">
-                            Clasificación final
-                            <select name="clasificacion" defaultValue="C" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white">
-                              <option value="C">C · Conforme</option>
-                              <option value="O">O · Observación</option>
-                              <option value="NC">NC · No conformidad</option>
-                              <option value="CR">CR · Crítico</option>
-                              <option value="NA">NA · No aplica</option>
-                            </select>
-                          </label>
-                          <label className="block text-xs font-black uppercase text-slate-400">
-                            Nivel de prioridad
-                            <select name="prioridad" defaultValue="P3" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white">
-                              <option value="P1">P1 · Atención inmediata / crítica</option>
-                              <option value="P2">P2 · Muy alta</option>
-                              <option value="P3">P3 · Alta / corregir</option>
-                              <option value="P4">P4 · Media / observación</option>
-                              <option value="P5">P5 · Baja / seguimiento</option>
-                            </select>
-                          </label>
-                          <button className="w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950">
-                            REGISTRAR LECTURA FINAL Y CERRAR PRUEBA
-                          </button>
-                        </form>
+
+                            <label className="block text-xs font-black uppercase text-slate-400">
+                              Nivel de prioridad
+                              <select
+                                name="prioridad"
+                                defaultValue={observacionPrueba.prioridadFinal ?? "P3"}
+                                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
+                              >
+                                <option value="P1">P1 · Atención inmediata / crítica</option>
+                                <option value="P2">P2 · Muy alta</option>
+                                <option value="P3">P3 · Alta / corregir</option>
+                                <option value="P4">P4 · Media / observación</option>
+                                <option value="P5">P5 · Baja / seguimiento</option>
+                              </select>
+                            </label>
+
+                            <p className="text-[11px] leading-5 text-slate-400">
+                              La interpretación de IA es una sugerencia. El comentario, clasificación y prioridad final los confirma el Inspector.
+                            </p>
+
+                            <button
+                              disabled={!observacionPrueba.lecturaFinalPropuesta || !observacionPrueba.unidadFinalPropuesta}
+                              className="w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30"
+                            >
+                              REGISTRAR LECTURA FINAL Y CERRAR PRUEBA
+                            </button>
+                          </form>
+                        </div>
                       )}
 
                       {paso.lecturaFinal && (
