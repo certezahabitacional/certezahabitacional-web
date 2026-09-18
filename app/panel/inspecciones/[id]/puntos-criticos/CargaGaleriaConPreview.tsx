@@ -7,6 +7,7 @@ type Props = {
   codigo: string;
   itemId: string;
   numeroFoto: number;
+  totalFotos?: number;
   subirFoto: (formData: FormData) => Promise<void>;
 };
 
@@ -15,6 +16,7 @@ export default function CargaGaleriaConPreview({
   codigo,
   itemId,
   numeroFoto,
+  totalFotos = 1,
   subirFoto,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +43,7 @@ export default function CargaGaleriaConPreview({
     formData.set("codigo", codigo);
     formData.set("itemId", itemId);
     formData.set("archivo", archivo);
+    formData.set("origenEvidencia", "GALERIA");
 
     startTransition(async () => {
       await subirFoto(formData);
@@ -98,7 +101,7 @@ export default function CargaGaleriaConPreview({
       <span className="block text-2xl">🖼️</span>
       <span className="mt-1 block">ELEGIR DE GALERÍA</span>
       <span className="mt-1 block text-[10px] font-bold text-slate-500">
-        Foto {numeroFoto}/4 · se mostrará completa antes de guardar
+        Foto {numeroFoto}/{totalFotos} · se mostrará completa antes de guardar
       </span>
       <input
         ref={inputRef}
