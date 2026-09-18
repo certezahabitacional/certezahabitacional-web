@@ -407,6 +407,9 @@ model Hallazgo {
   hallazgosSiguientes Hallazgo[] @relation("SeguimientoHallazgo")
   estadoSeguimiento EstadoSeguimientoHallazgo?
   observacionSeguimiento String?
+  guiaItemId String?
+  textoIaOriginal String?
+  textoInspectorFinal String?
   area String
   titulo String
   descripcion String
