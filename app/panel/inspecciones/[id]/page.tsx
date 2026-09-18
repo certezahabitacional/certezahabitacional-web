@@ -120,6 +120,8 @@ export default async function ExpedientePage({
     where: { id },
     select: {
       id: true,
+      estado: true,
+      numeroInspeccion: true,
       zonaId: true,
       inspectorId: true,
       requiereGerenteZona: true,
@@ -174,6 +176,19 @@ export default async function ExpedientePage({
 
   if (!accesoAutorizado) {
     redirect("/acceso");
+  }
+
+  // Las inspecciones activas no usan el panel intermedio del expediente.
+  // Se envían directamente a la etapa operativa correspondiente.
+  if (inspeccionAlcance.estado === EstadoInspeccion.PROGRAMADA) {
+    redirect(`/panel/inspecciones/${id}/revision-inicial`);
+  }
+  if (inspeccionAlcance.estado === EstadoInspeccion.EN_PROCESO) {
+    redirect(
+      inspeccionAlcance.numeroInspeccion === 1
+        ? `/panel/inspecciones/${id}/flujo`
+        : `/panel/inspecciones/${id}/captura`,
+    );
   }
 
   const inspeccion = await prisma.inspeccion.findUnique({
