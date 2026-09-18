@@ -619,7 +619,11 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
       WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
     `;
 
-    if ([ClasificacionHallazgo.O, ClasificacionHallazgo.NC, ClasificacionHallazgo.CR].includes(clasificacion)) {
+    if (
+      clasificacion === ClasificacionHallazgo.O ||
+      clasificacion === ClasificacionHallazgo.NC ||
+      clasificacion === ClasificacionHallazgo.CR
+    ) {
       const existente = await tx.hallazgo.findFirst({
         where: { inspeccionId, guiaItemId: itemId },
         select: { id: true },
