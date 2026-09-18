@@ -9,6 +9,7 @@ on:
       - fix/ocultar-enlaces-inspeccion
       - fix/continuar-flujo-v1
       - fix/continuar-desde-lista-v1
+      - fix/acciones-visibles-inspecciones
 
 jobs:
   typecheck:
