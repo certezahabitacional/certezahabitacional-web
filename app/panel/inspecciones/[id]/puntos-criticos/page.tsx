@@ -4,8 +4,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import {
-  extraerConfiguracionHerramientas,
   HERRAMIENTAS_INSPECCION,
+  obtenerHerramientasCotizadasDesdeCotizacion,
   type CodigoHerramienta,
 } from "@/lib/herramientas-inspeccion";
 import {
@@ -149,9 +149,9 @@ export default async function PuntosCriticosPage({
     ORDER BY "orden"
   `;
 
-  const herramientasCotizadas = extraerConfiguracionHerramientas(
+  const herramientasCotizadas = obtenerHerramientasCotizadasDesdeCotizacion(
     inspeccion.cotizacion?.observacionesInternas,
-  ).herramientas;
+  );
 
   if (pasos.length === 0) {
     return (
