@@ -88,12 +88,13 @@ export async function inicializarPlanAreasV1(formData: FormData) {
       ORDER BY "orden"
     `;
     for (const area of areas) {
-      if (!area.bibliotecaAreaId) continue;
-      const puntos = await tx.$queryRaw<Array<{ puntoId:string; nombre:string; descripcion:string|null; orden:number; obligatorio:boolean; requiereMedicion:boolean; requiereComparacionProyecto:boolean; herramientaSugerida:string|null }>>`
-        SELECT p."id"::text "puntoId",p."nombre",p."descripcion",ap."orden",ap."obligatorio",p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida"
-        FROM "BibliotecaAreaPuntoCerteza" ap JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId"
-        WHERE ap."areaBibliotecaId"=${area.bibliotecaAreaId}::uuid AND p."activa"=true ORDER BY ap."orden"
-      `;
+      const puntos = area.bibliotecaAreaId
+        ? await tx.$queryRaw<Array<{ puntoId:string; nombre:string; descripcion:string|null; orden:number; obligatorio:boolean; requiereMedicion:boolean; requiereComparacionProyecto:boolean; herramientaSugerida:string|null }>>`
+            SELECT p."id"::text "puntoId",p."nombre",p."descripcion",ap."orden",ap."obligatorio",p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida"
+            FROM "BibliotecaAreaPuntoCerteza" ap JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId"
+            WHERE ap."areaBibliotecaId"=${area.bibliotecaAreaId}::uuid AND p."activa"=true ORDER BY ap."orden"
+          `
+        : [];
       for (const p of puntos) {
         await tx.$executeRaw`
           INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio","completado","creadoPorId","areaId","bibliotecaPuntoId","estadoV3","origenV3","requiereMedicion","requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
@@ -130,7 +131,7 @@ export async function inicializarPlanAreasV1(formData: FormData) {
       }
     }
   });
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} inicializó el plan V1 desde la Biblioteca Certeza.` });
+  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} inicializó el plan V1 desde la Biblioteca Certeza e incorporó ${equipoCotizado.length} herramienta(s)/prueba(s) del punto 4 de la cotización donde aplican.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", "Plan técnico V1 preparado con los puntos mínimos aplicables.");
 }
