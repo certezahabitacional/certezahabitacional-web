@@ -46,6 +46,7 @@ type ObservacionItemCritico = {
   justificacionIa?: string;
   descripcionFinal?: string;
   clasificacionFinal?: string;
+  prioridadFinal?: string;
   actualizadoEn?: string;
 };
 
@@ -69,6 +70,23 @@ function observacionObjeto(valor: string | null): ObservacionItemCritico {
   } catch {
     return { descripcionFinal: valor };
   }
+}
+
+type OrigenEvidencia = "CAMARA" | "GALERIA";
+
+function origenEvidenciaDescripcion(valor: string | null | undefined): OrigenEvidencia | null {
+  if (valor?.includes("[ORIGEN:GALERIA]")) return "GALERIA";
+  if (valor?.includes("[ORIGEN:CAMARA]")) return "CAMARA";
+  return null;
+}
+
+function esItemPruebaProlongada(concepto: string) {
+  return /manómetro/i.test(concepto) || /lectura final/i.test(concepto);
+}
+
+function fotosRequeridas(origen: OrigenEvidencia | null, concepto: string) {
+  if (esItemPruebaProlongada(concepto)) return 1;
+  return origen === "GALERIA" ? 1 : 4;
 }
 
 function ruta(id: string, punto?: string, tipo?: "ok" | "error", mensaje?: string) {
@@ -355,6 +373,8 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
   const codigoTexto = texto(formData, "codigo");
   const itemId = texto(formData, "itemId");
   const archivo = formData.get("archivo");
+  const origenTexto = texto(formData, "origenEvidencia").toUpperCase();
+  const origenEvidencia: OrigenEvidencia = origenTexto === "GALERIA" ? "GALERIA" : "CAMARA";
   if (!inspeccionId || !esCodigo(codigoTexto) || !itemId) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
   const { session, usuario, responsable } = await exigirResponsable(inspeccionId);
@@ -366,6 +386,7 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
     estadoV3: string;
     fotos: number;
     ordenes: number[];
+    descripcionPrimera: string | null;
   }>>`
     SELECT g."id",g."areaId"::text,g."concepto",g."estadoV3",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos",
@@ -373,7 +394,15 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
         SELECT fa."orden" FROM "FotografiaArea" fa
         WHERE fa."guiaItemId"=g."id"
         ORDER BY fa."orden"
-      )::int[] AS "ordenes"
+      )::int[] AS "ordenes",
+      (
+        SELECT f."descripcion"
+        FROM "FotografiaArea" fa
+        JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+        WHERE fa."guiaItemId"=g."id"
+        ORDER BY fa."orden"
+        LIMIT 1
+      ) AS "descripcionPrimera"
     FROM "GuiaInspeccionItem" g
     WHERE g."id"=${itemId} AND g."inspeccionId"=${inspeccionId}
       AND g."area"=${`__PUNTO_CRITICO__:${codigo}`}
@@ -381,8 +410,19 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
   `;
   if (!item?.areaId) volver(inspeccionId, codigo, "error", "El concepto no pertenece a este punto crítico.");
   if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y su evidencia no puede modificarse.");
-  if (Number(item.fotos) >= 4) volver(inspeccionId, codigo, "error", "Este concepto ya tiene sus 4 fotografías. Elimina una si necesitas repetirla.");
-  const ordenFoto = [1, 2, 3, 4].find((orden) => !item.ordenes.includes(orden));
+  const origenActual = origenEvidenciaDescripcion(item.descripcionPrimera) ?? (Number(item.fotos) > 0 ? "CAMARA" : null);
+  if (!esItemPruebaProlongada(item.concepto) && origenActual && origenActual !== origenEvidencia) {
+    volver(inspeccionId, codigo, "error", "No combines cámara y galería dentro del mismo concepto. Quita la evidencia actual para cambiar de modalidad.");
+  }
+  const origenRegla = esItemPruebaProlongada(item.concepto) ? origenEvidencia : (origenActual ?? origenEvidencia);
+  const limiteFotos = fotosRequeridas(origenRegla, item.concepto);
+  if (Number(item.fotos) >= limiteFotos) {
+    volver(inspeccionId, codigo, "error", limiteFotos === 1
+      ? "Este concepto ya tiene la evidencia requerida."
+      : "Este concepto ya tiene sus 4 fotografías tomadas desde la aplicación.");
+  }
+  const ordenFoto = Array.from({ length: limiteFotos }, (_, index) => index + 1)
+    .find((orden) => !item.ordenes.includes(orden));
   if (!ordenFoto) volver(inspeccionId, codigo, "error", "No hay un espacio disponible para otra fotografía.");
   if (!(archivo instanceof File) || archivo.size === 0) volver(inspeccionId, codigo, "error", "Selecciona una fotografía.");
   if (!["image/jpeg", "image/png", "image/webp"].includes(archivo.type)) volver(inspeccionId, codigo, "error", "La evidencia debe ser JPG, PNG o WEBP.");
@@ -407,7 +447,7 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
           hallazgoId: null,
           url: rutaStorage,
           subidaPorId: session.user.id,
-          descripcion: `${puntoPorCodigo(codigo).etiqueta} · ${item.concepto} · foto ${ordenFoto}/4`,
+          descripcion: `[ORIGEN:${origenEvidencia}] ${puntoPorCodigo(codigo).etiqueta} · ${item.concepto} · foto ${ordenFoto}/${limiteFotos}`,
         },
       });
       await tx.$executeRaw`
@@ -427,7 +467,7 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
     entidad: "FotografiaArea",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} agregó evidencia ${ordenFoto}/4 a ${item.concepto} en ${puntoPorCodigo(codigo).etiqueta}.`,
+    descripcion: `${responsable} agregó evidencia ${ordenFoto}/${limiteFotos} (${origenEvidencia}) a ${item.concepto} en ${puntoPorCodigo(codigo).etiqueta}.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   volver(inspeccionId, codigo, "ok", "Fotografía registrada.");
@@ -571,13 +611,19 @@ export async function generarDescripcionIaPuntoCriticoV1(formData: FormData) {
   if (!item) volver(inspeccionId, codigo, "error", "Concepto no encontrado.");
   if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y no puede volver a analizarse.");
 
-  const fotos = await prisma.$queryRaw<Array<{ url: string }>>`
-    SELECT f."url" FROM "FotografiaArea" fa
+  const fotos = await prisma.$queryRaw<Array<{ url: string; descripcion: string | null }>>`
+    SELECT f."url",f."descripcion" FROM "FotografiaArea" fa
     JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
     WHERE fa."guiaItemId"=${itemId}
     ORDER BY fa."orden",fa."creadoEn"
   `;
-  if (fotos.length !== 4) volver(inspeccionId, codigo, "error", "Completa exactamente las 4 fotografías antes de generar la descripción con IA.");
+  const origenFotos = origenEvidenciaDescripcion(fotos[0]?.descripcion) ?? (fotos.length > 0 ? "CAMARA" : null);
+  const requeridas = fotosRequeridas(origenFotos, item.concepto);
+  if (fotos.length !== requeridas) {
+    volver(inspeccionId, codigo, "error", requeridas === 1
+      ? "La evidencia de galería requiere una fotografía antes del análisis con IA."
+      : "Completa las 4 fotografías tomadas desde la aplicación antes del análisis con IA.");
+  }
 
   const sb = obtenerSupabaseAdmin();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
@@ -597,7 +643,7 @@ export async function generarDescripcionIaPuntoCriticoV1(formData: FormData) {
       `Concepto: ${item.concepto}.`,
       item.especificacion ? `Criterio de revisión: ${item.especificacion}.` : "",
       item.herramientaSugerida ? `Herramienta asociada: ${item.herramientaSugerida}.` : "",
-      "Analiza exclusivamente lo visible en las cuatro fotografías. No inventes causas ocultas ni cumplimiento normativo que no pueda comprobarse.",
+      `Analiza exclusivamente lo visible en ${fotos.length === 1 ? "la fotografía proporcionada" : "las fotografías proporcionadas"}. No inventes causas ocultas ni cumplimiento normativo que no pueda comprobarse.`,
       "Redacta una descripción técnica breve, objetiva y útil para expediente.",
       "Sugiere una clasificación C, O, NC, CR o NA; la decisión final siempre será del Inspector.",
       "Devuelve únicamente JSON con: descripcion, clasificacionSugerida, justificacion."
@@ -681,6 +727,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   const itemId = texto(formData, "itemId");
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
+  const prioridadTexto = texto(formData, "prioridad").toUpperCase();
   const valorMedido = texto(formData, "valorMedido");
   const valorProyecto = texto(formData, "valorProyecto");
   const unidadMedida = texto(formData, "unidadMedida");
@@ -688,7 +735,8 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   const codigo = codigoTexto;
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
   if (!["C", "O", "NC", "CR", "NA"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
-  if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Confirma una descripción técnica de al menos 10 caracteres.");
+  if (!["P1", "P2", "P3", "P4", "P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona un nivel de prioridad válido.");
+  if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Confirma una interpretación o comentario técnico de al menos 10 caracteres.");
 
   const [item] = await prisma.$queryRaw<Array<{
     concepto: string;
@@ -698,9 +746,18 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     requiereComparacionProyecto: boolean;
     origenV3: string;
     estadoV3: string;
+    descripcionPrimera: string | null;
   }>>`
     SELECT g."concepto",g."observacion",g."requiereMedicion",g."requiereComparacionProyecto",g."origenV3",g."estadoV3",
-      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
+      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos",
+      (
+        SELECT f."descripcion"
+        FROM "FotografiaArea" fa
+        JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+        WHERE fa."guiaItemId"=g."id"
+        ORDER BY fa."orden"
+        LIMIT 1
+      ) AS "descripcionPrimera"
     FROM "GuiaInspeccionItem" g
     WHERE g."id"=${itemId} AND g."inspeccionId"=${inspeccionId}
       AND g."area"=${`__PUNTO_CRITICO__:${codigo}`}
@@ -708,7 +765,13 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   `;
   if (!item) volver(inspeccionId, codigo, "error", "Concepto no encontrado.");
   if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y no puede modificarse.");
-  if (Number(item.fotos) !== 4) volver(inspeccionId, codigo, "error", `${item.concepto} requiere exactamente 4 fotografías antes de cerrarse.`);
+  const origenFotosItem = origenEvidenciaDescripcion(item.descripcionPrimera) ?? (Number(item.fotos) > 0 ? "CAMARA" : null);
+  const requeridasItem = fotosRequeridas(origenFotosItem, item.concepto);
+  if (Number(item.fotos) !== requeridasItem) {
+    volver(inspeccionId, codigo, "error", requeridasItem === 1
+      ? `${item.concepto} requiere una fotografía de galería antes de cerrarse.`
+      : `${item.concepto} requiere 4 fotografías tomadas desde la aplicación antes de cerrarse.`);
+  }
   if (item.requiereMedicion && !valorMedido) {
     volver(inspeccionId, codigo, "error", `${item.concepto} requiere registrar el valor medido.`);
   }
@@ -720,13 +783,11 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   }
 
   const anterior = observacionObjeto(item.observacion);
-  if (!anterior.descripcionIa) {
-    volver(inspeccionId, codigo, "error", "Genera y revisa primero la descripción con IA a partir de las 4 fotografías.");
-  }
   const observacion: ObservacionItemCritico = {
     ...anterior,
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
+    prioridadFinal: prioridadTexto,
     actualizadoEn: new Date().toISOString(),
   };
 
@@ -758,7 +819,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
               area: puntoPorCodigo(codigo).etiqueta,
               descripcion: descripcionFinal,
               clasificacion,
-              prioridad: prioridadClasificacion(clasificacion),
+              prioridad: prioridadTexto as PrioridadHallazgo,
               textoIaOriginal: anterior.descripcionIa || null,
               textoInspectorFinal: descripcionFinal,
             },
@@ -771,7 +832,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
               titulo: `${puntoPorCodigo(codigo).etiqueta} · ${item.concepto}`,
               descripcion: descripcionFinal,
               clasificacion,
-              prioridad: prioridadClasificacion(clasificacion),
+              prioridad: prioridadTexto as PrioridadHallazgo,
               guiaItemId: itemId,
               textoIaOriginal: anterior.descripcionIa || null,
               textoInspectorFinal: descripcionFinal,
@@ -801,7 +862,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     entidadId: itemId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} cerró el concepto crítico “${item.concepto}” con clasificación ${clasificacionTexto} y 4 evidencias.`,
+    descripcion: `${responsable} cerró el concepto crítico “${item.concepto}” con clasificación ${clasificacionTexto}, prioridad ${prioridadTexto} y ${requeridasItem} evidencia(s).`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
