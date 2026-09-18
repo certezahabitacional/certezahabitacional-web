@@ -8,11 +8,6 @@ import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
-import {
-  extraerConfiguracionHerramientas,
-  HERRAMIENTAS_INSPECCION,
-  type CodigoHerramienta,
-} from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
 
 const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
@@ -29,26 +24,6 @@ function slug(valor: string) {
     .replace(/[^A-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 80);
-}
-
-
-function herramientaAplicaArea(codigo: CodigoHerramienta, areaCodigo: string, areaNombre: string) {
-  const area = slug(`${areaCodigo} ${areaNombre}`);
-  if (["MANOMETRO_AGUA", "DETECTOR_GAS", "HERMETICIDAD_HIDRAULICA", "HERMETICIDAD_GAS"].includes(codigo)) return false;
-  if (codigo === "CAMARA_TERMICA") return /(BANO|COCINA|LAVADO|LAVADERO|AZOTEA|SOTANO|CUARTO_SERVICIO)/.test(area);
-  if (["PROBADOR_GFCI_RCD", "DETECTOR_VOLTAJE", "MULTIMETRO"].includes(codigo)) return !/(JARDIN|PATIO|AZOTEA)/.test(area);
-  return true;
-}
-
-async function herramientasCotizadasInspeccion(inspeccionId: string) {
-  const [fila] = await prisma.$queryRaw<Array<{ observacionesInternas: string | null }>>`
-    SELECT c."observacionesInternas"
-    FROM "Inspeccion" i
-    LEFT JOIN "Cotizacion" c ON c."id"=i."cotizacionId"
-    WHERE i."id"=${inspeccionId}
-    LIMIT 1
-  `;
-  return extraerConfiguracionHerramientas(fila?.observacionesInternas).herramientas;
 }
 
 function supabaseAdmin() {
@@ -147,8 +122,6 @@ export async function generarAreasDesdeGuia(formData: FormData) {
       AND nullif(btrim("area"),'') IS NOT NULL
     ORDER BY 1
   `;
-
-  const herramientasCotizadas = await herramientasCotizadasInspeccion(inspeccionId);
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
