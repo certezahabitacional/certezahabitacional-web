@@ -12,6 +12,7 @@ on:
       - fix/acciones-visibles-inspecciones
       - fix/folio-directo-flujo-v1
       - fix/previsualizacion-fotos-puntos-criticos
+      - fix/regla-galeria-manometro-v1
 
 jobs:
   typecheck:
