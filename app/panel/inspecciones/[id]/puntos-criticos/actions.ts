@@ -696,7 +696,7 @@ export async function generarDescripcionIaPuntoCriticoV1(formData: FormData) {
     WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
   `;
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
-  volver(inspeccionId, codigo, "ok", "Descripción IA generada. Revísala y confirma la clasificación.");
+  redirect(`${ruta(inspeccionId, codigo, "ok", "Descripción IA generada. Revísala y confirma la clasificación.")}#item-${itemId}`);
 }
 
 function prioridadClasificacion(clasificacion: ClasificacionHallazgo): PrioridadHallazgo {

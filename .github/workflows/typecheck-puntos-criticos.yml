@@ -13,6 +13,7 @@ on:
       - fix/folio-directo-flujo-v1
       - fix/previsualizacion-fotos-puntos-criticos
       - fix/regla-galeria-manometro-v1
+      - fix/feedback-ia-puntos-criticos
 
 jobs:
   typecheck:

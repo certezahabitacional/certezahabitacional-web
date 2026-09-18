@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import CapturaCamara from "./CapturaCamara";
 import CargaGaleriaConPreview from "./CargaGaleriaConPreview";
+import BotonGenerarIa from "./BotonGenerarIa";
 import {
   cerrarPuntoCriticoV1,
   configurarPuntoCriticoV1,
@@ -460,7 +461,7 @@ export default async function PuntosCriticosPage({
               const evidenciaCompleta = fotosItem.length === requeridas;
               const cerrado = item.estadoV3 !== "PENDIENTE";
               return (
-                <article key={item.id} className={`rounded-3xl border p-5 ${cerrado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-900"}`}>
+                <article id={`item-${item.id}`} key={item.id} className={`scroll-mt-24 rounded-3xl border p-5 ${cerrado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-900"}`}>
                   <div className="grid gap-5 lg:grid-cols-[70px_1fr_340px]">
                     <div className="font-mono text-lg font-black text-cyan-300">{String(index + 1).padStart(2, "0")}</div>
                     <div>
@@ -571,9 +572,7 @@ export default async function PuntosCriticosPage({
                           <input type="hidden" name="inspeccionId" value={id} />
                           <input type="hidden" name="codigo" value={codigoSolicitado} />
                           <input type="hidden" name="itemId" value={item.id} />
-                          <button className="w-full rounded-xl border border-violet-300/30 px-4 py-3 text-sm font-black text-violet-200">
-                            ✨ GENERAR DESCRIPCIÓN CON IA
-                          </button>
+                          <BotonGenerarIa />
                         </form>
                       )}
 
