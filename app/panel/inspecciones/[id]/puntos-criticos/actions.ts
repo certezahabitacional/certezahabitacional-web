@@ -176,15 +176,22 @@ async function verificarSecuencia(inspeccionId: string, codigo: CodigoPuntoCriti
     if (paso.estado === "COMPLETADO" || paso.estado === "NO_APLICA") continue;
     const datos = datosObjeto(paso.datos);
     if (paso.estado === "EN_PROCESO" && datos.pruebaProlongada && paso.lecturaInicial) {
-      const [inicio] = await prisma.$queryRaw<Array<{ total: number }>>`
-        SELECT COUNT(*)::int AS "total"
-        FROM "FotografiaArea" fa
-        JOIN "GuiaInspeccionItem" g ON g."id"=fa."guiaItemId"
+      const [control] = await prisma.$queryRaw<Array<{ fotoInicial: number; pendientesOtros: number }>>`
+        SELECT
+          COUNT(*) FILTER (
+            WHERE g."concepto" ILIKE '%manómetro%' AND fa."fotografiaId" IS NOT NULL
+          )::int AS "fotoInicial",
+          COUNT(DISTINCT g."id") FILTER (
+            WHERE g."estadoV3"='PENDIENTE'
+              AND g."concepto" NOT ILIKE '%manómetro%'
+              AND g."concepto" NOT ILIKE '%lectura final%'
+          )::int AS "pendientesOtros"
+        FROM "GuiaInspeccionItem" g
+        LEFT JOIN "FotografiaArea" fa ON fa."guiaItemId"=g."id"
         WHERE g."inspeccionId"=${inspeccionId}
           AND g."area"=concat('__PUNTO_CRITICO__:',replace(${paso.clave},'PC_',''))
-          AND g."concepto" ILIKE '%manómetro%'
       `;
-      if (Number(inicio?.total ?? 0) > 0) continue;
+      if (Number(control?.fotoInicial ?? 0) > 0 && Number(control?.pendientesOtros ?? 0) === 0) continue;
     }
     throw new Error("Debes cerrar al 100% el punto crítico anterior antes de continuar.");
   }
@@ -273,14 +280,30 @@ export async function configurarPuntoCriticoV1(formData: FormData) {
     volver(inspeccionId, codigo, "error", "No se detectó información de proyecto para este punto crítico. Usa la plantilla precargada.");
   }
 
-  const pruebaProlongada = tienePruebaProlongadaCotizada(punto, herramientas);
+  const [pasoExistente] = await prisma.$queryRaw<Array<{ datos: unknown }>>`
+    SELECT "datos" FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
+    LIMIT 1
+  `;
+  const datosExistentes = datosObjeto(pasoExistente?.datos);
+  const pruebaProlongada =
+    Boolean(datosExistentes.pruebaProlongada) ||
+    tienePruebaProlongadaCotizada(punto, herramientas);
+  const herramientasEfectivas = [...herramientas];
+  if (pruebaProlongada && codigo === "HIDRAULICA") {
+    if (!herramientasEfectivas.includes("HERMETICIDAD_HIDRAULICA")) herramientasEfectivas.push("HERMETICIDAD_HIDRAULICA");
+    if (!herramientasEfectivas.includes("MANOMETRO_AGUA")) herramientasEfectivas.push("MANOMETRO_AGUA");
+  }
+  if (pruebaProlongada && codigo === "GAS") {
+    if (!herramientasEfectivas.includes("HERMETICIDAD_GAS")) herramientasEfectivas.push("HERMETICIDAD_GAS");
+  }
   const datos: DatosPasoCritico = {
     configurado: true,
     aplica: aplicaTexto === "SI",
     fuente: fuenteTexto as "PROYECTO" | "PLANTILLA",
     proyectoDisponible,
     pruebaProlongada,
-    herramientas,
+    herramientas: herramientasEfectivas,
   };
 
   if (aplicaTexto === "NO") {
@@ -306,7 +329,7 @@ export async function configurarPuntoCriticoV1(formData: FormData) {
     );
   }
 
-  const plantilla = plantillaAplicablePuntoCritico(punto, herramientas);
+  const plantilla = plantillaAplicablePuntoCritico(punto, herramientasEfectivas);
   const areaCodigo = `PC_${codigo}`;
   const areaMarcador = `__PUNTO_CRITICO__:${codigo}`;
 
@@ -582,6 +605,143 @@ export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   volver(inspeccionId, codigo, "ok", "Prueba prolongada iniciada. Ya puedes continuar con el siguiente punto y regresar después para cerrarla.");
+}
+
+export async function cerrarPruebaProlongadaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const codigoTexto = texto(formData, "codigo");
+  const lecturaFinal = texto(formData, "lecturaFinal");
+  const unidad = texto(formData, "unidad");
+  const descripcionFinal = texto(formData, "descripcionFinal");
+  const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
+  const prioridadTexto = texto(formData, "prioridad").toUpperCase();
+
+  if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
+  const codigo = codigoTexto;
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+
+  if (!["HIDRAULICA", "GAS"].includes(codigo)) {
+    volver(inspeccionId, codigo, "error", "La prueba prolongada con manómetro sólo corresponde a Hidráulica o Gas.");
+  }
+  if (!lecturaFinal || !unidad) volver(inspeccionId, codigo, "error", "Registra la lectura final y su unidad.");
+  if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Describe el resultado o hallazgo de la prueba con al menos 10 caracteres.");
+  if (!["C","O","NC","CR","NA"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
+  if (!["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona una prioridad válida.");
+
+  const [paso] = await prisma.$queryRaw<Array<{
+    datos: unknown;
+    lecturaInicial: string | null;
+    unidad: string | null;
+    lecturaFinal: string | null;
+  }>>`
+    SELECT "datos","lecturaInicial","unidad","lecturaFinal"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
+    LIMIT 1
+  `;
+  if (!paso || !datosObjeto(paso.datos).pruebaProlongada) volver(inspeccionId, codigo, "error", "Este punto no tiene habilitada la prueba prolongada.");
+  if (!paso.lecturaInicial) volver(inspeccionId, codigo, "error", "Primero registra la foto y lectura inicial.");
+  if (paso.lecturaFinal) volver(inspeccionId, codigo, "error", "La prueba prolongada ya fue cerrada.");
+
+  const especiales = await prisma.$queryRaw<Array<{ id: string; concepto: string; fotos: number }>>`
+    SELECT g."id",g."concepto",
+      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."inspeccionId"=${inspeccionId}
+      AND g."area"=${`__PUNTO_CRITICO__:${codigo}`}
+      AND (g."concepto" ILIKE '%manómetro%' OR g."concepto" ILIKE '%lectura final%')
+    ORDER BY g."orden"
+  `;
+  const inicial = especiales.find((item) => /manómetro/i.test(item.concepto));
+  const final = especiales.find((item) => /lectura final/i.test(item.concepto));
+  if (!inicial || Number(inicial.fotos) !== 1) volver(inspeccionId, codigo, "error", "Falta la fotografía inicial del manómetro.");
+  if (!final || Number(final.fotos) !== 1) volver(inspeccionId, codigo, "error", "Falta la fotografía final del manómetro.");
+
+  const [otros] = await prisma.$queryRaw<Array<{ pendientes: number }>>`
+    SELECT COUNT(*) FILTER (
+      WHERE "estadoV3"='PENDIENTE'
+        AND "concepto" NOT ILIKE '%manómetro%'
+        AND "concepto" NOT ILIKE '%lectura final%'
+    )::int AS "pendientes"
+    FROM "GuiaInspeccionItem"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "area"=${`__PUNTO_CRITICO__:${codigo}`}
+  `;
+  if (Number(otros?.pendientes ?? 0) > 0) {
+    volver(inspeccionId, codigo, "error", "Cierra primero todos los demás conceptos. La prueba con manómetro debe ser la única plantilla abierta.");
+  }
+
+  const observacion = JSON.stringify({
+    descripcionFinal,
+    clasificacionFinal: clasificacionTexto,
+    prioridadFinal: prioridadTexto,
+    actualizadoEn: new Date().toISOString(),
+  });
+  const clasificacion = clasificacionTexto as ClasificacionHallazgo;
+  const prioridad = prioridadTexto as PrioridadHallazgo;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "ProtocoloInspeccionPaso"
+      SET "lecturaFinal"=${lecturaFinal},"unidad"=${unidad},
+          "estado"='COMPLETADO',"completadoEn"=NOW(),"actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "observacion"=${observacion},"estadoV3"='REVISADO',"completado"=true,
+          "cerradoEn"=NOW(),"actualizadoEn"=NOW()
+      WHERE "id"=ANY(${[inicial.id, final.id]}::text[])
+    `;
+
+    if ([ClasificacionHallazgo.O, ClasificacionHallazgo.NC, ClasificacionHallazgo.CR].includes(clasificacion)) {
+      const hallazgo = await tx.hallazgo.create({
+        data: {
+          inspeccionId,
+          creadoPorId: usuario.id,
+          area: puntoPorCodigo(codigo).etiqueta,
+          titulo: `${puntoPorCodigo(codigo).etiqueta} · Prueba de hermeticidad con manómetro`,
+          descripcion: descripcionFinal,
+          clasificacion,
+          prioridad,
+          guiaItemId: final.id,
+          textoInspectorFinal: descripcionFinal,
+        },
+      });
+      await tx.$executeRaw`
+        UPDATE "Fotografia" f SET "hallazgoId"=${hallazgo.id}
+        WHERE f."id" IN (
+          SELECT fa."fotografiaId"
+          FROM "FotografiaArea" fa
+          WHERE fa."guiaItemId"=ANY(${[inicial.id, final.id]}::text[])
+        )
+      `;
+    }
+
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='REVISADA',"resultado"='PUNTO_CRITICO_COMPLETADO',
+          "comentarioFinal"=${`${puntoPorCodigo(codigo).etiqueta}: prueba de hermeticidad cerrada. ${descripcionFinal}`},
+          "revisadaEn"=NOW(),"cerradaEn"=NOW(),"cerradaPorId"=${usuario.id},"actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId} AND "codigo"=${`PC_${codigo}`}
+    `;
+  });
+
+  await recalcularIndice(inspeccionId);
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "ProtocoloInspeccionPaso",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} cerró la prueba prolongada de ${puntoPorCodigo(codigo).etiqueta}: ${paso.lecturaInicial} ${paso.unidad ?? unidad} → ${lecturaFinal} ${unidad}.`,
+  });
+
+  const siguiente = siguienteCodigo(codigo);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  if (siguiente) redirect(ruta(inspeccionId, siguiente, "ok", "Prueba de hermeticidad cerrada."));
+  redirect(`/panel/inspecciones/${inspeccionId}/areas?ok=${encodeURIComponent("Prueba de hermeticidad cerrada.")}`);
 }
 
 export async function generarDescripcionIaPuntoCriticoV1(formData: FormData) {
@@ -889,7 +1049,20 @@ export async function cerrarPuntoCriticoV1(formData: FormData) {
       COUNT(*)::int AS "total",
       COUNT(*) FILTER (WHERE g."estadoV3"='PENDIENTE')::int AS "pendientes",
       COUNT(*) FILTER (
-        WHERE (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 4
+        WHERE
+          CASE
+            WHEN g."concepto" ILIKE '%manómetro%' OR g."concepto" ILIKE '%lectura final%'
+              THEN (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 1
+            WHEN EXISTS (
+              SELECT 1
+              FROM "FotografiaArea" fa
+              JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+              WHERE fa."guiaItemId"=g."id"
+                AND f."descripcion" LIKE '[ORIGEN:GALERIA]%'
+            )
+              THEN (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 1
+            ELSE (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 4
+          END
       )::int AS "incompletosFotos",
       COALESCE((SELECT ("datos"->>'pruebaProlongada')::boolean FROM "ProtocoloInspeccionPaso"
         WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`} LIMIT 1),false) AS "pruebaProlongada",
@@ -902,7 +1075,7 @@ export async function cerrarPuntoCriticoV1(formData: FormData) {
   `;
   if (Number(estado?.total ?? 0) === 0) volver(inspeccionId, codigo, "error", "Primero configura este punto como SI APLICA.");
   if (Number(estado?.pendientes ?? 0) > 0) volver(inspeccionId, codigo, "error", `Faltan ${estado.pendientes} concepto(s) por cerrar.`);
-  if (Number(estado?.incompletosFotos ?? 0) > 0) volver(inspeccionId, codigo, "error", "Todos los conceptos requieren exactamente 4 fotografías.");
+  if (Number(estado?.incompletosFotos ?? 0) > 0) volver(inspeccionId, codigo, "error", "Hay conceptos sin la evidencia requerida: 1 foto de galería o 4 fotos tomadas desde la aplicación.");
   if (estado?.pruebaProlongada && !estado.lecturaInicial) {
     volver(inspeccionId, codigo, "error", "Falta registrar la lectura inicial de la prueba prolongada.");
   }
