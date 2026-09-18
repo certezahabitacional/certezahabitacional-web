@@ -5,6 +5,7 @@ on:
       - feature/puntos-criticos-equipo-v1
       - fix/mapeo-equipo-areas-v1
       - fix/camara-galeria-puntos-criticos
+      - fix/camara-webcam-puntos-criticos
 
 jobs:
   typecheck:
