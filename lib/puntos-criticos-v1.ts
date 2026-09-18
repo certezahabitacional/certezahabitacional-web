@@ -62,7 +62,7 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
     herramientasPruebaProlongada: ["HERMETICIDAD_HIDRAULICA"],
     plantilla: [
       item("PC_HID_01_MANOMETRO", "Fotografía del manómetro al iniciar", "Cuando la cotización incluya manómetro o prueba de hermeticidad, la primera evidencia debe mostrar manómetro, escala y lectura inicial.", "Manómetro / cámara", true, false, true, ["MANOMETRO_AGUA", "HERMETICIDAD_HIDRAULICA"]),
-      item("PC_HID_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba de hermeticidad.", "Manómetro / cronómetro", true, true, true, ["HERMETICIDAD_HIDRAULICA"]),
+      item("PC_HID_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba de hermeticidad.", "Manómetro / cronómetro", true, false, true, ["HERMETICIDAD_HIDRAULICA"]),
       item("PC_HID_03_FUGAS", "Fugas visibles", "Revisar uniones, válvulas, conexiones y puntos accesibles en busca de fuga o humedad.", "Detector de humedad / inspección visual"),
       item("PC_HID_04_VALVULAS", "Válvulas y elementos de control", "Verificar presencia, accesibilidad, fijación y condición aparente.", "Inspección visual", false, true),
       item("PC_HID_05_SOPORTES", "Trazo, soportes y protección", "Revisar recorrido visible, soportes, pasos, protección e interferencias.", "Inspección visual / medidor láser", false, true),
@@ -114,7 +114,7 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
     herramientasPruebaProlongada: ["HERMETICIDAD_GAS"],
     plantilla: [
       item("PC_GAS_01_MANOMETRO", "Fotografía del manómetro al iniciar", "Cuando la cotización incluya prueba de hermeticidad, la primera evidencia debe mostrar manómetro, escala y lectura inicial.", "Manómetro / cámara", true, false, true, ["HERMETICIDAD_GAS"]),
-      item("PC_GAS_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba.", "Manómetro / cronómetro", true, true, true, ["HERMETICIDAD_GAS"]),
+      item("PC_GAS_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba.", "Manómetro / cronómetro", true, false, true, ["HERMETICIDAD_GAS"]),
       item("PC_GAS_03_FUGAS", "Indicios de fuga", "Revisar conexiones con el procedimiento seguro permitido; no realizar maniobras no autorizadas.", "Detector de gas combustible"),
       item("PC_GAS_04_VALVULAS", "Válvulas y regulador", "Verificar presencia, accesibilidad, fijación y condición.", "Inspección visual", false, true),
       item("PC_GAS_05_SOPORTES", "Soportes, protección y recorrido", "Revisar sujeción, protección e interferencias.", "Inspección visual / medidor láser", false, true),
