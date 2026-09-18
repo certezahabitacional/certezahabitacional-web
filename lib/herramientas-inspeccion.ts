@@ -288,3 +288,20 @@ export function parsearResultadosInstrumentales(
     return {};
   }
 }
+
+
+export function obtenerHerramientasCotizadasDesdeCotizacion(
+  valor?: string | null,
+): CodigoHerramienta[] {
+  const original = valor ?? "";
+  const configuracion = extraerConfiguracionHerramientas(original);
+
+  // Las cotizaciones nuevas guardan explícitamente la selección del punto 4.
+  if (original.includes("[[CH_HERRAMIENTAS_V1:")) {
+    return configuracion.herramientas;
+  }
+
+  // Compatibilidad con cotizaciones legadas: el formato anterior incluía
+  // el alcance instrumental estándar completo y no persistía la selección.
+  return [...HERRAMIENTAS_PRESELECCIONADAS];
+}
