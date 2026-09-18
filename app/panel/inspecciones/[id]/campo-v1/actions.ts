@@ -8,8 +8,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import {
-  extraerConfiguracionHerramientas,
   HERRAMIENTAS_INSPECCION,
+  obtenerHerramientasCotizadasDesdeCotizacion,
   type CodigoHerramienta,
 } from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
@@ -44,7 +44,7 @@ async function herramientasCotizadas(inspeccionId: string) {
     WHERE i."id"=${inspeccionId}
     LIMIT 1
   `;
-  return extraerConfiguracionHerramientas(fila?.observacionesInternas).herramientas;
+  return obtenerHerramientasCotizadasDesdeCotizacion(fila?.observacionesInternas);
 }
 
 async function exigirResponsableV1(inspeccionId: string) {
