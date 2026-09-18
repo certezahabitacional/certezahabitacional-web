@@ -156,6 +156,35 @@ export default async function PuntosCriticosPage({
     ORDER BY "orden"
   `;
 
+  const iniciosPrueba = await prisma.$queryRaw<Array<{ codigo: string }>>`
+    SELECT DISTINCT replace(g."area",'__PUNTO_CRITICO__:','') AS "codigo"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."inspeccionId"=${id}
+      AND g."area" LIKE '__PUNTO_CRITICO__:%'
+      AND g."concepto" ILIKE '%manómetro%'
+      AND g."estadoV3" <> 'PENDIENTE'
+  `;
+  const pruebasProlongadasIniciadas = new Set(iniciosPrueba.map((item) => item.codigo));
+
+  const puedeEntrarPunto = (codigo: CodigoPuntoCriticoV1) => {
+    const indice = PUNTOS_CRITICOS_V1.findIndex((item) => item.codigo === codigo);
+    for (const anterior of PUNTOS_CRITICOS_V1.slice(0, indice)) {
+      const pasoAnterior = pasos.find((item) => item.clave === `PC_${anterior.codigo}`);
+      if (!pasoAnterior) return false;
+      if (pasoAnterior.estado === "COMPLETADO" || pasoAnterior.estado === "NO_APLICA") continue;
+      const datosAnterior = datosPaso(pasoAnterior.datos);
+      if (
+        pasoAnterior.estado === "EN_PROCESO" &&
+        datosAnterior.pruebaProlongada &&
+        pruebasProlongadasIniciadas.has(anterior.codigo)
+      ) {
+        continue;
+      }
+      return false;
+    }
+    return true;
+  };
+
   const herramientasCotizadas = obtenerHerramientasCotizadasDesdeCotizacion(
     inspeccion.cotizacion?.observacionesInternas,
   );
@@ -186,6 +215,15 @@ export default async function PuntosCriticosPage({
   }
 
   const codigoSolicitado = query.punto && esCodigo(query.punto) ? query.punto : "HIDRAULICA";
+  if (!puedeEntrarPunto(codigoSolicitado)) {
+    const primerPendiente = PUNTOS_CRITICOS_V1.find((item) => {
+      const pasoItem = pasos.find((pasoActual) => pasoActual.clave === `PC_${item.codigo}`);
+      return pasoItem && pasoItem.estado !== "COMPLETADO" && pasoItem.estado !== "NO_APLICA";
+    });
+    redirect(
+      `/panel/inspecciones/${id}/puntos-criticos?punto=${primerPendiente?.codigo ?? "HIDRAULICA"}&error=${encodeURIComponent("Debes respetar la secuencia obligatoria de puntos críticos.")}`,
+    );
+  }
   const punto = PUNTOS_CRITICOS_V1.find((item) => item.codigo === codigoSolicitado)!;
   const paso = pasos.find((item) => item.clave === `PC_${codigoSolicitado}`);
   if (!paso) redirect(`/panel/inspecciones/${id}/puntos-criticos?punto=HIDRAULICA`);
@@ -247,16 +285,37 @@ export default async function PuntosCriticosPage({
           {PUNTOS_CRITICOS_V1.map((item, index) => {
             const estado = pasos.find((p) => p.clave === `PC_${item.codigo}`)?.estado ?? "PENDIENTE";
             const activo = item.codigo === codigoSolicitado;
-            return (
+            const habilitado = puedeEntrarPunto(item.codigo);
+            const contenido = (
+              <>
+                <span className="block text-[10px] text-slate-500">{index + 1}/7</span>
+                <span className="mt-1 block">{item.etiqueta}</span>
+                <span className="mt-2 block text-[10px]">
+                  {habilitado ? estado.replaceAll("_", " ") : "BLOQUEADO"}
+                </span>
+              </>
+            );
+            const clases = `rounded-2xl border p-3 text-xs font-black ${activo
+              ? "border-cyan-300/50 bg-cyan-300/10 text-cyan-200"
+              : !habilitado
+                ? "cursor-not-allowed border-white/5 bg-slate-950 text-slate-700"
+                : estado === "COMPLETADO" || estado === "NO_APLICA"
+                  ? "border-emerald-300/20 bg-emerald-300/5 text-emerald-300"
+                  : estado === "EN_PROCESO"
+                    ? "border-amber-300/20 bg-amber-300/5 text-amber-200"
+                    : "border-white/10 bg-slate-900 text-slate-500"}`;
+            return habilitado ? (
               <Link
                 key={item.codigo}
                 href={`/panel/inspecciones/${id}/puntos-criticos?punto=${item.codigo}`}
-                className={`rounded-2xl border p-3 text-xs font-black ${activo ? "border-cyan-300/50 bg-cyan-300/10 text-cyan-200" : estado === "COMPLETADO" || estado === "NO_APLICA" ? "border-emerald-300/20 bg-emerald-300/5 text-emerald-300" : estado === "EN_PROCESO" ? "border-amber-300/20 bg-amber-300/5 text-amber-200" : "border-white/10 bg-slate-900 text-slate-500"}`}
+                className={clases}
               >
-                <span className="block text-[10px] text-slate-500">{index + 1}/7</span>
-                <span className="mt-1 block">{item.etiqueta}</span>
-                <span className="mt-2 block text-[10px]">{estado.replaceAll("_", " ")}</span>
+                {contenido}
               </Link>
+            ) : (
+              <div key={item.codigo} className={clases} aria-disabled="true">
+                {contenido}
+              </div>
             );
           })}
         </section>
