@@ -39,6 +39,11 @@ type Item = {
   herramientaSugerida: string | null;
   estadoV3: string;
   observacion: string | null;
+  requiereMedicion: boolean;
+  requiereComparacionProyecto: boolean;
+  valorMedido: string | null;
+  valorProyecto: string | null;
+  unidadMedida: string | null;
   fotos: number;
 };
 
@@ -191,6 +196,7 @@ export default async function PuntosCriticosPage({
   const items = datos.configurado && datos.aplica
     ? await prisma.$queryRaw<Item[]>`
         SELECT g."id",g."concepto",g."especificacion",g."herramientaSugerida",g."estadoV3",g."observacion",
+          g."requiereMedicion",g."requiereComparacionProyecto",g."valorMedido",g."valorProyecto",g."unidadMedida",
           (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
         FROM "GuiaInspeccionItem" g
         WHERE g."inspeccionId"=${id} AND g."area"=${`__PUNTO_CRITICO__:${codigoSolicitado}`}
@@ -401,6 +407,27 @@ export default async function PuntosCriticosPage({
                           <input type="hidden" name="inspeccionId" value={id} />
                           <input type="hidden" name="codigo" value={codigoSolicitado} />
                           <input type="hidden" name="itemId" value={item.id} />
+                          {item.requiereMedicion && (
+                            <div className="mb-4 rounded-xl border border-amber-300/20 bg-slate-950 p-3">
+                              <p className="text-xs font-black uppercase text-amber-200">Medición obligatoria</p>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <label className="text-xs font-bold text-slate-400">
+                                  Valor medido
+                                  <input name="valorMedido" required defaultValue={item.valorMedido ?? ""} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" />
+                                </label>
+                                <label className="text-xs font-bold text-slate-400">
+                                  Unidad
+                                  <input name="unidadMedida" required defaultValue={item.unidadMedida ?? ""} placeholder="psi, V, %, cm/m..." className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" />
+                                </label>
+                              </div>
+                              {item.requiereComparacionProyecto && datos.fuente === "PROYECTO" && (
+                                <label className="mt-3 block text-xs font-bold text-slate-400">
+                                  Valor de proyecto
+                                  <input name="valorProyecto" required defaultValue={item.valorProyecto ?? ""} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-white" />
+                                </label>
+                              )}
+                            </div>
+                          )}
                           <label className="text-xs font-black uppercase text-slate-400">Descripción técnica</label>
                           <textarea name="descripcionFinal" required defaultValue={obs.descripcionFinal ?? obs.descripcionIa} className="mt-2 min-h-28 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm" />
                           <label className="mt-3 block text-xs font-black uppercase text-slate-400">Clasificación final del Inspector</label>
@@ -420,6 +447,12 @@ export default async function PuntosCriticosPage({
                         <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
                           <p className="font-black">CONCEPTO CERRADO ✓</p>
                           <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
+                          {item.requiereMedicion && item.valorMedido && (
+                            <p className="mt-2 text-xs">
+                              Medición: <strong>{item.valorMedido} {item.unidadMedida ?? ""}</strong>
+                              {item.valorProyecto ? <> · Proyecto: <strong>{item.valorProyecto} {item.unidadMedida ?? ""}</strong></> : null}
+                            </p>
+                          )}
                           {obs.descripcionFinal && <p className="mt-2 text-xs">{obs.descripcionFinal}</p>}
                         </div>
                       )}
