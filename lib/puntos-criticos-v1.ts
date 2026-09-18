@@ -17,6 +17,7 @@ export type ItemPlantillaPuntoCriticoV1 = {
   requiereMedicion: boolean;
   requiereComparacionProyecto: boolean;
   requiereCuatroFotos: boolean;
+  requiereHerramientasCotizadas?: CodigoHerramienta[];
 };
 
 export type PuntoCriticoV1 = {
@@ -38,6 +39,7 @@ const item = (
   requiereMedicion = false,
   requiereComparacionProyecto = false,
   requiereCuatroFotos = true,
+  requiereHerramientasCotizadas?: CodigoHerramienta[],
 ): ItemPlantillaPuntoCriticoV1 => ({
   codigo,
   nombre,
@@ -46,6 +48,7 @@ const item = (
   requiereMedicion,
   requiereComparacionProyecto,
   requiereCuatroFotos,
+  requiereHerramientasCotizadas,
 });
 
 export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
@@ -58,8 +61,8 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
     herramientasRelacionadas: ["MANOMETRO_AGUA", "HERMETICIDAD_HIDRAULICA", "MEDIDOR_LASER", "CAMARA_TERMICA"],
     herramientasPruebaProlongada: ["HERMETICIDAD_HIDRAULICA"],
     plantilla: [
-      item("PC_HID_01_MANOMETRO", "Fotografía del manómetro al iniciar", "Cuando la cotización incluya manómetro o prueba de hermeticidad, la primera evidencia debe mostrar manómetro, escala y lectura inicial.", "Manómetro / cámara", true, false),
-      item("PC_HID_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba de hermeticidad.", "Manómetro / cronómetro", true, true),
+      item("PC_HID_01_MANOMETRO", "Fotografía del manómetro al iniciar", "Cuando la cotización incluya manómetro o prueba de hermeticidad, la primera evidencia debe mostrar manómetro, escala y lectura inicial.", "Manómetro / cámara", true, false, true, ["MANOMETRO_AGUA", "HERMETICIDAD_HIDRAULICA"]),
+      item("PC_HID_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba de hermeticidad.", "Manómetro / cronómetro", true, true, true, ["HERMETICIDAD_HIDRAULICA"]),
       item("PC_HID_03_FUGAS", "Fugas visibles", "Revisar uniones, válvulas, conexiones y puntos accesibles en busca de fuga o humedad.", "Detector de humedad / inspección visual"),
       item("PC_HID_04_VALVULAS", "Válvulas y elementos de control", "Verificar presencia, accesibilidad, fijación y condición aparente.", "Inspección visual", false, true),
       item("PC_HID_05_SOPORTES", "Trazo, soportes y protección", "Revisar recorrido visible, soportes, pasos, protección e interferencias.", "Inspección visual / medidor láser", false, true),
@@ -110,8 +113,8 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
     herramientasRelacionadas: ["DETECTOR_GAS", "HERMETICIDAD_GAS", "MEDIDOR_LASER"],
     herramientasPruebaProlongada: ["HERMETICIDAD_GAS"],
     plantilla: [
-      item("PC_GAS_01_MANOMETRO", "Fotografía del manómetro al iniciar", "Cuando la cotización incluya prueba de hermeticidad, la primera evidencia debe mostrar manómetro, escala y lectura inicial.", "Manómetro / cámara", true, false),
-      item("PC_GAS_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba.", "Manómetro / cronómetro", true, true),
+      item("PC_GAS_01_MANOMETRO", "Fotografía del manómetro al iniciar", "Cuando la cotización incluya prueba de hermeticidad, la primera evidencia debe mostrar manómetro, escala y lectura inicial.", "Manómetro / cámara", true, false, true, ["HERMETICIDAD_GAS"]),
+      item("PC_GAS_02_LECTURA_FINAL", "Lectura final de presión", "Registrar lectura final y tiempo transcurrido al cierre de la prueba.", "Manómetro / cronómetro", true, true, true, ["HERMETICIDAD_GAS"]),
       item("PC_GAS_03_FUGAS", "Indicios de fuga", "Revisar conexiones con el procedimiento seguro permitido; no realizar maniobras no autorizadas.", "Detector de gas combustible"),
       item("PC_GAS_04_VALVULAS", "Válvulas y regulador", "Verificar presencia, accesibilidad, fijación y condición.", "Inspección visual", false, true),
       item("PC_GAS_05_SOPORTES", "Soportes, protección y recorrido", "Revisar sujeción, protección e interferencias.", "Inspección visual / medidor láser", false, true),
@@ -146,8 +149,8 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
     plantilla: [
       item("PC_ELE_01_TABLERO", "Fotografía general del tablero", "Registrar tablero, identificación y condición general antes de verificaciones permitidas.", "Cámara / inspección visual", false, true),
       item("PC_ELE_02_PROTECCIONES", "Protecciones y circuitos", "Revisar identificación y condición visible sin desmontajes no autorizados.", "Inspección visual", false, true),
-      item("PC_ELE_03_VOLTAJE", "Voltaje en puntos permitidos", "Registrar voltaje sólo bajo condiciones seguras.", "Multímetro CAT adecuado", true, true),
-      item("PC_ELE_04_POLARIDAD", "Polaridad y tierra verificable", "Verificar con equipo apropiado sin intervenir partes energizadas expuestas.", "Probador GFCI/RCD / multímetro", true, false),
+      item("PC_ELE_03_VOLTAJE", "Voltaje en puntos permitidos", "Registrar voltaje sólo bajo condiciones seguras.", "Multímetro CAT adecuado", true, true, true, ["MULTIMETRO"]),
+      item("PC_ELE_04_POLARIDAD", "Polaridad y tierra verificable", "Verificar con equipo apropiado sin intervenir partes energizadas expuestas.", "Probador GFCI/RCD / multímetro", true, false, true, ["PROBADOR_GFCI_RCD", "MULTIMETRO"]),
       item("PC_ELE_05_CONTACTOS", "Contactos, apagadores y salidas", "Revisar ubicación, fijación, placas y funcionamiento básico.", "Probador / nivel", false, true),
       item("PC_ELE_06_LUMINARIAS", "Luminarias y salidas de iluminación", "Revisar ubicación, fijación y funcionamiento accesible.", "Prueba funcional / inspección visual", false, true),
       item("PC_ELE_07_CONDICION", "Humedad, daños e interferencias", "Registrar cualquier condición visible que requiera atención.", "Inspección visual / cámara térmica"),
@@ -210,4 +213,16 @@ export function tienePruebaProlongadaCotizada(
 ) {
   const seleccionadas = new Set(herramientasCotizadas);
   return punto.herramientasPruebaProlongada.some((codigo) => seleccionadas.has(codigo));
+}
+
+
+export function plantillaAplicablePuntoCritico(
+  punto: PuntoCriticoV1,
+  herramientasCotizadas: readonly CodigoHerramienta[],
+) {
+  const seleccionadas = new Set(herramientasCotizadas);
+  return punto.plantilla.filter((item) =>
+    !item.requiereHerramientasCotizadas?.length ||
+    item.requiereHerramientasCotizadas.some((codigo) => seleccionadas.has(codigo)),
+  );
 }
