@@ -68,6 +68,16 @@ export default async function CampoV1Page({ params, searchParams }: {
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
+  const [critical] = await prisma.$queryRaw<Array<{ total: number; incompletos: number }>>`
+    SELECT COUNT(*)::int AS "total",
+           COUNT(*) FILTER (WHERE "estado" NOT IN ('COMPLETADO','NO_APLICA'))::int AS "incompletos"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
+  `;
+  if (Number(critical?.total ?? 0) < 7 || Number(critical?.incompletos ?? 0) > 0) {
+    redirect(`/panel/inspecciones/${id}/puntos-criticos`);
+  }
+
   const areas = await prisma.$queryRaw<Area[]>`
     SELECT a."id"::text,a."codigo",a."nombre",a."estado",a."resultado",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") AS "fotos",
@@ -76,7 +86,9 @@ export default async function CampoV1Page({ params, searchParams }: {
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") AS "puntos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') AS "pendientes",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') AS "noAplica"
-    FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} ORDER BY a."orden",a."nombre"
+    FROM "AreaInspeccion" a
+    WHERE a."inspeccionId"=${id} AND a."tipo" <> 'PUNTO_CRITICO'
+    ORDER BY a."orden",a."nombre"
   `;
 
   const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areas.find((a) => a.estado !== "REVISADA") ?? areas[0];
