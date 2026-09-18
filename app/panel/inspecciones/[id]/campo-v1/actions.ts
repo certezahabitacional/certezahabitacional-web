@@ -7,12 +7,44 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import {
+  HERRAMIENTAS_INSPECCION,
+  obtenerHerramientasCotizadasDesdeCotizacion,
+  type CodigoHerramienta,
+} from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
 
 const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
 
 function volver(id: string, tipo: "ok" | "error", mensaje: string): never {
   redirect(`/panel/inspecciones/${id}/campo-v1?${tipo}=${encodeURIComponent(mensaje)}`);
+}
+
+function normalizarAreaEquipo(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_");
+}
+
+function herramientaAplicaArea(codigo: CodigoHerramienta, areaCodigo: string, areaNombre: string) {
+  const area = normalizarAreaEquipo(`${areaCodigo} ${areaNombre}`);
+  if (["MANOMETRO_AGUA", "DETECTOR_GAS", "HERMETICIDAD_HIDRAULICA", "HERMETICIDAD_GAS"].includes(codigo)) return false;
+  if (codigo === "CAMARA_TERMICA") return /(BANO|COCINA|LAVADO|LAVADERO|AZOTEA|SOTANO|CUARTO_SERVICIO)/.test(area);
+  if (["PROBADOR_GFCI_RCD", "DETECTOR_VOLTAJE", "MULTIMETRO"].includes(codigo)) return !/(JARDIN|PATIO|AZOTEA)/.test(area);
+  return true;
+}
+
+async function herramientasCotizadas(inspeccionId: string) {
+  const [fila] = await prisma.$queryRaw<Array<{ observacionesInternas: string | null }>>`
+    SELECT c."observacionesInternas"
+    FROM "Inspeccion" i
+    LEFT JOIN "Cotizacion" c ON c."id"=i."cotizacionId"
+    WHERE i."id"=${inspeccionId}
+    LIMIT 1
+  `;
+  return obtenerHerramientasCotizadasDesdeCotizacion(fila?.observacionesInternas);
 }
 
 async function exigirResponsableV1(inspeccionId: string) {
@@ -39,6 +71,7 @@ export async function inicializarPlanAreasV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  const equipoCotizado = await herramientasCotizadas(inspeccionId);
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
@@ -48,16 +81,20 @@ export async function inicializarPlanAreasV1(formData: FormData) {
       WHERE a."inspeccionId"=${inspeccionId} AND a."bibliotecaAreaId" IS NULL
         AND (b."codigo"=a."codigo" OR b."codigo"=regexp_replace(upper(unaccent(a."nombre")), '[^A-Z0-9]+', '_', 'g'))
     `;
-    const areas = await tx.$queryRaw<Array<{ id: string; nombre: string; bibliotecaAreaId: string | null }>>`
-      SELECT "id"::text,"nombre","bibliotecaAreaId"::text FROM "AreaInspeccion" WHERE "inspeccionId"=${inspeccionId} ORDER BY "orden"
+    const areas = await tx.$queryRaw<Array<{ id: string; codigo: string; nombre: string; bibliotecaAreaId: string | null }>>`
+      SELECT "id"::text,"codigo","nombre","bibliotecaAreaId"::text
+      FROM "AreaInspeccion"
+      WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+      ORDER BY "orden"
     `;
     for (const area of areas) {
-      if (!area.bibliotecaAreaId) continue;
-      const puntos = await tx.$queryRaw<Array<{ puntoId:string; nombre:string; descripcion:string|null; orden:number; obligatorio:boolean; requiereMedicion:boolean; requiereComparacionProyecto:boolean; herramientaSugerida:string|null }>>`
-        SELECT p."id"::text "puntoId",p."nombre",p."descripcion",ap."orden",ap."obligatorio",p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida"
-        FROM "BibliotecaAreaPuntoCerteza" ap JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId"
-        WHERE ap."areaBibliotecaId"=${area.bibliotecaAreaId}::uuid AND p."activa"=true ORDER BY ap."orden"
-      `;
+      const puntos = area.bibliotecaAreaId
+        ? await tx.$queryRaw<Array<{ puntoId:string; nombre:string; descripcion:string|null; orden:number; obligatorio:boolean; requiereMedicion:boolean; requiereComparacionProyecto:boolean; herramientaSugerida:string|null }>>`
+            SELECT p."id"::text "puntoId",p."nombre",p."descripcion",ap."orden",ap."obligatorio",p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida"
+            FROM "BibliotecaAreaPuntoCerteza" ap JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId"
+            WHERE ap."areaBibliotecaId"=${area.bibliotecaAreaId}::uuid AND p."activa"=true ORDER BY ap."orden"
+          `
+        : [];
       for (const p of puntos) {
         await tx.$executeRaw`
           INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio","completado","creadoPorId","areaId","bibliotecaPuntoId","estadoV3","origenV3","requiereMedicion","requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
@@ -65,9 +102,36 @@ export async function inicializarPlanAreasV1(formData: FormData) {
           WHERE NOT EXISTS (SELECT 1 FROM "GuiaInspeccionItem" g WHERE g."inspeccionId"=${inspeccionId} AND g."areaId"=${area.id}::uuid AND g."bibliotecaPuntoId"=${p.puntoId}::uuid)
         `;
       }
+
+      let ordenEquipo = 500;
+      for (const codigoHerramienta of equipoCotizado) {
+        if (!herramientaAplicaArea(codigoHerramienta, area.codigo, area.nombre)) continue;
+        const herramienta = HERRAMIENTAS_INSPECCION.find((item) => item.codigo === codigoHerramienta);
+        if (!herramienta) continue;
+        const requiereMedicion = herramienta.campos.some((campo) =>
+          /(lectura|presion|medicion|voltaje|dimension)/i.test(campo.clave),
+        );
+        await tx.$executeRaw`
+          INSERT INTO "GuiaInspeccionItem"
+            ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio",
+             "completado","creadoPorId","areaId","estadoV3","origenV3","requiereMedicion",
+             "requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
+          SELECT
+            ${randomUUID()},${inspeccionId},'EQUIPO_COTIZADO',${area.nombre},
+            ${`Uso de ${herramienta.nombre}`},${herramienta.aplicacionCotizacion},
+            ${ordenEquipo},true,false,${usuario.id},${area.id}::uuid,'PENDIENTE','COTIZACION_P4',
+            ${requiereMedicion},false,${herramienta.nombre},NOW(),NOW()
+          WHERE NOT EXISTS (
+            SELECT 1 FROM "GuiaInspeccionItem" g
+            WHERE g."inspeccionId"=${inspeccionId} AND g."areaId"=${area.id}::uuid
+              AND g."origen"='EQUIPO_COTIZADO' AND g."herramientaSugerida"=${herramienta.nombre}
+          )
+        `;
+        ordenEquipo += 10;
+      }
     }
   });
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} inicializó el plan V1 desde la Biblioteca Certeza.` });
+  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} inicializó el plan V1 desde la Biblioteca Certeza e incorporó ${equipoCotizado.length} herramienta(s)/prueba(s) del punto 4 de la cotización donde aplican.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", "Plan técnico V1 preparado con los puntos mínimos aplicables.");
 }

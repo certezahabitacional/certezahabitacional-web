@@ -288,3 +288,44 @@ export function parsearResultadosInstrumentales(
     return {};
   }
 }
+
+
+export function obtenerHerramientasCotizadasDesdeCotizacion(
+  valor?: string | null,
+): CodigoHerramienta[] {
+  const original = valor ?? "";
+  const configuracion = extraerConfiguracionHerramientas(original);
+
+  // Las cotizaciones nuevas guardan explícitamente la selección del punto 4.
+  if (original.includes("[[CH_HERRAMIENTAS_V1:")) {
+    return configuracion.herramientas;
+  }
+
+  // Cotizaciones legadas: nunca asumir el catálogo completo.
+  // Sólo se reconoce equipo que esté mencionado explícitamente en el texto disponible.
+  const normalizado = original
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+  const aliases: Record<CodigoHerramienta, string[]> = {
+    CAMARA_TERMICA: ["CAMARA TERMICA", "TERMOGRAF"],
+    PROBADOR_GFCI_RCD: ["PROBADOR GFCI", "PROBADOR RCD", "GFCI/RCD", "GFCI RCD"],
+    DETECTOR_VOLTAJE: ["DETECTOR DE VOLTAJE", "DETECTOR VOLTAJE", "VOLTAJE SIN CONTACTO"],
+    MULTIMETRO: ["MULTIMETRO"],
+    NIVEL_LASER: ["NIVEL LASER", "NIVEL AUTONIVELANTE"],
+    MEDIDOR_LASER: ["MEDIDOR LASER", "DISTANCIOMETRO LASER"],
+    AUSCULTACION_PISOS: ["AUSCULTACION", "MARTILLO DE AUSCULTACION", "RODILLO DE AUSCULTACION"],
+    LINTERNA: ["LINTERNA LED", "LINTERNA PROFESIONAL"],
+    MANOMETRO_AGUA: ["MANOMETRO PARA AGUA", "MANOMETRO DE AGUA", "MANOMETRO"],
+    DETECTOR_GAS: ["DETECTOR DE GAS COMBUSTIBLE", "DETECTOR GAS COMBUSTIBLE"],
+    HERMETICIDAD_HIDRAULICA: ["HERMETICIDAD HIDRAULICA", "PRUEBA HIDRAULICA DE HERMETICIDAD"],
+    HERMETICIDAD_GAS: ["HERMETICIDAD DE GAS", "HERMETICIDAD GAS", "PRUEBA DE HERMETICIDAD DE GAS"],
+  };
+
+  return HERRAMIENTAS_INSPECCION
+    .map((herramienta) => herramienta.codigo)
+    .filter((codigo) =>
+      aliases[codigo].some((alias) => normalizado.includes(alias)),
+    );
+}

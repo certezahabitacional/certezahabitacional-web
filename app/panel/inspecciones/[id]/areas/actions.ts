@@ -117,7 +117,9 @@ export async function generarAreasDesdeGuia(formData: FormData) {
   const items = await prisma.$queryRaw<Array<{ area: string }>>`
     SELECT DISTINCT btrim("area") AS "area"
     FROM "GuiaInspeccionItem"
-    WHERE "inspeccionId"=${inspeccionId} AND nullif(btrim("area"),'') IS NOT NULL
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "origen" <> 'PUNTO_CRITICO'
+      AND nullif(btrim("area"),'') IS NOT NULL
     ORDER BY 1
   `;
 
