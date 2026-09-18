@@ -356,16 +356,31 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
   const codigo = codigoTexto;
   const { session, usuario, responsable } = await exigirResponsable(inspeccionId);
 
-  const [item] = await prisma.$queryRaw<Array<{ id: string; areaId: string; concepto: string; fotos: number }>>`
-    SELECT g."id",g."areaId"::text,g."concepto",
-      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
+  const [item] = await prisma.$queryRaw<Array<{
+    id: string;
+    areaId: string;
+    concepto: string;
+    estadoV3: string;
+    fotos: number;
+    ordenes: number[];
+  }>>`
+    SELECT g."id",g."areaId"::text,g."concepto",g."estadoV3",
+      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos",
+      ARRAY(
+        SELECT fa."orden" FROM "FotografiaArea" fa
+        WHERE fa."guiaItemId"=g."id"
+        ORDER BY fa."orden"
+      )::int[] AS "ordenes"
     FROM "GuiaInspeccionItem" g
     WHERE g."id"=${itemId} AND g."inspeccionId"=${inspeccionId}
       AND g."area"=${`__PUNTO_CRITICO__:${codigo}`}
     LIMIT 1
   `;
   if (!item?.areaId) volver(inspeccionId, codigo, "error", "El concepto no pertenece a este punto crítico.");
+  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y su evidencia no puede modificarse.");
   if (Number(item.fotos) >= 4) volver(inspeccionId, codigo, "error", "Este concepto ya tiene sus 4 fotografías. Elimina una si necesitas repetirla.");
+  const ordenFoto = [1, 2, 3, 4].find((orden) => !item.ordenes.includes(orden));
+  if (!ordenFoto) volver(inspeccionId, codigo, "error", "No hay un espacio disponible para otra fotografía.");
   if (!(archivo instanceof File) || archivo.size === 0) volver(inspeccionId, codigo, "error", "Selecciona una fotografía.");
   if (!["image/jpeg", "image/png", "image/webp"].includes(archivo.type)) volver(inspeccionId, codigo, "error", "La evidencia debe ser JPG, PNG o WEBP.");
   if (archivo.size > 10 * 1024 * 1024) volver(inspeccionId, codigo, "error", "La imagen supera 10 MB.");
@@ -389,14 +404,14 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
           hallazgoId: null,
           url: rutaStorage,
           subidaPorId: session.user.id,
-          descripcion: `${puntoPorCodigo(codigo).etiqueta} · ${item.concepto} · foto ${Number(item.fotos) + 1}/4`,
+          descripcion: `${puntoPorCodigo(codigo).etiqueta} · ${item.concepto} · foto ${ordenFoto}/4`,
         },
       });
       await tx.$executeRaw`
         INSERT INTO "FotografiaArea"
           ("fotografiaId","areaId","guiaItemId","tipoEvidencia","orden","candidataReporte","candidataPortada","seleccionadaReporte")
         VALUES
-          (${foto.id},${item.areaId}::uuid,${itemId},'PUNTO_CRITICO',${Number(item.fotos) + 1},true,false,true)
+          (${foto.id},${item.areaId}::uuid,${itemId},'PUNTO_CRITICO',${ordenFoto},true,false,true)
       `;
     });
   } catch (errorRegistro) {
@@ -409,7 +424,7 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
     entidad: "FotografiaArea",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} agregó evidencia ${Number(item.fotos) + 1}/4 a ${item.concepto} en ${puntoPorCodigo(codigo).etiqueta}.`,
+    descripcion: `${responsable} agregó evidencia ${ordenFoto}/4 a ${item.concepto} en ${puntoPorCodigo(codigo).etiqueta}.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   volver(inspeccionId, codigo, "ok", "Fotografía registrada.");
@@ -423,8 +438,13 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
   const codigo = codigoTexto;
   const { usuario } = await exigirResponsable(inspeccionId);
 
-  const [foto] = await prisma.$queryRaw<Array<{ url: string }>>`
-    SELECT f."url" FROM "Fotografia" f
+  const [foto] = await prisma.$queryRaw<Array<{
+    url: string;
+    guiaItemId: string;
+    estadoV3: string;
+  }>>`
+    SELECT f."url",g."id" AS "guiaItemId",g."estadoV3"
+    FROM "Fotografia" f
     JOIN "FotografiaArea" fa ON fa."fotografiaId"=f."id"
     JOIN "GuiaInspeccionItem" g ON g."id"=fa."guiaItemId"
     WHERE f."id"=${fotografiaId} AND f."inspeccionId"=${inspeccionId}
@@ -432,12 +452,23 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
     LIMIT 1
   `;
   if (!foto) volver(inspeccionId, codigo, "error", "Fotografía no encontrada.");
+  if (foto.estadoV3 !== "PENDIENTE") {
+    volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y su evidencia no puede modificarse.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.fotografia.delete({ where: { id: fotografiaId } });
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "observacion"=${JSON.stringify({ actualizadoEn: new Date().toISOString() })},
+          "actualizadoEn"=NOW()
+      WHERE "id"=${foto.guiaItemId} AND "inspeccionId"=${inspeccionId}
+    `;
+  });
 
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const sb = obtenerSupabaseAdmin();
-  const { error } = await sb.storage.from(bucket).remove([foto.url]);
-  if (error) volver(inspeccionId, codigo, "error", "No fue posible eliminar el archivo.");
-  await prisma.fotografia.delete({ where: { id: fotografiaId } });
+  await sb.storage.from(bucket).remove([foto.url]);
   await registrarAuditoria({
     tipo: TipoEvento.ELIMINAR,
     entidad: "Fotografia",
@@ -526,14 +557,16 @@ export async function generarDescripcionIaPuntoCriticoV1(formData: FormData) {
     especificacion: string | null;
     herramientaSugerida: string | null;
     observacion: string | null;
+    estadoV3: string;
   }>>`
-    SELECT "concepto","especificacion","herramientaSugerida","observacion"
+    SELECT "concepto","especificacion","herramientaSugerida","observacion","estadoV3"
     FROM "GuiaInspeccionItem"
     WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
       AND "area"=${`__PUNTO_CRITICO__:${codigo}`}
     LIMIT 1
   `;
   if (!item) volver(inspeccionId, codigo, "error", "Concepto no encontrado.");
+  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y no puede volver a analizarse.");
 
   const fotos = await prisma.$queryRaw<Array<{ url: string }>>`
     SELECT f."url" FROM "FotografiaArea" fa
@@ -661,8 +694,9 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     requiereMedicion: boolean;
     requiereComparacionProyecto: boolean;
     origenV3: string;
+    estadoV3: string;
   }>>`
-    SELECT g."concepto",g."observacion",g."requiereMedicion",g."requiereComparacionProyecto",g."origenV3",
+    SELECT g."concepto",g."observacion",g."requiereMedicion",g."requiereComparacionProyecto",g."origenV3",g."estadoV3",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
     FROM "GuiaInspeccionItem" g
     WHERE g."id"=${itemId} AND g."inspeccionId"=${inspeccionId}
@@ -670,6 +704,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     LIMIT 1
   `;
   if (!item) volver(inspeccionId, codigo, "error", "Concepto no encontrado.");
+  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y no puede modificarse.");
   if (Number(item.fotos) !== 4) volver(inspeccionId, codigo, "error", `${item.concepto} requiere exactamente 4 fotografías antes de cerrarse.`);
   if (item.requiereMedicion && !valorMedido) {
     volver(inspeccionId, codigo, "error", `${item.concepto} requiere registrar el valor medido.`);
@@ -682,6 +717,9 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   }
 
   const anterior = observacionObjeto(item.observacion);
+  if (!anterior.descripcionIa) {
+    volver(inspeccionId, codigo, "error", "Genera y revisa primero la descripción con IA a partir de las 4 fotografías.");
+  }
   const observacion: ObservacionItemCritico = {
     ...anterior,
     descripcionFinal,
