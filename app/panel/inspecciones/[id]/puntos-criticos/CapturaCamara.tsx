@@ -7,6 +7,7 @@ type Props = {
   codigo: string;
   itemId: string;
   numeroFoto: number;
+  totalFotos?: number;
   subirFoto: (formData: FormData) => Promise<void>;
 };
 
@@ -15,6 +16,7 @@ export default function CapturaCamara({
   codigo,
   itemId,
   numeroFoto,
+  totalFotos = 4,
   subirFoto,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -114,6 +116,7 @@ export default function CapturaCamara({
     formData.set("codigo", codigo);
     formData.set("itemId", itemId);
     formData.set("archivo", captura);
+    formData.set("origenEvidencia", "CAMARA");
 
     startTransition(async () => {
       await subirFoto(formData);
@@ -131,7 +134,7 @@ export default function CapturaCamara({
           <span className="block text-3xl">📷</span>
           <span className="mt-1 block">ABRIR CÁMARA</span>
           <span className="mt-1 block text-[10px] font-bold text-slate-500">
-            Foto {numeroFoto}/4 · cámara en vivo
+            Foto {numeroFoto}/{totalFotos} · cámara en vivo
           </span>
         </button>
       )}
