@@ -14,7 +14,9 @@ import {
   type CodigoPuntoCriticoV1,
 } from "@/lib/puntos-criticos-v1";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import CapturaCamara from "./CapturaCamara";
+import CargaGaleriaConPreview from "./CargaGaleriaConPreview";
 import {
   cerrarPuntoCriticoV1,
   configurarPuntoCriticoV1,
@@ -56,6 +58,8 @@ type Foto = {
   fotografiaId: string;
   guiaItemId: string;
   orden: number;
+  ruta: string;
+  urlTemporal: string | null;
 };
 
 type DatosPaso = {
@@ -99,6 +103,14 @@ function observacionItem(valor: string | null): ObservacionItem {
 
 function nombreHerramienta(codigo: CodigoHerramienta) {
   return HERRAMIENTAS_INSPECCION.find((item) => item.codigo === codigo)?.nombre ?? codigo;
+}
+
+async function urlTemporalFoto(ruta: string) {
+  const sb = obtenerSupabaseAdminOpcional();
+  if (!sb) return null;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 30);
+  return error ? null : data.signedUrl;
 }
 
 export default async function PuntosCriticosPage({
@@ -241,14 +253,22 @@ export default async function PuntosCriticosPage({
     /manómetro/i.test(item.concepto),
   );
 
-  const fotos = items.length
-    ? await prisma.$queryRaw<Foto[]>`
-        SELECT fa."fotografiaId",fa."guiaItemId",fa."orden"
+  const fotosBase = items.length
+    ? await prisma.$queryRaw<Array<Omit<Foto, "urlTemporal">>>`
+        SELECT fa."fotografiaId",fa."guiaItemId",fa."orden",f."url" AS "ruta"
         FROM "FotografiaArea" fa
+        JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
         WHERE fa."guiaItemId"=ANY(${items.map((item) => item.id)}::text[])
         ORDER BY fa."guiaItemId",fa."orden"
       `
     : [];
+
+  const fotos: Foto[] = await Promise.all(
+    fotosBase.map(async (foto) => ({
+      ...foto,
+      urlTemporal: await urlTemporalFoto(foto.ruta),
+    })),
+  );
 
   const completados = items.filter((item) => item.estadoV3 !== "PENDIENTE").length;
   const porcentaje = items.length ? Math.round((completados / items.length) * 100) : paso.estado === "NO_APLICA" ? 100 : 0;
@@ -449,15 +469,55 @@ export default async function PuntosCriticosPage({
                         📷 Evidencia obligatoria: {item.fotos}/4 fotografías
                       </p>
                       {fotosItem.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
                           {fotosItem.map((foto) => (
-                            <form key={foto.fotografiaId} action={eliminarFotoPuntoCriticoV1} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs">
-                              <input type="hidden" name="inspeccionId" value={id} />
-                              <input type="hidden" name="codigo" value={codigoSolicitado} />
-                              <input type="hidden" name="fotografiaId" value={foto.fotografiaId} />
-                              <span className="font-black text-emerald-300">📷 Foto {foto.orden}</span>
-                              {!cerrado && puedeCapturar && <button className="ml-3 text-rose-300">QUITAR</button>}
-                            </form>
+                            <article key={foto.fotografiaId} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950">
+                              {foto.urlTemporal ? (
+                                <a
+                                  href={foto.urlTemporal}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block bg-black"
+                                  title={`Abrir foto ${foto.orden} en tamaño completo`}
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={foto.urlTemporal}
+                                    alt={`Evidencia ${foto.orden} de ${item.concepto}`}
+                                    className="h-72 w-full object-contain sm:h-80"
+                                  />
+                                </a>
+                              ) : (
+                                <div className="flex h-72 items-center justify-center bg-black px-5 text-center text-sm font-bold text-slate-500 sm:h-80">
+                                  Vista previa no disponible
+                                </div>
+                              )}
+                              <div className="p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-sm font-black text-emerald-300">📷 Foto {foto.orden}</span>
+                                  {foto.urlTemporal && (
+                                    <a
+                                      href={foto.urlTemporal}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-xs font-black text-cyan-300 underline"
+                                    >
+                                      VER EN GRANDE
+                                    </a>
+                                  )}
+                                </div>
+                                {!cerrado && puedeCapturar && (
+                                  <form action={eliminarFotoPuntoCriticoV1} className="mt-3">
+                                    <input type="hidden" name="inspeccionId" value={id} />
+                                    <input type="hidden" name="codigo" value={codigoSolicitado} />
+                                    <input type="hidden" name="fotografiaId" value={foto.fotografiaId} />
+                                    <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">
+                                      QUITAR / REPETIR ESTA FOTO
+                                    </button>
+                                  </form>
+                                )}
+                              </div>
+                            </article>
                           ))}
                         </div>
                       )}
@@ -481,26 +541,13 @@ export default async function PuntosCriticosPage({
                               subirFoto={subirFotoPuntoCriticoV1}
                             />
 
-                            <form action={subirFotoPuntoCriticoV1}>
-                              <input type="hidden" name="inspeccionId" value={id} />
-                              <input type="hidden" name="codigo" value={codigoSolicitado} />
-                              <input type="hidden" name="itemId" value={item.id} />
-                              <label className="block cursor-pointer rounded-xl border border-dashed border-violet-300/40 px-4 py-5 text-center font-black text-violet-200">
-                                <span className="block text-2xl">🖼️</span>
-                                <span className="mt-1 block">ELEGIR DE GALERÍA</span>
-                                <span className="mt-1 block text-[10px] font-bold text-slate-500">Foto existente</span>
-                                <input
-                                  name="archivo"
-                                  type="file"
-                                  accept="image/*"
-                                  required
-                                  className="sr-only"
-                                />
-                              </label>
-                              <button className="mt-2 w-full rounded-xl bg-violet-300 px-3 py-2 text-sm font-black text-slate-950">
-                                GUARDAR DE GALERÍA
-                              </button>
-                            </form>
+                            <CargaGaleriaConPreview
+                              inspeccionId={id}
+                              codigo={codigoSolicitado}
+                              itemId={item.id}
+                              numeroFoto={Number(item.fotos) + 1}
+                              subirFoto={subirFotoPuntoCriticoV1}
+                            />
                           </div>
                           <p className="mt-3 text-[11px] leading-5 text-slate-500">
                             Puedes combinar fotografías tomadas en el momento con imágenes seleccionadas de la galería. El concepto requiere exactamente 4 evidencias antes del análisis con IA.
