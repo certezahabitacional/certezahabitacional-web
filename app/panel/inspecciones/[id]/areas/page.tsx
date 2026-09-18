@@ -87,10 +87,16 @@ export default async function AreasPage({
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const [controlRows, areas, fotosFachada] = await Promise.all([
+  const [controlRows, criticalRows, areas, fotosFachada] = await Promise.all([
     prisma.$queryRaw<Control[]>`
       SELECT "proyectoConfirmado","areasConfirmadas"
       FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
+    `,
+    prisma.$queryRaw<Array<{ total: number; incompletos: number }>>`
+      SELECT COUNT(*)::int AS "total",
+             COUNT(*) FILTER (WHERE "estado" NOT IN ('COMPLETADO','NO_APLICA'))::int AS "incompletos"
+      FROM "ProtocoloInspeccionPaso"
+      WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
     `,
     prisma.$queryRaw<Area[]>`
       SELECT a."id",a."codigo",a."nombre",a."tipo",a."origen",a."obligatoria",a."estado",a."comentarioFinal",
@@ -98,7 +104,7 @@ export default async function AreasPage({
              COALESCE(BOOL_OR(fa."candidataPortada"),false) AS "portada"
       FROM "AreaInspeccion" a
       LEFT JOIN "FotografiaArea" fa ON fa."areaId"=a."id"
-      WHERE a."inspeccionId"=${id}
+      WHERE a."inspeccionId"=${id} AND a."tipo" <> 'PUNTO_CRITICO'
       GROUP BY a."id"
       ORDER BY a."orden",a."nombre"
     `,
@@ -115,6 +121,14 @@ export default async function AreasPage({
   const control = controlRows[0] ?? null;
   if (inspeccion.estado === EstadoInspeccion.EN_PROCESO && !control?.proyectoConfirmado) {
     redirect(`/panel/inspecciones/${id}/proyecto-v1`);
+  }
+  const critical = criticalRows[0];
+  if (
+    inspeccion.estado === EstadoInspeccion.EN_PROCESO &&
+    control?.proyectoConfirmado &&
+    (Number(critical?.total ?? 0) < 7 || Number(critical?.incompletos ?? 0) > 0)
+  ) {
+    redirect(`/panel/inspecciones/${id}/puntos-criticos`);
   }
 
   const fotosFachadaConUrl = await Promise.all(
