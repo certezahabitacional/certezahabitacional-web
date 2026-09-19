@@ -7,8 +7,10 @@ import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import {
   agregarAreaManual,
+  aplicarOrdenLogicoAreasV1,
   confirmarAreasV1,
   generarAreasDesdeGuia,
+  moverAreaRutaV1,
   subirFotoArea,
 } from "./actions";
 import { seleccionarPortadaFachadaV1 } from "./portada-actions";
@@ -213,13 +215,29 @@ export default async function AreasPage({
           <section className="mt-6 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
             <h2 className="text-xl font-black">Verificar y confirmar puntos de área</h2>
             <p className="mt-2 text-sm text-slate-300">Antes de confirmar, agrega cualquier recámara, baño, estancia, patio, cochera u otra área física que no haya surgido del proyecto, la cotización o la guía.</p>
+            <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+              <p className="text-sm font-black text-cyan-200">Orden lógico sugerido del recorrido</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Planta baja: sala → comedor → cocina → 1/2 baño → áreas de servicio; después escalera; planta alta: baño compartido → estancia → recámara principal → baño principal → balcón → recámaras 2, 3...; exteriores al final. Puedes ajustar el orden manualmente antes de confirmarlo.
+              </p>
+              <form action={aplicarOrdenLogicoAreasV1} className="mt-3">
+                <input type="hidden" name="inspeccionId" value={id}/>
+                <button className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">
+                  APLICAR ORDEN LÓGICO SUGERIDO
+                </button>
+              </form>
+            </div>
             <form action={agregarAreaManual} className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]">
               <input type="hidden" name="inspeccionId" value={id}/>
               <input name="nombre" required placeholder="Ej. Recámara 3" className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3"/>
               <select name="tipo" defaultValue="INTERIOR" className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3"><option value="INTERIOR">Interior</option><option value="EXTERIOR">Exterior</option><option value="INSTALACION">Instalación</option></select>
               <button className="rounded-xl border border-violet-300/30 px-5 py-3 font-black text-violet-300">Agregar área</button>
             </form>
-            <form action={confirmarAreasV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">Confirmar puntos de área</button></form>
+            <form action={confirmarAreasV1} className="mt-4">
+              <input type="hidden" name="inspeccionId" value={id}/>
+              <button className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">CONFIRMAR ORDEN Y PUNTOS DE ÁREA</button>
+              <p className="mt-2 text-xs text-slate-500">Al confirmar, este orden se convierte en la secuencia obligatoria: no se podrá iniciar el punto siguiente hasta cerrar el anterior al 100%.</p>
+            </form>
           </section>
         )}
 
@@ -244,6 +262,26 @@ export default async function AreasPage({
                     <p className={`mt-2 text-sm font-bold ${evidenciaLista ? "text-emerald-300" : "text-amber-300"}`}>{fotos}/{minimo} fotografía{minimo === 1 ? " mínima" : "s mínimas"}{area.portada ? " · portada seleccionada" : fachada ? " · portada pendiente" : ""}</p>
                     {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Resultado del recorrido:</strong> {area.comentarioFinal}</p>}
                     <p className="mt-3 text-xs text-slate-500">El cierre técnico del área se realiza únicamente desde Recorrido V1.</p>
+                    {puedeCapturar && !control?.areasConfirmadas && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <form action={moverAreaRutaV1}>
+                          <input type="hidden" name="inspeccionId" value={id}/>
+                          <input type="hidden" name="areaId" value={area.id}/>
+                          <input type="hidden" name="direccion" value="ARRIBA"/>
+                          <button disabled={index === 0} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-slate-300 disabled:opacity-30">
+                            ↑ MOVER ANTES
+                          </button>
+                        </form>
+                        <form action={moverAreaRutaV1}>
+                          <input type="hidden" name="inspeccionId" value={id}/>
+                          <input type="hidden" name="areaId" value={area.id}/>
+                          <input type="hidden" name="direccion" value="ABAJO"/>
+                          <button disabled={index === areas.length - 1} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-slate-300 disabled:opacity-30">
+                            ↓ MOVER DESPUÉS
+                          </button>
+                        </form>
+                      </div>
+                    )}
 
                     {fachada && fotosFachadaConUrl.length > 0 && (
                       <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-slate-950/60 p-4">
