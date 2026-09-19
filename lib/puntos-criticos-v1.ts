@@ -80,7 +80,7 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
     plantilla: [
       item("PC_SAN_01_PRUEBA", "Evidencia inicial del método de prueba", "Documentar el método de prueba disponible y su montaje cuando corresponda.", "Cámara / instrumento aplicable"),
       item("PC_SAN_02_DESCARGAS", "Descargas y conexiones visibles", "Revisar uniones, cambios de dirección, desacoples o daños.", "Inspección visual", false, true),
-      item("PC_SAN_03_PENDIENTES", "Pendientes verificables", "Medir pendientes accesibles y comparar contra proyecto cuando exista.", "Nivel digital / nivel láser", true, true),
+      item("PC_SAN_03_PENDIENTES", "Pendientes verificables", "Verificar pendientes accesibles y comparar contra proyecto cuando exista.", "Nivel digital / nivel láser", false, true),
       item("PC_SAN_04_COLADERAS", "Coladeras y puntos de desalojo", "Verificar ubicación, nivel, remates, fijación y comportamiento de desalojo.", "Nivel / prueba con agua", false, true),
       item("PC_SAN_05_REGISTROS", "Registros y accesibilidad", "Confirmar accesibilidad, tapas, remates y condición aparente.", "Inspección visual", false, true),
       item("PC_SAN_06_VENTILACION", "Ventilación sanitaria", "Revisar recorrido y terminaciones accesibles.", "Inspección visual", false, true),
