@@ -602,6 +602,10 @@ export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
   if (!lecturaInicial || !unidad) {
     volver(inspeccionId, codigo, "error", "Registra la lectura inicial y su unidad.");
   }
+  const lecturaInicialNumero = numeroLectura(lecturaInicial);
+  if (lecturaInicialNumero === null) {
+    volver(inspeccionId, codigo, "error", "La lectura inicial debe ser un valor numérico válido.");
+  }
 
   const [item] = await prisma.$queryRaw<Array<{ concepto: string; fotos: number }>>`
     SELECT g."concepto",
@@ -619,7 +623,7 @@ export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
 
   await prisma.$executeRaw`
     UPDATE "ProtocoloInspeccionPaso"
-    SET "lecturaInicial"=${lecturaInicial},"unidad"=${unidad},
+    SET "lecturaInicial"=CAST(${lecturaInicialNumero} AS numeric),"unidad"=${unidad},
         "iniciadoEn"=COALESCE("iniciadoEn",NOW()),"actualizadoEn"=NOW()
     WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
   `;
@@ -817,6 +821,8 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     volver(inspeccionId, codigo, "error", "La prueba prolongada con manómetro sólo corresponde a Hidráulica o Gas.");
   }
   if (!lecturaFinal || !unidad) volver(inspeccionId, codigo, "error", "Registra la lectura final y su unidad.");
+  const lecturaFinalNumero = numeroLectura(lecturaFinal);
+  if (lecturaFinalNumero === null) volver(inspeccionId, codigo, "error", "La lectura final debe ser un valor numérico válido.");
   if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Describe el resultado o hallazgo de la prueba con al menos 10 caracteres.");
   if (!["C","O","NC","CR","NA"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
   if (!["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona una prioridad válida.");
@@ -876,7 +882,7 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
       UPDATE "ProtocoloInspeccionPaso"
-      SET "lecturaFinal"=${lecturaFinal},"unidad"=${unidad},
+      SET "lecturaFinal"=CAST(${lecturaFinalNumero} AS numeric),"unidad"=${unidad},
           "estado"='COMPLETADO',"completadoEn"=NOW(),"actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`}
     `;

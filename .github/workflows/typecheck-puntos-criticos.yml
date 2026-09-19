@@ -15,6 +15,7 @@ on:
       - fix/regla-galeria-manometro-v1
       - fix/feedback-ia-puntos-criticos
       - fix/manometros-y-avance-puntos-criticos
+      - fix/continuidad-manometro-puntos-criticos
 
 jobs:
   typecheck:
