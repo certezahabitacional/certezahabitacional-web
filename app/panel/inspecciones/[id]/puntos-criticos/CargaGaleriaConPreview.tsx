@@ -9,6 +9,7 @@ type Props = {
   numeroFoto: number;
   totalFotos?: number;
   subirFoto: (formData: FormData) => Promise<void>;
+  retorno?: "HERMETICIDAD_INICIO" | "HERMETICIDAD_CIERRE";
 };
 
 export default function CargaGaleriaConPreview({
@@ -18,6 +19,7 @@ export default function CargaGaleriaConPreview({
   numeroFoto,
   totalFotos = 1,
   subirFoto,
+  retorno,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -44,6 +46,7 @@ export default function CargaGaleriaConPreview({
     formData.set("itemId", itemId);
     formData.set("archivo", archivo);
     formData.set("origenEvidencia", "GALERIA");
+    if (retorno) formData.set("retorno", retorno);
 
     sessionStorage.setItem("ch:puntos-criticos:foco", itemId);
 
