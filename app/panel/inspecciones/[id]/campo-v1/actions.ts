@@ -158,6 +158,19 @@ async function exigirAreaActivaV1(inspeccionId: string, areaId: string) {
   return { area: activa, numero: 9 + indiceActivo, totalRecorrido: 8 + areas.length };
 }
 
+async function siguienteAreaPendienteV1(inspeccionId: string) {
+  const [area] = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"::text
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "tipo" <> 'PUNTO_CRITICO'
+      AND "estado" <> 'REVISADA'
+    ORDER BY "orden","nombre"
+    LIMIT 1
+  `;
+  return area?.id ?? null;
+}
+
 export async function inicializarPlanAreasV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
@@ -377,7 +390,9 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
 
   await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} cerró el punto de área “${area.nombre}” al 100% SIN HALLAZGOS; todos sus conceptos ya estaban resueltos.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
-  volver(inspeccionId, "ok", `${area.nombre} cerrada sin hallazgos.`);
+  const siguiente = await siguienteAreaPendienteV1(inspeccionId);
+  if (siguiente) volver(inspeccionId, "ok", `${area.nombre} cerrada al 100%. Continúa con el siguiente punto.`, siguiente);
+  volver(inspeccionId, "ok", `${area.nombre} cerrada. Todas las áreas quedaron concluidas.`);
 }
 
 export async function cerrarAreaConHallazgosV1(formData: FormData) {
@@ -421,5 +436,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
-  volver(inspeccionId, "ok", `${area.nombre} cerrada con ${area.hallazgos} hallazgo(s).`);
+  const siguiente = await siguienteAreaPendienteV1(inspeccionId);
+  if (siguiente) volver(inspeccionId, "ok", `${area.nombre} cerrada al 100% con ${area.hallazgos} hallazgo(s). Continúa con el siguiente punto.`, siguiente);
+  volver(inspeccionId, "ok", `${area.nombre} cerrada con ${area.hallazgos} hallazgo(s). Todas las áreas quedaron concluidas.`);
 }
