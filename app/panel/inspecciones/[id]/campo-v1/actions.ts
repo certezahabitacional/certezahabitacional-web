@@ -63,6 +63,45 @@ function herramientaAplicaArea(codigo: CodigoHerramienta, areaCodigo: string, ar
   return false;
 }
 
+function codigoBibliotecaPorArea(codigo: string, nombre: string) {
+  const area = normalizarAreaEquipo(`${codigo} ${nombre}`);
+
+  if (/BANO.*RECAMARA_PRINCIPAL|RECAMARA_PRINCIPAL.*BANO|BANO_COMPARTIDO|BANO_COMPLETO/.test(area)) return "BANO_COMPLETO";
+  if (/MEDIO_BANO|1_2_BANO|BANO_VISITAS/.test(area)) return "MEDIO_BANO";
+  if (/RECAMARA_PRINCIPAL/.test(area) && !/BANO/.test(area)) return "RECAMARA_PRINCIPAL";
+  if (/RECAMARA|ALCOBA/.test(area)) return "RECAMARA";
+  if (/COCINA/.test(area)) return "COCINA";
+  if (/DESAYUNADOR/.test(area)) return "DESAYUNADOR";
+  if (/(^|_)SALA(_|$)/.test(area)) return "SALA";
+  if (/COMEDOR/.test(area)) return "COMEDOR";
+  if (/ESTANCIA|FAMILY_ROOM/.test(area)) return "ESTANCIA";
+  if (/RECIBIDOR|VESTIBULO/.test(area)) return "RECIBIDOR";
+  if (/PASILLO|CIRCULACION/.test(area)) return "PASILLO";
+  if (/ESCALERA/.test(area)) return "ESCALERA";
+  if (/VESTIDOR/.test(area)) return "VESTIDOR";
+  if (/CLOSET/.test(area)) return "CLOSET";
+  if (/LAVANDERIA|CUARTO_DE_LAVADO|LAVADO/.test(area)) return "LAVANDERIA";
+  if (/CUARTO_SERVICIO/.test(area)) return "CUARTO_SERVICIO";
+  if (/ESTUDIO|OFICINA/.test(area)) return "ESTUDIO";
+  if (/BODEGA/.test(area)) return "BODEGA";
+  if (/BALCON/.test(area)) return "BALCON";
+  if (/TERRAZA/.test(area)) return "TERRAZA";
+  if (/COCHERA|ACCESO_VEHICULAR/.test(area)) return "COCHERA";
+  if (/PATIO/.test(area)) return "PATIO";
+  if (/JARDIN/.test(area)) return "JARDIN";
+  if (/AZOTEA/.test(area)) return "AZOTEA";
+  if (/ROOF_GARDEN/.test(area)) return "ROOF_GARDEN";
+  if (/SOTANO/.test(area)) return "SOTANO";
+  if (/CUARTO_MAQUINAS/.test(area)) return "CUARTO_MAQUINAS";
+  if (/CUARTO_INSTALACIONES/.test(area)) return "CUARTO_INSTALACIONES";
+  if (/FACHADA_LATERAL/.test(area)) return "FACHADA_LATERAL";
+  if (/FACHADA_PRINCIPAL/.test(area)) return "FACHADA_PRINCIPAL";
+  if (/ACCESO_PEATONAL/.test(area)) return "ACCESO_PEATONAL";
+  if (/BARDA/.test(area)) return "BARDA";
+
+  return "OTRA_AREA";
+}
+
 async function herramientasCotizadas(inspeccionId: string) {
   const [fila] = await prisma.$queryRaw<Array<{ observacionesInternas: string | null }>>`
     SELECT c."observacionesInternas"
@@ -140,11 +179,30 @@ export async function inicializarPlanAreasV1(formData: FormData) {
       ORDER BY "orden"
     `;
     for (const area of areas) {
-      const puntos = area.bibliotecaAreaId
+      let bibliotecaAreaId = area.bibliotecaAreaId;
+      if (!bibliotecaAreaId) {
+        const codigoBiblioteca = codigoBibliotecaPorArea(area.codigo, area.nombre);
+        const [biblioteca] = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT "id"::text
+          FROM "BibliotecaAreaCerteza"
+          WHERE "codigo"=${codigoBiblioteca} AND "activa"=true
+          LIMIT 1
+        `;
+        bibliotecaAreaId = biblioteca?.id ?? null;
+        if (bibliotecaAreaId) {
+          await tx.$executeRaw`
+            UPDATE "AreaInspeccion"
+            SET "bibliotecaAreaId"=${bibliotecaAreaId}::uuid,"actualizadoEn"=NOW()
+            WHERE "id"=${area.id}::uuid AND "inspeccionId"=${inspeccionId}
+          `;
+        }
+      }
+
+      const puntos = bibliotecaAreaId
         ? await tx.$queryRaw<Array<{ puntoId:string; nombre:string; descripcion:string|null; orden:number; obligatorio:boolean; requiereMedicion:boolean; requiereComparacionProyecto:boolean; herramientaSugerida:string|null }>>`
             SELECT p."id"::text "puntoId",p."nombre",p."descripcion",ap."orden",ap."obligatorio",p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida"
             FROM "BibliotecaAreaPuntoCerteza" ap JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId"
-            WHERE ap."areaBibliotecaId"=${area.bibliotecaAreaId}::uuid AND p."activa"=true ORDER BY ap."orden"
+            WHERE ap."areaBibliotecaId"=${bibliotecaAreaId}::uuid AND p."activa"=true ORDER BY ap."orden"
           `
         : [];
       for (const p of puntos) {
@@ -265,6 +323,7 @@ export async function agregarPuntoInspectorV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const areaId = texto(formData, "areaId");
   const concepto = texto(formData, "concepto");
+  const especificacion = texto(formData, "especificacion");
   if (!inspeccionId || !areaId || !concepto) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
   await exigirAreaActivaV1(inspeccionId, areaId);
@@ -273,7 +332,7 @@ export async function agregarPuntoInspectorV1(formData: FormData) {
   `;
   if (!area) volver(inspeccionId, "error", "Área no encontrada.");
   const id = randomUUID();
-  await prisma.$executeRaw`INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","orden","obligatorio","completado","creadoPorId","areaId","estadoV3","origenV3","creadoEn","actualizadoEn") VALUES (${id},${inspeccionId},'INSPECTOR',${area.nombre},${concepto},${area.siguiente},true,false,${usuario.id},${areaId}::uuid,'PENDIENTE','INSPECTOR',NOW(),NOW())`;
+  await prisma.$executeRaw`INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio","completado","creadoPorId","areaId","estadoV3","origenV3","creadoEn","actualizadoEn") VALUES (${id},${inspeccionId},'INSPECTOR',${area.nombre},${concepto},${especificacion || null},${area.siguiente},true,false,${usuario.id},${areaId}::uuid,'PENDIENTE','INSPECTOR',NOW(),NOW())`;
   await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", entidadId: id, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó el punto adicional “${concepto}” en ${area.nombre}.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, "ok", "Punto adicional incorporado al plan V1.");
