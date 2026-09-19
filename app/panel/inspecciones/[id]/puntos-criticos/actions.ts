@@ -732,6 +732,7 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
   const codigoTexto = texto(formData, "codigo");
   const lecturaFinalPropuesta = texto(formData, "lecturaFinal");
   const unidadFinalPropuesta = texto(formData, "unidad");
+  const retorno = texto(formData, "retorno");
 
   if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
@@ -888,6 +889,10 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
   `;
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
+  if (retorno === "HERMETICIDAD_CIERRE") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=cierre&ok=${encodeURIComponent("Interpretación IA generada. Revísala antes de cerrar.")}`);
+  }
   redirect(`${ruta(inspeccionId, codigo, "ok", "Interpretación IA de la prueba generada. Revísala antes de cerrar.")}#prueba-manometro`);
 }
 
