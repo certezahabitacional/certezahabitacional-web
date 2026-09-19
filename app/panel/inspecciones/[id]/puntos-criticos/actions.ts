@@ -277,6 +277,66 @@ async function asegurarPasos(inspeccionId: string, usuarioId: string) {
   });
 }
 
+
+async function prepararPruebasHermeticidadIniciales(inspeccionId: string, usuarioId: string) {
+  const herramientas = await herramientasDeCotizacion(inspeccionId);
+
+  for (const codigo of ["HIDRAULICA", "GAS"] as CodigoPuntoCriticoV1[]) {
+    const punto = puntoPorCodigo(codigo);
+    if (!tienePruebaProlongadaCotizada(punto, herramientas)) continue;
+
+    const plantilla = plantillaAplicablePuntoCritico(punto, herramientas)
+      .filter((item) => /manómetro/i.test(item.nombre) || /lectura final/i.test(item.nombre));
+
+    if (plantilla.length < 2) continue;
+
+    const areaCodigo = `PC_${codigo}`;
+    const areaMarcador = `__PUNTO_CRITICO__:${codigo}`;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        INSERT INTO "AreaInspeccion"
+          ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria","estado")
+        VALUES
+          (${inspeccionId},${areaCodigo},${punto.etiqueta},'PUNTO_CRITICO',
+           ${900 + PUNTOS_CRITICOS_V1.findIndex((item) => item.codigo === codigo) * 10},
+           'PLANTILLA',false,'PENDIENTE')
+        ON CONFLICT ("inspeccionId","codigo") DO NOTHING
+      `;
+
+      const [area] = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"::text
+        FROM "AreaInspeccion"
+        WHERE "inspeccionId"=${inspeccionId} AND "codigo"=${areaCodigo}
+        LIMIT 1
+      `;
+      if (!area) throw new Error("No fue posible preparar la prueba de hermeticidad.");
+
+      let orden = 1;
+      for (const item of plantilla) {
+        await tx.$executeRaw`
+          INSERT INTO "GuiaInspeccionItem"
+            ("id","inspeccionId","origen","tipoProyecto","area","concepto","especificacion",
+             "orden","obligatorio","completado","creadoPorId","areaId","estadoV3","origenV3",
+             "requiereMedicion","requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
+          SELECT
+            ${randomUUID()},${inspeccionId},'PUNTO_CRITICO',${codigo},${areaMarcador},
+            ${item.nombre},${item.descripcion},${orden},true,false,${usuarioId},
+            ${area.id}::uuid,'PENDIENTE','PLANTILLA',${item.requiereMedicion},
+            ${item.requiereComparacionProyecto},${item.herramientaSugerida},NOW(),NOW()
+          WHERE NOT EXISTS (
+            SELECT 1 FROM "GuiaInspeccionItem"
+            WHERE "inspeccionId"=${inspeccionId}
+              AND "area"=${areaMarcador}
+              AND "concepto"=${item.nombre}
+          )
+        `;
+        orden += 1;
+      }
+    });
+  }
+}
+
 export async function iniciarPuntosCriticosV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
@@ -289,8 +349,9 @@ export async function iniciarPuntosCriticosV1(formData: FormData) {
   if (!control?.proyectoConfirmado) volver(inspeccionId, undefined, "error", "Primero confirma Proyecto/Plantilla.");
 
   await asegurarPasos(inspeccionId, usuario.id);
+  await prepararPruebasHermeticidadIniciales(inspeccionId, usuario.id);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
-  redirect(ruta(inspeccionId, "HIDRAULICA"));
+  redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio`);
 }
 
 export async function configurarPuntoCriticoV1(formData: FormData) {
@@ -439,6 +500,7 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
   const itemId = texto(formData, "itemId");
   const archivo = formData.get("archivo");
   const origenTexto = texto(formData, "origenEvidencia").toUpperCase();
+  const retorno = texto(formData, "retorno");
   const origenEvidencia: OrigenEvidencia = origenTexto === "GALERIA" ? "GALERIA" : "CAMARA";
   if (!inspeccionId || !esCodigo(codigoTexto) || !itemId) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
@@ -535,6 +597,13 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
     descripcion: `${responsable} agregó evidencia ${ordenFoto}/${limiteFotos} (${origenEvidencia}) a ${item.concepto} en ${puntoPorCodigo(codigo).etiqueta}.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
+  if (retorno === "HERMETICIDAD_INICIO") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio&ok=${encodeURIComponent("Fotografía registrada.")}`);
+  }
+  if (retorno === "HERMETICIDAD_CIERRE") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=cierre&ok=${encodeURIComponent("Fotografía registrada.")}`);
+  }
   volver(inspeccionId, codigo, "ok", "Fotografía registrada.", itemId);
 }
 
@@ -595,6 +664,7 @@ export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
   const itemId = texto(formData, "itemId");
   const lecturaInicial = texto(formData, "lecturaInicial");
   const unidad = texto(formData, "unidad");
+  const retorno = texto(formData, "retorno");
   if (!inspeccionId || !esCodigo(codigoTexto) || !itemId) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
@@ -650,6 +720,10 @@ export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
+  if (retorno === "HERMETICIDAD_INICIO") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio&ok=${encodeURIComponent("Lectura inicial registrada.")}`);
+  }
   volver(inspeccionId, codigo, "ok", "Prueba prolongada iniciada. Ya puedes continuar con el siguiente punto y regresar después para cerrarla.");
 }
 
@@ -825,6 +899,7 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
   const prioridadTexto = texto(formData, "prioridad").toUpperCase();
+  const retorno = texto(formData, "retorno");
 
   if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
@@ -955,7 +1030,11 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
 
   const siguiente = siguienteCodigo(codigo);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  if (retorno === "HERMETICIDAD_CIERRE") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=cierre&ok=${encodeURIComponent("Prueba de hermeticidad cerrada.")}`);
+  }
   if (siguiente) redirect(ruta(inspeccionId, siguiente, "ok", "Prueba de hermeticidad cerrada."));
   redirect(`/panel/inspecciones/${inspeccionId}/areas?ok=${encodeURIComponent("Prueba de hermeticidad cerrada.")}`);
 }
