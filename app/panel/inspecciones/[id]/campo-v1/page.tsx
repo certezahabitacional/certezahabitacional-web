@@ -9,20 +9,8 @@ import {
   cerrarAreaConHallazgosV1,
   cerrarAreaSinHallazgosV1,
   inicializarPlanAreasV1,
-  marcarPuntoNoAplicaV1,
-  marcarPuntoRevisadoV1,
 } from "./actions";
-
-type Punto = {
-  id: string;
-  concepto: string;
-  grupo: string | null;
-  estadoV3: string;
-  origenV3: string;
-  obligatorio: boolean;
-  herramientaSugerida: string | null;
-  motivoNoAplica: string | null;
-};
+import ConceptoAreaCard, { type PuntoArea } from "./ConceptoAreaCard";
 
 type Area = {
   id: string;
@@ -118,10 +106,16 @@ export default async function CampoV1Page({ params, searchParams }: {
     }
   }
   const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areaActiva ?? areas[0];
-  const puntos = areaSeleccionada ? await prisma.$queryRaw<Punto[]>`
-    SELECT g."id",g."concepto",p."grupo",g."estadoV3",g."origenV3",g."obligatorio",g."herramientaSugerida",g."motivoNoAplica"
-    FROM "GuiaInspeccionItem" g LEFT JOIN "BibliotecaPuntoCerteza" p ON p."id"=g."bibliotecaPuntoId"
-    WHERE g."areaId"=${areaSeleccionada.id}::uuid ORDER BY g."orden",g."concepto"
+  const puntos = areaSeleccionada ? await prisma.$queryRaw<PuntoArea[]>`
+    SELECT
+      g."id",g."concepto",g."especificacion",p."grupo",g."estadoV3",g."origenV3",
+      g."obligatorio",g."herramientaSugerida",g."motivoNoAplica",g."observacion",
+      g."requiereMedicion",g."requiereComparacionProyecto",
+      g."valorMedido",g."valorProyecto",g."unidadMedida"
+    FROM "GuiaInspeccionItem" g
+    LEFT JOIN "BibliotecaPuntoCerteza" p ON p."id"=g."bibliotecaPuntoId"
+    WHERE g."areaId"=${areaSeleccionada.id}::uuid
+    ORDER BY g."orden",g."concepto"
   ` : [];
 
   const totalPuntos = areas.reduce((s, a) => s + Number(a.puntos), 0);
@@ -212,31 +206,16 @@ export default async function CampoV1Page({ params, searchParams }: {
                   {areaSeleccionada.resultado && <span className="rounded-full bg-emerald-300/10 px-3 py-2 text-xs font-black text-emerald-300">{areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
                 </div>
 
-                <div className="mt-5 space-y-2">
+                <div className="mt-5 space-y-4">
                   {puntos.map((punto) => (
-                    <article key={punto.id} className={`rounded-2xl border p-4 ${punto.estadoV3 === "NO_APLICA" ? "border-slate-700 bg-slate-950/50 opacity-70" : punto.estadoV3 === "PENDIENTE" ? "border-amber-300/15 bg-amber-300/5" : "border-emerald-300/15 bg-emerald-300/5"}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div><div className="flex flex-wrap gap-2"><span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{punto.grupo ?? "ADICIONAL"}</span>{punto.origenV3 === "INSPECTOR" && <span className="rounded-full bg-violet-300/10 px-2 py-0.5 text-[10px] font-black text-violet-300">AGREGADO EN CAMPO</span>}</div><p className="mt-1 font-bold">{punto.concepto}</p>{punto.herramientaSugerida && <p className="mt-1 text-xs text-slate-500">Herramienta sugerida: {punto.herramientaSugerida}</p>}{punto.motivoNoAplica && <p className="mt-1 text-xs text-slate-500">Motivo: {punto.motivoNoAplica}</p>}</div>
-                        <span className={`text-xs font-black ${punto.estadoV3 === "PENDIENTE" ? "text-amber-300" : "text-emerald-300"}`}>{punto.estadoV3.replaceAll("_"," ")}</span>
-                      </div>
-                      {puedeCapturar && punto.estadoV3 === "PENDIENTE" && areaSeleccionada?.id === areaActivaId && (
-                        <div className="mt-3 grid gap-2 md:grid-cols-[auto_1fr_auto]">
-                          <form action={marcarPuntoRevisadoV1}>
-                            <input type="hidden" name="inspeccionId" value={id}/>
-                            <input type="hidden" name="itemId" value={punto.id}/>
-                            <button className="w-full rounded-xl bg-emerald-300 px-3 py-2 text-xs font-black text-slate-950">
-                              REVISADO / CONFORME
-                            </button>
-                          </form>
-                          <form action={marcarPuntoNoAplicaV1} className="contents">
-                            <input type="hidden" name="inspeccionId" value={id}/>
-                            <input type="hidden" name="itemId" value={punto.id}/>
-                            <input name="motivo" placeholder="Si no aplica, indica por qué" className="min-w-0 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
-                            <button className="rounded-xl border border-amber-300/30 px-3 py-2 text-xs font-black text-amber-200">NO APLICA</button>
-                          </form>
-                        </div>
-                      )}
-                    </article>
+                    <ConceptoAreaCard
+                      key={punto.id}
+                      inspeccionId={id}
+                      areaId={areaSeleccionada.id}
+                      punto={punto}
+                      puedeCapturar={puedeCapturar}
+                      areaActiva={areaSeleccionada.id === areaActivaId}
+                    />
                   ))}
                 </div>
 
@@ -244,10 +223,11 @@ export default async function CampoV1Page({ params, searchParams }: {
                   <div className="mt-6 grid gap-4 xl:grid-cols-2">
                     <form action={agregarPuntoInspectorV1} className="rounded-2xl border border-violet-300/15 bg-violet-300/5 p-4">
                       <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/>
-                      <p className="font-black text-violet-200">+ Agregar punto de inspección</p>
-                      <p className="mt-1 text-xs text-slate-400">Amplía el plan cuando tu criterio profesional lo considere necesario.</p>
-                      <input name="concepto" required placeholder="Ej. Revisar sellado en cancel fijo" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
-                      <button className="mt-3 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-black text-violet-200">Agregar al área</button>
+                      <p className="font-black text-violet-200">+ AGREGAR CONCEPTO MANUALMENTE</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">El concepto agregado usará el mismo flujo completo: evidencia, IA opcional, comentario, clasificación, prioridad y NO APLICA.</p>
+                      <input name="concepto" required placeholder="Ej. Sellado inferior de puerta corrediza" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+                      <input name="especificacion" placeholder="Indica exactamente qué revisar y el criterio esperado" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+                      <button className="mt-3 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-black text-violet-200">AGREGAR AL PUNTO ACTIVO</button>
                     </form>
 
                     {Number(areaSeleccionada.hallazgos) === 0 ? (
