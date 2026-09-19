@@ -387,9 +387,155 @@ export async function confirmarAreasV1(formData: FormData) {
     volver(inspeccionId, "error", "Antes de confirmar deben existir las cuatro fachadas: frontal, posterior, lateral izquierda y lateral derecha, además de todas las áreas físicas obligatorias.");
   }
 
-  await prisma.$executeRaw`
-    UPDATE "InspeccionControlV2" SET "areasConfirmadas"=true,"actualizadoEn"=NOW() WHERE "inspeccionId"=${inspeccionId}
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion" a
+      SET "bibliotecaAreaId" = b."id"
+      FROM "BibliotecaAreaCerteza" b
+      WHERE a."inspeccionId"=${inspeccionId}
+        AND a."tipo" <> 'PUNTO_CRITICO'
+        AND b."activa"=true
+        AND b."codigo" = CASE
+          WHEN upper(a."codigo") IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') THEN 'FACHADA_PRINCIPAL'
+          WHEN upper(a."codigo") IN ('FACHADA_POSTERIOR','FACHADA_LATERAL_IZQUIERDA','FACHADA_LATERAL_DERECHA') THEN 'FACHADA_LATERAL'
+          WHEN upper(a."codigo") ~ 'BANO.*RECAMARA_PRINCIPAL|RECAMARA_PRINCIPAL.*BANO|BANO_COMPARTIDO|BANO_[0-9]+|^BANO
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "InspeccionControlV2", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} confirmó el ecosistema de ${Number(r.total)} área(s) obligatoria(s) de V1.` });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+
+  const [primera] = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"::text
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "tipo" <> 'PUNTO_CRITICO'
+      AND "estado" <> 'REVISADA'
+    ORDER BY "orden","nombre"
+    LIMIT 1
   `;
+  if (primera?.id) {
+    redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?area=${primera.id}&ok=${encodeURIComponent("Orden confirmado. Inicia el primer punto y conclúyelo al 100% antes de avanzar.")}`);
+  }
+  volver(inspeccionId, "ok", "Ecosistema de áreas confirmado.");
+}
+
+export async function subirFotoArea(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const descripcion = texto(formData, "descripcion");
+  const archivo = formData.get("archivo");
+  if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
+  const { session, usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  await exigirAreaActivaV1(inspeccionId, areaId);
+
+  const [area] = await prisma.$queryRaw<Array<{ id: string; codigo: string; nombre: string }>>`
+    SELECT "id","codigo","nombre" FROM "AreaInspeccion" WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+  `;
+  if (!area) volver(inspeccionId, "error", "El área no pertenece a esta inspección.");
+  if (!(archivo instanceof File) || archivo.size === 0) volver(inspeccionId, "error", "Selecciona una fotografía.");
+  if (!['image/jpeg','image/png','image/webp'].includes(archivo.type)) volver(inspeccionId, "error", "La evidencia debe ser JPG, PNG o WEBP.");
+  if (archivo.size > 10 * 1024 * 1024) volver(inspeccionId, "error", "La imagen supera 10 MB.");
+
+  const extension = archivo.name.split('.').pop()?.toLowerCase() || archivo.type.split('/').pop() || 'jpg';
+  const ruta = `${inspeccionId}/areas/${areaId}/${randomUUID()}.${extension}`;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'evidencias';
+  const sb = supabaseAdmin();
+  const { error } = await sb.storage.from(bucket).upload(ruta, Buffer.from(await archivo.arrayBuffer()), { contentType: archivo.type, upsert: false });
+  if (error) volver(inspeccionId, "error", "No se pudo subir la fotografía del área.");
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const foto = await tx.fotografia.create({
+        data: { inspeccionId, hallazgoId: null, url: ruta, subidaPorId: session.user.id, descripcion: descripcion || `${area.nombre} · evidencia de recorrido` },
+      });
+      await tx.$executeRaw`
+        INSERT INTO "FotografiaArea" ("fotografiaId","areaId","tipoEvidencia","orden","candidataReporte","candidataPortada")
+        VALUES (${foto.id},${areaId}::uuid,${area.codigo === 'FACHADA_PRINCIPAL' ? 'IDENTIFICACION' : 'RECORRIDO'},0,true,false)
+      `;
+    });
+  } catch (e) {
+    await sb.storage.from(bucket).remove([ruta]);
+    throw e;
+  }
+
+  await registrarAuditoria({ tipo: TipoEvento.SUBIR_EVIDENCIA, entidad: "FotografiaArea", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó evidencia del área “${area.nombre}”${area.codigo === 'FACHADA_PRINCIPAL' ? ' (fachada/identificación; portada pendiente de selección explícita)' : ''}.` });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
+  volver(inspeccionId, "ok", area.codigo === 'FACHADA_PRINCIPAL' ? "Fotografía de fachada agregada. Selecciona explícitamente una de las fotos como portada antes del cierre." : `Fotografía agregada a ${area.nombre}.`);
+}
+
+export async function cerrarAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const comentario = texto(formData, "comentarioFinal");
+  if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  if (comentario.length < 5) volver(inspeccionId, "error", "Registra un comentario final del área, incluso cuando todo esté aparentemente en orden.");
+
+  const [r] = await prisma.$queryRaw<Array<{ nombre: string; fotos: number }>>`
+    SELECT a."nombre", COUNT(fa."id")::int AS "fotos"
+    FROM "AreaInspeccion" a LEFT JOIN "FotografiaArea" fa ON fa."areaId"=a."id"
+    WHERE a."id"=${areaId}::uuid AND a."inspeccionId"=${inspeccionId}
+    GROUP BY a."id",a."nombre"
+  `;
+  if (!r) volver(inspeccionId, "error", "Área no encontrada.");
+  if (Number(r.fotos) < 4) volver(inspeccionId, "error", `${r.nombre} tiene ${r.fotos}/4 fotografías. Completa la evidencia antes de cerrar el área.`);
+
+  await prisma.$executeRaw`
+    UPDATE "AreaInspeccion" SET "estado"='REVISADA',"comentarioFinal"=${comentario},"revisadaEn"=NOW(),"actualizadoEn"=NOW()
+    WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+  `;
+  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} cerró el área “${r.nombre}” con ${r.fotos} fotografías. Comentario final: ${comentario}` });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
+  volver(inspeccionId, "ok", `${r.nombre} quedó revisada y documentada.`);
+}
+ THEN 'BANO_COMPLETO'
+          WHEN upper(a."codigo") ~ 'MEDIO_BANO|1_2_BANO|BANO_VISITAS' THEN 'MEDIO_BANO'
+          WHEN upper(a."codigo") ~ 'RECAMARA_PRINCIPAL' THEN 'RECAMARA_PRINCIPAL'
+          WHEN upper(a."codigo") ~ 'RECAMARA|ALCOBA' THEN 'RECAMARA'
+          WHEN upper(a."codigo") ~ 'COCINA' THEN 'COCINA'
+          WHEN upper(a."codigo") ~ 'COMEDOR' THEN 'COMEDOR'
+          WHEN upper(a."codigo") ~ 'SALA' THEN 'SALA'
+          WHEN upper(a."codigo") ~ 'ESTANCIA|FAMILY_ROOM' THEN 'ESTANCIA'
+          WHEN upper(a."codigo") ~ 'ESCALERA' THEN 'ESCALERA'
+          WHEN upper(a."codigo") ~ 'LAVANDERIA|AREA_LAVADO|LAVADERO|LAVADO' THEN 'LAVANDERIA'
+          WHEN upper(a."codigo") ~ 'BALCON' THEN 'BALCON'
+          WHEN upper(a."codigo") ~ 'PATIO' THEN 'PATIO'
+          WHEN upper(a."codigo") ~ 'JARDIN' THEN 'JARDIN'
+          WHEN upper(a."codigo") ~ 'COCHERA' THEN 'COCHERA'
+          ELSE 'OTRA_AREA'
+        END
+    `;
+
+    await tx.$executeRaw`
+      INSERT INTO "GuiaInspeccionItem"
+        ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio",
+         "completado","creadoPorId","areaId","bibliotecaPuntoId","estadoV3","origenV3",
+         "requiereMedicion","requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
+      SELECT
+        gen_random_uuid()::text,a."inspeccionId",'BIBLIOTECA_CERTEZA',a."nombre",
+        p."nombre",p."descripcion",ap."orden",ap."obligatorio",
+        false,${usuario.id},a."id",p."id",'PENDIENTE','BIBLIOTECA',
+        p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida",NOW(),NOW()
+      FROM "AreaInspeccion" a
+      JOIN "BibliotecaAreaPuntoCerteza" ap ON ap."areaBibliotecaId"=a."bibliotecaAreaId"
+      JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId" AND p."activa"=true
+      WHERE a."inspeccionId"=${inspeccionId}
+        AND a."tipo" <> 'PUNTO_CRITICO'
+        AND NOT EXISTS (
+          SELECT 1 FROM "GuiaInspeccionItem" g
+          WHERE g."inspeccionId"=a."inspeccionId"
+            AND g."areaId"=a."id"
+            AND g."bibliotecaPuntoId"=p."id"
+        )
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "areasConfirmadas"=true,"actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
   await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "InspeccionControlV2", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} confirmó el ecosistema de ${Number(r.total)} área(s) obligatoria(s) de V1.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   volver(inspeccionId, "ok", "Ecosistema de áreas confirmado. A partir de ahora documenta todas las áreas antes del cierre.");
