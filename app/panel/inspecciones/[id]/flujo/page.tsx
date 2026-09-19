@@ -7,6 +7,10 @@ type PasoCritico = {
   clave: string;
   estado: string;
   orden: number;
+  lecturaInicial: string | null;
+  lecturaFinal: string | null;
+  pruebaProlongada: boolean;
+  pendientesNormales: number;
 };
 
 export default async function FlujoV1Page({
@@ -42,20 +46,46 @@ export default async function FlujoV1Page({
   }
 
   const pasos = await prisma.$queryRaw<PasoCritico[]>`
-    SELECT "clave","estado","orden"
-    FROM "ProtocoloInspeccionPaso"
-    WHERE "inspeccionId"=${id}
-      AND "tipo"='PUNTO_CRITICO'
-    ORDER BY "orden"
+    SELECT
+      p."clave",
+      p."estado",
+      p."orden",
+      p."lecturaInicial",
+      p."lecturaFinal",
+      COALESCE((p."datos"->>'pruebaProlongada')::boolean,false) AS "pruebaProlongada",
+      (
+        SELECT COUNT(*)::int
+        FROM "GuiaInspeccionItem" g
+        WHERE g."inspeccionId"=p."inspeccionId"
+          AND g."area"=concat('__PUNTO_CRITICO__:',replace(p."clave",'PC_',''))
+          AND g."estadoV3"='PENDIENTE'
+          AND g."concepto" NOT ILIKE '%manómetro%'
+          AND g."concepto" NOT ILIKE '%lectura final%'
+      ) AS "pendientesNormales"
+    FROM "ProtocoloInspeccionPaso" p
+    WHERE p."inspeccionId"=${id}
+      AND p."tipo"='PUNTO_CRITICO'
+    ORDER BY p."orden"
   `;
 
   if (pasos.length === 0) {
     redirect(`/panel/inspecciones/${id}/puntos-criticos`);
   }
 
-  const pendiente = pasos.find(
-    (paso) => paso.estado !== "COMPLETADO" && paso.estado !== "NO_APLICA",
-  );
+  const pendiente = pasos.find((paso) => {
+    if (paso.estado === "COMPLETADO" || paso.estado === "NO_APLICA") return false;
+
+    const esHermeticidadAbierta =
+      ["PC_HIDRAULICA", "PC_GAS"].includes(paso.clave) &&
+      paso.pruebaProlongada &&
+      Boolean(paso.lecturaInicial) &&
+      !paso.lecturaFinal &&
+      Number(paso.pendientesNormales) === 0;
+
+    // Una prueba de hermeticidad abierta NO bloquea el paso a las áreas.
+    // Su lectura final se toma después de concluir todas las áreas.
+    return !esHermeticidadAbierta;
+  });
 
   if (pendiente) {
     const codigo = pendiente.clave.replace(/^PC_/, "");
