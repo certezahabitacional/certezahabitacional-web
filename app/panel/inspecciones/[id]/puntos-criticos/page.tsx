@@ -229,6 +229,15 @@ export default async function PuntosCriticosPage({
     inspeccion.cotizacion?.observacionesInternas,
   );
 
+  const faltanLecturasIniciales = pasos.some((pasoActual) => {
+    const d = datosPaso(pasoActual.datos);
+    return Boolean(d.pruebaProlongada) && !d.pruebaProlongadaNoAplica && !pasoActual.lecturaInicial;
+  });
+
+  if (pasos.length > 0 && faltanLecturasIniciales) {
+    redirect(`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`);
+  }
+
   if (pasos.length === 0) {
     return (
       <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
@@ -316,8 +325,8 @@ export default async function PuntosCriticosPage({
     itemManometroInicial.estadoV3 !== "PENDIENTE" &&
     itemLecturaFinal.estadoV3 !== "PENDIENTE"
   );
-  const totalVisual = itemsNormales.length + (datos.pruebaProlongada && itemManometroInicial && itemLecturaFinal ? 1 : 0);
-  const completadosVisual = completadosNormales + (pruebaCompleta ? 1 : 0);
+  const totalVisual = itemsNormales.length;
+  const completadosVisual = completadosNormales;
   const porcentaje = totalVisual ? Math.round((completadosVisual / totalVisual) * 100) : paso.estado === "NO_APLICA" ? 100 : 0;
   const equipoAplicable = herramientasAplicablesPuntoCritico(punto, herramientasCotizadas);
   const otrosConceptosCompletos = itemsNormales.every((item) => item.estadoV3 !== "PENDIENTE");
@@ -493,7 +502,7 @@ export default async function PuntosCriticosPage({
           </section>
         )}
 
-        {datos.configurado && datos.aplica && datos.pruebaProlongada && itemManometroInicial && itemLecturaFinal && (
+        {false && datos.configurado && datos.aplica && datos.pruebaProlongada && itemManometroInicial && itemLecturaFinal && (
           <section id="prueba-manometro-inicio" className="scroll-mt-24 mt-7 rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
             {(() => {
               const fotoInicial = fotos.find((foto) => foto.guiaItemId === itemManometroInicial.id);
@@ -752,6 +761,21 @@ export default async function PuntosCriticosPage({
               );
             })()}
           </section>
+        )}
+
+        {datos.configurado && datos.aplica && datos.pruebaProlongada && (
+          <div className="mt-6 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
+            <p className="text-sm font-black text-amber-200">Prueba de hermeticidad administrada por separado</p>
+            <p className="mt-1 text-xs text-slate-400">
+              La lectura inicial se toma antes del recorrido y la lectura final al terminar las áreas de la vivienda.
+            </p>
+            <Link
+              href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=${paso.lecturaInicial && !paso.lecturaFinal ? "cierre" : "inicio"}`}
+              className="mt-3 inline-block text-xs font-black text-cyan-300 underline"
+            >
+              VER PRUEBAS DE HERMETICIDAD
+            </Link>
+          </div>
         )}
 
         {datos.configurado && datos.aplica && (
