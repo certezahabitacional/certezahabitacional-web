@@ -168,6 +168,7 @@ export default async function AreasPage({
   const totalRecorrido = 8 + areas.length;
   const primerPuntoArea = areas.length > 0 ? 9 : null;
   const ultimoPuntoArea = areas.length > 0 ? totalRecorrido : null;
+  const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
@@ -229,13 +230,16 @@ export default async function AreasPage({
             const fachada = area.codigo === "FACHADA_PRINCIPAL";
             const minimo = 1;
             const evidenciaLista = fotos >= minimo;
+            const cerrada = completa;
+            const activa = area.id === areaActivaId;
+            const bloqueada = !cerrada && !activa;
             return (
-              <article key={area.id} className={`rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-white/10 bg-slate-900"}`}>
+              <article key={area.id} className={`rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : bloqueada ? "border-white/5 bg-slate-950 opacity-60" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
                 <div className="grid gap-4 lg:grid-cols-[65px_1fr_300px]">
                   <span className="font-mono text-lg font-black text-cyan-300">{9 + index}/{totalRecorrido}</span>
                   <div>
                     <div className="flex flex-wrap gap-2 text-xs font-black"><span className="rounded-full bg-white/5 px-2 py-1 text-slate-400">{area.tipo}</span><span className="rounded-full bg-white/5 px-2 py-1 text-slate-400">{area.origen}</span>{fachada && <span className="rounded-full bg-cyan-300/10 px-2 py-1 text-cyan-300">IDENTIFICACIÓN / PORTADA</span>}</div>
-                    <p className="mt-2 text-xs font-black uppercase tracking-wider text-emerald-300">Punto {9 + index} del recorrido</p>
+                    <p className="mt-2 text-xs font-black uppercase tracking-wider text-emerald-300">Punto {9 + index} del recorrido · {completa ? "CERRADO 100%" : activa ? "ACTIVO" : "BLOQUEADO"}</p>
                     <h2 className="mt-1 text-xl font-black">{area.nombre}</h2>
                     <p className={`mt-2 text-sm font-bold ${evidenciaLista ? "text-emerald-300" : "text-amber-300"}`}>{fotos}/{minimo} fotografía{minimo === 1 ? " mínima" : "s mínimas"}{area.portada ? " · portada seleccionada" : fachada ? " · portada pendiente" : ""}</p>
                     {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Resultado del recorrido:</strong> {area.comentarioFinal}</p>}
@@ -272,7 +276,7 @@ export default async function AreasPage({
                     )}
                   </div>
 
-                  {puedeCapturar && control?.areasConfirmadas ? (
+                  {puedeCapturar && control?.areasConfirmadas && activa ? (
                     <div className="space-y-3">
                       <form action={subirFotoArea} className="rounded-2xl border border-white/10 bg-slate-950 p-4">
                         <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={area.id}/>
@@ -283,7 +287,7 @@ export default async function AreasPage({
                       <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block rounded-xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-300">{completa ? "Ver resultado en Recorrido V1" : "Continuar revisión en Recorrido V1"}</Link>
                     </div>
                   ) : (
-                    <div className={`rounded-2xl p-4 text-sm font-bold ${completa ? "bg-emerald-300/10 text-emerald-300" : "bg-white/5 text-slate-500"}`}>{completa ? "Área cerrada ✓" : control?.areasConfirmadas ? "Pendiente de recorrido" : "Confirma primero el ecosistema de áreas"}</div>
+                    <div className={`rounded-2xl p-4 text-sm font-bold ${completa ? "bg-emerald-300/10 text-emerald-300" : bloqueada ? "bg-white/5 text-slate-600" : "bg-white/5 text-slate-500"}`}>{completa ? "Punto cerrado al 100% ✓" : bloqueada ? "BLOQUEADO · concluye el punto anterior al 100%" : control?.areasConfirmadas ? "Punto activo pendiente de recorrido" : "Confirma primero los puntos de área"}</div>
                   )}
                 </div>
               </article>
