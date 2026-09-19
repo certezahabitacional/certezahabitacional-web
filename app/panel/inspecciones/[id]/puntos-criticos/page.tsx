@@ -23,7 +23,6 @@ import {
   agregarConceptoManualPuntoCriticoV1,
   marcarConceptoNoAplicaV1,
   reactivarConceptoPuntoCriticoV1,
-  reactivarPruebaProlongadaV1,
 } from "./conceptos-actions";
 import {
   cerrarPuntoCriticoV1,
@@ -242,16 +241,16 @@ export default async function PuntosCriticosPage({
             ← Proyecto digital
           </Link>
           <p className="mt-8 text-xs font-black uppercase tracking-[.24em] text-amber-300">
-            Etapa obligatoria V1
+            RECORRIDO TÉCNICO · PASO 1 DE 8
           </p>
-          <h1 className="mt-2 text-4xl font-black">INICIO DE INSPECCIÓN DE PUNTOS CRÍTICOS</h1>
+          <h1 className="mt-2 text-4xl font-black">PRUEBAS DE HERMETICIDAD</h1>
           <p className="mt-3 max-w-3xl text-slate-300">
-            La secuencia inicia en Instalación Hidráulica y continúa de forma bloqueada hasta completar los siete puntos críticos.
+            El recorrido inicia con las dos pruebas de hermeticidad: Hidráulica y Gas. Después continúan los siete Puntos Críticos.
           </p>
           <form action={iniciarPuntosCriticosV1} className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
             <input type="hidden" name="inspeccionId" value={id} />
             <button className="rounded-xl bg-cyan-300 px-6 py-3 font-black text-slate-950">
-              INICIAR EN INSTALACIÓN HIDRÁULICA
+              INICIAR PRUEBAS DE HERMETICIDAD
             </button>
           </form>
         </div>
@@ -319,6 +318,26 @@ export default async function PuntosCriticosPage({
   const otrosConceptosCompletos = itemsNormales.every((item) => item.estadoV3 !== "PENDIENTE");
   const indicePunto = PUNTOS_CRITICOS_V1.findIndex((item) => item.codigo === codigoSolicitado);
   const siguientePunto = PUNTOS_CRITICOS_V1[indicePunto + 1];
+  const pasosHermeticidad = pasos.filter(
+    (pasoActual) => pasoActual.clave === "PC_HIDRAULICA" || pasoActual.clave === "PC_GAS",
+  );
+  const hermeticidadInicioCompleta =
+    pasosHermeticidad.length === 2 &&
+    pasosHermeticidad.every((pasoActual) => {
+      const d = datosPaso(pasoActual.datos);
+      return Boolean(d.pruebaProlongadaNoAplica) || Boolean(pasoActual.lecturaInicial);
+    });
+  const hermeticidadCierreCompleta =
+    pasosHermeticidad.length === 2 &&
+    pasosHermeticidad.every((pasoActual) => {
+      const d = datosPaso(pasoActual.datos);
+      return Boolean(d.pruebaProlongadaNoAplica) || Boolean(pasoActual.lecturaFinal);
+    });
+  const estadoHermeticidad = hermeticidadCierreCompleta
+    ? "CERRADA"
+    : hermeticidadInicioCompleta
+      ? "INICIADA"
+      : "PENDIENTE";
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-7 text-white">
@@ -334,7 +353,7 @@ export default async function PuntosCriticosPage({
         </div>
 
         <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-amber-300">
-          INICIO DE INSPECCIÓN DE PUNTOS CRÍTICOS
+          RECORRIDO TÉCNICO · PASO {indicePunto + 2} DE 8
         </p>
         <h1 className="mt-2 text-3xl font-black">{punto.etiqueta}</h1>
         <p className="mt-2 text-sm text-slate-400">
@@ -347,14 +366,22 @@ export default async function PuntosCriticosPage({
           </div>
         )}
 
-        <section className="mt-6 grid gap-2 md:grid-cols-7">
+        <section className="mt-6 grid gap-2 md:grid-cols-8">
+          <Link
+            href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`}
+            className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-3 text-xs font-black text-emerald-300"
+          >
+            <span className="block text-[10px] text-slate-500">1/8</span>
+            <span className="mt-1 block">Hermeticidad</span>
+            <span className="mt-2 block text-[10px]">{estadoHermeticidad}</span>
+          </Link>
           {PUNTOS_CRITICOS_V1.map((item, index) => {
             const estado = pasos.find((p) => p.clave === `PC_${item.codigo}`)?.estado ?? "PENDIENTE";
             const activo = item.codigo === codigoSolicitado;
             const habilitado = puedeEntrarPunto(item.codigo);
             const contenido = (
               <>
-                <span className="block text-[10px] text-slate-500">{index + 1}/7</span>
+                <span className="block text-[10px] text-slate-500">{index + 2}/8</span>
                 <span className="mt-1 block">{item.etiqueta}</span>
                 <span className="mt-2 block text-[10px]">
                   {habilitado ? estado.replaceAll("_", " ") : "BLOQUEADO"}
@@ -399,18 +426,6 @@ export default async function PuntosCriticosPage({
                 <p className="text-2xl font-black text-cyan-300">{porcentaje}%</p>
               </div>
             </div>
-
-            {datos.pruebaProlongada && (
-              <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/5 p-4 text-sm text-amber-100">
-                <strong>Prueba prolongada con manómetro:</strong> inicia al arrancar este punto y puede permanecer abierta mientras continúas la inspección. Debe cerrarse con lectura final antes del cierre total.
-                {paso.lecturaInicial && (
-                  <p className="mt-2 text-xs font-bold text-emerald-200">
-                    Prueba iniciada: {paso.lecturaInicial} {paso.unidad ?? ""}.
-                    {paso.lecturaFinal ? <> Lectura final: {paso.lecturaFinal} {paso.unidad ?? ""}.</> : " Pendiente lectura final."}
-                  </p>
-                )}
-              </div>
-            )}
 
             {!datos.configurado && puedeCapturar && (
               <form action={configurarPuntoCriticoV1} className="mt-6 rounded-2xl border border-violet-300/20 bg-violet-300/5 p-5">
@@ -469,40 +484,6 @@ export default async function PuntosCriticosPage({
             </p>
           </aside>
         </section>
-
-        {datos.configurado && datos.aplica && datos.pruebaProlongadaNoAplica && (
-          <section className="mt-7 rounded-3xl border border-slate-600/30 bg-slate-900 p-6">
-            <p className="text-xs font-black uppercase tracking-wider text-slate-400">Prueba especial</p>
-            <h2 className="mt-1 text-2xl font-black">Prueba de hermeticidad con manómetro · NO APLICA</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              La prueba quedó exenta de fotografía y lecturas. Puede reactivarse mientras la partida no esté cerrada.
-            </p>
-            {puedeCapturar && paso.estado !== "COMPLETADO" && paso.estado !== "NO_APLICA" && (
-              <form action={reactivarPruebaProlongadaV1} className="mt-4">
-                <input type="hidden" name="inspeccionId" value={id} />
-                <input type="hidden" name="codigo" value={codigoSolicitado} />
-                <button className="rounded-xl border border-cyan-300/30 px-5 py-3 font-black text-cyan-200">
-                  REACTIVAR PRUEBA
-                </button>
-              </form>
-            )}
-          </section>
-        )}
-
-        {datos.configurado && datos.aplica && datos.pruebaProlongada && (
-          <div className="mt-6 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
-            <p className="text-sm font-black text-amber-200">Prueba de hermeticidad administrada por separado</p>
-            <p className="mt-1 text-xs text-slate-400">
-              La lectura inicial se toma antes del recorrido y la lectura final al terminar las áreas de la vivienda.
-            </p>
-            <Link
-              href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=${paso.lecturaInicial && !paso.lecturaFinal ? "cierre" : "inicio"}`}
-              className="mt-3 inline-block text-xs font-black text-cyan-300 underline"
-            >
-              VER PRUEBAS DE HERMETICIDAD
-            </Link>
-          </div>
-        )}
 
         {datos.configurado && datos.aplica && (
           <section className="mt-7 space-y-4">
@@ -598,12 +579,12 @@ export default async function PuntosCriticosPage({
                           <input type="hidden" name="inspeccionId" value={id} />
                           <input type="hidden" name="codigo" value={codigoSolicitado} />
                           <input type="hidden" name="itemId" value={item.id} />
-                          <p className="text-xs font-black uppercase tracking-wider text-slate-300">¿Este concepto no corresponde?</p>
+                          <p className="text-xs font-black uppercase tracking-wider text-amber-200">Opción por concepto</p>
                           <p className="mt-1 text-[11px] leading-5 text-slate-500">
                             Al marcarlo NO APLICA se cerrará sin pedir fotografía, IA, comentario, medición ni prioridad.
                           </p>
-                          <button className="mt-3 w-full rounded-xl border border-slate-400/30 px-3 py-2 text-sm font-black text-slate-200">
-                            NO APLICA
+                          <button className="mt-3 w-full rounded-xl border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-sm font-black text-amber-200">
+                            MARCAR NO APLICA
                           </button>
                         </form>
                       )}
@@ -766,7 +747,7 @@ export default async function PuntosCriticosPage({
                 <p className="text-xs font-black uppercase tracking-wider text-violet-200">Ampliación por criterio del Inspector</p>
                 <h3 className="mt-1 text-xl font-black">+ AGREGAR CONCEPTO MANUALMENTE</h3>
                 <p className="mt-2 text-sm text-slate-300">
-                  Úsalo cuando durante la revisión aparezca un punto que no esté incluido en la plantilla. El concepto agregado seguirá el mismo flujo de evidencia, IA opcional, comentario, clasificación, prioridad y NO APLICA.
+                  Úsalo cuando durante la revisión aparezca un punto que no esté incluido en la plantilla. El concepto agregado tendrá exactamente el mismo flujo que los conceptos precargados: cámara o galería, interpretación IA opcional, comentario del inspector, clasificación, prioridad y NO APLICA.
                 </p>
                 <div className="mt-4 grid gap-3 lg:grid-cols-2">
                   <label className="text-xs font-bold text-slate-400">
@@ -793,30 +774,15 @@ export default async function PuntosCriticosPage({
               </form>
             )}
 
-            {puedeCapturar && datos.pruebaProlongada && !paso.lecturaInicial && otrosConceptosCompletos && (
-              <div className="rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
-                <p className="font-black text-amber-200">FALTA INICIAR LA PRUEBA DEL MANÓMETRO</p>
+            {puedeCapturar && datos.pruebaProlongada && paso.lecturaInicial && otrosConceptosCompletos && siguientePunto && (
+              <div className="rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-6">
+                <p className="font-black text-emerald-200">PARTIDA REVISADA</p>
                 <p className="mt-2 text-sm text-slate-300">
-                  Los demás conceptos de {punto.etiqueta.toLowerCase()} ya están cerrados. Para continuar al siguiente punto crítico debes registrar la fotografía y la lectura inicial del manómetro. La lectura final se capturará al terminar la inspección.
-                </p>
-                <a
-                  href="#prueba-manometro-inicio"
-                  className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950"
-                >
-                  IR A MEDICIÓN INICIAL DEL MANÓMETRO
-                </a>
-              </div>
-            )}
-
-            {puedeCapturar && datos.pruebaProlongada && paso.lecturaInicial && !paso.lecturaFinal && otrosConceptosCompletos && siguientePunto && (
-              <div className="rounded-3xl border border-amber-300/25 bg-amber-300/5 p-6">
-                <p className="font-black text-amber-200">PRUEBA CON MANÓMETRO ABIERTA</p>
-                <p className="mt-2 text-sm text-slate-300">
-                  Todos los demás conceptos de {punto.etiqueta.toLowerCase()} están cerrados. La prueba del manómetro es la única que permanece abierta.
+                  Todos los conceptos aplicables de {punto.etiqueta.toLowerCase()} están resueltos. Puedes continuar con el siguiente punto crítico.
                 </p>
                 <Link
                   href={`/panel/inspecciones/${id}/puntos-criticos?punto=${siguientePunto.codigo}`}
-                  className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950"
+                  className="mt-4 inline-block rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950"
                 >
                   CONTINUAR A {siguientePunto.etiqueta}
                 </Link>
