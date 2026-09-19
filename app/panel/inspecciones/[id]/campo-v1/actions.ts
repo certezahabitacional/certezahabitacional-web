@@ -127,12 +127,15 @@ async function exigirResponsableV1(inspeccionId: string) {
     select: { id: true, numeroInspeccion: true, estado: true, inspectorId: true },
   });
   if (!usuario?.activo || !inspeccion) redirect("/acceso");
-  const inspectorAsignado = usuario.rol === RolUsuario.INSPECTOR && Boolean(usuario.inspector?.activo) && inspeccion.inspectorId === usuario.inspector?.id;
-  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
-  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
+  const inspectorAsignado =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    Boolean(usuario.inspector?.activo) &&
+    inspeccion.inspectorId === usuario.inspector?.id;
+  const director = usuario.rol === RolUsuario.DIRECTOR;
+  if (!inspectorAsignado && !director) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "Este recorrido guiado corresponde únicamente a V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "La captura técnica solo está disponible mientras V1 está EN PROCESO.");
-  return { usuario, responsable: directorPorAusencia ? "Director por ausencia" : "Inspector" };
+  return { usuario, responsable: director ? "Director" : "Inspector" };
 }
 
 async function exigirAreaActivaV1(inspeccionId: string, areaId: string) {
