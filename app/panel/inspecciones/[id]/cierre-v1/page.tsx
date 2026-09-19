@@ -6,12 +6,14 @@ import { auth } from "@/auth";
 import { bloquearContenidoTecnicoV1Finalizado } from "@/lib/acceso-v1-final";
 import { prisma } from "@/lib/prisma";
 import {
+  concluirInspeccionTecnicaV1,
   confirmarRevisionFinalInspectorV1,
   enviarReporteDireccionV1,
   terminarTrabajoCampoV1,
 } from "./actions";
 
 type Estado = {
+  inspeccionTecnicaConcluidaEn: Date | null;
   campoFinalizadoEn: Date | null;
   preReporteGeneradoEn: Date | null;
   revisionInspectorFinalEn: Date | null;
@@ -68,7 +70,7 @@ export default async function CierreV1Page({ params, searchParams }: {
 
   const [estado] = await prisma.$queryRaw<Estado[]>`
     SELECT
-      c."campoFinalizadoEn", c."preReporteGeneradoEn", c."revisionInspectorFinalEn",
+      c."inspeccionTecnicaConcluidaEn", c."campoFinalizadoEn", c."preReporteGeneradoEn", c."revisionInspectorFinalEn",
       c."reporteLimiteEn", c."reabiertaEn",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true) AS "areasTotal",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
@@ -96,6 +98,7 @@ export default async function CierreV1Page({ params, searchParams }: {
     estado.hallazgos === estado.hallazgosCompletos &&
     estado.portadaFachada === 1 && estado.syncPendientes === 0
   );
+  const inspeccionConcluida = Boolean(estado?.inspeccionTecnicaConcluidaEn);
   const preReporteRevisado = Boolean(estado?.preReporteGeneradoEn);
   const campoTerminado = Boolean(estado?.campoFinalizadoEn);
   const revisionInspectorFinal = Boolean(estado?.revisionInspectorFinalEn);
@@ -151,18 +154,43 @@ export default async function CierreV1Page({ params, searchParams }: {
           </div>
         </section>
 
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && !tecnicoListo && (
+          <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-amber-300">Inspección en proceso</p>
+            <h2 className="mt-2 text-xl font-black">Continúa con la inspección</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Durante esta etapa sólo se muestran las herramientas de captura técnica. Las opciones de revisión y ajuste permanecen ocultas.
+            </p>
+          </section>
+        )}
+
+        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && tecnicoListo && !inspeccionConcluida && (
+          <section className="mt-5 rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Inspección técnica completada al 100%</p>
+            <h2 className="mt-2 text-xl font-black">Concluir inspección</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Mientras la inspección está en ejecución no se muestran opciones de revisión ni ajuste. Cuando el Inspector confirme que terminó la inspección, se habilitará la revisión preliminar.
+            </p>
+            {esInspector && (
+              <form action={concluirInspeccionTecnicaV1} className="mt-4">
+                <input type="hidden" name="inspeccionId" value={id}/>
+                <button className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">CONCLUIR INSPECCIÓN</button>
+              </form>
+            )}
+          </section>
+        )}
+
+        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && tecnicoListo && inspeccionConcluida && (
           <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Etapa 1 · antes de retirarse del inmueble</p>
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Después de concluir la inspección</p>
             <h2 className="mt-2 text-xl font-black">Reporte preliminar para revisión en sitio</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">
               Antes de cerrar la visita, el Inspector debe revisar el pre-reporte completo y corregir cualquier omisión todavía estando en el inmueble.
             </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className={`rounded-xl px-4 py-3 text-sm font-black ${tecnicoListo ? "bg-cyan-300 text-slate-950" : "border border-white/15 text-slate-500"}`}>
-                {preReporteRevisado ? "VOLVER A VER PRE-REPORTE ✓" : "ABRIR REPORTE PRELIMINAR"}
+            <div className="mt-4">
+              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className="inline-block rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
+                {preReporteRevisado ? "VOLVER A VER REPORTE PRELIMINAR ✓" : "REVISAR REPORTE PRELIMINAR"}
               </Link>
-              <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Corregir captura</Link>
             </div>
             <p className={`mt-4 text-sm font-bold ${preReporteRevisado ? "text-emerald-300" : "text-amber-300"}`}>
               {preReporteRevisado ? "✓ Pre-reporte revisado y confirmado en sitio." : "Pendiente: confirmar la revisión preliminar antes de cerrar la visita."}
@@ -170,7 +198,7 @@ export default async function CierreV1Page({ params, searchParams }: {
           </section>
         )}
 
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && (
           <section className={`mt-5 rounded-3xl border p-6 ${listoCampo ? "border-emerald-300/20 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
             <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Etapa 2 · cierre de visita</p>
             <h2 className="mt-2 text-xl font-black">Terminar trabajo de campo</h2>
