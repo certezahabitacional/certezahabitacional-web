@@ -66,7 +66,7 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
       item("PC_HID_03_FUGAS", "Fugas visibles", "Revisar uniones, válvulas, conexiones y puntos accesibles en busca de fuga o humedad.", "Detector de humedad / inspección visual"),
       item("PC_HID_04_VALVULAS", "Válvulas y elementos de control", "Verificar presencia, accesibilidad, fijación y condición aparente.", "Inspección visual", false, true),
       item("PC_HID_05_SOPORTES", "Trazo, soportes y protección", "Revisar recorrido visible, soportes, pasos, protección e interferencias.", "Inspección visual / medidor láser", false, true),
-      item("PC_HID_06_SALIDAS", "Ubicación de salidas hidráulicas", "Verificar ubicación, altura, alineación y fijación de salidas visibles.", "Medidor láser / nivel", true, true),
+      item("PC_HID_06_SALIDAS", "Ubicación de salidas hidráulicas", "Verificar ubicación, altura, alineación y fijación de salidas visibles.", "Medidor láser / nivel", false, true),
     ],
   },
   {
