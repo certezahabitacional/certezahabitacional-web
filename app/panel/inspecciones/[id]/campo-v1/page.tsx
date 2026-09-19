@@ -110,7 +110,14 @@ export default async function CampoV1Page({ params, searchParams }: {
     ORDER BY a."orden",a."nombre"
   `;
 
-  const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areas.find((a) => a.estado !== "REVISADA") ?? areas[0];
+  const areaActiva = areas.find((a) => a.estado !== "REVISADA") ?? null;
+  if (query.area && areaActiva) {
+    const solicitada = areas.find((a) => a.id === query.area);
+    if (solicitada && solicitada.estado !== "REVISADA" && solicitada.id !== areaActiva.id) {
+      redirect(`/panel/inspecciones/${id}/campo-v1?area=${areaActiva.id}&error=${encodeURIComponent("Debes concluir al 100% el punto de área activo antes de avanzar al siguiente.")}`);
+    }
+  }
+  const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areaActiva ?? areas[0];
   const puntos = areaSeleccionada ? await prisma.$queryRaw<Punto[]>`
     SELECT g."id",g."concepto",p."grupo",g."estadoV3",g."origenV3",g."obligatorio",g."herramientaSugerida",g."motivoNoAplica"
     FROM "GuiaInspeccionItem" g LEFT JOIN "BibliotecaPuntoCerteza" p ON p."id"=g."bibliotecaPuntoId"
