@@ -40,6 +40,7 @@ type AreaResumen = {
 };
 
 type Control = {
+  inspeccionTecnicaConcluidaEn: Date | null;
   campoFinalizadoEn: Date | null;
   preReporteGeneradoEn: Date | null;
   coberturaPorcentaje: number | null;
@@ -79,7 +80,7 @@ export default async function PreReportePage({ params, searchParams }: {
   if (!puedeVer) redirect("/acceso");
 
   const [control] = await prisma.$queryRaw<Control[]>`
-    SELECT "campoFinalizadoEn","preReporteGeneradoEn","coberturaPorcentaje"
+    SELECT "inspeccionTecnicaConcluidaEn","campoFinalizadoEn","preReporteGeneradoEn","coberturaPorcentaje"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${id}
     LIMIT 1
@@ -169,19 +170,10 @@ export default async function PreReportePage({ params, searchParams }: {
       )}
 
       <section className="mx-auto mb-4 max-w-4xl rounded-3xl border border-slate-300 bg-white p-5 shadow-sm print:hidden">
-        <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">Flujo de cierre V1</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <Etapa numero="1" titulo="Pre-reporte en sitio" activa={!revisadoEnSitio && !campoTerminado} completa={revisadoEnSitio} detalle="Revisar antes de retirarse del inmueble." />
-          <Etapa numero="2" titulo="Revisión final del Inspector" activa={revisadoEnSitio && campoTerminado && inspeccion.estado === "EN_PROCESO"} completa={inspeccion.estado !== "EN_PROCESO"} detalle="Ajustar redacción y evidencias antes del envío." />
-          <Etapa numero="3" titulo="Revisión de Dirección" activa={inspeccion.estado === "REPORTE_PENDIENTE"} completa={inspeccion.estado === "FINALIZADA"} detalle="Autorizar o devolver con retroalimentación." />
-        </div>
-
-        {!campoTerminado && (
-          <div className={`mt-4 rounded-2xl p-4 ${tecnicoListo ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-950"}`}>
-            <p className="font-black">{tecnicoListo ? "El expediente técnico está listo para la revisión preliminar en sitio." : "Aún existen pendientes técnicos antes del pre-reporte."}</p>
-            <p className="mt-1 text-sm">Este paso no cierra la inspección ni bloquea correcciones. Su propósito es que el Inspector revise el resultado completo antes de salir del inmueble.</p>
-          </div>
-        )}
+        <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">Inspección técnica concluida</p>
+        <p className="mt-2 text-sm leading-6 text-slate-700">
+          Esta revisión sólo se habilita después de que el Inspector concluye formalmente la inspección. Si procede, aquí puede revisar el reporte preliminar antes de cerrar la visita.
+        </p>
       </section>
 
       <article className="mx-auto max-w-4xl overflow-hidden bg-white shadow-xl">
