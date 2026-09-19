@@ -68,13 +68,31 @@ export default async function CampoV1Page({ params, searchParams }: {
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const [critical] = await prisma.$queryRaw<Array<{ total: number; incompletos: number }>>`
-    SELECT COUNT(*)::int AS "total",
-           COUNT(*) FILTER (WHERE "estado" NOT IN ('COMPLETADO','NO_APLICA'))::int AS "incompletos"
-    FROM "ProtocoloInspeccionPaso"
-    WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
+  const [critical] = await prisma.$queryRaw<Array<{ total: number; bloqueantes: number }>>`
+    SELECT
+      COUNT(*)::int AS "total",
+      COUNT(*) FILTER (
+        WHERE p."estado" NOT IN ('COMPLETADO','NO_APLICA')
+          AND NOT (
+            p."clave" IN ('PC_HIDRAULICA','PC_GAS')
+            AND p."lecturaInicial" IS NOT NULL
+            AND p."lecturaFinal" IS NULL
+            AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "GuiaInspeccionItem" g
+              WHERE g."inspeccionId"=p."inspeccionId"
+                AND g."area"=concat('__PUNTO_CRITICO__:',replace(p."clave",'PC_',''))
+                AND g."estadoV3"='PENDIENTE'
+                AND g."concepto" NOT ILIKE '%manómetro%'
+                AND g."concepto" NOT ILIKE '%lectura final%'
+            )
+          )
+      )::int AS "bloqueantes"
+    FROM "ProtocoloInspeccionPaso" p
+    WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
   `;
-  if (Number(critical?.total ?? 0) < 7 || Number(critical?.incompletos ?? 0) > 0) {
+  if (Number(critical?.total ?? 0) < 7 || Number(critical?.bloqueantes ?? 0) > 0) {
     redirect(`/panel/inspecciones/${id}/puntos-criticos`);
   }
 
