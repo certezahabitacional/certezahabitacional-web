@@ -253,7 +253,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                     {Number(areaSeleccionada.hallazgos) === 0 ? (
                       <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/5 p-4">
                         <p className="font-black text-emerald-200">Cierre rápido sin hallazgos</p>
-                        <p className="mt-1 text-xs text-slate-400">Confirma que revisaste todos los puntos aplicables del área. Los puntos pendientes se marcarán automáticamente como revisados.</p>
+                        <p className="mt-1 text-xs text-slate-400">Todos los conceptos aplicables deben quedar resueltos individualmente como REVISADO / CONFORME o NO APLICA. El cierre sólo se habilita cuando el punto llega al 100%.</p>
                         <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1 || Number(areaSeleccionada.pendientes)>0} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PUNTO AL 100% · SIN HALLAZGOS</button></form>
                       </div>
                     ) : (
