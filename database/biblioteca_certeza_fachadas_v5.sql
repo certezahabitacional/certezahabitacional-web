@@ -46,7 +46,7 @@ puntos as (
     'PUERTA_INSTALACION','PUERTA_FUNCION',
     'VENTANA_INSTALACION','VENTANA_FUNCION',
     'SELLADO_PUERTA','SELLADO_VENTANA',
-    'INST_UBICACION','INST_ALTURA','INST_ALINEACION','INST_FUNCIONAMIENTO',
+    'INST_UBICACION','INST_ALTURA','INST_ALINEACION',
     'HUMEDAD_VISIBLE'
   )
 )
@@ -68,5 +68,11 @@ where ap."areaBibliotecaId"=a.id
     'SOTANO','OTRA_AREA'
   )
   and p."codigo" in ('VANOS','SELLADOS');
+
+-- El funcionamiento eléctrico no se repite por área: se resuelve en el Punto 7 · Instalación Eléctrica.
+delete from "BibliotecaAreaPuntoCerteza" ap
+using "BibliotecaPuntoCerteza" p
+where ap."puntoBibliotecaId"=p.id
+  and p."codigo"='INST_FUNCIONAMIENTO';
 
 commit;
