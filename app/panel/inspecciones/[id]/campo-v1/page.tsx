@@ -10,6 +10,7 @@ import {
   cerrarAreaSinHallazgosV1,
   inicializarPlanAreasV1,
   marcarPuntoNoAplicaV1,
+  marcarPuntoRevisadoV1,
 } from "./actions";
 
 type Punto = {
@@ -124,6 +125,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   const indiceAreaActiva = areaSeleccionada ? areas.findIndex((area) => area.id === areaSeleccionada.id) : -1;
   const numeroAreaActiva = indiceAreaActiva >= 0 ? 9 + indiceAreaActiva : null;
   const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
@@ -164,13 +166,35 @@ export default async function CampoV1Page({ params, searchParams }: {
 
         <div className="mt-6 grid gap-5 lg:grid-cols-[320px_1fr]">
           <aside className="space-y-2">
-            {areas.map((area, index) => (
-              <Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className={`block rounded-2xl border p-4 ${areaSeleccionada?.id === area.id ? "border-cyan-300/40 bg-cyan-300/10" : area.estado === "REVISADA" ? "border-emerald-400/15 bg-emerald-400/5" : "border-white/10 bg-slate-900"}`}>
-                <div className="flex items-start justify-between gap-3"><span className="text-xs font-black text-slate-500">{9 + index}/{totalRecorrido}</span><span className={`text-xs font-black ${area.estado === "REVISADA" ? "text-emerald-300" : "text-amber-300"}`}>{area.estado === "REVISADA" ? "CERRADA" : `${area.pendientes} pendientes`}</span></div>
-                <p className="mt-1 font-black">{area.nombre}</p>
-                <p className="mt-1 text-xs text-slate-400">{area.puntos} puntos · {area.hallazgos} hallazgos · {area.noAplica} no aplica</p>
-              </Link>
-            ))}
+            {areas.map((area, index) => {
+              const activa = area.id === areaActivaId;
+              const cerrada = area.estado === "REVISADA";
+              const bloqueada = !cerrada && !activa;
+              const contenido = (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-xs font-black text-slate-500">{9 + index}/{totalRecorrido}</span>
+                    <span className={`text-xs font-black ${cerrada ? "text-emerald-300" : activa ? "text-amber-300" : "text-slate-600"}`}>
+                      {cerrada ? "CERRADA 100%" : activa ? `${area.pendientes} pendientes` : "BLOQUEADO"}
+                    </span>
+                  </div>
+                  <p className="mt-1 font-black">{area.nombre}</p>
+                  <p className="mt-1 text-xs text-slate-400">{area.puntos} conceptos · {area.hallazgos} hallazgos · {area.noAplica} no aplica</p>
+                </>
+              );
+              const clases = `block rounded-2xl border p-4 ${areaSeleccionada?.id === area.id
+                ? "border-cyan-300/40 bg-cyan-300/10"
+                : cerrada
+                  ? "border-emerald-400/15 bg-emerald-400/5"
+                  : bloqueada
+                    ? "cursor-not-allowed border-white/5 bg-slate-950 text-slate-700"
+                    : "border-amber-300/20 bg-amber-300/5"}`;
+              return bloqueada ? (
+                <div key={area.id} className={clases} aria-disabled="true">{contenido}</div>
+              ) : (
+                <Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className={clases}>{contenido}</Link>
+              );
+            })}
           </aside>
 
           <section>
@@ -188,18 +212,28 @@ export default async function CampoV1Page({ params, searchParams }: {
                         <div><div className="flex flex-wrap gap-2"><span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{punto.grupo ?? "ADICIONAL"}</span>{punto.origenV3 === "INSPECTOR" && <span className="rounded-full bg-violet-300/10 px-2 py-0.5 text-[10px] font-black text-violet-300">AGREGADO EN CAMPO</span>}</div><p className="mt-1 font-bold">{punto.concepto}</p>{punto.herramientaSugerida && <p className="mt-1 text-xs text-slate-500">Herramienta sugerida: {punto.herramientaSugerida}</p>}{punto.motivoNoAplica && <p className="mt-1 text-xs text-slate-500">Motivo: {punto.motivoNoAplica}</p>}</div>
                         <span className={`text-xs font-black ${punto.estadoV3 === "PENDIENTE" ? "text-amber-300" : "text-emerald-300"}`}>{punto.estadoV3.replaceAll("_"," ")}</span>
                       </div>
-                      {puedeCapturar && punto.estadoV3 === "PENDIENTE" && (
-                        <form action={marcarPuntoNoAplicaV1} className="mt-3 flex gap-2">
-                          <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="itemId" value={punto.id}/>
-                          <input name="motivo" placeholder="Si no aplica, indica por qué" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
-                          <button className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-slate-300">NO APLICA</button>
-                        </form>
+                      {puedeCapturar && punto.estadoV3 === "PENDIENTE" && areaSeleccionada?.id === areaActivaId && (
+                        <div className="mt-3 grid gap-2 md:grid-cols-[auto_1fr_auto]">
+                          <form action={marcarPuntoRevisadoV1}>
+                            <input type="hidden" name="inspeccionId" value={id}/>
+                            <input type="hidden" name="itemId" value={punto.id}/>
+                            <button className="w-full rounded-xl bg-emerald-300 px-3 py-2 text-xs font-black text-slate-950">
+                              REVISADO / CONFORME
+                            </button>
+                          </form>
+                          <form action={marcarPuntoNoAplicaV1} className="contents">
+                            <input type="hidden" name="inspeccionId" value={id}/>
+                            <input type="hidden" name="itemId" value={punto.id}/>
+                            <input name="motivo" placeholder="Si no aplica, indica por qué" className="min-w-0 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+                            <button className="rounded-xl border border-amber-300/30 px-3 py-2 text-xs font-black text-amber-200">NO APLICA</button>
+                          </form>
+                        </div>
                       )}
                     </article>
                   ))}
                 </div>
 
-                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
+                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (
                   <div className="mt-6 grid gap-4 xl:grid-cols-2">
                     <form action={agregarPuntoInspectorV1} className="rounded-2xl border border-violet-300/15 bg-violet-300/5 p-4">
                       <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/>
@@ -213,19 +247,19 @@ export default async function CampoV1Page({ params, searchParams }: {
                       <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/5 p-4">
                         <p className="font-black text-emerald-200">Cierre rápido sin hallazgos</p>
                         <p className="mt-1 text-xs text-slate-400">Confirma que revisaste todos los puntos aplicables del área. Los puntos pendientes se marcarán automáticamente como revisados.</p>
-                        <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SIN HALLAZGOS · CERRAR ÁREA</button></form>
+                        <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1 || Number(areaSeleccionada.pendientes)>0} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PUNTO AL 100% · SIN HALLAZGOS</button></form>
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
                         <p className="font-black text-amber-200">Cierre con hallazgos</p>
                         <p className="mt-1 text-xs text-slate-400">El sistema comprobará que cada hallazgo tenga descripción y mínimo 4 evidencias antes de cerrar el área.</p>
-                        <form action={cerrarAreaConHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button className="w-full rounded-xl bg-amber-300 px-4 py-3 font-black text-slate-950">CERRAR ÁREA CON {areaSeleccionada.hallazgos} HALLAZGO(S)</button></form>
+                        <form action={cerrarAreaConHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.pendientes)>0} className="w-full rounded-xl bg-amber-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PUNTO AL 100% · {areaSeleccionada.hallazgos} HALLAZGO(S)</button></form>
                       </div>
                     )}
                   </div>
                 )}
 
-                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
+                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (
                   <div className="mt-4 flex flex-wrap gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-4">
                     <Link href={`/panel/inspecciones/${id}/areas`} className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">Tomar / agregar fotografías</Link>
                     <Link href={`/panel/inspecciones/${id}/captura?area=${encodeURIComponent(areaSeleccionada.nombre)}`} className="rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Registrar hallazgo</Link>
