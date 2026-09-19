@@ -26,6 +26,84 @@ function slug(valor: string) {
     .slice(0, 80);
 }
 
+function prioridadRutaArea(nombre: string, codigo: string) {
+  const n = slug(`${nombre} ${codigo}`);
+
+  // Planta baja y recorrido interior principal.
+  if (/RECIBIDOR|VESTIBULO/.test(n)) return 80;
+  if (/(^|_)SALA(_|$)/.test(n)) return 100;
+  if (/COMEDOR/.test(n)) return 110;
+  if (/COCINA/.test(n)) return 120;
+  if (/DESAYUNADOR/.test(n)) return 125;
+  if (/MEDIO_BANO|1_2_BANO|BANO_VISITAS/.test(n)) return 130;
+  if (/LAVANDERIA|CUARTO_DE_LAVADO|LAVADO/.test(n)) return 140;
+  if (/CUARTO_SERVICIO/.test(n)) return 150;
+
+  // Conexión entre niveles.
+  if (/ESCALERA/.test(n)) return 190;
+
+  // Planta alta: circulación, baño compartido y zona privada.
+  if (/BANO_COMPARTIDO/.test(n)) return 210;
+  if (/PASILLO|CIRCULACION/.test(n)) return 215;
+  if (/ESTANCIA|FAMILY_ROOM/.test(n)) return 220;
+  if (/BANO.*RECAMARA_PRINCIPAL|RECAMARA_PRINCIPAL.*BANO/.test(n)) return 240;
+  if (/RECAMARA_PRINCIPAL/.test(n)) return 230;
+  if (/VESTIDOR/.test(n)) return 250;
+  if (/BALCON/.test(n)) return 260;
+
+  const recamaraNumero = n.match(/RECAMARA_?(\d+)/);
+  if (recamaraNumero) return 280 + Number(recamaraNumero[1]) * 10;
+  if (/(^|_)RECAMARA(_|$)|ALCOBA/.test(n)) return 350;
+  if (/BANO_COMPLETO|(^|_)BANO(_|$)/.test(n)) return 360;
+  if (/CLOSET/.test(n)) return 370;
+  if (/ESTUDIO|OFICINA/.test(n)) return 380;
+
+  // Áreas secundarias interiores.
+  if (/BODEGA|SOTANO/.test(n)) return 450;
+  if (/CUARTO_MAQUINAS|CUARTO_INSTALACIONES/.test(n)) return 470;
+
+  // Exteriores al final del recorrido interior.
+  if (/COCHERA|ACCESO_VEHICULAR/.test(n)) return 600;
+  if (/TERRAZA/.test(n)) return 610;
+  if (/PATIO/.test(n)) return 620;
+  if (/JARDIN/.test(n)) return 630;
+  if (/ACCESO_PEATONAL/.test(n)) return 640;
+  if (/FACHADA_PRINCIPAL/.test(n)) return 650;
+  if (/FACHADA_LATERAL/.test(n)) return 660;
+  if (/BARDA/.test(n)) return 670;
+  if (/AZOTEA/.test(n)) return 700;
+  if (/ROOF_GARDEN/.test(n)) return 710;
+
+  return 500;
+}
+
+async function ordenarAreasLogicamente(inspeccionId: string) {
+  const areas = await prisma.$queryRaw<Array<{ id: string; nombre: string; codigo: string; orden: number }>>`
+    SELECT "id"::text,"nombre","codigo","orden"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+    ORDER BY "orden","nombre"
+  `;
+
+  const ordenadas = [...areas].sort((a, b) => {
+    const pa = prioridadRutaArea(a.nombre, a.codigo);
+    const pb = prioridadRutaArea(b.nombre, b.codigo);
+    if (pa !== pb) return pa - pb;
+    if (a.orden !== b.orden) return a.orden - b.orden;
+    return a.nombre.localeCompare(b.nombre, "es");
+  });
+
+  await prisma.$transaction(
+    ordenadas.map((area, index) =>
+      prisma.$executeRaw`
+        UPDATE "AreaInspeccion"
+        SET "orden"=${(index + 1) * 10},"actualizadoEn"=NOW()
+        WHERE "id"=${area.id}::uuid AND "inspeccionId"=${inspeccionId}
+      `,
+    ),
+  );
+}
+
 function supabaseAdmin() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -166,12 +244,14 @@ export async function generarAreasDesdeGuia(formData: FormData) {
     }
   });
 
+  await ordenarAreasLogicamente(inspeccionId);
+
   await registrarAuditoria({
     tipo: TipoEvento.CREAR,
     entidad: "AreaInspeccion",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} generó ecosistema V1 desde la guía técnica: fachada + ${items.length} área(s) fuente.`,
+    descripcion: `${responsable} generó las áreas V1 desde la guía técnica y aplicó el orden lógico sugerido del recorrido.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
@@ -193,10 +273,85 @@ export async function agregarAreaManual(formData: FormData) {
     INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
     VALUES (${inspeccionId},${codigo},${nombre},${tipo},${Number(r?.siguiente ?? 10)},'MANUAL',true)
   `;
+  await ordenarAreasLogicamente(inspeccionId);
 
   await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "AreaInspeccion", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó manualmente el área obligatoria “${nombre}”.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   volver(inspeccionId, "ok", `Área “${nombre}” agregada.`);
+}
+
+export async function aplicarOrdenLogicoAreasV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  if (!inspeccionId) redirect("/panel/inspecciones");
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+
+  const [control] = await prisma.$queryRaw<Array<{ areasConfirmadas: boolean }>>`
+    SELECT "areasConfirmadas"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+  if (control?.areasConfirmadas) {
+    volver(inspeccionId, "error", "La ruta ya fue confirmada y no puede reordenarse durante la inspección.");
+  }
+
+  await ordenarAreasLogicamente(inspeccionId);
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "AreaInspeccion",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} aplicó el orden lógico sugerido: planta baja, escalera, planta alta/zona privada y exteriores.`,
+  });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  volver(inspeccionId, "ok", "Orden lógico sugerido aplicado. Puedes ajustarlo antes de confirmar.");
+}
+
+export async function moverAreaRutaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const direccion = texto(formData, "direccion").toUpperCase();
+  if (!inspeccionId || !areaId || !["ARRIBA","ABAJO"].includes(direccion)) redirect("/panel/inspecciones");
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+
+  const [control] = await prisma.$queryRaw<Array<{ areasConfirmadas: boolean }>>`
+    SELECT "areasConfirmadas"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+  if (control?.areasConfirmadas) {
+    volver(inspeccionId, "error", "La ruta ya fue confirmada y no puede reordenarse durante la inspección.");
+  }
+
+  const areas = await prisma.$queryRaw<Array<{ id: string; nombre: string; orden: number }>>`
+    SELECT "id"::text,"nombre","orden"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+    ORDER BY "orden","nombre"
+  `;
+  const indice = areas.findIndex((area) => area.id === areaId);
+  if (indice < 0) volver(inspeccionId, "error", "Área no encontrada.");
+  const destino = direccion === "ARRIBA" ? indice - 1 : indice + 1;
+  if (destino < 0 || destino >= areas.length) volver(inspeccionId, "error", "El área ya está en el extremo del recorrido.");
+
+  const actual = areas[indice];
+  const vecina = areas[destino];
+  await prisma.$transaction([
+    prisma.$executeRaw`UPDATE "AreaInspeccion" SET "orden"=${vecina.orden},"actualizadoEn"=NOW() WHERE "id"=${actual.id}::uuid`,
+    prisma.$executeRaw`UPDATE "AreaInspeccion" SET "orden"=${actual.orden},"actualizadoEn"=NOW() WHERE "id"=${vecina.id}::uuid`,
+  ]);
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "AreaInspeccion",
+    entidadId: actual.id,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} movió “${actual.nombre}” ${direccion === "ARRIBA" ? "hacia arriba" : "hacia abajo"} en la ruta de inspección.`,
+  });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  volver(inspeccionId, "ok", "Orden del recorrido actualizado.");
 }
 
 export async function confirmarAreasV1(formData: FormData) {
