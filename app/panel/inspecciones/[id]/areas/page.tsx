@@ -225,7 +225,14 @@ export default async function AreasPage({
             const minimo = 1;
             const evidenciaLista = fotos >= minimo;
             return (
-              <article key={area.id} className={`rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-white/10 bg-slate-900"}`}>
+              <article key={area.id} className={`relative rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-white/10 bg-slate-900"}`}>
+                {puedeCapturar && control?.areasConfirmadas && (
+                  <Link
+                    href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`}
+                    aria-label={`Iniciar inspección detallada de ${area.nombre}`}
+                    className="absolute inset-0 z-10 rounded-3xl"
+                  />
+                )}
                 <div className="grid gap-4 lg:grid-cols-[65px_1fr_300px]">
                   <span className="font-mono text-lg font-black text-cyan-300">{String(index + 1).padStart(2, "0")}</span>
                   <div>
@@ -272,9 +279,9 @@ export default async function AreasPage({
                         <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={area.id}/>
                         <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="block w-full text-xs text-slate-400"/>
                         <input name="descripcion" placeholder="Descripción opcional" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
-                        <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-sm font-black text-slate-950">Tomar / agregar foto</button>
+                        <button className="relative z-20 mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-sm font-black text-slate-950">Tomar / agregar foto</button>
                       </form>
-                      <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block rounded-xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-300">{completa ? "Ver resultado en Recorrido V1" : "Continuar revisión en Recorrido V1"}</Link>
+                      <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="relative z-20 block rounded-xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-300">{completa ? "Ver resultado en Recorrido V1" : "Continuar revisión en Recorrido V1"}</Link>
                     </div>
                   ) : (
                     <div className={`rounded-2xl p-4 text-sm font-bold ${completa ? "bg-emerald-300/10 text-emerald-300" : "bg-white/5 text-slate-500"}`}>{completa ? "Área cerrada ✓" : control?.areasConfirmadas ? "Pendiente de recorrido" : "Confirma primero el ecosistema de áreas"}</div>
