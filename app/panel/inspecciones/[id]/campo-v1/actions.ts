@@ -94,8 +94,8 @@ function codigoBibliotecaPorArea(codigo: string, nombre: string) {
   if (/SOTANO/.test(area)) return "SOTANO";
   if (/CUARTO_MAQUINAS/.test(area)) return "CUARTO_MAQUINAS";
   if (/CUARTO_INSTALACIONES/.test(area)) return "CUARTO_INSTALACIONES";
-  if (/FACHADA_LATERAL/.test(area)) return "FACHADA_LATERAL";
-  if (/FACHADA_PRINCIPAL/.test(area)) return "FACHADA_PRINCIPAL";
+  if (/FACHADA_(POSTERIOR|LATERAL_IZQUIERDA|LATERAL_DERECHA|LATERAL)/.test(area)) return "FACHADA_LATERAL";
+  if (/FACHADA_(PRINCIPAL|FRONTAL)/.test(area)) return "FACHADA_PRINCIPAL";
   if (/ACCESO_PEATONAL/.test(area)) return "ACCESO_PEATONAL";
   if (/BARDA/.test(area)) return "BARDA";
 
