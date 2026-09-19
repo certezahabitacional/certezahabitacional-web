@@ -53,7 +53,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/flujo`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const esDirectorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
@@ -125,7 +125,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   const totalRecorrido = 8 + areas.length;
   const indiceAreaActiva = areaSeleccionada ? areas.findIndex((area) => area.id === areaSeleccionada.id) : -1;
   const numeroAreaActiva = indiceAreaActiva >= 0 ? 9 + indiceAreaActiva : null;
-  const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
   const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (
@@ -134,7 +134,7 @@ export default async function CampoV1Page({ params, searchParams }: {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo V1</Link>
           <div className="flex flex-wrap items-center gap-2">
-            {esDirectorPorAusencia && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR POR AUSENCIA</span>}
+            {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
           </div>
         </div>
