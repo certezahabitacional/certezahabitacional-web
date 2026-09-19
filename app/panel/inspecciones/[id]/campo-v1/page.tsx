@@ -120,6 +120,9 @@ export default async function CampoV1Page({ params, searchParams }: {
   const totalPendientes = areas.reduce((s, a) => s + Number(a.pendientes), 0);
   const cerradas = areas.filter((a) => a.estado === "REVISADA").length;
   const avance = areas.length ? Math.round((cerradas / areas.length) * 100) : 0;
+  const totalRecorrido = 8 + areas.length;
+  const indiceAreaActiva = areaSeleccionada ? areas.findIndex((area) => area.id === areaSeleccionada.id) : -1;
+  const numeroAreaActiva = indiceAreaActiva >= 0 ? 9 + indiceAreaActiva : null;
   const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
 
   return (
@@ -134,15 +137,17 @@ export default async function CampoV1Page({ params, searchParams }: {
         </div>
 
         <div className="mt-6">
-          <p className="text-xs font-black uppercase tracking-[.22em] text-emerald-300">Método Certeza Habitacional</p>
-          <h1 className="mt-2 text-3xl font-black">Recorrido guiado por áreas</h1>
+          <p className="text-xs font-black uppercase tracking-[.22em] text-emerald-300">
+            {numeroAreaActiva ? `RECORRIDO TÉCNICO · PUNTO ${numeroAreaActiva} DE ${totalRecorrido}` : "RECORRIDO TÉCNICO"}
+          </p>
+          <h1 className="mt-2 text-3xl font-black">Recorrido guiado por puntos de área</h1>
           <p className="mt-2 text-sm text-slate-400">{inspeccion.folio} · {inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? inspeccion.inmueble?.direccion ?? "Inmueble"}</p>
         </div>
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
 
         <section className="mt-6 grid gap-3 sm:grid-cols-4">
-          <Card titulo="Áreas cerradas" valor={`${cerradas}/${areas.length}`} />
+          <Card titulo="Puntos de área cerrados" valor={`${cerradas}/${areas.length}`} />
           <Card titulo="Puntos del plan" valor={String(totalPuntos)} />
           <Card titulo="Pendientes" valor={String(totalPendientes)} />
           <Card titulo="Avance" valor={`${avance}%`} />
@@ -161,7 +166,7 @@ export default async function CampoV1Page({ params, searchParams }: {
           <aside className="space-y-2">
             {areas.map((area, index) => (
               <Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className={`block rounded-2xl border p-4 ${areaSeleccionada?.id === area.id ? "border-cyan-300/40 bg-cyan-300/10" : area.estado === "REVISADA" ? "border-emerald-400/15 bg-emerald-400/5" : "border-white/10 bg-slate-900"}`}>
-                <div className="flex items-start justify-between gap-3"><span className="text-xs font-black text-slate-500">{String(index + 1).padStart(2,"0")}</span><span className={`text-xs font-black ${area.estado === "REVISADA" ? "text-emerald-300" : "text-amber-300"}`}>{area.estado === "REVISADA" ? "CERRADA" : `${area.pendientes} pendientes`}</span></div>
+                <div className="flex items-start justify-between gap-3"><span className="text-xs font-black text-slate-500">{9 + index}/{totalRecorrido}</span><span className={`text-xs font-black ${area.estado === "REVISADA" ? "text-emerald-300" : "text-amber-300"}`}>{area.estado === "REVISADA" ? "CERRADA" : `${area.pendientes} pendientes`}</span></div>
                 <p className="mt-1 font-black">{area.nombre}</p>
                 <p className="mt-1 text-xs text-slate-400">{area.puntos} puntos · {area.hallazgos} hallazgos · {area.noAplica} no aplica</p>
               </Link>
@@ -172,7 +177,7 @@ export default async function CampoV1Page({ params, searchParams }: {
             {!areaSeleccionada ? <div className="rounded-3xl border border-white/10 bg-slate-900 p-8 text-slate-400">Aún no existen áreas para V1.</div> : (
               <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">Área activa</p><h2 className="mt-1 text-2xl font-black">{areaSeleccionada.nombre}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} puntos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
+                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">{numeroAreaActiva ? `Punto ${numeroAreaActiva} de ${totalRecorrido}` : "Área activa"}</p><h2 className="mt-1 text-2xl font-black">{areaSeleccionada.nombre}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} conceptos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
                   {areaSeleccionada.resultado && <span className="rounded-full bg-emerald-300/10 px-3 py-2 text-xs font-black text-emerald-300">{areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
                 </div>
 
