@@ -56,6 +56,23 @@ async function exigirResponsableV1(inspeccionId: string) {
   return { session, usuario, inspeccion, responsable: directorPorAusencia ? "Director por ausencia" : "Inspector" };
 }
 
+async function exigirAreaActivaV1(inspeccionId: string, areaId: string) {
+  const areas = await prisma.$queryRaw<Array<{ id: string; nombre: string; estado: string }>>`
+    SELECT "id"::text,"nombre","estado"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+    ORDER BY "orden","nombre"
+  `;
+  const indiceSolicitado = areas.findIndex((area) => area.id === areaId);
+  if (indiceSolicitado < 0) volver(inspeccionId, "error", "El punto de área no pertenece a esta inspección.");
+  const indiceActivo = areas.findIndex((area) => area.estado !== "REVISADA");
+  if (indiceActivo < 0) volver(inspeccionId, "error", "Todos los puntos de área ya están cerrados al 100%.");
+  const activa = areas[indiceActivo];
+  if (activa.id !== areaId) {
+    volver(inspeccionId, "error", `Debes concluir al 100% el Punto ${9 + indiceActivo} · ${activa.nombre} antes de avanzar.`);
+  }
+}
+
 export async function confirmarProyectoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const modalidad = texto(formData, "modalidad");
@@ -209,6 +226,7 @@ export async function subirFotoArea(formData: FormData) {
   const archivo = formData.get("archivo");
   if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
   const { session, usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  await exigirAreaActivaV1(inspeccionId, areaId);
 
   const [area] = await prisma.$queryRaw<Array<{ id: string; codigo: string; nombre: string }>>`
     SELECT "id","codigo","nombre" FROM "AreaInspeccion" WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
