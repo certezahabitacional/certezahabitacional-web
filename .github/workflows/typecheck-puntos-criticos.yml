@@ -19,6 +19,7 @@ on:
       - fix/conservar-foco-concepto-puntos-criticos
       - fix/foco-persistente-session
       - fix/foco-acciones-reales-puntos-criticos
+      - fix/cierre-puntos-criticos-resultado-valido
 
 jobs:
   typecheck:
