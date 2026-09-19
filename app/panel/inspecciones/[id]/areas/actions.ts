@@ -373,19 +373,21 @@ export async function confirmarAreasV1(formData: FormData) {
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
-  const [r] = await prisma.$queryRaw<Array<{ total: number; fachadas: number }>>`
+  const [r] = await prisma.$queryRaw<Array<{ total: number; fachadas: number; revisadas: number }>>`
     SELECT COUNT(*) FILTER (WHERE "obligatoria")::int AS "total",
            COUNT(*) FILTER (
              WHERE "codigo" IN (
                'FACHADA_FRONTAL','FACHADA_POSTERIOR',
                'FACHADA_LATERAL_IZQUIERDA','FACHADA_LATERAL_DERECHA'
              )
-           )::int AS "fachadas"
+           )::int AS "fachadas",
+           COUNT(*) FILTER (WHERE "estado"='REVISADA')::int AS "revisadas"
     FROM "AreaInspeccion"
     WHERE "inspeccionId"=${inspeccionId}
   `;
 
-  if (Number(r?.total ?? 0) === 0 || Number(r?.fachadas ?? 0) < 4) {
+  const recorridoYaIniciado = Number(r?.revisadas ?? 0) > 0;
+  if (Number(r?.total ?? 0) === 0 || (Number(r?.fachadas ?? 0) < 4 && !recorridoYaIniciado)) {
     volver(
       inspeccionId,
       "error",

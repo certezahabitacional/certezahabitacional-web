@@ -253,12 +253,23 @@ export default async function AreasPage({
             const bloqueada = !cerrada && !activa;
             return (
               <article key={area.id} className={`relative rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : bloqueada ? "border-white/5 bg-slate-950 opacity-60" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
-                {puedeCapturar && control?.areasConfirmadas && activa && (
-                  <Link
-                    href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`}
-                    aria-label={`Iniciar inspección detallada de ${area.nombre}`}
-                    className="absolute inset-0 z-10 rounded-3xl"
-                  />
+                {puedeCapturar && activa && (
+                  control?.areasConfirmadas ? (
+                    <Link
+                      href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`}
+                      aria-label={`Iniciar inspección detallada de ${area.nombre}`}
+                      className="absolute inset-0 z-10 rounded-3xl"
+                    />
+                  ) : completas > 0 ? (
+                    <form action={confirmarAreasV1} className="absolute inset-0 z-10 rounded-3xl">
+                      <input type="hidden" name="inspeccionId" value={id}/>
+                      <button
+                        type="submit"
+                        aria-label={`Confirmar recorrido existente e iniciar inspección detallada de ${area.nombre}`}
+                        className="h-full w-full rounded-3xl text-left"
+                      />
+                    </form>
+                  ) : null
                 )}
                 <div className="grid gap-4 lg:grid-cols-[65px_1fr_300px]">
                   <span className="font-mono text-lg font-black text-cyan-300">{9 + index}/{totalRecorrido}</span>
@@ -269,7 +280,7 @@ export default async function AreasPage({
                     <p className={`mt-2 text-sm font-bold ${evidenciaLista ? "text-emerald-300" : "text-amber-300"}`}>{fotos}/{minimo} fotografía{minimo === 1 ? " mínima" : "s mínimas"}{area.portada ? " · portada seleccionada" : fachada ? " · portada pendiente" : ""}</p>
                     {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Resultado del recorrido:</strong> {area.comentarioFinal}</p>}
                     <p className="mt-3 text-xs text-slate-500">El cierre técnico del área se realiza únicamente desde Recorrido V1.</p>
-                    {puedeCapturar && !control?.areasConfirmadas && (
+                    {puedeCapturar && !control?.areasConfirmadas && completas === 0 && (
                       <div className="mt-4 flex flex-wrap gap-2">
                         <form action={moverAreaRutaV1}>
                           <input type="hidden" name="inspeccionId" value={id}/>
