@@ -20,6 +20,7 @@ on:
       - fix/foco-persistente-session
       - fix/foco-acciones-reales-puntos-criticos
       - fix/cierre-puntos-criticos-resultado-valido
+      - fix/mediciones-visuales-puntos-criticos
 
 jobs:
   typecheck:
