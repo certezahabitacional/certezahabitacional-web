@@ -139,7 +139,7 @@ export default async function AreasPage({
       FROM "FotografiaArea" fa
       JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
       JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
-      WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL'
+      WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_FRONTAL'
       ORDER BY fa."orden",fa."creadoEn"
     `,
   ]);
@@ -245,7 +245,7 @@ export default async function AreasPage({
           {areas.map((area, index) => {
             const fotos = Number(area.fotos);
             const completa = area.estado === "REVISADA";
-            const fachada = area.codigo === "FACHADA_PRINCIPAL";
+            const fachada = area.codigo.startsWith("FACHADA_");
             const minimo = 1;
             const evidenciaLista = fotos >= minimo;
             const cerrada = completa;
