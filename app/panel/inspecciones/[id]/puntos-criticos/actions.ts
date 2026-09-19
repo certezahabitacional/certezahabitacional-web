@@ -118,16 +118,29 @@ function fotosRequeridas(origen: OrigenEvidencia | null, concepto: string) {
   return origen === "GALERIA" ? 1 : 4;
 }
 
-function ruta(id: string, punto?: string, tipo?: "ok" | "error", mensaje?: string) {
+function ruta(
+  id: string,
+  punto?: string,
+  tipo?: "ok" | "error",
+  mensaje?: string,
+  foco?: string,
+) {
   const params = new URLSearchParams();
   if (punto) params.set("punto", punto);
   if (tipo && mensaje) params.set(tipo, mensaje);
+  if (foco) params.set("foco", foco);
   const query = params.toString();
   return `/panel/inspecciones/${id}/puntos-criticos${query ? `?${query}` : ""}`;
 }
 
-function volver(id: string, punto: string | undefined, tipo: "ok" | "error", mensaje: string): never {
-  redirect(ruta(id, punto, tipo, mensaje));
+function volver(
+  id: string,
+  punto: string | undefined,
+  tipo: "ok" | "error",
+  mensaje: string,
+  foco?: string,
+): never {
+  redirect(ruta(id, punto, tipo, mensaje, foco));
 }
 
 function puntoPorCodigo(codigo: CodigoPuntoCriticoV1) {
@@ -522,7 +535,7 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
     descripcion: `${responsable} agregó evidencia ${ordenFoto}/${limiteFotos} (${origenEvidencia}) a ${item.concepto} en ${puntoPorCodigo(codigo).etiqueta}.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
-  volver(inspeccionId, codigo, "ok", "Fotografía registrada.");
+  volver(inspeccionId, codigo, "ok", "Fotografía registrada.", itemId);
 }
 
 export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
@@ -1229,7 +1242,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
-  volver(inspeccionId, codigo, "ok", "Concepto cerrado y clasificado.");
+  volver(inspeccionId, codigo, "ok", "Concepto cerrado y clasificado.", itemId);
 }
 
 export async function cerrarPuntoCriticoV1(formData: FormData) {
