@@ -55,7 +55,9 @@ function herramientaAplicaArea(codigo: CodigoHerramienta, areaCodigo: string, ar
   }
 
   if (["PROBADOR_GFCI_RCD", "DETECTOR_VOLTAJE", "MULTIMETRO"].includes(codigo)) {
-    return !/(JARDIN|PATIO|AZOTEA)/.test(area);
+    // Las pruebas funcionales eléctricas pertenecen al Punto 7 · Instalación Eléctrica.
+    // En las áreas sólo se conserva ubicación, altura, alineación, nivel y acabado visual.
+    return false;
   }
 
   if (codigo === "LINTERNA") return true;
