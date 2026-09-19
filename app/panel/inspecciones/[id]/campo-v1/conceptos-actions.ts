@@ -88,12 +88,12 @@ async function exigirResponsable(inspeccionId: string) {
     usuario.rol === RolUsuario.INSPECTOR &&
     Boolean(usuario.inspector?.activo) &&
     inspeccion.inspectorId === usuario.inspector?.id;
-  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
-  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
+  const director = usuario.rol === RolUsuario.DIRECTOR;
+  if (!inspectorAsignado && !director) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${inspeccionId}/flujo`);
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) redirect(`/panel/inspecciones/${inspeccionId}`);
 
-  return { usuario, responsable: directorPorAusencia ? "Director por ausencia" : "Inspector" };
+  return { usuario, responsable: director ? "Director" : "Inspector" };
 }
 
 async function exigirAreaActiva(inspeccionId: string, areaId: string) {
