@@ -18,6 +18,7 @@ import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import CapturaCamara from "./CapturaCamara";
 import CargaGaleriaConPreview from "./CargaGaleriaConPreview";
 import BotonGenerarIa from "./BotonGenerarIa";
+import RestaurarFocoConcepto from "./RestaurarFocoConcepto";
 import {
   cerrarPuntoCriticoV1,
   cerrarPruebaProlongadaV1,
@@ -126,7 +127,7 @@ export default async function PuntosCriticosPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ punto?: string; ok?: string; error?: string }>;
+  searchParams: Promise<{ punto?: string; ok?: string; error?: string; foco?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -317,6 +318,7 @@ export default async function PuntosCriticosPage({
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-7 text-white">
+      <RestaurarFocoConcepto itemId={query.foco} />
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}/proyecto-v1`} className="text-sm font-black text-cyan-300">
