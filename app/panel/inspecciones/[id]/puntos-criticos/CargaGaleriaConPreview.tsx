@@ -45,6 +45,8 @@ export default function CargaGaleriaConPreview({
     formData.set("archivo", archivo);
     formData.set("origenEvidencia", "GALERIA");
 
+    sessionStorage.setItem("ch:puntos-criticos:foco", itemId);
+
     startTransition(async () => {
       await subirFoto(formData);
     });
