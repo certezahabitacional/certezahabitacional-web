@@ -83,6 +83,52 @@ async function validarCierreCampo(inspeccionId: string) {
   return null;
 }
 
+export async function concluirInspeccionTecnicaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  if (!inspeccionId) redirect("/panel/inspecciones");
+  const { usuario, inspeccion } = await exigirInspectorV1(inspeccionId);
+
+  const error = await validarCierreCampo(inspeccionId);
+  if (error) volver(inspeccionId, "error", error);
+
+  const [control] = await prisma.$queryRaw<Array<{
+    inspeccionTecnicaConcluidaEn: Date | null;
+    campoFinalizadoEn: Date | null;
+  }>>`
+    SELECT "inspeccionTecnicaConcluidaEn","campoFinalizadoEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+
+  if (control?.campoFinalizadoEn) {
+    volver(inspeccionId, "error", "La visita ya fue cerrada.");
+  }
+  if (control?.inspeccionTecnicaConcluidaEn) {
+    volver(inspeccionId, "error", "La inspección técnica ya fue concluida por el Inspector.");
+  }
+
+  await prisma.$executeRaw`
+    UPDATE "InspeccionControlV2"
+    SET "inspeccionTecnicaConcluidaEn"=NOW(),
+        "inspeccionTecnicaConcluidaPorId"=${usuario.id},
+        "actualizadoEn"=NOW()
+    WHERE "inspeccionId"=${inspeccionId}
+  `;
+
+  await registrarAuditoria({
+    tipo: TipoEvento.FINALIZAR_CAPTURA,
+    entidad: "InspeccionControlV2",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `Inspector concluyó la inspección técnica V1 ${inspeccion.folio}. A partir de este momento se habilita la revisión preliminar y los ajustes que procedan.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/pre-reporte`);
+  volver(inspeccionId, "ok", "Inspección concluida. Ya puedes revisar el reporte preliminar y realizar ajustes si procede.");
+}
+
 export async function terminarTrabajoCampoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
@@ -95,14 +141,21 @@ export async function terminarTrabajoCampoV1(formData: FormData) {
   const error = await validarCierreCampo(inspeccionId);
   if (error) volver(inspeccionId, "error", error);
 
-  const [ya] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null; preReporteGeneradoEn: Date | null }>>`
-    SELECT "campoFinalizadoEn","preReporteGeneradoEn"
+  const [ya] = await prisma.$queryRaw<Array<{
+    inspeccionTecnicaConcluidaEn: Date | null;
+    campoFinalizadoEn: Date | null;
+    preReporteGeneradoEn: Date | null;
+  }>>`
+    SELECT "inspeccionTecnicaConcluidaEn","campoFinalizadoEn","preReporteGeneradoEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${inspeccionId}
     LIMIT 1
   `;
-  if (!ya?.preReporteGeneradoEn) {
-    volver(inspeccionId, "error", "Antes de terminar la visita debes revisar y confirmar el pre-reporte en sitio.");
+  if (!ya?.inspeccionTecnicaConcluidaEn) {
+    volver(inspeccionId, "error", "Primero debes concluir formalmente la inspección técnica.");
+  }
+  if (!ya.preReporteGeneradoEn) {
+    volver(inspeccionId, "error", "Después de concluir la inspección, revisa y confirma el reporte preliminar antes de cerrar la visita.");
   }
   if (ya.campoFinalizadoEn) volver(inspeccionId, "error", "El trabajo de campo ya fue terminado y la ventana de edición ya está activa.");
 
@@ -320,6 +373,9 @@ export async function devolverReporteInspectorV1(formData: FormData) {
         SET "capturaCerrada"=false,
             "capturaCerradaEn"=NULL,
             "capturaCerradaPorId"=NULL,
+            "inspeccionTecnicaConcluidaEn"=NULL,
+            "inspeccionTecnicaConcluidaPorId"=NULL,
+            "preReporteGeneradoEn"=NULL,
             "revisionInspectorFinalEn"=NULL,
             "revisionInspectorFinalPorId"=NULL,
             "reabiertaEn"=NOW(),
