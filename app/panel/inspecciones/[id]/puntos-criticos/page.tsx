@@ -20,6 +20,13 @@ import CargaGaleriaConPreview from "./CargaGaleriaConPreview";
 import BotonGenerarIa from "./BotonGenerarIa";
 import RestaurarFocoConcepto from "./RestaurarFocoConcepto";
 import {
+  agregarConceptoManualPuntoCriticoV1,
+  marcarConceptoNoAplicaV1,
+  marcarPruebaProlongadaNoAplicaV1,
+  reactivarConceptoPuntoCriticoV1,
+  reactivarPruebaProlongadaV1,
+} from "./conceptos-actions";
+import {
   cerrarPuntoCriticoV1,
   cerrarPruebaProlongadaV1,
   configurarPuntoCriticoV1,
@@ -73,6 +80,7 @@ type DatosPaso = {
   fuente?: "PROYECTO" | "PLANTILLA" | null;
   proyectoDisponible?: boolean;
   pruebaProlongada?: boolean;
+  pruebaProlongadaNoAplica?: boolean;
   herramientas?: CodigoHerramienta[];
 };
 
@@ -466,6 +474,25 @@ export default async function PuntosCriticosPage({
           </aside>
         </section>
 
+        {datos.configurado && datos.aplica && datos.pruebaProlongadaNoAplica && (
+          <section className="mt-7 rounded-3xl border border-slate-600/30 bg-slate-900 p-6">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-400">Prueba especial</p>
+            <h2 className="mt-1 text-2xl font-black">Prueba de hermeticidad con manómetro · NO APLICA</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              La prueba quedó exenta de fotografía y lecturas. Puede reactivarse mientras la partida no esté cerrada.
+            </p>
+            {puedeCapturar && paso.estado !== "COMPLETADO" && paso.estado !== "NO_APLICA" && (
+              <form action={reactivarPruebaProlongadaV1} className="mt-4">
+                <input type="hidden" name="inspeccionId" value={id} />
+                <input type="hidden" name="codigo" value={codigoSolicitado} />
+                <button className="rounded-xl border border-cyan-300/30 px-5 py-3 font-black text-cyan-200">
+                  REACTIVAR PRUEBA
+                </button>
+              </form>
+            )}
+          </section>
+        )}
+
         {datos.configurado && datos.aplica && datos.pruebaProlongada && itemManometroInicial && itemLecturaFinal && (
           <section id="prueba-manometro-inicio" className="scroll-mt-24 mt-7 rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
             {(() => {
@@ -487,6 +514,20 @@ export default async function PuntosCriticosPage({
                       {paso.lecturaFinal ? "CERRADA" : paso.lecturaInicial ? "ABIERTA · EN PRUEBA" : "PENDIENTE DE INICIO"}
                     </span>
                   </div>
+
+                  {!paso.lecturaInicial && puedeCapturar && (
+                    <form action={marcarPruebaProlongadaNoAplicaV1} className="mt-4 rounded-2xl border border-slate-600/30 bg-slate-950 p-4">
+                      <input type="hidden" name="inspeccionId" value={id} />
+                      <input type="hidden" name="codigo" value={codigoSolicitado} />
+                      <p className="text-xs font-black uppercase text-slate-300">¿La prueba de hermeticidad no aplica?</p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Márcala antes de registrar la lectura inicial. Quedará exenta de fotografía y lecturas.
+                      </p>
+                      <button className="mt-3 rounded-xl border border-slate-400/30 px-4 py-2 text-xs font-black text-slate-200">
+                        NO APLICA A ESTA PRUEBA
+                      </button>
+                    </form>
+                  )}
 
                   <div className="mt-5 grid gap-5 lg:grid-cols-2">
                     <article className="rounded-2xl border border-white/10 bg-slate-950 p-4">
@@ -720,7 +761,8 @@ export default async function PuntosCriticosPage({
               const fotosItem = fotos.filter((foto) => foto.guiaItemId === item.id);
               const origenGaleria = fotosItem.some((foto) => foto.descripcionArchivo?.includes("[ORIGEN:GALERIA]"));
               const requeridas = origenGaleria ? 1 : 4;
-              const evidenciaCompleta = fotosItem.length === requeridas;
+              const noAplica = item.estadoV3 === "NO_APLICA";
+              const evidenciaCompleta = noAplica || fotosItem.length === requeridas;
               const cerrado = item.estadoV3 !== "PENDIENTE";
               return (
                 <article id={`item-${item.id}`} key={item.id} className={`scroll-mt-24 rounded-3xl border p-5 ${cerrado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-900"}`}>
@@ -733,9 +775,15 @@ export default async function PuntosCriticosPage({
                       </div>
                       <h3 className="mt-2 text-xl font-black">{item.concepto}</h3>
                       <p className="mt-2 text-sm text-slate-300">{item.especificacion}</p>
-                      <p className={`mt-3 text-sm font-black ${evidenciaCompleta ? "text-emerald-300" : "text-amber-300"}`}>
-                        📷 Evidencia obligatoria: {origenGaleria ? "1 foto de galería" : "4 fotos tomadas desde la aplicación"} · {fotosItem.length}/{requeridas}
-                      </p>
+                      {noAplica ? (
+                        <p className="mt-3 rounded-xl bg-slate-950/70 p-3 text-sm font-black text-slate-300">
+                          NO APLICA · Este concepto queda exento de fotografía, IA, comentario, medición y prioridad.
+                        </p>
+                      ) : (
+                        <p className={`mt-3 text-sm font-black ${evidenciaCompleta ? "text-emerald-300" : "text-amber-300"}`}>
+                          📷 Evidencia obligatoria: {origenGaleria ? "1 foto de galería" : "4 fotos tomadas desde la aplicación"} · {fotosItem.length}/{requeridas}
+                        </p>
+                      )}
                       {fotosItem.length > 0 && (
                         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
                           {fotosItem.map((foto) => (
@@ -795,6 +843,21 @@ export default async function PuntosCriticosPage({
                     </div>
 
                     <div className="space-y-3">
+                      {!cerrado && puedeCapturar && (
+                        <form action={marcarConceptoNoAplicaV1} className="rounded-2xl border border-slate-600/40 bg-slate-950 p-4">
+                          <input type="hidden" name="inspeccionId" value={id} />
+                          <input type="hidden" name="codigo" value={codigoSolicitado} />
+                          <input type="hidden" name="itemId" value={item.id} />
+                          <p className="text-xs font-black uppercase tracking-wider text-slate-300">¿Este concepto no corresponde?</p>
+                          <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                            Al marcarlo NO APLICA se cerrará sin pedir fotografía, IA, comentario, medición ni prioridad.
+                          </p>
+                          <button className="mt-3 w-full rounded-xl border border-slate-400/30 px-3 py-2 text-sm font-black text-slate-200">
+                            NO APLICA
+                          </button>
+                        </form>
+                      )}
+
                       {!cerrado && puedeCapturar && !evidenciaCompleta && (
                         <div className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-4">
                           <p className="text-xs font-black uppercase tracking-wider text-slate-400">
@@ -908,24 +971,77 @@ export default async function PuntosCriticosPage({
                       )}
 
                       {cerrado && (
-                        <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
-                          <p className="font-black">CONCEPTO CERRADO ✓</p>
-                          <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
-                          {obs.prioridadFinal && <p className="mt-1">Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
-                          {item.requiereMedicion && item.valorMedido && (
-                            <p className="mt-2 text-xs">
-                              Medición: <strong>{item.valorMedido} {item.unidadMedida ?? ""}</strong>
-                              {item.valorProyecto ? <> · Proyecto: <strong>{item.valorProyecto} {item.unidadMedida ?? ""}</strong></> : null}
+                        noAplica ? (
+                          <div className="rounded-2xl border border-slate-600/30 bg-slate-950 p-4 text-sm text-slate-300">
+                            <p className="font-black">NO APLICA ✓</p>
+                            <p className="mt-2 text-xs text-slate-500">
+                              No requiere fotografía, IA, comentario, medición ni prioridad.
                             </p>
-                          )}
-                          {obs.descripcionFinal && <p className="mt-2 text-xs">{obs.descripcionFinal}</p>}
-                        </div>
+                            {puedeCapturar && paso.estado !== "COMPLETADO" && paso.estado !== "NO_APLICA" && (
+                              <form action={reactivarConceptoPuntoCriticoV1} className="mt-3">
+                                <input type="hidden" name="inspeccionId" value={id} />
+                                <input type="hidden" name="codigo" value={codigoSolicitado} />
+                                <input type="hidden" name="itemId" value={item.id} />
+                                <button className="w-full rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-200">
+                                  REACTIVAR CONCEPTO
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
+                            <p className="font-black">CONCEPTO CERRADO ✓</p>
+                            <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
+                            {obs.prioridadFinal && <p className="mt-1">Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
+                            {item.requiereMedicion && item.valorMedido && (
+                              <p className="mt-2 text-xs">
+                                Medición: <strong>{item.valorMedido} {item.unidadMedida ?? ""}</strong>
+                                {item.valorProyecto ? <> · Proyecto: <strong>{item.valorProyecto} {item.unidadMedida ?? ""}</strong></> : null}
+                              </p>
+                            )}
+                            {obs.descripcionFinal && <p className="mt-2 text-xs">{obs.descripcionFinal}</p>}
+                          </div>
+                        )
                       )}
                     </div>
                   </div>
                 </article>
               );
             })}
+
+            {puedeCapturar && paso.estado !== "COMPLETADO" && paso.estado !== "NO_APLICA" && (
+              <form action={agregarConceptoManualPuntoCriticoV1} className="rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
+                <input type="hidden" name="inspeccionId" value={id} />
+                <input type="hidden" name="codigo" value={codigoSolicitado} />
+                <p className="text-xs font-black uppercase tracking-wider text-violet-200">Ampliación por criterio del Inspector</p>
+                <h3 className="mt-1 text-xl font-black">+ AGREGAR CONCEPTO MANUALMENTE</h3>
+                <p className="mt-2 text-sm text-slate-300">
+                  Úsalo cuando durante la revisión aparezca un punto que no esté incluido en la plantilla. El concepto agregado seguirá el mismo flujo de evidencia, IA opcional, comentario, clasificación, prioridad y NO APLICA.
+                </p>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <label className="text-xs font-bold text-slate-400">
+                    Concepto
+                    <input
+                      name="concepto"
+                      required
+                      placeholder="Ej. Revisar sellado de penetración no contemplada"
+                      className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-white"
+                    />
+                  </label>
+                  <label className="text-xs font-bold text-slate-400">
+                    Alcance / indicación opcional
+                    <input
+                      name="especificacion"
+                      placeholder="Qué debe revisar el inspector"
+                      className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-white"
+                    />
+                  </label>
+                </div>
+                <button className="mt-4 rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">
+                  AGREGAR A ESTA PARTIDA
+                </button>
+              </form>
+            )}
 
             {puedeCapturar && datos.pruebaProlongada && !paso.lecturaInicial && otrosConceptosCompletos && (
               <div className="rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
