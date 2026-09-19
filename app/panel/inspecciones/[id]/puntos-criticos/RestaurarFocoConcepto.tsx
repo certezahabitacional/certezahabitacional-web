@@ -6,6 +6,35 @@ const CLAVE_FOCO = "ch:puntos-criticos:foco";
 
 export default function RestaurarFocoConcepto({ itemId }: { itemId?: string }) {
   useEffect(() => {
+    let temporizador: number | null = null;
+
+    const enfocarGuardado = (focoForzado?: string) => {
+      const foco = focoForzado || sessionStorage.getItem(CLAVE_FOCO) || undefined;
+      if (!foco) return false;
+
+      const objetivo = document.getElementById(`item-${foco}`);
+      if (!objetivo) return false;
+
+      objetivo.scrollIntoView({
+        behavior: "auto",
+        block: "center",
+        inline: "nearest",
+      });
+      sessionStorage.removeItem(CLAVE_FOCO);
+      return true;
+    };
+
+    const programarEnfoque = (focoForzado?: string) => {
+      if (temporizador !== null) window.clearTimeout(temporizador);
+      temporizador = window.setTimeout(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            enfocarGuardado(focoForzado);
+          });
+        });
+      }, 80);
+    };
+
     const guardarFoco = (evento: Event) => {
       const formulario = evento.target;
       if (!(formulario instanceof HTMLFormElement)) return;
@@ -19,40 +48,28 @@ export default function RestaurarFocoConcepto({ itemId }: { itemId?: string }) {
     };
 
     document.addEventListener("submit", guardarFoco, true);
-    return () => document.removeEventListener("submit", guardarFoco, true);
-  }, []);
 
-  useEffect(() => {
-    const foco = itemId || sessionStorage.getItem(CLAVE_FOCO) || undefined;
-    if (!foco) return;
-
-    let intentos = 0;
-    let cancelado = false;
-
-    const enfocar = () => {
-      if (cancelado) return;
-
-      const objetivo = document.getElementById(`item-${foco}`);
-      if (objetivo) {
-        objetivo.scrollIntoView({
-          behavior: "auto",
-          block: "center",
-          inline: "nearest",
-        });
-        sessionStorage.removeItem(CLAVE_FOCO);
-        return;
+    const observador = new MutationObserver(() => {
+      if (sessionStorage.getItem(CLAVE_FOCO)) {
+        programarEnfoque();
       }
+    });
+    observador.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
 
-      intentos += 1;
-      if (intentos < 12) {
-        window.setTimeout(enfocar, 100);
-      }
-    };
-
-    requestAnimationFrame(() => requestAnimationFrame(enfocar));
+    if (itemId) {
+      sessionStorage.setItem(CLAVE_FOCO, itemId);
+      programarEnfoque(itemId);
+    } else if (sessionStorage.getItem(CLAVE_FOCO)) {
+      programarEnfoque();
+    }
 
     return () => {
-      cancelado = true;
+      document.removeEventListener("submit", guardarFoco, true);
+      observador.disconnect();
+      if (temporizador !== null) window.clearTimeout(temporizador);
     };
   }, [itemId]);
 
