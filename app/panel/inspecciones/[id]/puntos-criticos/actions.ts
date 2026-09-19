@@ -1265,8 +1265,8 @@ export async function cerrarPuntoCriticoV1(formData: FormData) {
       COUNT(*)::int AS "total",
       COUNT(*) FILTER (WHERE g."estadoV3"='PENDIENTE')::int AS "pendientes",
       COUNT(*) FILTER (
-        WHERE
-          CASE
+        WHERE g."estadoV3" <> 'NO_APLICA'
+          AND CASE
             WHEN g."concepto" ILIKE '%manómetro%' OR g."concepto" ILIKE '%lectura final%'
               THEN (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 1
             WHEN EXISTS (
