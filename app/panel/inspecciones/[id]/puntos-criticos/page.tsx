@@ -185,6 +185,13 @@ export default async function PuntosCriticosPage({
     ORDER BY "orden"
   `;
 
+  const [areasRecorrido] = await prisma.$queryRaw<Array<{ total: number }>>`
+    SELECT COUNT(*)::int AS "total"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${id} AND "tipo" <> 'PUNTO_CRITICO'
+  `;
+  const totalRecorrido = 8 + Number(areasRecorrido?.total ?? 0);
+
   const pendientesNoPruebaRows = await prisma.$queryRaw<Array<{ codigo: string; pendientes: number }>>`
     SELECT replace("area",'__PUNTO_CRITICO__:','') AS "codigo",
            COUNT(*) FILTER (
@@ -241,7 +248,7 @@ export default async function PuntosCriticosPage({
             ← Proyecto digital
           </Link>
           <p className="mt-8 text-xs font-black uppercase tracking-[.24em] text-amber-300">
-            RECORRIDO TÉCNICO · PASO 1 DE 8
+            RECORRIDO TÉCNICO · PASO 1 DE {totalRecorrido}
           </p>
           <h1 className="mt-2 text-4xl font-black">PRUEBAS DE HERMETICIDAD</h1>
           <p className="mt-3 max-w-3xl text-slate-300">
@@ -353,7 +360,7 @@ export default async function PuntosCriticosPage({
         </div>
 
         <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-amber-300">
-          RECORRIDO TÉCNICO · PASO {indicePunto + 2} DE 8
+          RECORRIDO TÉCNICO · PASO {indicePunto + 2} DE {totalRecorrido}
         </p>
         <h1 className="mt-2 text-3xl font-black">{punto.etiqueta}</h1>
         <p className="mt-2 text-sm text-slate-400">
@@ -371,7 +378,7 @@ export default async function PuntosCriticosPage({
             href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`}
             className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-3 text-xs font-black text-emerald-300"
           >
-            <span className="block text-[10px] text-slate-500">1/8</span>
+            <span className="block text-[10px] text-slate-500">1/{totalRecorrido}</span>
             <span className="mt-1 block">Hermeticidad</span>
             <span className="mt-2 block text-[10px]">{estadoHermeticidad}</span>
           </Link>
@@ -381,7 +388,7 @@ export default async function PuntosCriticosPage({
             const habilitado = puedeEntrarPunto(item.codigo);
             const contenido = (
               <>
-                <span className="block text-[10px] text-slate-500">{index + 2}/8</span>
+                <span className="block text-[10px] text-slate-500">{index + 2}/{totalRecorrido}</span>
                 <span className="mt-1 block">{item.etiqueta}</span>
                 <span className="mt-2 block text-[10px]">
                   {habilitado ? estado.replaceAll("_", " ") : "BLOQUEADO"}

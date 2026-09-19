@@ -1,0 +1,582 @@
+"use server";
+
+import { randomUUID } from "node:crypto";
+import {
+  ClasificacionHallazgo,
+  EstadoInspeccion,
+  PrioridadHallazgo,
+  RolUsuario,
+  TipoEvento,
+} from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
+import { registrarAuditoria } from "@/lib/auditoria";
+import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
+
+const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
+
+type OrigenEvidencia = "CAMARA" | "GALERIA";
+
+type ObservacionConcepto = {
+  descripcionIa?: string;
+  clasificacionSugerida?: string;
+  justificacionIa?: string;
+  descripcionFinal?: string;
+  clasificacionFinal?: string;
+  prioridadFinal?: string;
+  actualizadoEn?: string;
+};
+
+function observacionObjeto(valor: string | null): ObservacionConcepto {
+  if (!valor) return {};
+  try {
+    const parsed = JSON.parse(valor);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as ObservacionConcepto)
+      : {};
+  } catch {
+    return { descripcionFinal: valor };
+  }
+}
+
+function origenEvidenciaDescripcion(valor: string | null | undefined): OrigenEvidencia | null {
+  if (valor?.includes("[ORIGEN:GALERIA]")) return "GALERIA";
+  if (valor?.includes("[ORIGEN:CAMARA]")) return "CAMARA";
+  return null;
+}
+
+function fotosRequeridas(origen: OrigenEvidencia | null) {
+  return origen === "GALERIA" ? 1 : 4;
+}
+
+function volver(
+  inspeccionId: string,
+  areaId: string,
+  tipo: "ok" | "error",
+  mensaje: string,
+  itemId?: string,
+): never {
+  const params = new URLSearchParams({ area: areaId, [tipo]: mensaje });
+  redirect(
+    `/panel/inspecciones/${inspeccionId}/campo-v1?${params.toString()}${itemId ? `#item-${itemId}` : ""}`,
+  );
+}
+
+async function exigirResponsable(inspeccionId: string) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      inspector: { select: { id: true, activo: true } },
+    },
+  });
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id: inspeccionId },
+    select: { id: true, numeroInspeccion: true, estado: true, inspectorId: true },
+  });
+  if (!usuario?.activo || !inspeccion) redirect("/acceso");
+
+  const inspectorAsignado =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    Boolean(usuario.inspector?.activo) &&
+    inspeccion.inspectorId === usuario.inspector?.id;
+  const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
+  if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${inspeccionId}/flujo`);
+  if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) redirect(`/panel/inspecciones/${inspeccionId}`);
+
+  return { usuario, responsable: directorPorAusencia ? "Director por ausencia" : "Inspector" };
+}
+
+async function exigirAreaActiva(inspeccionId: string, areaId: string) {
+  const areas = await prisma.$queryRaw<Array<{ id: string; nombre: string; estado: string }>>`
+    SELECT "id"::text,"nombre","estado"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+    ORDER BY "orden","nombre"
+  `;
+  const indice = areas.findIndex((area) => area.estado !== "REVISADA");
+  const solicitada = areas.find((area) => area.id === areaId);
+  if (!solicitada) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
+  if (indice < 0) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?ok=${encodeURIComponent("Todos los puntos de área están cerrados al 100%.")}`);
+  const activa = areas[indice];
+  if (activa.id !== areaId) {
+    volver(
+      inspeccionId,
+      activa.id,
+      "error",
+      `Debes concluir al 100% el Punto ${9 + indice} · ${activa.nombre} antes de avanzar.`,
+    );
+  }
+  return { area: activa, numero: 9 + indice };
+}
+
+async function itemArea(inspeccionId: string, areaId: string, itemId: string) {
+  const [item] = await prisma.$queryRaw<Array<{
+    id: string;
+    areaId: string;
+    areaNombre: string;
+    concepto: string;
+    especificacion: string | null;
+    herramientaSugerida: string | null;
+    observacion: string | null;
+    estadoV3: string;
+    origenV3: string;
+    requiereMedicion: boolean;
+    requiereComparacionProyecto: boolean;
+    valorMedido: string | null;
+    valorProyecto: string | null;
+    unidadMedida: string | null;
+    fotos: number;
+    descripcionPrimera: string | null;
+  }>>`
+    SELECT g."id",g."areaId"::text AS "areaId",a."nombre" AS "areaNombre",
+      g."concepto",g."especificacion",g."herramientaSugerida",g."observacion",
+      g."estadoV3",g."origenV3",g."requiereMedicion",g."requiereComparacionProyecto",
+      g."valorMedido",g."valorProyecto",g."unidadMedida",
+      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos",
+      (
+        SELECT f."descripcion"
+        FROM "FotografiaArea" fa
+        JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+        WHERE fa."guiaItemId"=g."id"
+        ORDER BY fa."orden"
+        LIMIT 1
+      ) AS "descripcionPrimera"
+    FROM "GuiaInspeccionItem" g
+    JOIN "AreaInspeccion" a ON a."id"=g."areaId"
+    WHERE g."id"=${itemId}
+      AND g."inspeccionId"=${inspeccionId}
+      AND g."areaId"=${areaId}::uuid
+    LIMIT 1
+  `;
+  if (!item) volver(inspeccionId, areaId, "error", "Concepto no encontrado.");
+  return item;
+}
+
+async function recalcularIndice(inspeccionId: string) {
+  const hallazgos = await prisma.hallazgo.findMany({
+    where: { inspeccionId },
+    select: { clasificacion: true },
+  });
+  const evaluables = hallazgos
+    .map((hallazgo) => hallazgo.clasificacion)
+    .filter((valor) => valor !== ClasificacionHallazgo.NA);
+  if (!evaluables.length) {
+    await prisma.inspeccion.update({
+      where: { id: inspeccionId },
+      data: { ish: null, semaforo: null },
+    });
+    return;
+  }
+  const pesos: Record<string, number> = { C: 100, O: 90, NC: 70, CR: 35 };
+  const indice = evaluables.reduce((suma, valor) => suma + (pesos[valor] ?? 0), 0) / evaluables.length;
+  const semaforo = indice >= 90 ? "VERDE" : indice >= 75 ? "AMARILLO" : indice >= 60 ? "NARANJA" : "ROJO";
+  await prisma.inspeccion.update({ where: { id: inspeccionId }, data: { ish: indice, semaforo } });
+}
+
+export async function subirFotoConceptoAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const itemId = texto(formData, "itemId");
+  const archivo = formData.get("archivo");
+  const origenTexto = texto(formData, "origenEvidencia").toUpperCase();
+  const origenEvidencia: OrigenEvidencia = origenTexto === "GALERIA" ? "GALERIA" : "CAMARA";
+  if (!inspeccionId || !areaId || !itemId) redirect("/panel/inspecciones");
+
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+  await exigirAreaActiva(inspeccionId, areaId);
+  const item = await itemArea(inspeccionId, areaId, itemId);
+  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "Este concepto ya está cerrado.", itemId);
+
+  const fotos = await prisma.$queryRaw<Array<{ orden: number; descripcion: string | null }>>`
+    SELECT fa."orden",f."descripcion"
+    FROM "FotografiaArea" fa
+    JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+    WHERE fa."guiaItemId"=${itemId}
+    ORDER BY fa."orden"
+  `;
+  const origenActual = origenEvidenciaDescripcion(fotos[0]?.descripcion) ?? (fotos.length > 0 ? "CAMARA" : null);
+  if (origenActual && origenActual !== origenEvidencia) {
+    volver(inspeccionId, areaId, "error", "No combines cámara y galería en el mismo concepto. Retira la evidencia actual para cambiar de modalidad.", itemId);
+  }
+  const regla = origenActual ?? origenEvidencia;
+  const requeridas = fotosRequeridas(regla);
+  if (fotos.length >= requeridas) {
+    volver(inspeccionId, areaId, "error", "Este concepto ya tiene la evidencia requerida.", itemId);
+  }
+
+  if (!(archivo instanceof File) || archivo.size === 0) volver(inspeccionId, areaId, "error", "Selecciona una fotografía.", itemId);
+  if (!["image/jpeg","image/png","image/webp"].includes(archivo.type)) volver(inspeccionId, areaId, "error", "La evidencia debe ser JPG, PNG o WEBP.", itemId);
+  if (archivo.size > 10 * 1024 * 1024) volver(inspeccionId, areaId, "error", "La imagen supera 10 MB.", itemId);
+
+  const usados = new Set(fotos.map((foto) => Number(foto.orden)));
+  const ordenFoto = Array.from({ length: requeridas }, (_, index) => index + 1).find((orden) => !usados.has(orden));
+  if (!ordenFoto) volver(inspeccionId, areaId, "error", "No hay espacio disponible para otra fotografía.", itemId);
+
+  const extension = archivo.name.split(".").pop()?.toLowerCase() || "jpg";
+  const rutaStorage = `${inspeccionId}/areas/${areaId}/conceptos/${itemId}/${randomUUID()}.${extension}`;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  const sb = obtenerSupabaseAdmin();
+  const { error } = await sb.storage.from(bucket).upload(
+    rutaStorage,
+    Buffer.from(await archivo.arrayBuffer()),
+    { contentType: archivo.type, upsert: false },
+  );
+  if (error) volver(inspeccionId, areaId, "error", "No fue posible guardar la fotografía.", itemId);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const foto = await tx.fotografia.create({
+        data: {
+          inspeccionId,
+          hallazgoId: null,
+          url: rutaStorage,
+          subidaPorId: usuario.id,
+          descripcion: `[ORIGEN:${origenEvidencia}] ${item.areaNombre} · ${item.concepto} · foto ${ordenFoto}/${requeridas}`,
+        },
+      });
+      await tx.$executeRaw`
+        INSERT INTO "FotografiaArea"
+          ("fotografiaId","areaId","guiaItemId","tipoEvidencia","orden","candidataReporte","candidataPortada","seleccionadaReporte")
+        VALUES
+          (${foto.id},${areaId}::uuid,${itemId},'CONCEPTO_AREA',${ordenFoto},true,false,true)
+      `;
+    });
+  } catch (registroError) {
+    await sb.storage.from(bucket).remove([rutaStorage]);
+    throw registroError;
+  }
+
+  await registrarAuditoria({
+    tipo: TipoEvento.SUBIR_EVIDENCIA,
+    entidad: "FotografiaArea",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} agregó evidencia ${ordenFoto}/${requeridas} (${origenEvidencia}) al concepto “${item.concepto}” en ${item.areaNombre}.`,
+  });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  volver(inspeccionId, areaId, "ok", "Fotografía registrada.", itemId);
+}
+
+export async function eliminarFotoConceptoAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const itemId = texto(formData, "itemId");
+  const fotografiaId = texto(formData, "fotografiaId");
+  if (!inspeccionId || !areaId || !itemId || !fotografiaId) redirect("/panel/inspecciones");
+
+  const { usuario } = await exigirResponsable(inspeccionId);
+  await exigirAreaActiva(inspeccionId, areaId);
+  const item = await itemArea(inspeccionId, areaId, itemId);
+  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "El concepto ya está cerrado.", itemId);
+
+  const [foto] = await prisma.$queryRaw<Array<{ url: string }>>`
+    SELECT f."url"
+    FROM "Fotografia" f
+    JOIN "FotografiaArea" fa ON fa."fotografiaId"=f."id"
+    WHERE f."id"=${fotografiaId}
+      AND f."inspeccionId"=${inspeccionId}
+      AND fa."areaId"=${areaId}::uuid
+      AND fa."guiaItemId"=${itemId}
+    LIMIT 1
+  `;
+  if (!foto) volver(inspeccionId, areaId, "error", "Fotografía no encontrada.", itemId);
+
+  await prisma.fotografia.delete({ where: { id: fotografiaId } });
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  await obtenerSupabaseAdmin().storage.from(bucket).remove([foto.url]);
+  await prisma.$executeRaw`
+    UPDATE "GuiaInspeccionItem"
+    SET "observacion"=NULL,"actualizadoEn"=NOW()
+    WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+  `;
+
+  await registrarAuditoria({
+    tipo: TipoEvento.ELIMINAR,
+    entidad: "Fotografia",
+    entidadId: fotografiaId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `Se retiró evidencia del concepto “${item.concepto}” para permitir repetir la fotografía.`,
+  });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  volver(inspeccionId, areaId, "ok", "Fotografía retirada.", itemId);
+}
+
+export async function generarDescripcionIaConceptoAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const itemId = texto(formData, "itemId");
+  if (!inspeccionId || !areaId || !itemId) redirect("/panel/inspecciones");
+
+  await exigirResponsable(inspeccionId);
+  await exigirAreaActiva(inspeccionId, areaId);
+  const item = await itemArea(inspeccionId, areaId, itemId);
+  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "El concepto ya está cerrado.", itemId);
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) volver(inspeccionId, areaId, "error", "Falta GEMINI_API_KEY para generar la interpretación.", itemId);
+
+  const fotos = await prisma.$queryRaw<Array<{ url: string; descripcion: string | null }>>`
+    SELECT f."url",f."descripcion"
+    FROM "FotografiaArea" fa
+    JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+    WHERE fa."guiaItemId"=${itemId}
+    ORDER BY fa."orden",fa."creadoEn"
+  `;
+  const origen = origenEvidenciaDescripcion(fotos[0]?.descripcion) ?? (fotos.length > 0 ? "CAMARA" : null);
+  const requeridas = fotosRequeridas(origen);
+  if (fotos.length !== requeridas) {
+    volver(
+      inspeccionId,
+      areaId,
+      "error",
+      requeridas === 1
+        ? "La evidencia de galería requiere una fotografía antes del análisis con IA."
+        : "Completa las 4 fotografías tomadas desde la aplicación antes del análisis con IA.",
+      itemId,
+    );
+  }
+
+  const sb = obtenerSupabaseAdmin();
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
+  const partes: Array<Record<string, unknown>> = [];
+  for (const foto of fotos) {
+    const { data, error } = await sb.storage.from(bucket).download(foto.url);
+    if (error || !data) volver(inspeccionId, areaId, "error", "No fue posible recuperar una de las fotografías.", itemId);
+    const mime = data.type || "image/jpeg";
+    const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+    partes.push({ inlineData: { mimeType: mime, data: base64 } });
+  }
+
+  partes.push({
+    text: [
+      "Actúa como asistente técnico de una inspección habitacional.",
+      `Área de la vivienda: ${item.areaNombre}.`,
+      `Concepto específico: ${item.concepto}.`,
+      item.especificacion ? `Criterio de revisión: ${item.especificacion}.` : "",
+      item.herramientaSugerida ? `Herramienta sugerida: ${item.herramientaSugerida}.` : "",
+      "Analiza exclusivamente lo visible en las fotografías y el criterio indicado.",
+      "No inventes daños ocultos, causas, cumplimiento normativo ni mediciones que no puedan comprobarse.",
+      "Describe nivelación, alineación, uniformidad, funcionamiento, sellados, remates, acabado o condición únicamente cuando corresponda al concepto evaluado.",
+      "Redacta una interpretación técnica breve, objetiva y útil para el expediente.",
+      "Sugiere clasificación C, O, NC o CR; la decisión final siempre será del Inspector.",
+      "Devuelve únicamente JSON con: descripcion, clasificacionSugerida, justificacion.",
+    ].filter(Boolean).join(" "),
+  });
+
+  const modelo = process.env.GEMINI_PROYECTO_MODEL || "gemini-3.5-flash-lite";
+  const respuesta = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: partes }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
+      }),
+      cache: "no-store",
+    },
+  );
+  const cuerpo = (await respuesta.json().catch(() => ({}))) as {
+    error?: { message?: string };
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  if (!respuesta.ok) volver(inspeccionId, areaId, "error", `Gemini no pudo analizar las fotografías: ${cuerpo.error?.message || "error no identificado"}`, itemId);
+  const salida = cuerpo.candidates?.[0]?.content?.parts?.map((parte) => parte.text || "").join("").trim();
+  if (!salida) volver(inspeccionId, areaId, "error", "Gemini no devolvió una interpretación.", itemId);
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(salida);
+  } catch {
+    volver(inspeccionId, areaId, "error", "Gemini devolvió una respuesta que no pudo estructurarse.", itemId);
+  }
+
+  const descripcionIa = String(parsed.descripcion ?? "").trim();
+  const sugerida = String(parsed.clasificacionSugerida ?? "").trim().toUpperCase();
+  const justificacionIa = String(parsed.justificacion ?? "").trim();
+  if (!descripcionIa) volver(inspeccionId, areaId, "error", "Gemini no generó una interpretación técnica válida.", itemId);
+
+  const anterior = observacionObjeto(item.observacion);
+  const observacion: ObservacionConcepto = {
+    ...anterior,
+    descripcionIa,
+    clasificacionSugerida: ["C","O","NC","CR"].includes(sugerida) ? sugerida : "O",
+    justificacionIa,
+    actualizadoEn: new Date().toISOString(),
+  };
+  await prisma.$executeRaw`
+    UPDATE "GuiaInspeccionItem"
+    SET "observacion"=${JSON.stringify(observacion)},"actualizadoEn"=NOW()
+    WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+  `;
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  volver(inspeccionId, areaId, "ok", "Interpretación IA generada. Revísala antes de cerrar el concepto.", itemId);
+}
+
+export async function guardarResultadoConceptoAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const itemId = texto(formData, "itemId");
+  const descripcionFinal = texto(formData, "descripcionFinal");
+  const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
+  const prioridadTexto = texto(formData, "prioridad").toUpperCase();
+  const valorMedido = texto(formData, "valorMedido");
+  const valorProyecto = texto(formData, "valorProyecto");
+  const unidadMedida = texto(formData, "unidadMedida");
+  if (!inspeccionId || !areaId || !itemId) redirect("/panel/inspecciones");
+
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+  await exigirAreaActiva(inspeccionId, areaId);
+  const item = await itemArea(inspeccionId, areaId, itemId);
+  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "El concepto ya está cerrado.", itemId);
+  if (!["C","O","NC","CR"].includes(clasificacionTexto)) volver(inspeccionId, areaId, "error", "Selecciona una clasificación válida.", itemId);
+  if (!["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, areaId, "error", "Selecciona una prioridad válida.", itemId);
+  if (descripcionFinal.length < 10) volver(inspeccionId, areaId, "error", "Registra una interpretación técnica de al menos 10 caracteres.", itemId);
+
+  const origen = origenEvidenciaDescripcion(item.descripcionPrimera) ?? (Number(item.fotos) > 0 ? "CAMARA" : null);
+  const requeridas = fotosRequeridas(origen);
+  if (Number(item.fotos) !== requeridas) {
+    volver(
+      inspeccionId,
+      areaId,
+      "error",
+      requeridas === 1
+        ? `${item.concepto} requiere una fotografía de galería antes de cerrarse.`
+        : `${item.concepto} requiere 4 fotografías tomadas desde la aplicación antes de cerrarse.`,
+      itemId,
+    );
+  }
+  if (item.requiereMedicion && !valorMedido) volver(inspeccionId, areaId, "error", `${item.concepto} requiere registrar el valor medido.`, itemId);
+  if (item.requiereMedicion && !unidadMedida) volver(inspeccionId, areaId, "error", `${item.concepto} requiere indicar la unidad de medición.`, itemId);
+  if (item.requiereComparacionProyecto && item.origenV3 === "PROYECTO" && !valorProyecto) {
+    volver(inspeccionId, areaId, "error", `${item.concepto} requiere registrar el valor de proyecto para la comparación.`, itemId);
+  }
+
+  const anterior = observacionObjeto(item.observacion);
+  const observacion: ObservacionConcepto = {
+    ...anterior,
+    descripcionFinal,
+    clasificacionFinal: clasificacionTexto,
+    prioridadFinal: prioridadTexto,
+    actualizadoEn: new Date().toISOString(),
+  };
+  const clasificacion = clasificacionTexto as ClasificacionHallazgo;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "observacion"=${JSON.stringify(observacion)},
+          "estadoV3"='REVISADO',
+          "valorMedido"=${valorMedido || null},
+          "valorProyecto"=${valorProyecto || null},
+          "unidadMedida"=${unidadMedida || null},
+          "completado"=true,
+          "cerradoEn"=NOW(),
+          "actualizadoEn"=NOW()
+      WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+    `;
+
+    if (
+      clasificacion === ClasificacionHallazgo.O ||
+      clasificacion === ClasificacionHallazgo.NC ||
+      clasificacion === ClasificacionHallazgo.CR
+    ) {
+      const existente = await tx.hallazgo.findFirst({
+        where: { inspeccionId, guiaItemId: itemId },
+        select: { id: true },
+      });
+      const hallazgo = existente
+        ? await tx.hallazgo.update({
+            where: { id: existente.id },
+            data: {
+              area: item.areaNombre,
+              areaId,
+              titulo: `${item.areaNombre} · ${item.concepto}`,
+              descripcion: descripcionFinal,
+              clasificacion,
+              prioridad: prioridadTexto as PrioridadHallazgo,
+              textoIaOriginal: anterior.descripcionIa || null,
+              textoInspectorFinal: descripcionFinal,
+            },
+          })
+        : await tx.hallazgo.create({
+            data: {
+              inspeccionId,
+              creadoPorId: usuario.id,
+              area: item.areaNombre,
+              areaId,
+              titulo: `${item.areaNombre} · ${item.concepto}`,
+              descripcion: descripcionFinal,
+              clasificacion,
+              prioridad: prioridadTexto as PrioridadHallazgo,
+              guiaItemId: itemId,
+              textoIaOriginal: anterior.descripcionIa || null,
+              textoInspectorFinal: descripcionFinal,
+            },
+          });
+
+      await tx.$executeRaw`
+        UPDATE "Fotografia"
+        SET "hallazgoId"=${hallazgo.id}
+        WHERE "id" IN (
+          SELECT fa."fotografiaId"
+          FROM "FotografiaArea" fa
+          WHERE fa."guiaItemId"=${itemId}
+        )
+      `;
+    }
+  });
+
+  await recalcularIndice(inspeccionId);
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "GuiaInspeccionItem",
+    entidadId: itemId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} cerró “${item.concepto}” en ${item.areaNombre} con clasificación ${clasificacionTexto}, prioridad ${prioridadTexto} y ${requeridas} evidencia(s).`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
+  volver(inspeccionId, areaId, "ok", "Concepto cerrado y clasificado.", itemId);
+}
+
+export async function reactivarConceptoAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const itemId = texto(formData, "itemId");
+  if (!inspeccionId || !areaId || !itemId) redirect("/panel/inspecciones");
+
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+  await exigirAreaActiva(inspeccionId, areaId);
+  const item = await itemArea(inspeccionId, areaId, itemId);
+  if (item.estadoV3 !== "NO_APLICA") volver(inspeccionId, areaId, "error", "Sólo un concepto marcado NO APLICA puede reactivarse.", itemId);
+
+  await prisma.$executeRaw`
+    UPDATE "GuiaInspeccionItem"
+    SET "estadoV3"='PENDIENTE',"motivoNoAplica"=NULL,"completado"=false,"cerradoEn"=NULL,"actualizadoEn"=NOW()
+    WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+  `;
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "GuiaInspeccionItem",
+    entidadId: itemId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} reactivó el concepto “${item.concepto}” en ${item.areaNombre}.`,
+  });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  volver(inspeccionId, areaId, "ok", "Concepto reactivado.", itemId);
+}

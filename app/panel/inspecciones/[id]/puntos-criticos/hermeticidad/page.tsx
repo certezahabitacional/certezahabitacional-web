@@ -136,6 +136,13 @@ export default async function HermeticidadPage({
     ORDER BY "orden"
   `;
 
+  const [areasRecorrido] = await prisma.$queryRaw<Array<{ total: number }>>`
+    SELECT COUNT(*)::int AS "total"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${id} AND "tipo" <> 'PUNTO_CRITICO'
+  `;
+  const totalRecorrido = 8 + Number(areasRecorrido?.total ?? 0);
+
   const pruebas = [];
   for (const paso of pasos) {
     const codigo = paso.clave === "PC_GAS" ? "GAS" : "HIDRAULICA";
@@ -204,7 +211,7 @@ export default async function HermeticidadPage({
         </div>
 
         <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-amber-300">
-          PRUEBAS DE HERMETICIDAD
+          RECORRIDO TÉCNICO · PUNTO 1 DE {totalRecorrido}
         </p>
         <h1 className="mt-2 text-4xl font-black">
           {fase === "inicio" ? "Lecturas iniciales antes del recorrido" : "Lecturas finales al terminar la inspección"}
