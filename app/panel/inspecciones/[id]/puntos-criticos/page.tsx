@@ -465,7 +465,7 @@ export default async function PuntosCriticosPage({
         </section>
 
         {datos.configurado && datos.aplica && datos.pruebaProlongada && itemManometroInicial && itemLecturaFinal && (
-          <section className="mt-7 rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
+          <section id="prueba-manometro-inicio" className="scroll-mt-24 mt-7 rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
             {(() => {
               const fotoInicial = fotos.find((foto) => foto.guiaItemId === itemManometroInicial.id);
               const fotoFinal = fotos.find((foto) => foto.guiaItemId === itemLecturaFinal.id);
@@ -924,6 +924,21 @@ export default async function PuntosCriticosPage({
                 </article>
               );
             })}
+
+            {puedeCapturar && datos.pruebaProlongada && !paso.lecturaInicial && otrosConceptosCompletos && (
+              <div className="rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
+                <p className="font-black text-amber-200">FALTA INICIAR LA PRUEBA DEL MANÓMETRO</p>
+                <p className="mt-2 text-sm text-slate-300">
+                  Los demás conceptos de {punto.etiqueta.toLowerCase()} ya están cerrados. Para continuar al siguiente punto crítico debes registrar la fotografía y la lectura inicial del manómetro. La lectura final se capturará al terminar la inspección.
+                </p>
+                <a
+                  href="#prueba-manometro-inicio"
+                  className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950"
+                >
+                  IR A MEDICIÓN INICIAL DEL MANÓMETRO
+                </a>
+              </div>
+            )}
 
             {puedeCapturar && datos.pruebaProlongada && paso.lecturaInicial && !paso.lecturaFinal && otrosConceptosCompletos && siguientePunto && (
               <div className="rounded-3xl border border-amber-300/25 bg-amber-300/5 p-6">
