@@ -118,6 +118,8 @@ export default function CapturaCamara({
     formData.set("archivo", captura);
     formData.set("origenEvidencia", "CAMARA");
 
+    sessionStorage.setItem("ch:puntos-criticos:foco", itemId);
+
     startTransition(async () => {
       await subirFoto(formData);
     });
