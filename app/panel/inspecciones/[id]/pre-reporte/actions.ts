@@ -109,13 +109,19 @@ export async function confirmarPreReporteSitioV1(formData: FormData) {
     redirect(`/panel/inspecciones/${inspeccionId}/pre-reporte?error=${encodeURIComponent(error)}`);
   }
 
-  const [control] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null }>>`
-    SELECT "campoFinalizadoEn"
+  const [control] = await prisma.$queryRaw<Array<{
+    inspeccionTecnicaConcluidaEn: Date | null;
+    campoFinalizadoEn: Date | null;
+  }>>`
+    SELECT "inspeccionTecnicaConcluidaEn","campoFinalizadoEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${inspeccionId}
     LIMIT 1
   `;
-  if (control?.campoFinalizadoEn) {
+  if (!control?.inspeccionTecnicaConcluidaEn) {
+    redirect(`/panel/inspecciones/${inspeccionId}/flujo`);
+  }
+  if (control.campoFinalizadoEn) {
     redirect(`/panel/inspecciones/${inspeccionId}/pre-reporte?error=${encodeURIComponent("La visita ya fue cerrada en sitio. La revisión preliminar debía confirmarse antes de que el Inspector se retirara del inmueble.")}`);
   }
 
