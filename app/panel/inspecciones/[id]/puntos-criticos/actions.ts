@@ -49,6 +49,7 @@ type ObservacionItemCritico = {
   prioridadFinal?: string;
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
+  variacionPresion?: string;
   actualizadoEn?: string;
 };
 
@@ -72,6 +73,32 @@ function observacionObjeto(valor: string | null): ObservacionItemCritico {
   } catch {
     return { descripcionFinal: valor };
   }
+}
+
+function numeroLectura(valor: string | null | undefined) {
+  if (!valor) return null;
+  const coincidencia = valor.replace(",", ".").match(/-?\d+(?:\.\d+)?/);
+  if (!coincidencia) return null;
+  const numero = Number(coincidencia[0]);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function calcularVariacionPresion(
+  lecturaInicial: string | null | undefined,
+  lecturaFinal: string | null | undefined,
+  unidadInicial: string | null | undefined,
+  unidadFinal: string | null | undefined,
+) {
+  const inicial = numeroLectura(lecturaInicial);
+  const final = numeroLectura(lecturaFinal);
+  const unidadA = (unidadInicial ?? unidadFinal ?? "").trim();
+  const unidadB = (unidadFinal ?? unidadInicial ?? "").trim();
+  if (inicial === null || final === null) return null;
+  if (unidadA && unidadB && unidadA.toLowerCase() !== unidadB.toLowerCase()) return null;
+  const diferencia = final - inicial;
+  const redondeada = Math.round(diferencia * 100) / 100;
+  const signo = redondeada > 0 ? "+" : "";
+  return `${signo}${redondeada} ${unidadB || unidadA}`.trim();
 }
 
 type OrigenEvidencia = "CAMARA" | "GALERIA";
@@ -646,6 +673,13 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
     volver(inspeccionId, codigo, "error", "Captura la lectura final y la unidad antes de solicitar la interpretación con IA.");
   }
 
+  const variacionPresion = calcularVariacionPresion(
+    paso.lecturaInicial,
+    lecturaFinalPropuesta,
+    paso.unidad,
+    unidadFinalPropuesta,
+  );
+
   const especiales = await prisma.$queryRaw<Array<{
     id: string;
     concepto: string;
@@ -697,6 +731,7 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
       "Prueba: hermeticidad con manómetro.",
       `Lectura inicial registrada por el inspector: ${paso.lecturaInicial} ${paso.unidad ?? unidadFinalPropuesta}.`,
       `Lectura final registrada para análisis: ${lecturaFinalPropuesta} ${unidadFinalPropuesta}.`,
+      `Variación numérica calculada por el sistema: ${variacionPresion ?? "no calculable automáticamente"}.`,
       "Compara ambos momentos de la prueba y las dos fotografías.",
       "Describe objetivamente si la presión se mantiene, aumenta o disminuye según los valores proporcionados.",
       "No inventes causas, fugas ocultas, cumplimiento normativo ni condiciones que no puedan demostrarse con las fotografías y lecturas.",
@@ -751,6 +786,7 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
     justificacionIa,
     lecturaFinalPropuesta,
     unidadFinalPropuesta,
+    variacionPresion: variacionPresion ?? undefined,
     actualizadoEn: new Date().toISOString(),
   };
 

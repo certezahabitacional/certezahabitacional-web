@@ -84,6 +84,7 @@ type ObservacionItem = {
   prioridadFinal?: string;
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
+  variacionPresion?: string;
 };
 
 function esCodigo(valor: string): valor is CodigoPuntoCriticoV1 {
@@ -614,8 +615,22 @@ export default async function PuntosCriticosPage({
 
                           {observacionPrueba.descripcionIa && (
                             <div className="rounded-xl border border-cyan-300/20 bg-slate-950 p-4">
-                              <p className="text-xs font-black uppercase text-cyan-200">Interpretación sugerida por IA</p>
-                              <p className="mt-2 text-sm leading-6 text-cyan-50">{observacionPrueba.descripcionIa}</p>
+                              <p className="text-xs font-black uppercase text-cyan-200">Comparativo de presión e interpretación sugerida por IA</p>
+                              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                                <div className="rounded-lg bg-white/5 p-3">
+                                  <span className="block text-slate-500">Lectura inicial</span>
+                                  <strong className="mt-1 block text-white">{paso.lecturaInicial} {paso.unidad ?? ""}</strong>
+                                </div>
+                                <div className="rounded-lg bg-white/5 p-3">
+                                  <span className="block text-slate-500">Lectura final</span>
+                                  <strong className="mt-1 block text-white">{observacionPrueba.lecturaFinalPropuesta} {observacionPrueba.unidadFinalPropuesta ?? ""}</strong>
+                                </div>
+                                <div className="rounded-lg bg-white/5 p-3">
+                                  <span className="block text-slate-500">Variación calculada</span>
+                                  <strong className="mt-1 block text-amber-200">{observacionPrueba.variacionPresion ?? "No calculable"}</strong>
+                                </div>
+                              </div>
+                              <p className="mt-3 text-sm leading-6 text-cyan-50">{observacionPrueba.descripcionIa}</p>
                               {observacionPrueba.justificacionIa && (
                                 <p className="mt-2 text-xs text-cyan-200/80">{observacionPrueba.justificacionIa}</p>
                               )}
