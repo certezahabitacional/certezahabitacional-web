@@ -29,7 +29,13 @@ function slug(valor: string) {
 function prioridadRutaArea(nombre: string, codigo: string) {
   const n = slug(`${nombre} ${codigo}`);
 
-  // Planta baja y recorrido interior principal.
+  // El recorrido físico inicia por las cuatro caras de fachada.
+  if (/FACHADA_(PRINCIPAL|FRONTAL)/.test(n)) return 10;
+  if (/FACHADA_POSTERIOR/.test(n)) return 20;
+  if (/FACHADA_LATERAL_IZQUIERDA/.test(n)) return 30;
+  if (/FACHADA_LATERAL_DERECHA/.test(n)) return 40;
+
+  // Después continúa el recorrido interior de planta baja.
   if (/RECIBIDOR|VESTIBULO/.test(n)) return 80;
   if (/(^|_)SALA(_|$)/.test(n)) return 100;
   if (/COMEDOR/.test(n)) return 110;
@@ -68,8 +74,7 @@ function prioridadRutaArea(nombre: string, codigo: string) {
   if (/PATIO/.test(n)) return 620;
   if (/JARDIN/.test(n)) return 630;
   if (/ACCESO_PEATONAL/.test(n)) return 640;
-  if (/FACHADA_PRINCIPAL/.test(n)) return 650;
-  if (/FACHADA_LATERAL/.test(n)) return 660;
+  if (/FACHADA/.test(n)) return 40;
   if (/BARDA/.test(n)) return 670;
   if (/AZOTEA/.test(n)) return 700;
   if (/ROOF_GARDEN/.test(n)) return 710;
@@ -224,17 +229,26 @@ export async function generarAreasDesdeGuia(formData: FormData) {
       VALUES (${inspeccionId},'VIVIENDA',2)
       ON CONFLICT ("inspeccionId") DO NOTHING
     `;
-    await tx.$executeRaw`
-      INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
-      VALUES (${inspeccionId},'FACHADA_PRINCIPAL','Fachada principal','EXTERIOR',0,'METODO_CERTEZA',true)
-      ON CONFLICT ("inspeccionId","codigo") DO NOTHING
-    `;
-    let orden = 10;
+    const fachadas = [
+      { codigo: "FACHADA_FRONTAL", nombre: "Fachada frontal", orden: 10 },
+      { codigo: "FACHADA_POSTERIOR", nombre: "Fachada posterior", orden: 20 },
+      { codigo: "FACHADA_LATERAL_IZQUIERDA", nombre: "Fachada lateral izquierda", orden: 30 },
+      { codigo: "FACHADA_LATERAL_DERECHA", nombre: "Fachada lateral derecha", orden: 40 },
+    ];
+    for (const fachada of fachadas) {
+      await tx.$executeRaw`
+        INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
+        VALUES (${inspeccionId},${fachada.codigo},${fachada.nombre},'EXTERIOR',${fachada.orden},'METODO_CERTEZA',true)
+        ON CONFLICT ("inspeccionId","codigo") DO NOTHING
+      `;
+    }
+    let orden = 100;
     for (const item of items) {
       const nombre = item.area.trim();
       if (!nombre) continue;
       const codigoBase = slug(nombre) || `AREA_${orden}`;
-      const codigo = codigoBase === 'FACHADA_PRINCIPAL' ? `AREA_${codigoBase}` : codigoBase;
+      if (/^FACHADA(_|$)/.test(codigoBase)) continue;
+      const codigo = codigoBase;
       await tx.$executeRaw`
         INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
         VALUES (${inspeccionId},${codigo},${nombre},'INTERIOR',${orden},'GUIA_TECNICA',true)
@@ -359,12 +373,19 @@ export async function confirmarAreasV1(formData: FormData) {
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
-  const [r] = await prisma.$queryRaw<Array<{ total: number; fachada: number }>>`
+  const [r] = await prisma.$queryRaw<Array<{ total: number; fachadas: number }>>`
     SELECT COUNT(*) FILTER (WHERE "obligatoria")::int AS "total",
-           COUNT(*) FILTER (WHERE "codigo"='FACHADA_PRINCIPAL')::int AS "fachada"
+           COUNT(*) FILTER (
+             WHERE "codigo" IN (
+               'FACHADA_FRONTAL','FACHADA_POSTERIOR',
+               'FACHADA_LATERAL_IZQUIERDA','FACHADA_LATERAL_DERECHA'
+             )
+           )::int AS "fachadas"
     FROM "AreaInspeccion" WHERE "inspeccionId"=${inspeccionId}
   `;
-  if (Number(r?.total ?? 0) === 0 || Number(r?.fachada ?? 0) === 0) volver(inspeccionId, "error", "Antes de confirmar deben existir la fachada principal y todas las áreas físicas obligatorias.");
+  if (Number(r?.total ?? 0) === 0 || Number(r?.fachadas ?? 0) < 4) {
+    volver(inspeccionId, "error", "Antes de confirmar deben existir las cuatro fachadas: frontal, posterior, lateral izquierda y lateral derecha, además de todas las áreas físicas obligatorias.");
+  }
 
   await prisma.$executeRaw`
     UPDATE "InspeccionControlV2" SET "areasConfirmadas"=true,"actualizadoEn"=NOW() WHERE "inspeccionId"=${inspeccionId}
