@@ -16,6 +16,7 @@ on:
       - fix/feedback-ia-puntos-criticos
       - fix/manometros-y-avance-puntos-criticos
       - fix/continuidad-manometro-puntos-criticos
+      - fix/conservar-foco-concepto-puntos-criticos
 
 jobs:
   typecheck:
