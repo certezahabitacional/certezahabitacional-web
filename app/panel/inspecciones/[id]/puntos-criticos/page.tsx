@@ -22,20 +22,16 @@ import RestaurarFocoConcepto from "./RestaurarFocoConcepto";
 import {
   agregarConceptoManualPuntoCriticoV1,
   marcarConceptoNoAplicaV1,
-  marcarPruebaProlongadaNoAplicaV1,
   reactivarConceptoPuntoCriticoV1,
   reactivarPruebaProlongadaV1,
 } from "./conceptos-actions";
 import {
   cerrarPuntoCriticoV1,
-  cerrarPruebaProlongadaV1,
   configurarPuntoCriticoV1,
   eliminarFotoPuntoCriticoV1,
   generarDescripcionIaPuntoCriticoV1,
-  generarInterpretacionIaPruebaProlongadaV1,
   guardarResultadoPuntoCriticoV1,
   iniciarPuntosCriticosV1,
-  registrarInicioPruebaProlongadaV1,
   subirFotoPuntoCriticoV1,
 } from "./actions";
 
@@ -293,7 +289,6 @@ export default async function PuntosCriticosPage({
 
   const itemManometroInicial = items.find((item) => /manómetro/i.test(item.concepto));
   const itemLecturaFinal = items.find((item) => /lectura final/i.test(item.concepto));
-  const observacionPrueba = itemLecturaFinal ? observacionItem(itemLecturaFinal.observacion) : {};
   const idsPrueba = new Set(
     [itemManometroInicial?.id, itemLecturaFinal?.id].filter((valor): valor is string => Boolean(valor)),
   );
@@ -317,14 +312,6 @@ export default async function PuntosCriticosPage({
   );
 
   const completadosNormales = itemsNormales.filter((item) => item.estadoV3 !== "PENDIENTE").length;
-  const pruebaCompleta = Boolean(
-    itemManometroInicial &&
-    itemLecturaFinal &&
-    paso.lecturaInicial &&
-    paso.lecturaFinal &&
-    itemManometroInicial.estadoV3 !== "PENDIENTE" &&
-    itemLecturaFinal.estadoV3 !== "PENDIENTE"
-  );
   const totalVisual = itemsNormales.length;
   const completadosVisual = completadosNormales;
   const porcentaje = totalVisual ? Math.round((completadosVisual / totalVisual) * 100) : paso.estado === "NO_APLICA" ? 100 : 0;
@@ -499,267 +486,6 @@ export default async function PuntosCriticosPage({
                 </button>
               </form>
             )}
-          </section>
-        )}
-
-        {false && datos.configurado && datos.aplica && datos.pruebaProlongada && itemManometroInicial && itemLecturaFinal && (
-          <section id="prueba-manometro-inicio" className="scroll-mt-24 mt-7 rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6">
-            {(() => {
-              const fotoInicial = fotos.find((foto) => foto.guiaItemId === itemManometroInicial.id);
-              const fotoFinal = fotos.find((foto) => foto.guiaItemId === itemLecturaFinal.id);
-              return (
-                <>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-wider text-amber-200">
-                        Plantilla especial · única que puede permanecer abierta
-                      </p>
-                      <h2 className="mt-1 text-2xl font-black">Prueba de hermeticidad con manómetro</h2>
-                      <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                        En esta misma plantilla se documentan el inicio de carga y la lectura al terminar la inspección.
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-3 py-2 text-xs font-black ${paso.lecturaFinal ? "bg-emerald-300/10 text-emerald-200" : paso.lecturaInicial ? "bg-amber-300/10 text-amber-200" : "bg-white/5 text-slate-400"}`}>
-                      {paso.lecturaFinal ? "CERRADA" : paso.lecturaInicial ? "ABIERTA · EN PRUEBA" : "PENDIENTE DE INICIO"}
-                    </span>
-                  </div>
-
-                  {!paso.lecturaInicial && puedeCapturar && (
-                    <form action={marcarPruebaProlongadaNoAplicaV1} className="mt-4 rounded-2xl border border-slate-600/30 bg-slate-950 p-4">
-                      <input type="hidden" name="inspeccionId" value={id} />
-                      <input type="hidden" name="codigo" value={codigoSolicitado} />
-                      <p className="text-xs font-black uppercase text-slate-300">¿La prueba de hermeticidad no aplica?</p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Márcala antes de registrar la lectura inicial. Quedará exenta de fotografía y lecturas.
-                      </p>
-                      <button className="mt-3 rounded-xl border border-slate-400/30 px-4 py-2 text-xs font-black text-slate-200">
-                        NO APLICA A ESTA PRUEBA
-                      </button>
-                    </form>
-                  )}
-
-                  <div className="mt-5 grid gap-5 lg:grid-cols-2">
-                    <article className="rounded-2xl border border-white/10 bg-slate-950 p-4">
-                      <p className="text-xs font-black uppercase text-cyan-200">1 · Inicio de carga</p>
-                      <p className="mt-2 text-sm text-slate-400">Toma o carga una foto del manómetro y registra la lectura inicial.</p>
-
-                      {fotoInicial?.urlTemporal ? (
-                        <a href={fotoInicial.urlTemporal} target="_blank" rel="noreferrer" className="mt-3 block bg-black">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={fotoInicial.urlTemporal} alt="Lectura inicial del manómetro" className="h-64 w-full object-contain" />
-                        </a>
-                      ) : puedeCapturar ? (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <CapturaCamara
-                            inspeccionId={id}
-                            codigo={codigoSolicitado}
-                            itemId={itemManometroInicial.id}
-                            numeroFoto={1}
-                            totalFotos={1}
-                            subirFoto={subirFotoPuntoCriticoV1}
-                          />
-                          <CargaGaleriaConPreview
-                            inspeccionId={id}
-                            codigo={codigoSolicitado}
-                            itemId={itemManometroInicial.id}
-                            numeroFoto={1}
-                            totalFotos={1}
-                            subirFoto={subirFotoPuntoCriticoV1}
-                          />
-                        </div>
-                      ) : null}
-
-                      {fotoInicial && !paso.lecturaInicial && puedeCapturar && (
-                        <form action={registrarInicioPruebaProlongadaV1} className="mt-4">
-                          <input type="hidden" name="inspeccionId" value={id} />
-                          <input type="hidden" name="codigo" value={codigoSolicitado} />
-                          <input type="hidden" name="itemId" value={itemManometroInicial.id} />
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="text-xs font-bold text-slate-400">
-                              Lectura inicial
-                              <input name="lecturaInicial" required className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
-                            </label>
-                            <label className="text-xs font-bold text-slate-400">
-                              Unidad
-                              <input name="unidad" required placeholder="psi, kPa, bar..." className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
-                            </label>
-                          </div>
-                          <button className="mt-3 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-slate-950">
-                            INICIAR PRUEBA
-                          </button>
-                        </form>
-                      )}
-
-                      {paso.lecturaInicial && (
-                        <p className="mt-4 rounded-xl bg-emerald-300/10 p-3 text-sm font-black text-emerald-200">
-                          Lectura inicial: {paso.lecturaInicial} {paso.unidad ?? ""}
-                        </p>
-                      )}
-                    </article>
-
-                    <article className="rounded-2xl border border-white/10 bg-slate-950 p-4">
-                      <p className="text-xs font-black uppercase text-violet-200">2 · Al terminar la inspección</p>
-                      <p className="mt-2 text-sm text-slate-400">
-                        Regresa a esta misma plantilla, toma o carga la foto final y registra la lectura final.
-                      </p>
-
-                      {!paso.lecturaInicial ? (
-                        <p className="mt-4 rounded-xl bg-white/5 p-3 text-sm text-slate-500">Primero inicia la prueba.</p>
-                      ) : fotoFinal?.urlTemporal ? (
-                        <a href={fotoFinal.urlTemporal} target="_blank" rel="noreferrer" className="mt-3 block bg-black">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={fotoFinal.urlTemporal} alt="Lectura final del manómetro" className="h-64 w-full object-contain" />
-                        </a>
-                      ) : puedeCapturar ? (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <CapturaCamara
-                            inspeccionId={id}
-                            codigo={codigoSolicitado}
-                            itemId={itemLecturaFinal.id}
-                            numeroFoto={1}
-                            totalFotos={1}
-                            subirFoto={subirFotoPuntoCriticoV1}
-                          />
-                          <CargaGaleriaConPreview
-                            inspeccionId={id}
-                            codigo={codigoSolicitado}
-                            itemId={itemLecturaFinal.id}
-                            numeroFoto={1}
-                            totalFotos={1}
-                            subirFoto={subirFotoPuntoCriticoV1}
-                          />
-                        </div>
-                      ) : null}
-
-                      {fotoFinal && !paso.lecturaFinal && puedeCapturar && (
-                        <div id="prueba-manometro" className="mt-4 space-y-4">
-                          <form action={generarInterpretacionIaPruebaProlongadaV1} className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-4">
-                            <input type="hidden" name="inspeccionId" value={id} />
-                            <input type="hidden" name="codigo" value={codigoSolicitado} />
-                            <p className="text-xs font-black uppercase text-cyan-200">Interpretación IA de la prueba</p>
-                            <p className="mt-2 text-xs text-cyan-50">
-                              Captura la lectura final. La IA comparará lectura inicial, lectura final y ambas fotografías.
-                            </p>
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                              <label className="text-xs font-bold text-slate-400">
-                                Lectura final
-                                <input
-                                  name="lecturaFinal"
-                                  required
-                                  defaultValue={observacionPrueba.lecturaFinalPropuesta ?? ""}
-                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
-                                />
-                              </label>
-                              <label className="text-xs font-bold text-slate-400">
-                                Unidad
-                                <input
-                                  name="unidad"
-                                  required
-                                  defaultValue={observacionPrueba.unidadFinalPropuesta ?? paso.unidad ?? ""}
-                                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
-                                />
-                              </label>
-                            </div>
-                            <div className="mt-3">
-                              <BotonGenerarIa />
-                            </div>
-                          </form>
-
-                          {observacionPrueba.descripcionIa && (
-                            <div className="rounded-xl border border-cyan-300/20 bg-slate-950 p-4">
-                              <p className="text-xs font-black uppercase text-cyan-200">Comparativo de presión e interpretación sugerida por IA</p>
-                              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                                <div className="rounded-lg bg-white/5 p-3">
-                                  <span className="block text-slate-500">Lectura inicial</span>
-                                  <strong className="mt-1 block text-white">{paso.lecturaInicial} {paso.unidad ?? ""}</strong>
-                                </div>
-                                <div className="rounded-lg bg-white/5 p-3">
-                                  <span className="block text-slate-500">Lectura final</span>
-                                  <strong className="mt-1 block text-white">{observacionPrueba.lecturaFinalPropuesta} {observacionPrueba.unidadFinalPropuesta ?? ""}</strong>
-                                </div>
-                                <div className="rounded-lg bg-white/5 p-3">
-                                  <span className="block text-slate-500">Variación calculada</span>
-                                  <strong className="mt-1 block text-amber-200">{observacionPrueba.variacionPresion ?? "No calculable"}</strong>
-                                </div>
-                              </div>
-                              <p className="mt-3 text-sm leading-6 text-cyan-50">{observacionPrueba.descripcionIa}</p>
-                              {observacionPrueba.justificacionIa && (
-                                <p className="mt-2 text-xs text-cyan-200/80">{observacionPrueba.justificacionIa}</p>
-                              )}
-                            </div>
-                          )}
-
-                          <form action={cerrarPruebaProlongadaV1} className="space-y-3 rounded-xl border border-violet-300/20 bg-violet-300/5 p-4">
-                            <input type="hidden" name="inspeccionId" value={id} />
-                            <input type="hidden" name="codigo" value={codigoSolicitado} />
-                            <input type="hidden" name="lecturaFinal" value={observacionPrueba.lecturaFinalPropuesta ?? ""} />
-                            <input type="hidden" name="unidad" value={observacionPrueba.unidadFinalPropuesta ?? paso.unidad ?? ""} />
-
-                            <label className="block text-xs font-black uppercase text-slate-400">
-                              Interpretación / comentario del inspector
-                              <textarea
-                                name="descripcionFinal"
-                                required
-                                defaultValue={observacionPrueba.descripcionFinal ?? observacionPrueba.descripcionIa ?? ""}
-                                placeholder="Describe estabilidad o variación de presión y cualquier hallazgo observado."
-                                className="mt-2 min-h-32 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white"
-                              />
-                            </label>
-
-                            <label className="block text-xs font-black uppercase text-slate-400">
-                              Clasificación final
-                              <select
-                                name="clasificacion"
-                                defaultValue={observacionPrueba.clasificacionFinal ?? observacionPrueba.clasificacionSugerida ?? "C"}
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
-                              >
-                                <option value="C">C · Conforme</option>
-                                <option value="O">O · Observación</option>
-                                <option value="NC">NC · No conformidad</option>
-                                <option value="CR">CR · Crítico</option>
-                                <option value="NA">NA · No aplica</option>
-                              </select>
-                            </label>
-
-                            <label className="block text-xs font-black uppercase text-slate-400">
-                              Nivel de prioridad
-                              <select
-                                name="prioridad"
-                                defaultValue={observacionPrueba.prioridadFinal ?? "P3"}
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white"
-                              >
-                                <option value="P1">P1 · Atención inmediata / crítica</option>
-                                <option value="P2">P2 · Muy alta</option>
-                                <option value="P3">P3 · Alta / corregir</option>
-                                <option value="P4">P4 · Media / observación</option>
-                                <option value="P5">P5 · Baja / seguimiento</option>
-                              </select>
-                            </label>
-
-                            <p className="text-[11px] leading-5 text-slate-400">
-                              La interpretación de IA es una sugerencia. El comentario, clasificación y prioridad final los confirma el Inspector.
-                            </p>
-
-                            <button
-                              disabled={!observacionPrueba.lecturaFinalPropuesta || !observacionPrueba.unidadFinalPropuesta}
-                              className="w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30"
-                            >
-                              REGISTRAR LECTURA FINAL Y CERRAR PRUEBA
-                            </button>
-                          </form>
-                        </div>
-                      )}
-
-                      {paso.lecturaFinal && (
-                        <p className="mt-4 rounded-xl bg-emerald-300/10 p-3 text-sm font-black text-emerald-200">
-                          Lectura final: {paso.lecturaFinal} {paso.unidad ?? ""} · PRUEBA CERRADA ✓
-                        </p>
-                      )}
-                    </article>
-                  </div>
-                </>
-              );
-            })()}
           </section>
         )}
 
