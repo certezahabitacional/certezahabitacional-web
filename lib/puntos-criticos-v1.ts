@@ -97,7 +97,7 @@ export const PUNTOS_CRITICOS_V1: PuntoCriticoV1[] = [
     herramientasPruebaProlongada: [],
     plantilla: [
       item("PC_PLU_01_CAPTACION", "Captación y puntos de entrada", "Revisar coladeras, canalones, bocas y obstrucciones.", "Inspección visual", false, true),
-      item("PC_PLU_02_PENDIENTES", "Pendientes y puntos bajos", "Verificar dirección de pendientes y zonas de encharcamiento.", "Nivel digital / prueba con agua", true, true),
+      item("PC_PLU_02_PENDIENTES", "Pendientes y puntos bajos", "Verificar dirección de pendientes y zonas de encharcamiento.", "Nivel digital / prueba con agua", false, true),
       item("PC_PLU_03_BAJANTES", "Bajantes y uniones", "Revisar continuidad, fijación, juntas y daños.", "Inspección visual", false, true),
       item("PC_PLU_04_DESCARGA", "Punto final de descarga", "Verificar correspondencia con proyecto y afectaciones visibles.", "Inspección visual", false, true),
       item("PC_PLU_05_FUGAS", "Fugas durante escurrimiento", "Cuando sea posible realizar prueba funcional, revisar fugas.", "Prueba con agua / inspección visual"),
