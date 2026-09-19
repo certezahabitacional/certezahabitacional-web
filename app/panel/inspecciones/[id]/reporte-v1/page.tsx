@@ -108,7 +108,7 @@ export default async function ReporteV1Page({ params }: { params: Promise<{ id:s
 
   const [fachada] = await prisma.$queryRaw<Array<{url:string|null}>>`
     SELECT f."url" FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
-    WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL' AND fa."candidataPortada"=true LIMIT 1
+    WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true LIMIT 1
   `;
   const [controlReporte] = await prisma.$queryRaw<ControlReporte[]>`
     SELECT "campoFinalizadoEn" FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
