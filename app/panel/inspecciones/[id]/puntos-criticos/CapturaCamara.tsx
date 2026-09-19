@@ -9,6 +9,7 @@ type Props = {
   numeroFoto: number;
   totalFotos?: number;
   subirFoto: (formData: FormData) => Promise<void>;
+  retorno?: "HERMETICIDAD_INICIO" | "HERMETICIDAD_CIERRE";
 };
 
 export default function CapturaCamara({
@@ -18,6 +19,7 @@ export default function CapturaCamara({
   numeroFoto,
   totalFotos = 4,
   subirFoto,
+  retorno,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -117,6 +119,7 @@ export default function CapturaCamara({
     formData.set("itemId", itemId);
     formData.set("archivo", captura);
     formData.set("origenEvidencia", "CAMARA");
+    if (retorno) formData.set("retorno", retorno);
 
     sessionStorage.setItem("ch:puntos-criticos:foco", itemId);
 
