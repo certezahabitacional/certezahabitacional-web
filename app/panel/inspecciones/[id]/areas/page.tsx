@@ -92,11 +92,35 @@ export default async function AreasPage({
       SELECT "proyectoConfirmado","areasConfirmadas"
       FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
     `,
-    prisma.$queryRaw<Array<{ total: number; incompletos: number }>>`
-      SELECT COUNT(*)::int AS "total",
-             COUNT(*) FILTER (WHERE "estado" NOT IN ('COMPLETADO','NO_APLICA'))::int AS "incompletos"
-      FROM "ProtocoloInspeccionPaso"
-      WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
+    prisma.$queryRaw<Array<{ total: number; bloqueantes: number; pruebasAbiertas: number }>>`
+      SELECT
+        COUNT(*)::int AS "total",
+        COUNT(*) FILTER (
+          WHERE p."estado" NOT IN ('COMPLETADO','NO_APLICA')
+            AND NOT (
+              p."clave" IN ('PC_HIDRAULICA','PC_GAS')
+              AND p."lecturaInicial" IS NOT NULL
+              AND p."lecturaFinal" IS NULL
+              AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
+              AND NOT EXISTS (
+                SELECT 1
+                FROM "GuiaInspeccionItem" g
+                WHERE g."inspeccionId"=p."inspeccionId"
+                  AND g."area"=concat('__PUNTO_CRITICO__:',replace(p."clave",'PC_',''))
+                  AND g."estadoV3"='PENDIENTE'
+                  AND g."concepto" NOT ILIKE '%manómetro%'
+                  AND g."concepto" NOT ILIKE '%lectura final%'
+              )
+            )
+        )::int AS "bloqueantes",
+        COUNT(*) FILTER (
+          WHERE p."clave" IN ('PC_HIDRAULICA','PC_GAS')
+            AND p."lecturaInicial" IS NOT NULL
+            AND p."lecturaFinal" IS NULL
+            AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
+        )::int AS "pruebasAbiertas"
+      FROM "ProtocoloInspeccionPaso" p
+      WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
     `,
     prisma.$queryRaw<Area[]>`
       SELECT a."id",a."codigo",a."nombre",a."tipo",a."origen",a."obligatoria",a."estado",a."comentarioFinal",
@@ -126,7 +150,7 @@ export default async function AreasPage({
   if (
     inspeccion.estado === EstadoInspeccion.EN_PROCESO &&
     control?.proyectoConfirmado &&
-    (Number(critical?.total ?? 0) < 7 || Number(critical?.incompletos ?? 0) > 0)
+    (Number(critical?.total ?? 0) < 7 || Number(critical?.bloqueantes ?? 0) > 0)
   ) {
     redirect(`/panel/inspecciones/${id}/puntos-criticos`);
   }
@@ -264,7 +288,21 @@ export default async function AreasPage({
         {areas.length > 0 && completas === areas.length && control?.areasConfirmadas && (
           <div className="mt-7 rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-6 text-emerald-200">
             <p className="font-black">Recorrido por áreas completo</p>
-            <p className="mt-2 text-sm">Todas las áreas obligatorias están cerradas desde el recorrido V1. El cierre formal validará además procesos, hallazgos, fachada, portada, firmas y sincronización.</p>
+            {Number(critical?.pruebasAbiertas ?? 0) > 0 ? (
+              <>
+                <p className="mt-2 text-sm">
+                  Ya terminaste Sala, Comedor, Cocina, Baños, Recámaras y demás áreas. Ahora corresponde regresar a las pruebas de hermeticidad para tomar las lecturas finales de Hidráulica y Gas.
+                </p>
+                <Link
+                  href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=cierre`}
+                  className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950"
+                >
+                  TOMAR LECTURAS FINALES DE HERMETICIDAD
+                </Link>
+              </>
+            ) : (
+              <p className="mt-2 text-sm">Todas las áreas obligatorias y las pruebas de hermeticidad están cerradas. Puedes continuar al cierre formal de la inspección.</p>
+            )}
           </div>
         )}
       </div>
