@@ -30,8 +30,8 @@ export default async function FlujoV1Page({
     redirect(`/panel/inspecciones/${id}/captura`);
   }
 
-  const [control] = await prisma.$queryRaw<Array<{ proyectoConfirmado: boolean }>>`
-    SELECT "proyectoConfirmado"
+  const [control] = await prisma.$queryRaw<Array<{ proyectoConfirmado: boolean; areasConfirmadas: boolean }>>`
+    SELECT "proyectoConfirmado","areasConfirmadas"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${id}
     LIMIT 1
@@ -62,6 +62,21 @@ export default async function FlujoV1Page({
     redirect(
       `/panel/inspecciones/${id}/puntos-criticos?punto=${encodeURIComponent(codigo)}`,
     );
+  }
+
+  if (control?.areasConfirmadas) {
+    const [areaActiva] = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"::text
+      FROM "AreaInspeccion"
+      WHERE "inspeccionId"=${id}
+        AND "tipo" <> 'PUNTO_CRITICO'
+        AND "estado" <> 'REVISADA'
+      ORDER BY "orden","nombre"
+      LIMIT 1
+    `;
+    if (areaActiva?.id) {
+      redirect(`/panel/inspecciones/${id}/campo-v1?area=${areaActiva.id}`);
+    }
   }
 
   redirect(`/panel/inspecciones/${id}/areas`);

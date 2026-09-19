@@ -1,5 +1,5 @@
 -- Biblioteca Certeza V4: refuerzo de plantillas para áreas 9+
--- Objetivo: individualizar piso, vanos, sellados, plafones, acabados y funcionamiento eléctrico.
+-- Objetivo: individualizar piso, vanos, sellados, plafones y acabados. El funcionamiento eléctrico se inspecciona en el punto de Instalación Eléctrica.
 -- Aplicar primero en DEV; producción sólo después de validar PR #49.
 
 begin;
@@ -13,8 +13,7 @@ values
 ('SELLADO_PUERTA','SELLADOS','Puertas: sellados y encuentros','Revisar continuidad y calidad de sellos, encuentros con marco y muro, remates, juntas y posibles pasos de agua o aire visibles.','BASE',true,true,false,false,'Inspección visual','Sellados y encuentros de puerta sin discontinuidades visibles relevantes.',182,true),
 ('SELLADO_VENTANA','SELLADOS','Ventanas: sellados y encuentros','Revisar sellado perimetral interior y exterior accesible, continuidad, adherencia, remates, juntas y posibles entradas de agua o aire visibles.','BASE',true,true,false,false,'Inspección visual','Sellados y encuentros de ventana sin discontinuidades visibles relevantes.',184,true),
 ('PLAFON_NIVELACION','ACABADOS','Plafón: nivelación y uniformidad','Revisar planeidad, nivel, ondulaciones, juntas, remates, cambios de plano y uniformidad del acabado con luz rasante cuando sea posible.','BASE',true,true,true,false,'Nivel láser / luz rasante','Plafón con nivelación, planeidad y acabado visualmente uniformes.',102,true),
-('ACABADO_UNIFORMIDAD','ACABADOS','Acabados: uniformidad y homogeneidad','Revisar homogeneidad de textura, recubrimientos, juntas, tono, remates, encuentros y continuidad visual entre paños.','BASE',true,true,false,false,'Luz rasante / inspección visual','Acabados visualmente homogéneos y uniformes.',85,true),
-('INST_FUNCIONAMIENTO','INSTALACIONES_VISIBLES','Accesorios eléctricos: funcionamiento','Probar, cuando sea seguro y aplicable, contactos, apagadores, placas, salidas, luminarias y otros accesorios eléctricos visibles; revisar fijación y respuesta funcional.','INSTALACIONES_VISIBLES',true,true,false,false,'Probador GFCI/RCD / detector de voltaje / prueba funcional','Accesorios eléctricos visibles con funcionamiento aparente correcto.',215,true)
+('ACABADO_UNIFORMIDAD','ACABADOS','Acabados: uniformidad y homogeneidad','Revisar homogeneidad de textura, recubrimientos, juntas, tono, remates, encuentros y continuidad visual entre paños.','BASE',true,true,false,false,'Luz rasante / inspección visual','Acabados visualmente homogéneos y uniformes.',85,true)
 on conflict ("codigo") do update set
   "grupo"=excluded."grupo",
   "nombre"=excluded."nombre",
@@ -65,7 +64,7 @@ puntos as (
   where "codigo" in (
     'PISO_NIVELACION','PISO_CERAMICO','VANO_PUERTA','VANO_VENTANA',
     'SELLADO_PUERTA','SELLADO_VENTANA','PLAFON_NIVELACION',
-    'ACABADO_UNIFORMIDAD','INST_FUNCIONAMIENTO'
+    'ACABADO_UNIFORMIDAD'
   )
 )
 insert into "BibliotecaAreaPuntoCerteza"
@@ -83,7 +82,7 @@ puntos as (
     'MUROS_ESTADO','MUROS_ACABADO','ACABADO_UNIFORMIDAD','PINTURA',
     'PLAFON_LOSA','PLAFON_NIVELACION','PISO_ESTADO','PISO_NIVELACION',
     'PISO_CERAMICO','INST_UBICACION','INST_ALTURA','INST_ALINEACION',
-    'INST_FUNCIONAMIENTO','HUMEDAD_VISIBLE'
+    'HUMEDAD_VISIBLE'
   )
 )
 insert into "BibliotecaAreaPuntoCerteza"

@@ -55,7 +55,9 @@ function herramientaAplicaArea(codigo: CodigoHerramienta, areaCodigo: string, ar
   }
 
   if (["PROBADOR_GFCI_RCD", "DETECTOR_VOLTAJE", "MULTIMETRO"].includes(codigo)) {
-    return !/(JARDIN|PATIO|AZOTEA)/.test(area);
+    // Las pruebas funcionales eléctricas pertenecen al Punto 7 · Instalación Eléctrica.
+    // En las áreas sólo se conserva ubicación, altura, alineación, nivel y acabado visual.
+    return false;
   }
 
   if (codigo === "LINTERNA") return true;
@@ -94,8 +96,8 @@ function codigoBibliotecaPorArea(codigo: string, nombre: string) {
   if (/SOTANO/.test(area)) return "SOTANO";
   if (/CUARTO_MAQUINAS/.test(area)) return "CUARTO_MAQUINAS";
   if (/CUARTO_INSTALACIONES/.test(area)) return "CUARTO_INSTALACIONES";
-  if (/FACHADA_LATERAL/.test(area)) return "FACHADA_LATERAL";
-  if (/FACHADA_PRINCIPAL/.test(area)) return "FACHADA_PRINCIPAL";
+  if (/FACHADA_(POSTERIOR|LATERAL_IZQUIERDA|LATERAL_DERECHA|LATERAL)/.test(area)) return "FACHADA_LATERAL";
+  if (/FACHADA_(PRINCIPAL|FRONTAL)/.test(area)) return "FACHADA_PRINCIPAL";
   if (/ACCESO_PEATONAL/.test(area)) return "ACCESO_PEATONAL";
   if (/BARDA/.test(area)) return "BARDA";
 
@@ -156,6 +158,19 @@ async function exigirAreaActivaV1(inspeccionId: string, areaId: string) {
     );
   }
   return { area: activa, numero: 9 + indiceActivo, totalRecorrido: 8 + areas.length };
+}
+
+async function siguienteAreaPendienteV1(inspeccionId: string) {
+  const [area] = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"::text
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "tipo" <> 'PUNTO_CRITICO'
+      AND "estado" <> 'REVISADA'
+    ORDER BY "orden","nombre"
+    LIMIT 1
+  `;
+  return area?.id ?? null;
 }
 
 export async function inicializarPlanAreasV1(formData: FormData) {
@@ -377,7 +392,9 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
 
   await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "AreaInspeccion", entidadId: areaId, inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} cerró el punto de área “${area.nombre}” al 100% SIN HALLAZGOS; todos sus conceptos ya estaban resueltos.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
-  volver(inspeccionId, "ok", `${area.nombre} cerrada sin hallazgos.`);
+  const siguiente = await siguienteAreaPendienteV1(inspeccionId);
+  if (siguiente) volver(inspeccionId, "ok", `${area.nombre} cerrada al 100%. Continúa con el siguiente punto.`, siguiente);
+  volver(inspeccionId, "ok", `${area.nombre} cerrada. Todas las áreas quedaron concluidas.`);
 }
 
 export async function cerrarAreaConHallazgosV1(formData: FormData) {
@@ -421,5 +438,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
-  volver(inspeccionId, "ok", `${area.nombre} cerrada con ${area.hallazgos} hallazgo(s).`);
+  const siguiente = await siguienteAreaPendienteV1(inspeccionId);
+  if (siguiente) volver(inspeccionId, "ok", `${area.nombre} cerrada al 100% con ${area.hallazgos} hallazgo(s). Continúa con el siguiente punto.`, siguiente);
+  volver(inspeccionId, "ok", `${area.nombre} cerrada con ${area.hallazgos} hallazgo(s). Todas las áreas quedaron concluidas.`);
 }

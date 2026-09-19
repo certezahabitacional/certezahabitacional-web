@@ -29,7 +29,13 @@ function slug(valor: string) {
 function prioridadRutaArea(nombre: string, codigo: string) {
   const n = slug(`${nombre} ${codigo}`);
 
-  // Planta baja y recorrido interior principal.
+  // El recorrido físico inicia por las cuatro caras de fachada.
+  if (/FACHADA_(PRINCIPAL|FRONTAL)/.test(n)) return 10;
+  if (/FACHADA_POSTERIOR/.test(n)) return 20;
+  if (/FACHADA_LATERAL_IZQUIERDA/.test(n)) return 30;
+  if (/FACHADA_LATERAL_DERECHA/.test(n)) return 40;
+
+  // Después continúa el recorrido interior de planta baja.
   if (/RECIBIDOR|VESTIBULO/.test(n)) return 80;
   if (/(^|_)SALA(_|$)/.test(n)) return 100;
   if (/COMEDOR/.test(n)) return 110;
@@ -68,8 +74,7 @@ function prioridadRutaArea(nombre: string, codigo: string) {
   if (/PATIO/.test(n)) return 620;
   if (/JARDIN/.test(n)) return 630;
   if (/ACCESO_PEATONAL/.test(n)) return 640;
-  if (/FACHADA_PRINCIPAL/.test(n)) return 650;
-  if (/FACHADA_LATERAL/.test(n)) return 660;
+  if (/FACHADA/.test(n)) return 40;
   if (/BARDA/.test(n)) return 670;
   if (/AZOTEA/.test(n)) return 700;
   if (/ROOF_GARDEN/.test(n)) return 710;
@@ -224,17 +229,26 @@ export async function generarAreasDesdeGuia(formData: FormData) {
       VALUES (${inspeccionId},'VIVIENDA',2)
       ON CONFLICT ("inspeccionId") DO NOTHING
     `;
-    await tx.$executeRaw`
-      INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
-      VALUES (${inspeccionId},'FACHADA_PRINCIPAL','Fachada principal','EXTERIOR',0,'METODO_CERTEZA',true)
-      ON CONFLICT ("inspeccionId","codigo") DO NOTHING
-    `;
-    let orden = 10;
+    const fachadas = [
+      { codigo: "FACHADA_FRONTAL", nombre: "Fachada frontal", orden: 10 },
+      { codigo: "FACHADA_POSTERIOR", nombre: "Fachada posterior", orden: 20 },
+      { codigo: "FACHADA_LATERAL_IZQUIERDA", nombre: "Fachada lateral izquierda", orden: 30 },
+      { codigo: "FACHADA_LATERAL_DERECHA", nombre: "Fachada lateral derecha", orden: 40 },
+    ];
+    for (const fachada of fachadas) {
+      await tx.$executeRaw`
+        INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
+        VALUES (${inspeccionId},${fachada.codigo},${fachada.nombre},'EXTERIOR',${fachada.orden},'METODO_CERTEZA',true)
+        ON CONFLICT ("inspeccionId","codigo") DO NOTHING
+      `;
+    }
+    let orden = 100;
     for (const item of items) {
       const nombre = item.area.trim();
       if (!nombre) continue;
       const codigoBase = slug(nombre) || `AREA_${orden}`;
-      const codigo = codigoBase === 'FACHADA_PRINCIPAL' ? `AREA_${codigoBase}` : codigoBase;
+      if (/^FACHADA(_|$)/.test(codigoBase)) continue;
+      const codigo = codigoBase;
       await tx.$executeRaw`
         INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
         VALUES (${inspeccionId},${codigo},${nombre},'INTERIOR',${orden},'GUIA_TECNICA',true)
@@ -301,7 +315,7 @@ export async function aplicarOrdenLogicoAreasV1(formData: FormData) {
     entidad: "AreaInspeccion",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} aplicó el orden lógico sugerido: planta baja, escalera, planta alta/zona privada y exteriores.`,
+    descripcion: `${responsable} aplicó el orden lógico sugerido: cuatro fachadas, planta baja, escalera, planta alta/zona privada y exteriores restantes.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   volver(inspeccionId, "ok", "Orden lógico sugerido aplicado. Puedes ajustarlo antes de confirmar.");
@@ -359,19 +373,116 @@ export async function confirmarAreasV1(formData: FormData) {
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
-  const [r] = await prisma.$queryRaw<Array<{ total: number; fachada: number }>>`
+  const [r] = await prisma.$queryRaw<Array<{ total: number; fachadas: number }>>`
     SELECT COUNT(*) FILTER (WHERE "obligatoria")::int AS "total",
-           COUNT(*) FILTER (WHERE "codigo"='FACHADA_PRINCIPAL')::int AS "fachada"
-    FROM "AreaInspeccion" WHERE "inspeccionId"=${inspeccionId}
+           COUNT(*) FILTER (
+             WHERE "codigo" IN (
+               'FACHADA_FRONTAL','FACHADA_POSTERIOR',
+               'FACHADA_LATERAL_IZQUIERDA','FACHADA_LATERAL_DERECHA'
+             )
+           )::int AS "fachadas"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
   `;
-  if (Number(r?.total ?? 0) === 0 || Number(r?.fachada ?? 0) === 0) volver(inspeccionId, "error", "Antes de confirmar deben existir la fachada principal y todas las áreas físicas obligatorias.");
 
-  await prisma.$executeRaw`
-    UPDATE "InspeccionControlV2" SET "areasConfirmadas"=true,"actualizadoEn"=NOW() WHERE "inspeccionId"=${inspeccionId}
-  `;
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "InspeccionControlV2", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} confirmó el ecosistema de ${Number(r.total)} área(s) obligatoria(s) de V1.` });
+  if (Number(r?.total ?? 0) === 0 || Number(r?.fachadas ?? 0) < 4) {
+    volver(
+      inspeccionId,
+      "error",
+      "Antes de confirmar deben existir las cuatro fachadas: frontal, posterior, lateral izquierda y lateral derecha, además de todas las áreas físicas obligatorias.",
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion" a
+      SET "bibliotecaAreaId" = b."id"
+      FROM "BibliotecaAreaCerteza" b
+      WHERE a."inspeccionId"=${inspeccionId}
+        AND a."tipo" <> 'PUNTO_CRITICO'
+        AND b."activa"=true
+        AND b."codigo" = CASE
+          WHEN upper(a."codigo") IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') THEN 'FACHADA_PRINCIPAL'
+          WHEN upper(a."codigo") IN ('FACHADA_POSTERIOR','FACHADA_LATERAL_IZQUIERDA','FACHADA_LATERAL_DERECHA') THEN 'FACHADA_LATERAL'
+          WHEN upper(a."codigo") ~ 'BANO.*RECAMARA_PRINCIPAL|RECAMARA_PRINCIPAL.*BANO|BANO_COMPARTIDO|BANO_[0-9]+|^BANO$' THEN 'BANO_COMPLETO'
+          WHEN upper(a."codigo") ~ 'MEDIO_BANO|1_2_BANO|BANO_VISITAS' THEN 'MEDIO_BANO'
+          WHEN upper(a."codigo") ~ 'RECAMARA_PRINCIPAL' THEN 'RECAMARA_PRINCIPAL'
+          WHEN upper(a."codigo") ~ 'RECAMARA|ALCOBA' THEN 'RECAMARA'
+          WHEN upper(a."codigo") ~ 'COCINA' THEN 'COCINA'
+          WHEN upper(a."codigo") ~ 'COMEDOR' THEN 'COMEDOR'
+          WHEN upper(a."codigo") ~ 'SALA' THEN 'SALA'
+          WHEN upper(a."codigo") ~ 'ESTANCIA|FAMILY_ROOM' THEN 'ESTANCIA'
+          WHEN upper(a."codigo") ~ 'ESCALERA' THEN 'ESCALERA'
+          WHEN upper(a."codigo") ~ 'LAVANDERIA|AREA_LAVADO|LAVADERO|LAVADO' THEN 'LAVANDERIA'
+          WHEN upper(a."codigo") ~ 'BALCON' THEN 'BALCON'
+          WHEN upper(a."codigo") ~ 'PATIO' THEN 'PATIO'
+          WHEN upper(a."codigo") ~ 'JARDIN' THEN 'JARDIN'
+          WHEN upper(a."codigo") ~ 'COCHERA' THEN 'COCHERA'
+          ELSE 'OTRA_AREA'
+        END
+    `;
+
+    await tx.$executeRaw`
+      INSERT INTO "GuiaInspeccionItem"
+        ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio",
+         "completado","creadoPorId","areaId","bibliotecaPuntoId","estadoV3","origenV3",
+         "requiereMedicion","requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
+      SELECT
+        gen_random_uuid()::text,a."inspeccionId",'BIBLIOTECA_CERTEZA',a."nombre",
+        p."nombre",p."descripcion",ap."orden",ap."obligatorio",
+        false,${usuario.id},a."id",p."id",'PENDIENTE','BIBLIOTECA',
+        p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida",NOW(),NOW()
+      FROM "AreaInspeccion" a
+      JOIN "BibliotecaAreaPuntoCerteza" ap ON ap."areaBibliotecaId"=a."bibliotecaAreaId"
+      JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId" AND p."activa"=true
+      WHERE a."inspeccionId"=${inspeccionId}
+        AND a."tipo" <> 'PUNTO_CRITICO'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "GuiaInspeccionItem" g
+          WHERE g."inspeccionId"=a."inspeccionId"
+            AND g."areaId"=a."id"
+            AND g."bibliotecaPuntoId"=p."id"
+        )
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "areasConfirmadas"=true,"actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "InspeccionControlV2",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} confirmó el recorrido de ${Number(r.total)} área(s) obligatoria(s), incluyendo las cuatro fachadas.`,
+  });
+
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
-  volver(inspeccionId, "ok", "Ecosistema de áreas confirmado. A partir de ahora documenta todas las áreas antes del cierre.");
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+
+  const [primera] = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"::text
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "tipo" <> 'PUNTO_CRITICO'
+      AND "estado" <> 'REVISADA'
+    ORDER BY "orden","nombre"
+    LIMIT 1
+  `;
+
+  if (primera?.id) {
+    redirect(
+      `/panel/inspecciones/${inspeccionId}/campo-v1?area=${primera.id}&ok=${encodeURIComponent(
+        "Orden confirmado. Inicia el primer punto y conclúyelo al 100% antes de avanzar.",
+      )}`,
+    );
+  }
+
+  volver(inspeccionId, "ok", "Recorrido de áreas confirmado.");
 }
 
 export async function subirFotoArea(formData: FormData) {
@@ -405,7 +516,7 @@ export async function subirFotoArea(formData: FormData) {
       });
       await tx.$executeRaw`
         INSERT INTO "FotografiaArea" ("fotografiaId","areaId","tipoEvidencia","orden","candidataReporte","candidataPortada")
-        VALUES (${foto.id},${areaId}::uuid,${area.codigo === 'FACHADA_PRINCIPAL' ? 'IDENTIFICACION' : 'RECORRIDO'},0,true,false)
+        VALUES (${foto.id},${areaId}::uuid,${area.codigo === 'FACHADA_FRONTAL' ? 'IDENTIFICACION' : 'RECORRIDO'},0,true,false)
       `;
     });
   } catch (e) {
@@ -413,10 +524,10 @@ export async function subirFotoArea(formData: FormData) {
     throw e;
   }
 
-  await registrarAuditoria({ tipo: TipoEvento.SUBIR_EVIDENCIA, entidad: "FotografiaArea", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó evidencia del área “${area.nombre}”${area.codigo === 'FACHADA_PRINCIPAL' ? ' (fachada/identificación; portada pendiente de selección explícita)' : ''}.` });
+  await registrarAuditoria({ tipo: TipoEvento.SUBIR_EVIDENCIA, entidad: "FotografiaArea", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} agregó evidencia del área “${area.nombre}”${area.codigo === 'FACHADA_FRONTAL' ? ' (fachada/identificación; portada pendiente de selección explícita)' : ''}.` });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
-  volver(inspeccionId, "ok", area.codigo === 'FACHADA_PRINCIPAL' ? "Fotografía de fachada agregada. Selecciona explícitamente una de las fotos como portada antes del cierre." : `Fotografía agregada a ${area.nombre}.`);
+  volver(inspeccionId, "ok", area.codigo === 'FACHADA_FRONTAL' ? "Fotografía de fachada agregada. Selecciona explícitamente una de las fotos como portada antes del cierre." : `Fotografía agregada a ${area.nombre}.`);
 }
 
 export async function cerrarAreaV1(formData: FormData) {
