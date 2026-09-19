@@ -43,8 +43,6 @@ puntos as (
     'FACHADA_RECUBRIMIENTO','ACABADO_UNIFORMIDAD','PINTURA',
     'FACHADA_MOLDURAS','FACHADA_RODAPIE','FACHADA_JUNTAS',
     'VANO_PUERTA','VANO_VENTANA',
-    'PUERTA_INSTALACION','PUERTA_FUNCION',
-    'VENTANA_INSTALACION','VENTANA_FUNCION',
     'SELLADO_PUERTA','SELLADO_VENTANA',
     'INST_UBICACION','INST_ALTURA','INST_ALINEACION',
     'HUMEDAD_VISIBLE'
@@ -68,6 +66,15 @@ where ap."areaBibliotecaId"=a.id
     'SOTANO','OTRA_AREA'
   )
   and p."codigo" in ('VANOS','SELLADOS');
+
+-- En fachadas, puertas y ventanas se revisan desde el exterior sólo por vanos y sellados.
+-- Instalación y funcionamiento se inspeccionan cuando se revise el área interior correspondiente.
+delete from "BibliotecaAreaPuntoCerteza" ap
+using "BibliotecaAreaCerteza" a, "BibliotecaPuntoCerteza" p
+where ap."areaBibliotecaId"=a.id
+  and ap."puntoBibliotecaId"=p.id
+  and a."codigo" in ('FACHADA_PRINCIPAL','FACHADA_LATERAL')
+  and p."codigo" in ('PUERTA_INSTALACION','PUERTA_FUNCION','VENTANA_INSTALACION','VENTANA_FUNCION');
 
 -- El funcionamiento eléctrico no se repite por área: se resuelve en el Punto 7 · Instalación Eléctrica.
 delete from "BibliotecaAreaPuntoCerteza" ap
