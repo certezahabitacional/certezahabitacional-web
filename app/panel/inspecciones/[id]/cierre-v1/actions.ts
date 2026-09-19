@@ -55,7 +55,6 @@ async function validarCierreCampo(inspeccionId: string) {
     areasCompletas: number;
     protocoloTotal: number;
     protocoloCompleto: number;
-    fachadaFotos: number;
     fachadaPortadas: number;
     hallazgosIncompletos: number;
     syncPendientes: number;
@@ -65,8 +64,12 @@ async function validarCierreCampo(inspeccionId: string) {
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${inspeccionId} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${inspeccionId} AND p."obligatorio"=true) AS "protocoloTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${inspeccionId} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "protocoloCompleto",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${inspeccionId} AND a."codigo"='FACHADA_PRINCIPAL') AS "fachadaFotos",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${inspeccionId} AND a."codigo"='FACHADA_PRINCIPAL' AND fa."candidataPortada"=true) AS "fachadaPortadas",
+      (SELECT COUNT(*)::int
+       FROM "AreaInspeccion" a
+       JOIN "FotografiaArea" fa ON fa."areaId"=a."id"
+       WHERE a."inspeccionId"=${inspeccionId}
+         AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+         AND fa."candidataPortada"=true) AS "fachadaPortadas",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${inspeccionId} AND ((SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") < 4 OR nullif(btrim(coalesce(h."descripcion",'')),'') IS NULL)) AS "hallazgosIncompletos",
       (SELECT COUNT(*)::int FROM "OperacionCampoSync" s WHERE s."inspeccionId"=${inspeccionId} AND s."estado" <> 'PROCESADA') AS "syncPendientes"
   `;
@@ -74,8 +77,7 @@ async function validarCierreCampo(inspeccionId: string) {
   if (!v || v.areasTotal === 0) return "No existen áreas obligatorias configuradas para la V1.";
   if (v.areasCompletas !== v.areasTotal) return `Faltan ${v.areasTotal - v.areasCompletas} área(s) por cerrar.`;
   if (v.protocoloTotal === 0 || v.protocoloCompleto !== v.protocoloTotal) return "Faltan procesos técnicos obligatorios por completar.";
-  if (v.fachadaFotos !== 1) return "La fachada principal debe conservar exactamente una fotografía definitiva elegida en la revisión inicial.";
-  if (v.fachadaPortadas !== 1) return "Debes seleccionar exactamente una fotografía de fachada para la portada.";
+  if (v.fachadaPortadas !== 1) return "Debes seleccionar exactamente una fotografía de fachada frontal para la portada.";
   if (v.hallazgosIncompletos > 0) return `Existen ${v.hallazgosIncompletos} hallazgo(s) sin 4 evidencias o descripción completa.`;
   if (v.syncPendientes > 0) return `Existen ${v.syncPendientes} operación(es) pendientes de sincronizar.`;
   return null;
@@ -93,15 +95,23 @@ export async function terminarTrabajoCampoV1(formData: FormData) {
   const error = await validarCierreCampo(inspeccionId);
   if (error) volver(inspeccionId, "error", error);
 
-  const [ya] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null }>>`
-    SELECT "campoFinalizadoEn" FROM "InspeccionControlV2" WHERE "inspeccionId"=${inspeccionId} LIMIT 1
+  const [ya] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null; preReporteGeneradoEn: Date | null }>>`
+    SELECT "campoFinalizadoEn","preReporteGeneradoEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
   `;
-  if (ya?.campoFinalizadoEn) volver(inspeccionId, "error", "El trabajo de campo ya fue terminado y la ventana de edición ya está activa.");
+  if (!ya?.preReporteGeneradoEn) {
+    volver(inspeccionId, "error", "Antes de terminar la visita debes revisar y confirmar el pre-reporte en sitio.");
+  }
+  if (ya.campoFinalizadoEn) volver(inspeccionId, "error", "El trabajo de campo ya fue terminado y la ventana de edición ya está activa.");
 
   await prisma.$executeRaw`
     UPDATE "InspeccionControlV2"
     SET "campoFinalizadoEn"=NOW(),
         "reporteLimiteEn"=NOW() + interval '12 hours',
+        "revisionInspectorFinalEn"=NULL,
+        "revisionInspectorFinalPorId"=NULL,
         "actualizadoEn"=NOW()
     WHERE "inspeccionId"=${inspeccionId}
   `;
@@ -111,12 +121,69 @@ export async function terminarTrabajoCampoV1(formData: FormData) {
     entidad: "InspeccionControlV2",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Inspector terminó el trabajo de campo de ${inspeccion.folio}. Inicia ventana máxima de 12 horas para edición y envío del reporte a Dirección.`,
+    descripcion: `Inspector terminó el trabajo de campo de ${inspeccion.folio} después de revisar el pre-reporte en sitio. Inicia la última revisión y ajuste del Inspector antes del envío a Dirección.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
-  volver(inspeccionId, "ok", "Trabajo de campo terminado. Ya corre la ventana de 12 horas para revisar el reporte y enviarlo a Dirección.");
+  volver(inspeccionId, "ok", "Visita cerrada. Ahora realiza la última revisión y ajuste del Inspector antes de enviar el reporte a Dirección.");
+}
+
+export async function confirmarRevisionFinalInspectorV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  if (!inspeccionId) redirect("/panel/inspecciones");
+  const { usuario, inspeccion } = await exigirInspectorV1(inspeccionId);
+
+  const [control] = await prisma.$queryRaw<Array<{
+    campoFinalizadoEn: Date | null;
+    preReporteGeneradoEn: Date | null;
+    revisionInspectorFinalEn: Date | null;
+  }>>`
+    SELECT "campoFinalizadoEn","preReporteGeneradoEn","revisionInspectorFinalEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+
+  if (!control?.preReporteGeneradoEn) volver(inspeccionId, "error", "Primero debes revisar el pre-reporte en sitio.");
+  if (!control.campoFinalizadoEn) volver(inspeccionId, "error", "Primero debes cerrar formalmente la visita en el inmueble.");
+  if (control.revisionInspectorFinalEn) volver(inspeccionId, "error", "La revisión final del Inspector ya fue confirmada.");
+
+  const error = await validarCierreCampo(inspeccionId);
+  if (error) volver(inspeccionId, "error", error);
+
+  const reabiertaEn = await prisma.$queryRaw<Array<{ reabiertaEn: Date | null }>>`
+    SELECT "reabiertaEn" FROM "InspeccionControlV2" WHERE "inspeccionId"=${inspeccionId} LIMIT 1
+  `;
+  const desde = reabiertaEn[0]?.reabiertaEn ? new Date(reabiertaEn[0].reabiertaEn as Date) : null;
+  const firmasVigentes = inspeccion.firmas.filter(
+    (firma) => !desde || new Date(firma.firmadaEn) >= desde,
+  );
+  const firmaInspector = firmasVigentes.some((firma) => firma.tipo.toLowerCase().includes("inspector"));
+  const firmaCliente = firmasVigentes.some((firma) => firma.tipo.toLowerCase().includes("cliente"));
+  if (!firmaInspector || !firmaCliente) {
+    volver(inspeccionId, "error", "Antes de confirmar la revisión final deben estar vigentes las firmas del Inspector y del cliente.");
+  }
+
+  await prisma.$executeRaw`
+    UPDATE "InspeccionControlV2"
+    SET "revisionInspectorFinalEn"=NOW(),
+        "revisionInspectorFinalPorId"=${usuario.id},
+        "actualizadoEn"=NOW()
+    WHERE "inspeccionId"=${inspeccionId}
+  `;
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "InspeccionControlV2",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `Inspector confirmó la última revisión y ajuste del reporte V1 ${inspeccion.folio}. El expediente queda listo para envío a Dirección.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  volver(inspeccionId, "ok", "Revisión final del Inspector confirmada. Ya puedes enviar el reporte a Dirección.");
 }
 
 export async function enviarReporteDireccionV1(formData: FormData) {
@@ -128,13 +195,15 @@ export async function enviarReporteDireccionV1(formData: FormData) {
     campoFinalizadoEn: Date | null;
     reporteLimiteEn: Date | null;
     reabiertaEn: Date | null;
+    revisionInspectorFinalEn: Date | null;
   }>>`
-    SELECT "campoFinalizadoEn","reporteLimiteEn","reabiertaEn"
+    SELECT "campoFinalizadoEn","reporteLimiteEn","reabiertaEn","revisionInspectorFinalEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${inspeccionId}
     LIMIT 1
   `;
   if (!control?.campoFinalizadoEn) volver(inspeccionId, "error", "Primero debes terminar formalmente el trabajo de campo.");
+  if (!control.revisionInspectorFinalEn) volver(inspeccionId, "error", "Antes de enviar a Dirección debes confirmar la última revisión y ajuste del Inspector.");
 
   const reabiertaEn = control.reabiertaEn ? new Date(control.reabiertaEn) : null;
   const firmasVigentes = inspeccion.firmas.filter(
@@ -180,8 +249,8 @@ export async function enviarReporteDireccionV1(formData: FormData) {
     cotizacionId: inspeccion.cotizacionId,
     usuarioId: usuario.id,
     descripcion: fueraDePlazo
-      ? `Reporte V1 enviado a Dirección fuera de la ventana objetivo de 12 horas.`
-      : `Reporte V1 enviado a Dirección dentro de la ventana de 12 horas.`,
+      ? `Reporte V1 enviado a Dirección fuera de la ventana objetivo de 12 horas, después de la revisión final del Inspector.`
+      : `Reporte V1 enviado a Dirección después de la revisión final del Inspector.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
@@ -251,6 +320,8 @@ export async function devolverReporteInspectorV1(formData: FormData) {
         SET "capturaCerrada"=false,
             "capturaCerradaEn"=NULL,
             "capturaCerradaPorId"=NULL,
+            "revisionInspectorFinalEn"=NULL,
+            "revisionInspectorFinalPorId"=NULL,
             "reabiertaEn"=NOW(),
             "reabiertaPorId"=${usuario.id},
             "motivoReapertura"=${comentario},
@@ -263,6 +334,8 @@ export async function devolverReporteInspectorV1(formData: FormData) {
         SET "capturaCerrada"=false,
             "capturaCerradaEn"=NULL,
             "capturaCerradaPorId"=NULL,
+            "revisionInspectorFinalEn"=NULL,
+            "revisionInspectorFinalPorId"=NULL,
             "motivoReapertura"=${`Corrección documental: ${comentario}`},
             "actualizadoEn"=NOW()
         WHERE "inspeccionId"=${inspeccionId}
