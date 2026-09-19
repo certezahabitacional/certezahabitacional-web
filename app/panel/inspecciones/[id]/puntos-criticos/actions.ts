@@ -937,7 +937,7 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
 
     await tx.$executeRaw`
       UPDATE "AreaInspeccion"
-      SET "estado"='REVISADA',"resultado"='PUNTO_CRITICO_COMPLETADO',
+      SET "estado"='REVISADA',"resultado"=NULL,
           "comentarioFinal"=${`${puntoPorCodigo(codigo).etiqueta}: prueba de hermeticidad cerrada. ${descripcionFinal}`},
           "revisadaEn"=NOW(),"cerradaEn"=NOW(),"cerradaPorId"=${usuario.id},"actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId} AND "codigo"=${`PC_${codigo}`}
@@ -1307,7 +1307,7 @@ export async function cerrarPuntoCriticoV1(formData: FormData) {
     `;
     await tx.$executeRaw`
       UPDATE "AreaInspeccion"
-      SET "estado"='REVISADA',"resultado"='PUNTO_CRITICO_COMPLETADO',
+      SET "estado"='REVISADA',"resultado"=NULL,
           "comentarioFinal"=${`${punto.etiqueta} completada al 100%.`},
           "revisadaEn"=NOW(),"cerradaEn"=NOW(),"cerradaPorId"=${usuario.id},"actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId} AND "codigo"=${`PC_${codigo}`}
