@@ -17,6 +17,7 @@ on:
       - fix/manometros-y-avance-puntos-criticos
       - fix/continuidad-manometro-puntos-criticos
       - fix/conservar-foco-concepto-puntos-criticos
+      - fix/foco-persistente-session
 
 jobs:
   typecheck:
