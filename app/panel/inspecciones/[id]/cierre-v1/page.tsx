@@ -5,10 +5,16 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { bloquearContenidoTecnicoV1Finalizado } from "@/lib/acceso-v1-final";
 import { prisma } from "@/lib/prisma";
-import { enviarReporteDireccionV1, terminarTrabajoCampoV1 } from "./actions";
+import {
+  confirmarRevisionFinalInspectorV1,
+  enviarReporteDireccionV1,
+  terminarTrabajoCampoV1,
+} from "./actions";
 
 type Estado = {
   campoFinalizadoEn: Date | null;
+  preReporteGeneradoEn: Date | null;
+  revisionInspectorFinalEn: Date | null;
   reporteLimiteEn: Date | null;
   reabiertaEn: Date | null;
   areasTotal: number;
@@ -62,15 +68,16 @@ export default async function CierreV1Page({ params, searchParams }: {
 
   const [estado] = await prisma.$queryRaw<Estado[]>`
     SELECT
-      c."campoFinalizadoEn", c."reporteLimiteEn", c."reabiertaEn",
+      c."campoFinalizadoEn", c."preReporteGeneradoEn", c."revisionInspectorFinalEn",
+      c."reporteLimiteEn", c."reabiertaEn",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true) AS "areasTotal",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "procesosTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "procesosCompletos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id}) AS "hallazgos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id} AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") >= 4 AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL) AS "hallazgosCompletos",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL') AS "fotosFachada",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL' AND fa."candidataPortada"=true) AS "portadaFachada",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')) AS "fotosFachada",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true) AS "portadaFachada",
       (SELECT COUNT(*)::int FROM "OperacionCampoSync" s WHERE s."inspeccionId"=${id} AND s."estado" <> 'PROCESADA') AS "syncPendientes"
     FROM "InspeccionControlV2" c WHERE c."inspeccionId"=${id} LIMIT 1
   `;
@@ -83,13 +90,16 @@ export default async function CierreV1Page({ params, searchParams }: {
   const firmaCliente = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("cliente"));
   const firmasListas = firmaInspector && firmaCliente;
 
-  const listoCampo = Boolean(
+  const tecnicoListo = Boolean(
     estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal &&
     estado.procesosTotal > 0 && estado.procesosCompletos === estado.procesosTotal &&
-    estado.hallazgos === estado.hallazgosCompletos && estado.fotosFachada >= 4 &&
-    estado.portadaFachada === 1 && estado.syncPendientes === 0 && firmasListas
+    estado.hallazgos === estado.hallazgosCompletos &&
+    estado.portadaFachada === 1 && estado.syncPendientes === 0
   );
+  const preReporteRevisado = Boolean(estado?.preReporteGeneradoEn);
   const campoTerminado = Boolean(estado?.campoFinalizadoEn);
+  const revisionInspectorFinal = Boolean(estado?.revisionInspectorFinalEn);
+  const listoCampo = tecnicoListo && preReporteRevisado && firmasListas;
   const ahora = new Date();
   const limite = estado?.reporteLimiteEn ? new Date(estado.reporteLimiteEn) : null;
   const minutosRestantes = limite ? Math.floor((limite.getTime() - ahora.getTime()) / 60000) : null;
@@ -142,28 +152,57 @@ export default async function CierreV1Page({ params, searchParams }: {
         </section>
 
         {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+          <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Etapa 1 · antes de retirarse del inmueble</p>
+            <h2 className="mt-2 text-xl font-black">Reporte preliminar para revisión en sitio</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Antes de cerrar la visita, el Inspector debe revisar el pre-reporte completo y corregir cualquier omisión todavía estando en el inmueble.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className={`rounded-xl px-4 py-3 text-sm font-black ${tecnicoListo ? "bg-cyan-300 text-slate-950" : "border border-white/15 text-slate-500"}`}>
+                {preReporteRevisado ? "VOLVER A VER PRE-REPORTE ✓" : "ABRIR REPORTE PRELIMINAR"}
+              </Link>
+              <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Corregir captura</Link>
+            </div>
+            <p className={`mt-4 text-sm font-bold ${preReporteRevisado ? "text-emerald-300" : "text-amber-300"}`}>
+              {preReporteRevisado ? "✓ Pre-reporte revisado y confirmado en sitio." : "Pendiente: confirmar la revisión preliminar antes de cerrar la visita."}
+            </p>
+          </section>
+        )}
+
+        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
           <section className={`mt-5 rounded-3xl border p-6 ${listoCampo ? "border-emerald-300/20 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
-            <h2 className="text-xl font-black">Terminar trabajo de campo</h2>
-            <p className="mt-2 text-sm text-slate-300">Al terminar, el cliente podrá ver el pre-reporte y comenzará la ventana máxima de 12 horas para la edición final del reporte.</p>
-            {esInspector && <form action={terminarTrabajoCampoV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button disabled={!listoCampo} className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">TERMINAR TRABAJO DE CAMPO</button></form>}
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Etapa 2 · cierre de visita</p>
+            <h2 className="mt-2 text-xl font-black">Terminar trabajo de campo</h2>
+            <p className="mt-2 text-sm text-slate-300">Se habilita únicamente después de confirmar el pre-reporte en sitio y contar con las firmas vigentes. Al cerrar la visita inicia la última revisión del Inspector.</p>
+            {esInspector && <form action={terminarTrabajoCampoV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button disabled={!listoCampo} className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR VISITA Y PASAR A REVISIÓN FINAL</button></form>}
           </section>
         )}
 
         {campoTerminado && (
           <section className={`mt-5 rounded-3xl border p-6 ${vencido ? "border-rose-300/20 bg-rose-300/5" : "border-cyan-300/20 bg-cyan-300/5"}`}>
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Ventana de edición</p>
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Etapa 3 · última revisión del Inspector</p>
             <h2 className="mt-2 text-2xl font-black">{vencido ? "Plazo objetivo vencido" : `${horasRestantes} h ${mins} min restantes`}</h2>
             {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950">Ver pre-reporte</Link>
-              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Revisar reporte V1</Link>
-              <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Editar evidencias</Link>
+              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Consultar pre-reporte en sitio</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950">REVISAR REPORTE COMPLETO</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">AJUSTAR EVIDENCIAS</Link>
             </div>
             {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
-              <form action={enviarReporteDireccionV1} className="mt-5">
-                <input type="hidden" name="inspeccionId" value={id}/>
-                <button disabled={!firmasListas} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">ENVIAR REPORTE A DIRECCIÓN</button>
-              </form>
+              <>
+                <form action={confirmarRevisionFinalInspectorV1} className="mt-5">
+                  <input type="hidden" name="inspeccionId" value={id}/>
+                  <button disabled={!firmasListas || revisionInspectorFinal} className="w-full rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
+                    {revisionInspectorFinal ? "REVISIÓN FINAL DEL INSPECTOR CONFIRMADA ✓" : "CONFIRMAR ÚLTIMA REVISIÓN Y AJUSTE DEL INSPECTOR"}
+                  </button>
+                </form>
+                <form action={enviarReporteDireccionV1} className="mt-3">
+                  <input type="hidden" name="inspeccionId" value={id}/>
+                  <button disabled={!firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">ENVIAR A REVISIÓN DE DIRECCIÓN</button>
+                </form>
+                <p className="mt-3 text-xs leading-5 text-slate-400">Después del envío, el Inspector queda en sólo lectura. Dirección podrá autorizar o devolver el reporte con retroalimentación y correcciones requeridas.</p>
+              </>
             )}
           </section>
         )}
