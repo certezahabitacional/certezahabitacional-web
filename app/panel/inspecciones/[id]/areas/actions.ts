@@ -373,6 +373,49 @@ export async function confirmarAreasV1(formData: FormData) {
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
+  // Compatibilidad con inspecciones V1 iniciadas antes de que el recorrido
+  // exigiera las cuatro fachadas. Conserva la fachada existente y agrega
+  // únicamente las faltantes, antes de las áreas interiores.
+  const [estadoRuta] = await prisma.$queryRaw<Array<{ revisadas: number }>>`
+    SELECT COUNT(*) FILTER (WHERE "estado"='REVISADA')::int AS "revisadas"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "tipo" <> 'PUNTO_CRITICO'
+  `;
+
+  if (Number(estadoRuta?.revisadas ?? 0) > 0) {
+    await prisma.$transaction(async (tx) => {
+      const fachadas = [
+        { codigo: "FACHADA_FRONTAL", nombre: "Fachada frontal", orden: 10 },
+        { codigo: "FACHADA_POSTERIOR", nombre: "Fachada posterior", orden: 20 },
+        { codigo: "FACHADA_LATERAL_IZQUIERDA", nombre: "Fachada lateral izquierda", orden: 30 },
+        { codigo: "FACHADA_LATERAL_DERECHA", nombre: "Fachada lateral derecha", orden: 40 },
+      ];
+
+      const [frontalExistente] = await tx.$queryRaw<Array<{ existe: boolean }>>`
+        SELECT EXISTS(
+          SELECT 1
+          FROM "AreaInspeccion"
+          WHERE "inspeccionId"=${inspeccionId}
+            AND upper("codigo") IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+        ) AS "existe"
+      `;
+
+      for (const fachada of fachadas) {
+        if (fachada.codigo === "FACHADA_FRONTAL" && frontalExistente?.existe) continue;
+        await tx.$executeRaw`
+          INSERT INTO "AreaInspeccion"
+            ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
+          VALUES
+            (${inspeccionId},${fachada.codigo},${fachada.nombre},'EXTERIOR',${fachada.orden},'METODO_CERTEZA',true)
+          ON CONFLICT ("inspeccionId","codigo") DO NOTHING
+        `;
+      }
+    });
+
+    await ordenarAreasLogicamente(inspeccionId);
+  }
+
   const [r] = await prisma.$queryRaw<Array<{ total: number; fachadas: number; revisadas: number }>>`
     SELECT COUNT(*) FILTER (WHERE "obligatoria")::int AS "total",
            COUNT(*) FILTER (
