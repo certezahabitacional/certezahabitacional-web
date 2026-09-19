@@ -10,6 +10,7 @@ import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import { prisma } from "@/lib/prisma";
 import DecisionClienteSitioV1 from "./DecisionClienteSitioV1";
+import { confirmarPreReporteSitioV1 } from "./actions";
 
 function supabaseAdmin() {
   const url = process.env.SUPABASE_URL;
@@ -38,7 +39,11 @@ type AreaResumen = {
   noAplica: number;
 };
 
-type Control = { campoFinalizadoEn: Date | null; coberturaPorcentaje: number | null };
+type Control = {
+  campoFinalizadoEn: Date | null;
+  preReporteGeneradoEn: Date | null;
+  coberturaPorcentaje: number | null;
+};
 type DecisionPreReporte = { decisionCliente: string | null; decisionRegistradaEn: Date | null };
 
 export default async function PreReportePage({ params, searchParams }: {
@@ -74,9 +79,11 @@ export default async function PreReportePage({ params, searchParams }: {
   if (!puedeVer) redirect("/acceso");
 
   const [control] = await prisma.$queryRaw<Control[]>`
-    SELECT "campoFinalizadoEn","coberturaPorcentaje" FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
+    SELECT "campoFinalizadoEn","preReporteGeneradoEn","coberturaPorcentaje"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${id}
+    LIMIT 1
   `;
-  if (!control?.campoFinalizadoEn) redirect(`/panel/inspecciones/${id}/cierre-v1?error=${encodeURIComponent("El pre-reporte se habilita al terminar formalmente el trabajo de campo.")}`);
 
   const [decisionPreReporte] = await prisma.$queryRaw<DecisionPreReporte[]>`
     SELECT "decisionCliente","decisionRegistradaEn"
@@ -100,7 +107,9 @@ export default async function PreReportePage({ params, searchParams }: {
     SELECT f."url" FROM "AreaInspeccion" a
     JOIN "FotografiaArea" fa ON fa."areaId"=a."id"
     JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
-    WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL' AND fa."candidataPortada"=true
+    WHERE a."inspeccionId"=${id}
+      AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+      AND fa."candidataPortada"=true
     LIMIT 1
   `;
   const portada = await signedUrl(foto?.url ?? null);
@@ -112,6 +121,39 @@ export default async function PreReportePage({ params, searchParams }: {
     prioridad,
     total: metricas.resumenPrioridades[prioridad],
   }));
+
+  const [estadoTecnico] = await prisma.$queryRaw<Array<{
+    areasTotal: number;
+    areasCompletas: number;
+    procesosTotal: number;
+    procesosCompletos: number;
+    hallazgos: number;
+    hallazgosCompletos: number;
+    syncPendientes: number;
+    portadaFachada: number;
+  }>>`
+    SELECT
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."tipo" <> 'PUNTO_CRITICO') AS "areasTotal",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."tipo" <> 'PUNTO_CRITICO' AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
+      (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "procesosTotal",
+      (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "procesosCompletos",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id}) AS "hallazgos",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id} AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") >= 4 AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL) AS "hallazgosCompletos",
+      (SELECT COUNT(*)::int FROM "OperacionCampoSync" s WHERE s."inspeccionId"=${id} AND s."estado" <> 'PROCESADA') AS "syncPendientes",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true) AS "portadaFachada"
+  `;
+  const tecnicoListo = Boolean(
+    estadoTecnico &&
+    estadoTecnico.areasTotal > 0 &&
+    estadoTecnico.areasCompletas === estadoTecnico.areasTotal &&
+    estadoTecnico.procesosTotal > 0 &&
+    estadoTecnico.procesosCompletos === estadoTecnico.procesosTotal &&
+    estadoTecnico.hallazgos === estadoTecnico.hallazgosCompletos &&
+    estadoTecnico.syncPendientes === 0 &&
+    estadoTecnico.portadaFachada === 1
+  );
+  const revisadoEnSitio = Boolean(control?.preReporteGeneradoEn);
+  const campoTerminado = Boolean(control?.campoFinalizadoEn);
 
   return (
     <main className="min-h-screen bg-slate-200 px-3 py-5 text-slate-950">
@@ -125,6 +167,22 @@ export default async function PreReportePage({ params, searchParams }: {
           {query.error ?? query.ok}
         </div>
       )}
+
+      <section className="mx-auto mb-4 max-w-4xl rounded-3xl border border-slate-300 bg-white p-5 shadow-sm print:hidden">
+        <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">Flujo de cierre V1</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Etapa numero="1" titulo="Pre-reporte en sitio" activa={!revisadoEnSitio && !campoTerminado} completa={revisadoEnSitio} detalle="Revisar antes de retirarse del inmueble." />
+          <Etapa numero="2" titulo="Revisión final del Inspector" activa={revisadoEnSitio && campoTerminado && inspeccion.estado === "EN_PROCESO"} completa={inspeccion.estado !== "EN_PROCESO"} detalle="Ajustar redacción y evidencias antes del envío." />
+          <Etapa numero="3" titulo="Revisión de Dirección" activa={inspeccion.estado === "REPORTE_PENDIENTE"} completa={inspeccion.estado === "FINALIZADA"} detalle="Autorizar o devolver con retroalimentación." />
+        </div>
+
+        {!campoTerminado && (
+          <div className={`mt-4 rounded-2xl p-4 ${tecnicoListo ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-950"}`}>
+            <p className="font-black">{tecnicoListo ? "El expediente técnico está listo para la revisión preliminar en sitio." : "Aún existen pendientes técnicos antes del pre-reporte."}</p>
+            <p className="mt-1 text-sm">Este paso no cierra la inspección ni bloquea correcciones. Su propósito es que el Inspector revise el resultado completo antes de salir del inmueble.</p>
+          </div>
+        )}
+      </section>
 
       <article className="mx-auto max-w-4xl overflow-hidden bg-white shadow-xl">
         <section className="bg-slate-950 px-7 py-7 text-white">
@@ -190,6 +248,27 @@ export default async function PreReportePage({ params, searchParams }: {
           <div className="mt-5"><TecnologiaInspeccionV1 resultados={resultados} compact /></div>
         </section>
 
+        {!campoTerminado && esInspector && (
+          <section className="border-t border-slate-200 bg-cyan-50 px-7 py-7 print:hidden">
+            <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-800">Revisión obligatoria antes de salir del inmueble</p>
+            <h2 className="mt-2 text-2xl font-black">Confirmar pre-reporte en sitio</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-700">
+              Revisa hallazgos, prioridades, fotografías, áreas satisfactorias, lecturas y datos del inmueble. Si detectas algo que deba corregirse, regresa al recorrido o a la evidencia antes de confirmar.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">Volver a corregir captura</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">Revisar evidencias</Link>
+            </div>
+            <form action={confirmarPreReporteSitioV1} className="mt-5">
+              <input type="hidden" name="inspeccionId" value={id}/>
+              <button disabled={!tecnicoListo || revisadoEnSitio} className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+                {revisadoEnSitio ? "PRE-REPORTE YA REVISADO EN SITIO ✓" : "CONFIRMAR REVISIÓN PRELIMINAR EN SITIO"}
+              </button>
+            </form>
+            {revisadoEnSitio && <Link href={`/panel/inspecciones/${id}/cierre-v1`} className="mt-4 block rounded-xl bg-emerald-700 px-5 py-3 text-center font-black text-white">CONTINUAR AL CIERRE DE VISITA →</Link>}
+          </section>
+        )}
+
         <DecisionClienteSitioV1
           inspeccionId={id}
           decisionActual={decisionPreReporte?.decisionCliente ?? null}
@@ -198,7 +277,9 @@ export default async function PreReportePage({ params, searchParams }: {
 
         <section className="border-t border-slate-200 bg-slate-50 px-7 py-7">
           <h2 className="text-2xl font-black">Qué sigue</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-700">El Inspector realizará la edición final dentro de la ventana establecida y enviará el reporte a Dirección. Una vez revisado y autorizado se liberará el reporte formal y el Certificado Certeza Habitacional.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-700">
+            Primero se confirma este pre-reporte todavía en el inmueble. Después se cierra la visita y el Inspector realiza una última revisión y ajuste editorial. Sólo entonces envía el expediente a Dirección, quien puede autorizarlo o devolverlo con retroalimentación.
+          </p>
           <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-amber-800">PRELIMINAR · PENDIENTE DE REVISIÓN Y AUTORIZACIÓN</p>
         </section>
       </article>
@@ -208,3 +289,13 @@ export default async function PreReportePage({ params, searchParams }: {
 
 function Dato({ label, value }: { label:string; value:string }) { return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>; }
 function Metrica({ label, value }: { label:string; value:string }) { return <div className="rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>; }
+
+function Etapa({ numero, titulo, activa, completa, detalle }: { numero:string; titulo:string; activa:boolean; completa:boolean; detalle:string }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${completa ? "border-emerald-200 bg-emerald-50" : activa ? "border-cyan-200 bg-cyan-50" : "border-slate-200 bg-slate-50"}`}>
+      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Etapa {numero}</p>
+      <p className={`mt-1 font-black ${completa ? "text-emerald-800" : activa ? "text-cyan-900" : "text-slate-600"}`}>{titulo}</p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{detalle}</p>
+    </div>
+  );
+}
