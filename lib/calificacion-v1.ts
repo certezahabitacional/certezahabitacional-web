@@ -12,6 +12,39 @@ export const PESOS_PRIORIDAD_V1: Record<PrioridadHallazgo, number> = {
 
 export type ResumenPrioridadesV1 = Record<PrioridadHallazgo, number>;
 
+export type NivelEvaluacionCertezaV1 = "P1" | "P2" | "P3" | "P4" | "P5" | "SH";
+
+export function nivelEvaluacionCertezaV1(calificacion: number): NivelEvaluacionCertezaV1 {
+  if (calificacion >= 100) return "SH";
+  if (calificacion >= 90) return "P5";
+  if (calificacion >= 80) return "P4";
+  if (calificacion >= 70) return "P3";
+  if (calificacion >= 50) return "P2";
+  return "P1";
+}
+
+export function rangoEvaluacionCertezaV1(nivel: NivelEvaluacionCertezaV1) {
+  switch (nivel) {
+    case "P1": return "0–49";
+    case "P2": return "50–69";
+    case "P3": return "70–79";
+    case "P4": return "80–89";
+    case "P5": return "90–99";
+    case "SH": return "100";
+  }
+}
+
+export function calificacionReferenciaPorPrioridadV1(prioridad: PrioridadHallazgo | null | undefined) {
+  if (!prioridad) return 100;
+  switch (prioridad) {
+    case "P1": return 49;
+    case "P2": return 69;
+    case "P3": return 79;
+    case "P4": return 89;
+    case "P5": return 99;
+  }
+}
+
 export function calcularCargaSeveridadV1(prioridades: PrioridadHallazgo[]) {
   return prioridades.reduce((total, prioridad) => total + PESOS_PRIORIDAD_V1[prioridad], 0);
 }
