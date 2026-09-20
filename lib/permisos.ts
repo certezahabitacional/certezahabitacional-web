@@ -141,7 +141,12 @@ export const MATRIZ_PERMISOS: MatrizPermisos = {
 };
 
 export function puede(rol: RolUsuario, accion: AccionSistema): boolean {
+  // Regla maestra del sistema: Dirección conserva facultades absolutas
+  // sobre todas las acciones operativas y administrativas presentes y futuras.
+  // La única excepción es PASSWORD_EXISTENTE_VER porque las contraseñas
+  // no son recuperables en texto plano; Dirección sí puede restablecerlas.
   if (accion === "PASSWORD_EXISTENTE_VER") return false;
+  if (rol === RolUsuario.DIRECTOR) return true;
   return MATRIZ_PERMISOS[rol]?.has(accion) ?? false;
 }
 
