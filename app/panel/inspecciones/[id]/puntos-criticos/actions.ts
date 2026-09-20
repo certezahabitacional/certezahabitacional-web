@@ -75,9 +75,9 @@ function observacionObjeto(valor: string | null): ObservacionItemCritico {
   }
 }
 
-function numeroLectura(valor: string | null | undefined) {
-  if (!valor) return null;
-  const coincidencia = valor.replace(",", ".").match(/-?\d+(?:\.\d+)?/);
+function numeroLectura(valor: unknown) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const coincidencia = String(valor).replace(",", ".").match(/-?\d+(?:\.\d+)?/);
   if (!coincidencia) return null;
   const numero = Number(coincidencia[0]);
   return Number.isFinite(numero) ? numero : null;
