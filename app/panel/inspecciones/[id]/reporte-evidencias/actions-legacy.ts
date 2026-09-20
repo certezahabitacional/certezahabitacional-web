@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { RolUsuario, TipoEvento } from "@prisma/client";
+import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -38,6 +38,7 @@ async function obtenerEditor(inspeccionId: string) {
     select: {
       id: true,
       numeroInspeccion: true,
+      estado: true,
       inspector: {
         select: {
           usuario: {
@@ -67,6 +68,11 @@ async function obtenerEditor(inspeccionId: string) {
       `
     : [{ existe: false }];
 
+  const inspectorAsignadoEnRevision =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    inspeccion.inspector?.usuario.id === usuario.id &&
+    inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+
   const inspectorDocumental =
     usuario.rol === RolUsuario.INSPECTOR &&
     inspeccion.inspector?.usuario.id === usuario.id &&
@@ -76,6 +82,7 @@ async function obtenerEditor(inspeccionId: string) {
     usuario.rol === RolUsuario.DIRECTOR ||
     (usuario.rol === RolUsuario.GERENTE && inspeccion.inspector?.usuario.gerenteId === usuario.id) ||
     (usuario.rol === RolUsuario.COORDINADOR && inspeccion.inspector?.usuario.coordinadorId === usuario.id) ||
+    inspectorAsignadoEnRevision ||
     inspectorDocumental;
 
   if (!permitido) redirect("/acceso");
