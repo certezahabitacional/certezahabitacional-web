@@ -73,7 +73,7 @@ export default async function CierreV1Page({ params, searchParams }: {
       c."inspeccionTecnicaConcluidaEn", c."campoFinalizadoEn", c."preReporteGeneradoEn", c."revisionInspectorFinalEn",
       c."reporteLimiteEn", c."reabiertaEn",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true) AS "areasTotal",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "procesosTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "procesosCompletos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id}) AS "hallazgos",
@@ -96,7 +96,7 @@ export default async function CierreV1Page({ params, searchParams }: {
     estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal &&
     estado.procesosTotal > 0 && estado.procesosCompletos === estado.procesosTotal &&
     estado.hallazgos === estado.hallazgosCompletos &&
-    estado.portadaFachada === 1 && estado.syncPendientes === 0
+    (estado.portadaFachada === 1 || estado.fotosFachada === 0) && estado.syncPendientes === 0
   );
   const inspeccionConcluida = Boolean(estado?.inspeccionTecnicaConcluidaEn);
   const preReporteRevisado = Boolean(estado?.preReporteGeneradoEn);
