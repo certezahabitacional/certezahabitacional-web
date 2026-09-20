@@ -52,6 +52,9 @@ type Foto = {
 
 type Observacion = {
   descripcionIa?: string;
+  descripcionFinal?: string;
+  clasificacionFinal?: string;
+  prioridadFinal?: string;
   clasificacionSugerida?: string;
   justificacionIa?: string;
   lecturaFinalPropuesta?: string;
@@ -133,7 +136,11 @@ export default async function HermeticidadPage({
   const consulta = usuario.rol === RolUsuario.GERENTE || usuario.rol === RolUsuario.COORDINADOR;
   if (!esInspector && !esDirector && !consulta) redirect("/acceso");
 
-  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const puedeCapturar =
+    (esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO) ||
+    (esDirector &&
+      (inspeccion.estado === EstadoInspeccion.EN_PROCESO ||
+       inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE));
 
   const pasos = await prisma.$queryRaw<Paso[]>`
     SELECT "clave","nombre","estado","datos","lecturaInicial","lecturaFinal","unidad"
@@ -319,6 +326,7 @@ export default async function HermeticidadPage({
                                 <input type="hidden" name="inspeccionId" value={id}/>
                                 <input type="hidden" name="codigo" value={codigo}/>
                                 <input type="hidden" name="fotografiaId" value={fotoInicial.fotografiaId}/>
+                                <input type="hidden" name="retorno" value="HERMETICIDAD_INICIO"/>
                                 <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">QUITAR / REPETIR FOTO INICIAL</button>
                               </form>
                             )}
@@ -403,6 +411,7 @@ export default async function HermeticidadPage({
                                 <input type="hidden" name="inspeccionId" value={id}/>
                                 <input type="hidden" name="codigo" value={codigo}/>
                                 <input type="hidden" name="fotografiaId" value={fotoFinal.fotografiaId}/>
+                                <input type="hidden" name="retorno" value="HERMETICIDAD_CIERRE"/>
                                 <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">QUITAR / REPETIR FOTO FINAL</button>
                               </form>
                             )}
