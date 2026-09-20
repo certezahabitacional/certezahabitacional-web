@@ -157,6 +157,61 @@ function siguienteCodigo(codigo: CodigoPuntoCriticoV1) {
   return PUNTOS_CRITICOS_V1[indice + 1]?.codigo ?? null;
 }
 
+async function inspeccionListaParaPreReporte(inspeccionId: string) {
+  const [r] = await prisma.$queryRaw<Array<{
+    areasTotal: number;
+    areasCompletas: number;
+    protocoloTotal: number;
+    protocoloCompleto: number;
+    fachadaPortadas: number;
+    fachadaNoAplica: number;
+    hallazgosIncompletos: number;
+    syncPendientes: number;
+  }>>`
+    SELECT
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a
+       WHERE a."inspeccionId"=${inspeccionId} AND a."obligatoria"=true) AS "areasTotal",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a
+       WHERE a."inspeccionId"=${inspeccionId} AND a."obligatoria"=true
+         AND a."estado"='REVISADA'
+         AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA')) AS "areasCompletas",
+      (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p
+       WHERE p."inspeccionId"=${inspeccionId} AND p."obligatorio"=true) AS "protocoloTotal",
+      (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p
+       WHERE p."inspeccionId"=${inspeccionId} AND p."obligatorio"=true
+         AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "protocoloCompleto",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a
+       JOIN "FotografiaArea" fa ON fa."areaId"=a."id"
+       WHERE a."inspeccionId"=${inspeccionId}
+         AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+         AND fa."candidataPortada"=true) AS "fachadaPortadas",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a
+       WHERE a."inspeccionId"=${inspeccionId}
+         AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+         AND a."resultado"='NO_APLICA') AS "fachadaNoAplica",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h
+       WHERE h."inspeccionId"=${inspeccionId}
+         AND (
+           (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") NOT BETWEEN 1 AND 4
+           OR nullif(btrim(coalesce(h."descripcion",'')),'') IS NULL
+         )) AS "hallazgosIncompletos",
+      (SELECT COUNT(*)::int FROM "OperacionCampoSync" s
+       WHERE s."inspeccionId"=${inspeccionId}
+         AND s."estado" <> 'PROCESADA') AS "syncPendientes"
+  `;
+
+  if (!r) return false;
+  return (
+    r.areasTotal > 0 &&
+    r.areasCompletas === r.areasTotal &&
+    r.protocoloTotal > 0 &&
+    r.protocoloCompleto === r.protocoloTotal &&
+    (r.fachadaNoAplica > 0 || r.fachadaPortadas === 1) &&
+    r.hallazgosIncompletos === 0 &&
+    r.syncPendientes === 0
+  );
+}
+
 async function exigirResponsable(inspeccionId: string) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -1142,13 +1197,48 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     descripcion: `${responsable} cerró la prueba prolongada de ${puntoPorCodigo(codigo).etiqueta}: ${paso.lecturaInicial} ${paso.unidad ?? unidad} → ${lecturaFinal} ${unidad}. Se generó interpretación IA y se confirmó la interpretación final del Inspector.`,
   });
 
-  const siguiente = siguienteCodigo(codigo);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+
   if (retorno === "HERMETICIDAD_CIERRE") {
-    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=cierre&ok=${encodeURIComponent("Prueba de hermeticidad cerrada.")}`);
+    const listoParaPreReporte = await inspeccionListaParaPreReporte(inspeccionId);
+
+    if (listoParaPreReporte) {
+      await prisma.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "inspeccionTecnicaConcluidaEn"=COALESCE("inspeccionTecnicaConcluidaEn",NOW()),
+            "inspeccionTecnicaConcluidaPorId"=COALESCE("inspeccionTecnicaConcluidaPorId",${usuario.id}),
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+
+      await registrarAuditoria({
+        tipo: TipoEvento.FINALIZAR_CAPTURA,
+        entidad: "InspeccionControlV2",
+        inspeccionId,
+        usuarioId: usuario.id,
+        descripcion: `${responsable} completó las pruebas finales de hermeticidad y todos los requisitos técnicos de la V1. El sistema habilitó automáticamente el pre-reporte.`,
+      });
+
+      revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+      revalidatePath(`/panel/inspecciones/${inspeccionId}/pre-reporte`);
+      redirect(
+        `/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent(
+          "Pruebas de hermeticidad cerradas. La inspección técnica quedó concluida y el pre-reporte ya está disponible para revisión.",
+        )}`,
+      );
+    }
+
+    redirect(
+      `/panel/inspecciones/${inspeccionId}/cierre-v1?ok=${encodeURIComponent(
+        "Pruebas de hermeticidad cerradas. Revisa los pendientes restantes antes de generar el pre-reporte.",
+      )}`,
+    );
   }
+
+  const siguiente = siguienteCodigo(codigo);
   if (siguiente) redirect(ruta(inspeccionId, siguiente, "ok", "Prueba de hermeticidad cerrada."));
   redirect(`/panel/inspecciones/${inspeccionId}/areas?ok=${encodeURIComponent("Prueba de hermeticidad cerrada.")}`);
 }
