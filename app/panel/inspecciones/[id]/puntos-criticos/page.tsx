@@ -22,6 +22,7 @@ import RestaurarFocoConcepto from "./RestaurarFocoConcepto";
 import {
   agregarConceptoManualPuntoCriticoV1,
   marcarConceptoNoAplicaV1,
+  reabrirConceptoPuntoCriticoV1,
   reactivarConceptoPuntoCriticoV1,
 } from "./conceptos-actions";
 import {
@@ -720,7 +721,7 @@ export default async function PuntosCriticosPage({
                             <p className="mt-2 text-xs text-slate-500">
                               No requiere fotografía, IA, comentario, medición ni prioridad.
                             </p>
-                            {puedeCapturar && paso.estado !== "COMPLETADO" && paso.estado !== "NO_APLICA" && (
+                            {puedeCapturar && (
                               <form action={reactivarConceptoPuntoCriticoV1} className="mt-3">
                                 <input type="hidden" name="inspeccionId" value={id} />
                                 <input type="hidden" name="codigo" value={codigoSolicitado} />
@@ -743,6 +744,16 @@ export default async function PuntosCriticosPage({
                               </p>
                             )}
                             {obs.descripcionFinal && <p className="mt-2 text-xs">{obs.descripcionFinal}</p>}
+                            {puedeCapturar && (
+                              <form action={reabrirConceptoPuntoCriticoV1} className="mt-4">
+                                <input type="hidden" name="inspeccionId" value={id} />
+                                <input type="hidden" name="codigo" value={codigoSolicitado} />
+                                <input type="hidden" name="itemId" value={item.id} />
+                                <button className="w-full rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-200">
+                                  EDITAR CONCEPTO CERRADO
+                                </button>
+                              </form>
+                            )}
                           </div>
                         )
                       )}
