@@ -472,7 +472,7 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   }
 
   const anterior = observacionObjeto(item.observacion);
-  if (!anterior.descripcionIa) {
+  if (!anterior.descripcionIa && !anterior.descripcionFinal) {
     volver(inspeccionId, areaId, "error", "Primero genera la interpretación de IA para este grupo de evidencias.", itemId);
   }
   // Al cierre se conserva una sola descripción: la versión final confirmada por el Inspector.
