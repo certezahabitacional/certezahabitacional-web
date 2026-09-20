@@ -743,6 +743,7 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const codigoTexto = texto(formData, "codigo");
   const fotografiaId = texto(formData, "fotografiaId");
+  const retorno = texto(formData, "retorno");
   if (!inspeccionId || !esCodigo(codigoTexto) || !fotografiaId) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
   const { usuario } = await exigirResponsable(inspeccionId);
@@ -787,6 +788,13 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
     descripcion: "Se retiró una evidencia de punto crítico para permitir repetir la fotografía.",
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
+  if (retorno === "HERMETICIDAD_INICIO") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio&ok=${encodeURIComponent("Fotografía inicial retirada. Ya puedes repetirla.")}`);
+  }
+  if (retorno === "HERMETICIDAD_CIERRE") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=cierre&ok=${encodeURIComponent("Fotografía final retirada. Ya puedes repetirla.")}`);
+  }
   volver(inspeccionId, codigo, "ok", "Fotografía retirada. Ya puedes repetirla.");
 }
 
