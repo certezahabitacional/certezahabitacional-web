@@ -11,7 +11,9 @@ import BotonGenerarIa from "../BotonGenerarIa";
 import {
   cerrarPruebaProlongadaV1,
   continuarPreReporteDesdeHermeticidadV1,
+  eliminarFotoPuntoCriticoV1,
   generarInterpretacionIaPruebaProlongadaV1,
+  reabrirPruebaProlongadaV1,
   registrarInicioPruebaProlongadaV1,
   subirFotoPuntoCriticoV1,
 } from "../actions";
@@ -42,6 +44,7 @@ type Item = {
 };
 
 type Foto = {
+  fotografiaId: string;
   guiaItemId: string;
   ruta: string;
   urlTemporal: string | null;
@@ -167,8 +170,8 @@ export default async function HermeticidadPage({
     const ids = [inicial?.id, final?.id].filter((x): x is string => Boolean(x));
 
     const fotosBase = ids.length
-      ? await prisma.$queryRaw<Array<{ guiaItemId: string; ruta: string }>>`
-          SELECT fa."guiaItemId", f."url" AS "ruta"
+      ? await prisma.$queryRaw<Array<{ fotografiaId: string; guiaItemId: string; ruta: string }>>`
+          SELECT f."id" AS "fotografiaId", fa."guiaItemId", f."url" AS "ruta"
           FROM "FotografiaArea" fa
           JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
           WHERE fa."guiaItemId"=ANY(${ids}::text[])
@@ -261,7 +264,7 @@ export default async function HermeticidadPage({
                 {noAplica ? (
                   <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-slate-300">
                     <p className="font-black">NO APLICA ✓</p>
-                    {puedeCapturar && fase === "inicio" && (
+                    {puedeCapturar && (
                       <form action={reactivarPruebaProlongadaV1} className="mt-3">
                         <input type="hidden" name="inspeccionId" value={id} />
                         <input type="hidden" name="codigo" value={codigo} />
@@ -287,6 +290,16 @@ export default async function HermeticidadPage({
                             <img src={fotoInicial.urlTemporal} alt={`Lectura inicial ${etiqueta}`} className="h-64 w-full object-contain" />
                           </a>
                         )}
+                        {puedeCapturar && (
+                          <form action={reabrirPruebaProlongadaV1} className="mt-4">
+                            <input type="hidden" name="inspeccionId" value={id}/>
+                            <input type="hidden" name="codigo" value={codigo}/>
+                            <input type="hidden" name="etapa" value="INICIAL"/>
+                            <button className="rounded-xl border border-cyan-300/30 px-4 py-2 text-xs font-black text-cyan-200">
+                              EDITAR LECTURA INICIAL / EVIDENCIA
+                            </button>
+                          </form>
+                        )}
                       </div>
                     ) : (
                       <>
@@ -296,10 +309,20 @@ export default async function HermeticidadPage({
                             <CargaGaleriaConPreview inspeccionId={id} codigo={codigo} itemId={inicial.id} numeroFoto={1} totalFotos={1} retorno="HERMETICIDAD_INICIO" subirFoto={subirFotoPuntoCriticoV1} />
                           </div>
                         ) : (
-                          <a href={fotoInicial.urlTemporal} target="_blank" rel="noreferrer" className="block max-w-xl bg-black">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={fotoInicial.urlTemporal} alt={`Lectura inicial ${etiqueta}`} className="h-64 w-full object-contain" />
-                          </a>
+                          <div className="max-w-xl">
+                            <a href={fotoInicial.urlTemporal} target="_blank" rel="noreferrer" className="block bg-black">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={fotoInicial.urlTemporal} alt={`Lectura inicial ${etiqueta}`} className="h-64 w-full object-contain" />
+                            </a>
+                            {puedeCapturar && (
+                              <form action={eliminarFotoPuntoCriticoV1} className="mt-2">
+                                <input type="hidden" name="inspeccionId" value={id}/>
+                                <input type="hidden" name="codigo" value={codigo}/>
+                                <input type="hidden" name="fotografiaId" value={fotoInicial.fotografiaId}/>
+                                <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">QUITAR / REPETIR FOTO INICIAL</button>
+                              </form>
+                            )}
+                          </div>
                         )}
 
                         {fotoInicial && (
@@ -344,8 +367,19 @@ export default async function HermeticidadPage({
                       </p>
                     ) : paso.lecturaFinal ? (
                       <div className="rounded-2xl bg-emerald-300/10 p-4 text-emerald-200">
-                        <p className="font-black">PRUEBA CERRADA ✓</p>
+                        <p className="font-black">PRUEBA CERRADA ✓ · EDITABLE</p>
                         <p className="mt-2 text-sm">{paso.lecturaInicial} {paso.unidad ?? ""} → {paso.lecturaFinal} {paso.unidad ?? ""}</p>
+                        {obs.descripcionFinal && <p className="mt-3 whitespace-pre-line text-xs leading-5 text-emerald-100"><strong>Interpretación final:</strong> {obs.descripcionFinal}</p>}
+                        {puedeCapturar && (
+                          <form action={reabrirPruebaProlongadaV1} className="mt-4">
+                            <input type="hidden" name="inspeccionId" value={id}/>
+                            <input type="hidden" name="codigo" value={codigo}/>
+                            <input type="hidden" name="etapa" value="FINAL"/>
+                            <button className="rounded-xl border border-cyan-300/30 px-4 py-2 text-xs font-black text-cyan-200">
+                              EDITAR PRUEBA CERRADA
+                            </button>
+                          </form>
+                        )}
                       </div>
                     ) : !final ? (
                       <p className="rounded-xl bg-rose-400/10 p-4 text-sm font-bold text-rose-300">
@@ -359,10 +393,20 @@ export default async function HermeticidadPage({
                             <CargaGaleriaConPreview inspeccionId={id} codigo={codigo} itemId={final.id} numeroFoto={1} totalFotos={1} retorno="HERMETICIDAD_CIERRE" subirFoto={subirFotoPuntoCriticoV1} />
                           </div>
                         ) : (
-                          <a href={fotoFinal.urlTemporal} target="_blank" rel="noreferrer" className="block max-w-xl bg-black">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={fotoFinal.urlTemporal} alt={`Lectura final ${etiqueta}`} className="h-64 w-full object-contain" />
-                          </a>
+                          <div className="max-w-xl">
+                            <a href={fotoFinal.urlTemporal} target="_blank" rel="noreferrer" className="block bg-black">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={fotoFinal.urlTemporal} alt={`Lectura final ${etiqueta}`} className="h-64 w-full object-contain" />
+                            </a>
+                            {puedeCapturar && (
+                              <form action={eliminarFotoPuntoCriticoV1} className="mt-2">
+                                <input type="hidden" name="inspeccionId" value={id}/>
+                                <input type="hidden" name="codigo" value={codigo}/>
+                                <input type="hidden" name="fotografiaId" value={fotoFinal.fotografiaId}/>
+                                <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">QUITAR / REPETIR FOTO FINAL</button>
+                              </form>
+                            )}
+                          </div>
                         )}
 
                         {fotoFinal && (
@@ -425,7 +469,7 @@ export default async function HermeticidadPage({
                               </div>
                               <label className="mt-3 block text-xs font-black uppercase tracking-wider text-emerald-200">
                                 Interpretación final del Inspector
-                                <textarea name="descripcionFinal" required defaultValue={obs.descripcionIa ?? ""} placeholder="La interpretación IA aparecerá aquí automáticamente para que el Inspector la confirme o ajuste." className="mt-2 min-h-32 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm font-normal normal-case tracking-normal text-white" />
+                                <textarea name="descripcionFinal" required defaultValue={obs.descripcionFinal ?? obs.descripcionIa ?? ""} placeholder="La interpretación IA aparecerá aquí automáticamente para que el Inspector la confirme o ajuste." className="mt-2 min-h-32 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm font-normal normal-case tracking-normal text-white" />
                               </label>
                               <p className="mt-2 text-xs leading-5 text-slate-400">
                                 La IA sirve como propuesta técnica. Este campo es la interpretación final que quedará en el reporte; puede conservarse tal cual o ajustarse por el Inspector.
