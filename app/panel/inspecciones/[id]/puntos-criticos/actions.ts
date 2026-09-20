@@ -354,6 +354,68 @@ export async function iniciarPuntosCriticosV1(formData: FormData) {
   redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio`);
 }
 
+export async function reactivarPuntoCriticoV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const codigoTexto = texto(formData, "codigo");
+  if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
+
+  const codigo = codigoTexto;
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+
+  const [paso] = await prisma.$queryRaw<Array<{ estado: string; datos: unknown }>>`
+    SELECT "estado","datos"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "clave"=${`PC_${codigo}`}
+    LIMIT 1
+  `;
+  if (!paso) volver(inspeccionId, codigo, "error", "Punto crítico no encontrado.");
+  if (paso.estado !== "NO_APLICA") {
+    volver(inspeccionId, codigo, "error", "Sólo un punto completo marcado NO APLICA puede reactivarse.");
+  }
+
+  const datos = datosObjeto(paso.datos);
+  const actualizados: DatosPasoCritico = {
+    ...datos,
+    configurado: false,
+    aplica: null,
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "ProtocoloInspeccionPaso"
+      SET "estado"='PENDIENTE',
+          "datos"=${JSON.stringify(actualizados)}::jsonb,
+          "comentario"=NULL,
+          "completadoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "clave"=${`PC_${codigo}`}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "ProtocoloInspeccionPaso",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} reactivó el punto crítico completo “${puntoPorCodigo(codigo).etiqueta}” durante la revisión del expediente.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  volver(inspeccionId, codigo, "ok", "Punto crítico reactivado. Configúralo nuevamente y completa su revisión.");
+}
+
 export async function configurarPuntoCriticoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const codigoTexto = texto(formData, "codigo");
