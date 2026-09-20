@@ -176,7 +176,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-xs font-black text-slate-500">{9 + index}/{totalRecorrido}</span>
                     <span className={`text-xs font-black ${cerrada ? "text-emerald-300" : activa ? "text-amber-300" : "text-slate-600"}`}>
-                      {cerrada ? "CERRADA 100%" : activa ? `${area.pendientes} pendientes` : "BLOQUEADO"}
+                      {cerrada ? "CERRADA 100% · EDITABLE" : activa ? `${area.pendientes} pendientes` : "BLOQUEADO"}
                     </span>
                   </div>
                   <p className="mt-1 font-black">{area.nombre}</p>
@@ -224,7 +224,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                     <form action={agregarPuntoInspectorV1} className="rounded-2xl border border-violet-300/15 bg-violet-300/5 p-4">
                       <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/>
                       <p className="font-black text-violet-200">+ AGREGAR CONCEPTO MANUALMENTE</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-400">El concepto agregado usará el mismo flujo completo: evidencia, IA opcional, comentario, clasificación, prioridad y NO APLICA.</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">El concepto agregado usará el mismo flujo completo: 1 a 4 fotografías, interpretación de IA, descripción editable del Inspector, clasificación, prioridad y NO APLICA.</p>
                       <input name="concepto" required placeholder="Ej. Sellado inferior de puerta corrediza" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
                       <input name="especificacion" placeholder="Indica exactamente qué revisar y el criterio esperado" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
                       <button className="mt-3 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-black text-violet-200">AGREGAR AL PUNTO ACTIVO</button>
@@ -239,7 +239,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                     ) : (
                       <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
                         <p className="font-black text-amber-200">Cierre con hallazgos</p>
-                        <p className="mt-1 text-xs text-slate-400">El sistema comprobará que cada hallazgo tenga descripción y mínimo 4 evidencias antes de cerrar el área.</p>
+                        <p className="mt-1 text-xs text-slate-400">El sistema comprobará que cada hallazgo tenga una sola descripción final y entre 1 y 4 evidencias antes de cerrar el área.</p>
                         <form action={cerrarAreaConHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.pendientes)>0} className="w-full rounded-xl bg-amber-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PUNTO AL 100% · {areaSeleccionada.hallazgos} HALLAZGO(S)</button></form>
                       </div>
                     )}
