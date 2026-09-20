@@ -167,7 +167,10 @@ export default async function RevisionInicialPage({
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente</Link>
-          <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-slate-300">{inspeccion.folio}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">VER PLAN COMPLETO DE INSPECCIÓN</Link>
+            <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-slate-300">{inspeccion.folio}</span>
+          </div>
         </div>
 
         <section className="mt-6 text-center">
