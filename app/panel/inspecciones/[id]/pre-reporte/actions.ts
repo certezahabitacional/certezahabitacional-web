@@ -61,7 +61,7 @@ async function validarTecnicoListoPreReporte(inspeccionId: string) {
          AND a."obligatoria"=true
          AND a."tipo" <> 'PUNTO_CRITICO'
          AND a."estado"='REVISADA'
-         AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
+         AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA')) AS "areasCompletas",
       (SELECT COUNT(*)::int
        FROM "ProtocoloInspeccionPaso" p
        WHERE p."inspeccionId"=${inspeccionId}
@@ -95,7 +95,15 @@ async function validarTecnicoListoPreReporte(inspeccionId: string) {
   if (r.protocoloTotal === 0 || r.protocoloCompleto !== r.protocoloTotal) return "Faltan procesos técnicos obligatorios por completar, incluyendo las lecturas finales que correspondan.";
   if (r.hallazgosIncompletos > 0) return `Existen ${r.hallazgosIncompletos} hallazgo(s) con evidencia o descripción incompleta.`;
   if (r.syncPendientes > 0) return `Existen ${r.syncPendientes} operación(es) pendientes de sincronizar.`;
-  if (r.portadaFachada !== 1) return "Debes seleccionar exactamente una fotografía de fachada frontal para la portada.";
+  const [fachadaFrontal] = await prisma.$queryRaw<Array<{ resultado: string | null }>>`
+    SELECT "resultado"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+    ORDER BY CASE WHEN "codigo"='FACHADA_FRONTAL' THEN 0 ELSE 1 END
+    LIMIT 1
+  `;
+  if (fachadaFrontal?.resultado !== "NO_APLICA" && r.portadaFachada !== 1) return "Debes seleccionar exactamente una fotografía de fachada frontal para la portada.";
   return null;
 }
 
