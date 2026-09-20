@@ -188,9 +188,14 @@ export default async function CierreV1Page({ params, searchParams }: {
               Antes de cerrar la visita, el Inspector debe revisar el pre-reporte completo y corregir cualquier omisión todavía estando en el inmueble.
             </p>
             <div className="mt-4">
-              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className="inline-block rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
-                {preReporteRevisado ? "VOLVER A VER REPORTE PRELIMINAR ✓" : "REVISAR REPORTE PRELIMINAR"}
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="inline-block rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
+                {preReporteRevisado ? "VOLVER A VER PRE-REPORTE INTEGRAL ✓" : "GENERAR / REVISAR PRE-REPORTE INTEGRAL"}
               </Link>
+              {preReporteRevisado && (
+                <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="ml-3 inline-block rounded-xl border border-violet-300/30 px-4 py-3 text-sm font-black text-violet-200">
+                  PASAR A ÚLTIMA REVISIÓN Y AJUSTE
+                </Link>
+              )}
             </div>
             <p className={`mt-4 text-sm font-bold ${preReporteRevisado ? "text-emerald-300" : "text-amber-300"}`}>
               {preReporteRevisado ? "✓ Pre-reporte revisado y confirmado en sitio." : "Pendiente: confirmar la revisión preliminar antes de cerrar la visita."}
@@ -213,8 +218,8 @@ export default async function CierreV1Page({ params, searchParams }: {
             <h2 className="mt-2 text-2xl font-black">{vencido ? "Plazo objetivo vencido" : `${horasRestantes} h ${mins} min restantes`}</h2>
             {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Consultar pre-reporte en sitio</Link>
-              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950">REVISAR REPORTE COMPLETO</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Consultar pre-reporte integral</Link>
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-4 py-3 text-sm font-black text-slate-950">ÚLTIMA REVISIÓN Y AJUSTE</Link>
               <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">AJUSTAR EVIDENCIAS</Link>
             </div>
             {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
