@@ -50,6 +50,8 @@ type ObservacionItemCritico = {
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
   variacionPresion?: string;
+  lecturaInicialAnalizada?: string;
+  unidadInicialAnalizada?: string;
   diagnosticoProbable?: string;
   causasPosibles?: string[];
   verificacionesSugeridas?: string[];
@@ -243,7 +245,17 @@ async function exigirResponsable(inspeccionId: string) {
   const director = usuario.rol === RolUsuario.DIRECTOR;
   if (!inspectorAsignado && !director) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, undefined, "error", "Los puntos críticos corresponden a la inspección V1.");
-  if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, undefined, "error", "Los puntos críticos sólo pueden capturarse mientras la inspección está EN PROCESO.");
+  if (
+    inspeccion.estado !== EstadoInspeccion.EN_PROCESO &&
+    !(director && inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE)
+  ) {
+    volver(
+      inspeccionId,
+      undefined,
+      "error",
+      "Los puntos críticos pueden modificarse por el Inspector mientras la inspección está EN PROCESO y por Dirección mientras el reporte espera autorización.",
+    );
+  }
 
   return {
     session,
@@ -731,6 +743,7 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const codigoTexto = texto(formData, "codigo");
   const fotografiaId = texto(formData, "fotografiaId");
+  const retorno = texto(formData, "retorno");
   if (!inspeccionId || !esCodigo(codigoTexto) || !fotografiaId) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
   const { usuario } = await exigirResponsable(inspeccionId);
@@ -775,7 +788,226 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
     descripcion: "Se retiró una evidencia de punto crítico para permitir repetir la fotografía.",
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
+  if (retorno === "HERMETICIDAD_INICIO") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio&ok=${encodeURIComponent("Fotografía inicial retirada. Ya puedes repetirla.")}`);
+  }
+  if (retorno === "HERMETICIDAD_CIERRE") {
+    redirect(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=cierre&ok=${encodeURIComponent("Fotografía final retirada. Ya puedes repetirla.")}`);
+  }
   volver(inspeccionId, codigo, "ok", "Fotografía retirada. Ya puedes repetirla.");
+}
+
+export async function continuarPreReporteDesdeHermeticidadV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  if (!inspeccionId) redirect("/panel/inspecciones");
+
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+  const listoParaPreReporte = await inspeccionListaParaPreReporte(inspeccionId);
+
+  if (!listoParaPreReporte) {
+    redirect(
+      `/panel/inspecciones/${inspeccionId}/cierre-v1?error=${encodeURIComponent(
+        "La hermeticidad ya está cerrada, pero todavía existe al menos un requisito pendiente antes del pre-reporte.",
+      )}`,
+    );
+  }
+
+  const [control] = await prisma.$queryRaw<Array<{ inspeccionTecnicaConcluidaEn: Date | null }>>`
+    SELECT "inspeccionTecnicaConcluidaEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+
+  if (!control?.inspeccionTecnicaConcluidaEn) {
+    await prisma.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "inspeccionTecnicaConcluidaEn"=NOW(),
+          "inspeccionTecnicaConcluidaPorId"=${usuario.id},
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+
+    await registrarAuditoria({
+      tipo: TipoEvento.FINALIZAR_CAPTURA,
+      entidad: "InspeccionControlV2",
+      inspeccionId,
+      usuarioId: usuario.id,
+      descripcion: `${responsable} confirmó la continuidad al pre-reporte después de cerrar las pruebas de hermeticidad y validar todos los requisitos técnicos de la V1.`,
+    });
+  }
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/pre-reporte`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  redirect(
+    `/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent(
+      "Pruebas de hermeticidad cerradas. Pre-reporte integral listo para revisión.",
+    )}`,
+  );
+}
+
+export async function reabrirPruebaProlongadaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const codigoTexto = texto(formData, "codigo");
+  const etapa = texto(formData, "etapa").toUpperCase();
+
+  if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
+  if (!["INICIAL", "FINAL"].includes(etapa)) {
+    volver(inspeccionId, codigoTexto, "error", "Indica qué etapa de hermeticidad deseas editar.");
+  }
+
+  const codigo = codigoTexto;
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+  if (!["HIDRAULICA", "GAS"].includes(codigo)) {
+    volver(inspeccionId, codigo, "error", "La edición de hermeticidad sólo corresponde a Hidráulica o Gas.");
+  }
+
+  const [paso] = await prisma.$queryRaw<Array<{
+    lecturaInicial: string | null;
+    lecturaFinal: string | null;
+  }>>`
+    SELECT "lecturaInicial","lecturaFinal"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "clave"=${`PC_${codigo}`}
+    LIMIT 1
+  `;
+  if (!paso) volver(inspeccionId, codigo, "error", "No se encontró la prueba de hermeticidad.");
+
+  const especiales = await prisma.$queryRaw<Array<{ id: string; concepto: string }>>`
+    SELECT "id","concepto"
+    FROM "GuiaInspeccionItem"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "area"=${`__PUNTO_CRITICO__:${codigo}`}
+      AND ("concepto" ILIKE '%manómetro%' OR "concepto" ILIKE '%lectura final%')
+    ORDER BY "orden"
+  `;
+  const inicial = especiales.find((item) => /manómetro/i.test(item.concepto));
+  const final = especiales.find((item) => /lectura final/i.test(item.concepto));
+  if (!inicial || !final) {
+    volver(inspeccionId, codigo, "error", "No se encontraron las plantillas inicial y final de la prueba.");
+  }
+
+  if (etapa === "INICIAL" && !paso.lecturaInicial) {
+    volver(inspeccionId, codigo, "error", "La lectura inicial ya está abierta para edición.");
+  }
+  if (etapa === "FINAL" && !paso.lecturaFinal) {
+    volver(inspeccionId, codigo, "error", "La lectura final ya está abierta para edición.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Evita duplicar hallazgos cuando la prueba se vuelva a cerrar.
+    await tx.$executeRaw`
+      UPDATE "Fotografia"
+      SET "hallazgoId"=NULL
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "hallazgoId" IN (
+          SELECT "id" FROM "Hallazgo"
+          WHERE "inspeccionId"=${inspeccionId}
+            AND "guiaItemId"=${final.id}
+        )
+    `;
+    await tx.$executeRaw`
+      DELETE FROM "Hallazgo"
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "guiaItemId"=${final.id}
+    `;
+
+    if (etapa === "INICIAL") {
+      await tx.$executeRaw`
+        UPDATE "ProtocoloInspeccionPaso"
+        SET "lecturaInicial"=NULL,
+            "lecturaFinal"=NULL,
+            "unidad"=NULL,
+            "estado"='EN_PROCESO',
+            "completadoEn"=NULL,
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+          AND "clave"=${`PC_${codigo}`}
+      `;
+      await tx.$executeRaw`
+        UPDATE "GuiaInspeccionItem"
+        SET "estadoV3"='PENDIENTE',
+            "completado"=false,
+            "cerradoEn"=NULL,
+            "actualizadoEn"=NOW()
+        WHERE "id"=ANY(${[inicial.id, final.id]}::text[])
+          AND "inspeccionId"=${inspeccionId}
+      `;
+    } else {
+      await tx.$executeRaw`
+        UPDATE "ProtocoloInspeccionPaso"
+        SET "lecturaFinal"=NULL,
+            "estado"='EN_PROCESO',
+            "completadoEn"=NULL,
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+          AND "clave"=${`PC_${codigo}`}
+      `;
+      await tx.$executeRaw`
+        UPDATE "GuiaInspeccionItem"
+        SET "estadoV3"='PENDIENTE',
+            "completado"=false,
+            "cerradoEn"=NULL,
+            "actualizadoEn"=NOW()
+        WHERE "id"=${final.id}
+          AND "inspeccionId"=${inspeccionId}
+      `;
+    }
+
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',
+          "resultado"=NULL,
+          "comentarioFinal"=NULL,
+          "revisadaEn"=NULL,
+          "cerradaEn"=NULL,
+          "cerradaPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "codigo"=${`PC_${codigo}`}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND EXISTS (
+          SELECT 1 FROM "Inspeccion" i
+          WHERE i."id"=${inspeccionId}
+            AND i."estado"='EN_PROCESO'
+        )
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "ProtocoloInspeccionPaso",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion:
+      etapa === "INICIAL"
+        ? `${responsable} reabrió la prueba de hermeticidad de ${puntoPorCodigo(codigo).etiqueta} desde la lectura inicial para corregir datos y evidencia. El cierre previo quedó sin efecto hasta completar nuevamente la prueba.`
+        : `${responsable} reabrió el cierre de hermeticidad de ${puntoPorCodigo(codigo).etiqueta} para editar lectura final, evidencia, interpretación, clasificación o prioridad.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+
+  const fase = etapa === "INICIAL" ? "inicio" : "cierre";
+  redirect(
+    `/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=${fase}&ok=${encodeURIComponent(
+      etapa === "INICIAL"
+        ? "Prueba reabierta desde la lectura inicial. Puedes corregir lectura, unidad y fotografía."
+        : "Cierre reabierto. Puedes corregir lectura final, fotografía, IA, interpretación, clasificación y prioridad.",
+    )}`,
+  );
 }
 
 export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
@@ -1023,6 +1255,8 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
     lecturaFinalPropuesta,
     unidadFinalPropuesta,
     variacionPresion: variacionPresion ?? undefined,
+    lecturaInicialAnalizada: String(paso.lecturaInicial ?? ""),
+    unidadInicialAnalizada: paso.unidad ?? unidadFinalPropuesta,
     actualizadoEn: new Date().toISOString(),
   };
 
@@ -1103,6 +1337,27 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     );
   }
 
+  const lecturaInicialActual = String(paso.lecturaInicial ?? "").trim();
+  const unidadActual = (paso.unidad ?? unidad).trim().toLowerCase();
+  const lecturaInicialAnalizada = String(interpretacionIa.lecturaInicialAnalizada ?? lecturaInicialActual).trim();
+  const unidadInicialAnalizada = String(interpretacionIa.unidadInicialAnalizada ?? unidadActual).trim().toLowerCase();
+  const lecturaFinalAnalizada = String(interpretacionIa.lecturaFinalPropuesta ?? "").trim();
+  const unidadFinalAnalizada = String(interpretacionIa.unidadFinalPropuesta ?? "").trim().toLowerCase();
+
+  if (
+    lecturaInicialAnalizada !== lecturaInicialActual ||
+    unidadInicialAnalizada !== unidadActual ||
+    lecturaFinalAnalizada !== lecturaFinal.trim() ||
+    unidadFinalAnalizada !== unidad.trim().toLowerCase()
+  ) {
+    volver(
+      inspeccionId,
+      codigo,
+      "error",
+      "Las lecturas o unidades cambiaron después del análisis. Genera nuevamente la interpretación IA antes de cerrar la prueba.",
+    );
+  }
+
   const [otros] = await prisma.$queryRaw<Array<{ pendientes: number }>>`
     SELECT COUNT(*) FILTER (
       WHERE "estadoV3"='PENDIENTE'
@@ -1124,6 +1379,8 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     lecturaFinalPropuesta: interpretacionIa.lecturaFinalPropuesta,
     unidadFinalPropuesta: interpretacionIa.unidadFinalPropuesta,
     variacionPresion: interpretacionIa.variacionPresion,
+    lecturaInicialAnalizada: interpretacionIa.lecturaInicialAnalizada,
+    unidadInicialAnalizada: interpretacionIa.unidadInicialAnalizada,
     diagnosticoProbable: interpretacionIa.diagnosticoProbable,
     causasPosibles: interpretacionIa.causasPosibles,
     verificacionesSugeridas: interpretacionIa.verificacionesSugeridas,
