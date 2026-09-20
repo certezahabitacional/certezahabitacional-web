@@ -233,7 +233,7 @@ export default async function EvidenciasPage({
 
         <p className="mt-2 text-slate-400">
           Agrega evidencia general de la inspección o vincúlala a un hallazgo
-          específico ya capturado.
+          específico ya capturado. Cada hallazgo debe conservar entre 1 y 4 fotografías.
         </p>
 
         {query.ok && (
@@ -286,7 +286,7 @@ export default async function EvidenciasPage({
           </section>
         )}
 
-        {puedeModificar ? (
+        {puedeModificar && (!hallazgoSeleccionado || fotografiasMostradas.length < 4) ? (
         <form
           action={registrarEvidencia}
           className="mt-7 grid gap-4 rounded-3xl border border-white/10 bg-slate-900 p-6 md:grid-cols-2"
@@ -350,7 +350,9 @@ export default async function EvidenciasPage({
 
         ) : (
           <div className="mt-7 rounded-3xl border border-white/10 bg-slate-900 p-5 text-sm text-slate-400">
-            Evidencias en modo solo lectura para tu rol o para el estado actual del expediente.
+            {hallazgoSeleccionado && fotografiasMostradas.length >= 4
+              ? "Este hallazgo ya tiene el máximo de 4 fotografías. Puedes eliminar alguna evidencia antes de agregar otra."
+              : "Evidencias en modo solo lectura para tu rol o para el estado actual del expediente."}
           </div>
         )}
 
