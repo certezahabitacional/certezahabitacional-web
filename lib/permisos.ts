@@ -123,7 +123,9 @@ export const MATRIZ_PERMISOS: MatrizPermisos = {
     "EXPEDIENTE_AUTORIZAR","OBSERVACION_CLIENTE_REVISAR","NOTIFICACIONES_VER",
   ]),
   [RolUsuario.VENDEDOR]: new Set<AccionSistema>([
-    "PANEL_ACCEDER","AGENDA_VER_GENERAL","COTIZACION_VER","NOTIFICACIONES_VER",
+    "PANEL_ACCEDER","AGENDA_VER_GENERAL","COTIZACION_VER",
+    "EXPEDIENTE_VER_TECNICO","REPORTE_VER","CERTIFICADO_VER",
+    "NOTIFICACIONES_VER",
   ]),
   [RolUsuario.ADMINISTRADOR]: new Set<AccionSistema>([
     "PANEL_ACCEDER","AGENDA_VER_GENERAL","COTIZACION_VER","COTIZACION_CREAR",
@@ -141,7 +143,11 @@ export const MATRIZ_PERMISOS: MatrizPermisos = {
 };
 
 export function puede(rol: RolUsuario, accion: AccionSistema): boolean {
+  // Dirección conserva facultades absolutas sobre todas las acciones
+  // operativas y administrativas. La única excepción es visualizar
+  // contraseñas existentes, porque no se almacenan en texto plano.
   if (accion === "PASSWORD_EXISTENTE_VER") return false;
+  if (rol === RolUsuario.DIRECTOR) return true;
   return MATRIZ_PERMISOS[rol]?.has(accion) ?? false;
 }
 
@@ -221,8 +227,9 @@ export function estaDentroDelAlcanceDeInspeccion(
     case RolUsuario.DIRECTOR:
       return true;
     case RolUsuario.ADMINISTRADOR:
-    case RolUsuario.VENDEDOR:
       return false;
+    case RolUsuario.VENDEDOR:
+      return Boolean(usuario.zonaId && inspeccion.zonaId && usuario.zonaId === inspeccion.zonaId);
     case RolUsuario.GERENTE:
       return Boolean(
         inspeccion.requiereGerenteZona &&
