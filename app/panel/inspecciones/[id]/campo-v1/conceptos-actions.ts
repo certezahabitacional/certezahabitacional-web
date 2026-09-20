@@ -48,9 +48,8 @@ function origenEvidenciaDescripcion(valor: string | null | undefined): OrigenEvi
   return null;
 }
 
-function fotosRequeridas(origen: OrigenEvidencia | null) {
-  return origen === "GALERIA" ? 1 : 4;
-}
+const MIN_FOTOS_CONCEPTO = 1;
+const MAX_FOTOS_CONCEPTO = 4;
 
 function volver(
   inspeccionId: string,
@@ -117,6 +116,33 @@ async function exigirAreaActiva(inspeccionId: string, areaId: string) {
     );
   }
   return { area: activa, numero: 9 + indice };
+}
+
+async function exigirAreaEditable(inspeccionId: string, areaId: string) {
+  const areas = await prisma.$queryRaw<Array<{ id: string; nombre: string; estado: string }>>`
+    SELECT "id"::text,"nombre","estado"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+    ORDER BY "orden","nombre"
+  `;
+  const solicitadaIndex = areas.findIndex((area) => area.id === areaId);
+  if (solicitadaIndex < 0) {
+    redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
+  }
+  const activaIndex = areas.findIndex((area) => area.estado !== "REVISADA");
+  const solicitada = areas[solicitadaIndex];
+
+  // Se permite volver a cualquier área ya cerrada y al área activa actual.
+  // No se permite saltar hacia un área futura todavía bloqueada.
+  if (solicitada.estado !== "REVISADA" && activaIndex >= 0 && solicitadaIndex !== activaIndex) {
+    volver(
+      inspeccionId,
+      areas[activaIndex].id,
+      "error",
+      `El Punto ${9 + solicitadaIndex} todavía está bloqueado. Concluye primero el punto activo.`,
+    );
+  }
+  return { area: solicitada, indice: solicitadaIndex };
 }
 
 async function itemArea(inspeccionId: string, areaId: string, itemId: string) {
@@ -204,14 +230,8 @@ export async function subirFotoConceptoAreaV1(formData: FormData) {
     WHERE fa."guiaItemId"=${itemId}
     ORDER BY fa."orden"
   `;
-  const origenActual = origenEvidenciaDescripcion(fotos[0]?.descripcion) ?? (fotos.length > 0 ? "CAMARA" : null);
-  if (origenActual && origenActual !== origenEvidencia) {
-    volver(inspeccionId, areaId, "error", "No combines cámara y galería en el mismo concepto. Retira la evidencia actual para cambiar de modalidad.", itemId);
-  }
-  const regla = origenActual ?? origenEvidencia;
-  const requeridas = fotosRequeridas(regla);
-  if (fotos.length >= requeridas) {
-    volver(inspeccionId, areaId, "error", "Este concepto ya tiene la evidencia requerida.", itemId);
+  if (fotos.length >= MAX_FOTOS_CONCEPTO) {
+    volver(inspeccionId, areaId, "error", "Este concepto ya tiene el máximo de 4 fotografías.", itemId);
   }
 
   if (!(archivo instanceof File) || archivo.size === 0) volver(inspeccionId, areaId, "error", "Selecciona una fotografía.", itemId);
@@ -219,7 +239,7 @@ export async function subirFotoConceptoAreaV1(formData: FormData) {
   if (archivo.size > 10 * 1024 * 1024) volver(inspeccionId, areaId, "error", "La imagen supera 10 MB.", itemId);
 
   const usados = new Set(fotos.map((foto) => Number(foto.orden)));
-  const ordenFoto = Array.from({ length: requeridas }, (_, index) => index + 1).find((orden) => !usados.has(orden));
+  const ordenFoto = Array.from({ length: MAX_FOTOS_CONCEPTO }, (_, index) => index + 1).find((orden) => !usados.has(orden));
   if (!ordenFoto) volver(inspeccionId, areaId, "error", "No hay espacio disponible para otra fotografía.", itemId);
 
   const extension = archivo.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -241,7 +261,7 @@ export async function subirFotoConceptoAreaV1(formData: FormData) {
           hallazgoId: null,
           url: rutaStorage,
           subidaPorId: usuario.id,
-          descripcion: `[ORIGEN:${origenEvidencia}] ${item.areaNombre} · ${item.concepto} · foto ${ordenFoto}/${requeridas}`,
+          descripcion: `[ORIGEN:${origenEvidencia}] ${item.areaNombre} · ${item.concepto} · evidencia ${ordenFoto}/${MAX_FOTOS_CONCEPTO}`,
         },
       });
       await tx.$executeRaw`
@@ -249,6 +269,11 @@ export async function subirFotoConceptoAreaV1(formData: FormData) {
           ("fotografiaId","areaId","guiaItemId","tipoEvidencia","orden","candidataReporte","candidataPortada","seleccionadaReporte")
         VALUES
           (${foto.id},${areaId}::uuid,${itemId},'CONCEPTO_AREA',${ordenFoto},true,false,true)
+      `;
+      await tx.$executeRaw`
+        UPDATE "GuiaInspeccionItem"
+        SET "observacion"=NULL,"actualizadoEn"=NOW()
+        WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
       `;
     });
   } catch (registroError) {
@@ -261,7 +286,7 @@ export async function subirFotoConceptoAreaV1(formData: FormData) {
     entidad: "FotografiaArea",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} agregó evidencia ${ordenFoto}/${requeridas} (${origenEvidencia}) al concepto “${item.concepto}” en ${item.areaNombre}.`,
+    descripcion: `${responsable} agregó evidencia ${ordenFoto}/${MAX_FOTOS_CONCEPTO} (${origenEvidencia}) al concepto “${item.concepto}” en ${item.areaNombre}.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, areaId, "ok", "Fotografía registrada.", itemId);
@@ -333,16 +358,12 @@ export async function generarDescripcionIaConceptoAreaV1(formData: FormData) {
     WHERE fa."guiaItemId"=${itemId}
     ORDER BY fa."orden",fa."creadoEn"
   `;
-  const origen = origenEvidenciaDescripcion(fotos[0]?.descripcion) ?? (fotos.length > 0 ? "CAMARA" : null);
-  const requeridas = fotosRequeridas(origen);
-  if (fotos.length !== requeridas) {
+  if (fotos.length < MIN_FOTOS_CONCEPTO || fotos.length > MAX_FOTOS_CONCEPTO) {
     volver(
       inspeccionId,
       areaId,
       "error",
-      requeridas === 1
-        ? "La evidencia de galería requiere una fotografía antes del análisis con IA."
-        : "Completa las 4 fotografías tomadas desde la aplicación antes del análisis con IA.",
+      "El análisis con IA requiere entre 1 y 4 fotografías del mismo concepto.",
       itemId,
     );
   }
@@ -362,7 +383,10 @@ export async function generarDescripcionIaConceptoAreaV1(formData: FormData) {
     text: [
       "Actúa como asistente técnico de una inspección habitacional.",
       `Área de la vivienda: ${item.areaNombre}.`,
+      `Partida / área: ${item.areaNombre}.`,
       `Concepto específico: ${item.concepto}.`,
+      `Se adjuntan ${fotos.length} fotografía(s) que constituyen un solo grupo de evidencia para este concepto.`,
+      "Interpreta todas las fotografías de manera conjunta y correlacionada; no redactes conclusiones independientes por foto.",
       item.especificacion ? `Criterio de revisión: ${item.especificacion}.` : "",
       item.herramientaSugerida ? `Herramienta sugerida: ${item.herramientaSugerida}.` : "",
       "Analiza exclusivamente lo visible en las fotografías y el criterio indicado.",
@@ -411,6 +435,7 @@ export async function generarDescripcionIaConceptoAreaV1(formData: FormData) {
   const observacion: ObservacionConcepto = {
     ...anterior,
     descripcionIa,
+    descripcionFinal: descripcionIa,
     clasificacionSugerida: ["C","O","NC","CR"].includes(sugerida) ? sugerida : "O",
     justificacionIa,
     actualizadoEn: new Date().toISOString(),
@@ -444,18 +469,8 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   if (!["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, areaId, "error", "Selecciona una prioridad válida.", itemId);
   if (descripcionFinal.length < 10) volver(inspeccionId, areaId, "error", "Registra una interpretación técnica de al menos 10 caracteres.", itemId);
 
-  const origen = origenEvidenciaDescripcion(item.descripcionPrimera) ?? (Number(item.fotos) > 0 ? "CAMARA" : null);
-  const requeridas = fotosRequeridas(origen);
-  if (Number(item.fotos) !== requeridas) {
-    volver(
-      inspeccionId,
-      areaId,
-      "error",
-      requeridas === 1
-        ? `${item.concepto} requiere una fotografía de galería antes de cerrarse.`
-        : `${item.concepto} requiere 4 fotografías tomadas desde la aplicación antes de cerrarse.`,
-      itemId,
-    );
+  if (Number(item.fotos) < MIN_FOTOS_CONCEPTO || Number(item.fotos) > MAX_FOTOS_CONCEPTO) {
+    volver(inspeccionId, areaId, "error", `${item.concepto} requiere entre 1 y 4 fotografías antes de cerrarse.`, itemId);
   }
   if (item.requiereMedicion && !valorMedido) volver(inspeccionId, areaId, "error", `${item.concepto} requiere registrar el valor medido.`, itemId);
   if (item.requiereMedicion && !unidadMedida) volver(inspeccionId, areaId, "error", `${item.concepto} requiere indicar la unidad de medición.`, itemId);
@@ -464,8 +479,11 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   }
 
   const anterior = observacionObjeto(item.observacion);
+  if (!anterior.descripcionIa) {
+    volver(inspeccionId, areaId, "error", "Primero genera la interpretación de IA para este grupo de evidencias.", itemId);
+  }
+  // Al cierre se conserva una sola descripción: la versión final confirmada por el Inspector.
   const observacion: ObservacionConcepto = {
-    ...anterior,
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
     prioridadFinal: prioridadTexto,
@@ -506,8 +524,8 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
               descripcion: descripcionFinal,
               clasificacion,
               prioridad: prioridadTexto as PrioridadHallazgo,
-              textoIaOriginal: anterior.descripcionIa || null,
-              textoInspectorFinal: descripcionFinal,
+              textoIaOriginal: null,
+              textoInspectorFinal: null,
             },
           })
         : await tx.hallazgo.create({
@@ -521,8 +539,8 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
               clasificacion,
               prioridad: prioridadTexto as PrioridadHallazgo,
               guiaItemId: itemId,
-              textoIaOriginal: anterior.descripcionIa || null,
-              textoInspectorFinal: descripcionFinal,
+              textoIaOriginal: null,
+              textoInspectorFinal: null,
             },
           });
 
@@ -535,6 +553,18 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
           WHERE fa."guiaItemId"=${itemId}
         )
       `;
+    } else {
+      const existente = await tx.hallazgo.findFirst({
+        where: { inspeccionId, guiaItemId: itemId },
+        select: { id: true },
+      });
+      if (existente) {
+        await tx.fotografia.updateMany({
+          where: { hallazgoId: existente.id },
+          data: { hallazgoId: null },
+        });
+        await tx.hallazgo.delete({ where: { id: existente.id } });
+      }
     }
   });
 
@@ -545,12 +575,51 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
     entidadId: itemId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} cerró “${item.concepto}” en ${item.areaNombre} con clasificación ${clasificacionTexto}, prioridad ${prioridadTexto} y ${requeridas} evidencia(s).`,
+    descripcion: `${responsable} cerró “${item.concepto}” en ${item.areaNombre} con clasificación ${clasificacionTexto}, prioridad ${prioridadTexto} y ${item.fotos} evidencia(s). Se conservó una sola descripción final.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
   volver(inspeccionId, areaId, "ok", "Concepto cerrado y clasificado.", itemId);
+}
+
+export async function reabrirConceptoAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const itemId = texto(formData, "itemId");
+  if (!inspeccionId || !areaId || !itemId) redirect("/panel/inspecciones");
+
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+  await exigirAreaEditable(inspeccionId, areaId);
+  const item = await itemArea(inspeccionId, areaId, itemId);
+  if (item.estadoV3 !== "REVISADO") {
+    volver(inspeccionId, areaId, "error", "Sólo un concepto ya cerrado puede abrirse para edición.", itemId);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='PENDIENTE',"completado"=false,"cerradoEn"=NULL,"actualizadoEn"=NOW()
+      WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',"resultado"=NULL,"cerradaEn"=NULL,"revisadaEn"=NULL,
+          "comentarioFinal"=NULL,"actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "GuiaInspeccionItem",
+    entidadId: itemId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} reabrió el concepto “${item.concepto}” de ${item.areaNombre} para editarlo. El área volvió a quedar activa hasta su nuevo cierre.`,
+  });
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  volver(inspeccionId, areaId, "ok", "Concepto abierto para edición. Revisa evidencia, IA y descripción final antes de volver a cerrarlo.", itemId);
 }
 
 export async function reactivarConceptoAreaV1(formData: FormData) {
@@ -560,15 +629,23 @@ export async function reactivarConceptoAreaV1(formData: FormData) {
   if (!inspeccionId || !areaId || !itemId) redirect("/panel/inspecciones");
 
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
-  await exigirAreaActiva(inspeccionId, areaId);
+  await exigirAreaEditable(inspeccionId, areaId);
   const item = await itemArea(inspeccionId, areaId, itemId);
   if (item.estadoV3 !== "NO_APLICA") volver(inspeccionId, areaId, "error", "Sólo un concepto marcado NO APLICA puede reactivarse.", itemId);
 
-  await prisma.$executeRaw`
-    UPDATE "GuiaInspeccionItem"
-    SET "estadoV3"='PENDIENTE',"motivoNoAplica"=NULL,"completado"=false,"cerradoEn"=NULL,"actualizadoEn"=NOW()
-    WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
-  `;
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='PENDIENTE',"motivoNoAplica"=NULL,"completado"=false,"cerradoEn"=NULL,"actualizadoEn"=NOW()
+      WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',"resultado"=NULL,"cerradaEn"=NULL,"revisadaEn"=NULL,
+          "comentarioFinal"=NULL,"actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+    `;
+  });
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,
     entidad: "GuiaInspeccionItem",
