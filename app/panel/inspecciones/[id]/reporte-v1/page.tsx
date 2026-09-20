@@ -30,6 +30,8 @@ async function signedUrl(path: string | null) {
 type Area = {
   id:string;
   orden:number;
+  codigo:string;
+  tipo:string;
   nombre:string;
   resultado:string|null;
   comentarioFinal:string|null;
@@ -211,7 +213,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
 
   const areas = await prisma.$queryRaw<Area[]>`
-    SELECT a."id"::text,a."orden",a."nombre",a."resultado",a."comentarioFinal",
+    SELECT a."id"::text,a."orden",a."codigo",a."tipo",a."nombre",a."resultado",a."comentarioFinal",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')) "revisados",
@@ -246,6 +248,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
     SELECT "orden","nombre","estado","lecturaInicial","lecturaFinal","unidad","comentario"
     FROM "ProtocoloInspeccionPaso" WHERE "inspeccionId"=${id} ORDER BY "orden"
   `;
+  const procesoPorNombre = new Map(procesos.map((p)=>[p.nombre.toUpperCase(),p]));
+  const partidasReporte = [...areas].sort((a,b)=>{
+    const prioridadA = a.tipo === "PUNTO_CRITICO" ? 0 : 1;
+    const prioridadB = b.tipo === "PUNTO_CRITICO" ? 0 : 1;
+    return prioridadA - prioridadB || a.orden - b.orden || a.nombre.localeCompare(b.nombre,"es");
+  });
+  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+1]));
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
     SELECT fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
@@ -345,14 +354,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
   };
 
   const evaluacionesPorArea = new Map<string,{calificacion:number;nivel:string}>();
-  const numeroConcepto = new Map<string,number>();
-  let consecutivoConcepto = 1;
-  for (const area of areas) {
+  const numeroPunto = new Map<string,number>();
+  for (const area of partidasReporte) {
     const conceptos = conceptosPorArea.get(area.id) ?? [];
-    for (const concepto of conceptos) {
-      numeroConcepto.set(concepto.id,consecutivoConcepto);
-      consecutivoConcepto += 1;
-    }
+    conceptos.forEach((concepto,index)=>numeroPunto.set(concepto.id,index+1));
     evaluacionesPorArea.set(area.id,evaluarPromedioV1(conceptos.map((g)=>evaluacionConcepto(g).calificacion)));
   }
 
@@ -493,13 +498,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion folio={inspeccion.folio} n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
-            {areas.filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).map((a)=>{
+            {partidasReporte.filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).map((a)=>{
               const conceptos=conceptosPorArea.get(a.id)??[];
               const evaluacionArea=evaluacionesPorArea.get(a.id);
               return <article key={a.id} className="rounded-3xl border-2 border-slate-200 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida {a.orden}</p>
+                    <p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida {numeroPartida.get(a.id)}</p>
                     <h3 className="mt-1 text-2xl font-black">{a.nombre}</h3>
                     <p className="mt-2 text-xs font-bold text-slate-500">{conceptos.length} conceptos inspeccionados · {a.noAplica} no aplica · {Math.max(a.aplicables-a.revisados,0)} no inspeccionados / sin acceso u otra causa</p>
                   </div>
@@ -511,11 +516,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     const ev=evaluacionConcepto(g);
                     const fotos=fotosPorConcepto.get(g.id)??[];
                     const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
+                    const proceso=procesoPorNombre.get(a.nombre.toUpperCase());
+                    const esHermeticidad=Boolean(proceso && (proceso.lecturaInicial!==null || proceso.lecturaFinal!==null) && /manómetro|presión/i.test(g.concepto));
                     return <section key={g.id} className="avoid-break rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {numeroConcepto.get(g.id)} · Partida {a.orden}</p>
-                          <h4 className="mt-1 text-lg font-black">{g.concepto}</h4>
+                          <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
+                          <h4 className="mt-1 text-lg font-black">{esHermeticidad && /Lectura final/i.test(g.concepto) ? `Prueba de hermeticidad · ${g.concepto}` : g.concepto}</h4>
                           {g.especificacion&&<p className="mt-1 text-xs leading-5 text-slate-500">{g.especificacion}</p>}
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -525,6 +532,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                       </div>
                       {ev.hallazgo&&<div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Hallazgo</p><p className="mt-1 text-sm font-black">{ev.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{ev.hallazgo.descripcion}</p>{ev.hallazgo.recomendacion&&<p className="mt-2 text-sm leading-6 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
                       {obs.descripcionFinal&&<p className="mt-4 text-sm leading-6 text-slate-700"><strong>Interpretación final del Inspector:</strong> {obs.descripcionFinal}</p>}
+                      {esHermeticidad&&proceso&&<div className="mt-3 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Prueba de hermeticidad:</strong> lectura inicial {proceso.lecturaInicial??"—"} {proceso.unidad??""} · lectura final {proceso.lecturaFinal??"—"} {proceso.unidad??""}{proceso.lecturaInicial!==null&&proceso.lecturaFinal!==null?` · variación ${Number(proceso.lecturaFinal)-Number(proceso.lecturaInicial)} ${proceso.unidad??""}`:""}</div>}
                       {(g.valorMedido||g.valorProyecto)&&<p className="mt-3 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Referencia/proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
                       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-600">
                         <span>Clasificación: {obs.clasificacionFinal??ev.hallazgo?.clasificacion??(tieneHallazgo?"—":"SIN HALLAZGO")}</span>
@@ -546,11 +554,11 @@ export default async function ReporteV1Page({ params, searchParams }: {
             <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white">
               <span>Partida</span><span className="text-center">Inspeccionados</span><span className="text-center">Hallazgos</span><span className="text-center">No aplica</span><span className="text-center">Calificación</span><span className="text-center">Nivel</span>
             </div>
-            {areas.map((a)=>{
+            {partidasReporte.map((a)=>{
               const conceptos=conceptosPorArea.get(a.id)??[];
               const ev=evaluacionesPorArea.get(a.id);
               return <div key={a.id} className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
-                <span><strong>{a.orden}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max(a.aplicables-a.revisados,0)} no inspeccionados / sin acceso u otra causa</span></span>
+                <span><strong>{numeroPartida.get(a.id)}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max(a.aplicables-a.revisados,0)} no inspeccionados / sin acceso u otra causa</span></span>
                 <span className="text-center font-bold">{conceptos.length}</span>
                 <span className="text-center font-bold">{a.hallazgos}</span>
                 <span className="text-center font-bold">{a.noAplica}</span>
