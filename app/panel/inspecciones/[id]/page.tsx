@@ -111,7 +111,8 @@ export default async function ExpedientePage({
 
   /*
    * Alcance técnico:
-   * DIRECTOR     -> acceso global.
+   * DIRECTOR     -> acceso global y facultades absolutas.
+   * VENDEDOR     -> consulta de solo lectura dentro de su zona.
    * GERENTE      -> inspecciones de Inspectores adscritos a su Gerencia.
    * COORDINADOR  -> inspecciones de Inspectores bajo su coordinación.
    * INSPECTOR    -> únicamente inspecciones asignadas a él.
@@ -152,6 +153,12 @@ export default async function ExpedientePage({
       accesoAutorizado = true;
       break;
 
+    case RolUsuario.VENDEDOR:
+      accesoAutorizado =
+        Boolean(usuarioActual.zonaId) &&
+        inspeccionAlcance.zonaId === usuarioActual.zonaId;
+      break;
+
     case RolUsuario.GERENTE:
       accesoAutorizado =
         inspeccionAlcance.requiereGerenteZona &&
@@ -180,10 +187,12 @@ export default async function ExpedientePage({
 
   // Las inspecciones activas no usan el panel intermedio del expediente.
   // Se envían directamente a la etapa operativa correspondiente.
-  if (inspeccionAlcance.estado === EstadoInspeccion.PROGRAMADA) {
+  const esVendedor = rolActual === RolUsuario.VENDEDOR;
+
+  if (!esVendedor && inspeccionAlcance.estado === EstadoInspeccion.PROGRAMADA) {
     redirect(`/panel/inspecciones/${id}/revision-inicial`);
   }
-  if (inspeccionAlcance.estado === EstadoInspeccion.EN_PROCESO) {
+  if (!esVendedor && inspeccionAlcance.estado === EstadoInspeccion.EN_PROCESO) {
     redirect(
       inspeccionAlcance.numeroInspeccion === 1
         ? `/panel/inspecciones/${id}/flujo`
@@ -326,7 +335,7 @@ export default async function ExpedientePage({
   // certificado ni reabre un expediente finalizado.
   const expedienteFinalizado = inspeccion.estado === "FINALIZADA";
   const expedienteCancelado = inspeccion.estado === "CANCELADA";
-  const capturaSoloLectura = expedienteFinalizado || expedienteCancelado;
+  const capturaSoloLectura = expedienteFinalizado || expedienteCancelado || esVendedor;
   const certificadoFinancieramenteLiberado = pagoLiquidado;
 
   /*
@@ -617,9 +626,9 @@ export default async function ExpedientePage({
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {expedienteFinalizado ? (
-                <span className="cursor-not-allowed rounded-full border border-white/10 px-5 py-3 font-black text-slate-600">
-                  Expediente en solo lectura
+              {esVendedor || expedienteFinalizado ? (
+                <span className="cursor-not-allowed rounded-full border border-white/10 px-5 py-3 font-black text-slate-500">
+                  {esVendedor ? "Consulta de vendedor · solo lectura" : "Expediente en solo lectura"}
                 </span>
               ) : (
                 <Link
