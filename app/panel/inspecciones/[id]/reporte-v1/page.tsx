@@ -205,6 +205,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         versiones:{orderBy:{version:"desc"},take:1,select:{version:true,datos:true,total:true}},
       }},
       hallazgos:{orderBy:[{prioridad:"asc"},{creadoEn:"asc"}],include:{fotografias:true}},
+      firmas:{orderBy:{firmadaEn:"desc"}},
       certificado:true,
     },
   });
@@ -421,6 +422,11 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
+  const firmaInspector = inspeccion.firmas.find((f)=>f.tipo==="INSPECTOR");
+  const firmaCliente = inspeccion.firmas.find((f)=>f.tipo==="CLIENTE");
+  const fechaFirma = (valor: Date | undefined) => valor
+    ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(valor)
+    : "Pendiente";
   const autorizado = Boolean(inspeccion.certificado?.vigente);
   const calificacion = autorizado && inspeccion.certificado ? Number(inspeccion.certificado.ish) : metricas.calificacion;
   const calificacionTexto = Number(calificacion).toFixed(2);
@@ -526,6 +532,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
             "Conclusiones",
             "Bibliografía y normatividad de apoyo",
             "Glosario",
+            "Firmas",
             "Certificado Certeza Habitacional",
           ].map((x,i)=><li key={x} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold">{String(i+1).padStart(2,"0")} · {x}</li>)}</ol>
         </Seccion>
@@ -676,8 +683,31 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <div className="grid gap-3 sm:grid-cols-2">{GLOSARIO.map(([t,d])=><article key={t} className="rounded-2xl bg-slate-100 p-4"><h3 className="font-black">{t}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{d}</p></article>)}</div>
         </Seccion>
 
+        <Seccion folio={inspeccion.folio} n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
+          <p className="mb-6 text-sm leading-7 text-slate-700">Las firmas registradas quedan asociadas al expediente de la inspección y forman parte de la trazabilidad documental. En el pre-reporte se muestran las firmas vigentes del Inspector y del Cliente cuando ya fueron capturadas en el sistema.</p>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <article className="rounded-3xl border border-slate-200 p-5 text-center">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Inspector</p>
+              <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
+                {firmaInspector?.imagenUrl?<img src={firmaInspector.imagenUrl} alt="Firma del Inspector" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
+              </div>
+              <p className="mt-4 font-black">{firmaInspector?.nombreFirmante ?? inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}</p>
+              <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaInspector?.firmadaEn)}</p>
+            </article>
+            <article className="rounded-3xl border border-slate-200 p-5 text-center">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Cliente</p>
+              <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
+                {firmaCliente?.imagenUrl?<img src={firmaCliente.imagenUrl} alt="Firma del Cliente" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
+              </div>
+              <p className="mt-4 font-black">{firmaCliente?.nombreFirmante ?? inspeccion.cliente.nombre}</p>
+              <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaCliente?.firmadaEn)}</p>
+            </article>
+          </div>
+          {!firmaInspector||!firmaCliente?<div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
+        </Seccion>
+
         <section className="page-break px-10 py-10">
-          <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">11 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
+          <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">12 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
           {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
         </section>
       </article>
