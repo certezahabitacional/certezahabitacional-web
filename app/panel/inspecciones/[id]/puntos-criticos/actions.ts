@@ -778,6 +778,56 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
   volver(inspeccionId, codigo, "ok", "Fotografía retirada. Ya puedes repetirla.");
 }
 
+export async function continuarPreReporteDesdeHermeticidadV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  if (!inspeccionId) redirect("/panel/inspecciones");
+
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+  const listoParaPreReporte = await inspeccionListaParaPreReporte(inspeccionId);
+
+  if (!listoParaPreReporte) {
+    redirect(
+      `/panel/inspecciones/${inspeccionId}/cierre-v1?error=${encodeURIComponent(
+        "La hermeticidad ya está cerrada, pero todavía existe al menos un requisito pendiente antes del pre-reporte.",
+      )}`,
+    );
+  }
+
+  const [control] = await prisma.$queryRaw<Array<{ inspeccionTecnicaConcluidaEn: Date | null }>>`
+    SELECT "inspeccionTecnicaConcluidaEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+
+  if (!control?.inspeccionTecnicaConcluidaEn) {
+    await prisma.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "inspeccionTecnicaConcluidaEn"=NOW(),
+          "inspeccionTecnicaConcluidaPorId"=${usuario.id},
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+
+    await registrarAuditoria({
+      tipo: TipoEvento.FINALIZAR_CAPTURA,
+      entidad: "InspeccionControlV2",
+      inspeccionId,
+      usuarioId: usuario.id,
+      descripcion: `${responsable} confirmó la continuidad al pre-reporte después de cerrar las pruebas de hermeticidad y validar todos los requisitos técnicos de la V1.`,
+    });
+  }
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/pre-reporte`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  redirect(
+    `/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent(
+      "Pruebas de hermeticidad cerradas. Pre-reporte integral listo para revisión.",
+    )}`,
+  );
+}
+
 export async function registrarInicioPruebaProlongadaV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const codigoTexto = texto(formData, "codigo");
