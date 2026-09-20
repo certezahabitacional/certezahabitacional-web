@@ -6,8 +6,10 @@ import QRCode from "qrcode";
 
 import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
+import { DATOS_DOCUMENTALES, datosContactoDocumento } from "@/lib/datos-documentales";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
+import { evaluarPromedioV1, referenciaPrioridadV1 } from "@/lib/evaluacion-reporte-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import {
   HERRAMIENTAS_INSPECCION,
@@ -45,7 +47,7 @@ type Area = {
   hallazgos:number;
 };
 type Proceso = { orden:number; nombre:string; estado:string; lecturaInicial:number|null; lecturaFinal:number|null; unidad:string|null; comentario:string|null };
-type FotoArea = { areaId:string; url:string; descripcion:string|null };
+type FotoArea = { areaId:string; guiaItemId:string|null; url:string; descripcion:string|null };
 type ConceptoReporte = {
   id:string;
   areaId:string;
@@ -82,6 +84,8 @@ type ObservacionConcepto = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
+  evaluacionFinal?: number;
 };
 type SnapshotCotizacion = Record<string, unknown>;
 type AutorizacionDireccion = { nombre: string; creadaEn: Date };
@@ -229,14 +233,18 @@ export default async function ReporteV1Page({ params, searchParams }: {
   `;
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
-    SELECT fa."areaId"::text "areaId",f."url",f."descripcion"
+    SELECT fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
     FROM "FotografiaArea" fa JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
     JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
     WHERE a."inspeccionId"=${id} AND fa."seleccionadaReporte"=true ORDER BY a."orden",fa."orden",fa."creadoEn"
   `;
   const fotosFirmadas = await Promise.all(fotosArea.map(async f => ({...f,urlFirmada:await signedUrl(f.url)})));
   const fotosPorArea = new Map<string, typeof fotosFirmadas>();
-  for (const f of fotosFirmadas) fotosPorArea.set(f.areaId,[...(fotosPorArea.get(f.areaId)??[]),f]);
+  const fotosPorConcepto = new Map<string, typeof fotosFirmadas>();
+  for (const f of fotosFirmadas) {
+    fotosPorArea.set(f.areaId,[...(fotosPorArea.get(f.areaId)??[]),f]);
+    if (f.guiaItemId) fotosPorConcepto.set(f.guiaItemId,[...(fotosPorConcepto.get(f.guiaItemId)??[]),f]);
+  }
 
   const [fachada] = await prisma.$queryRaw<Array<{url:string|null}>>`
     SELECT f."url" FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
@@ -300,6 +308,24 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
   const { resultados } = extraerResultadosInstrumentales(inspeccion.observaciones);
   const metricas = await obtenerMetricasV1(id);
+
+  const evaluacionConcepto = (concepto: ConceptoReporte) => {
+    const obs = observacionConcepto(concepto.observacion);
+    const hallazgo = inspeccion.hallazgos.find((h) => h.guiaItemId === concepto.id);
+    const capturada = Number(obs.calificacionFinal ?? obs.evaluacionFinal);
+    const calificacion = Number.isFinite(capturada) && capturada >= 0 && capturada <= 100
+      ? capturada
+      : hallazgo
+        ? referenciaPrioridadV1(hallazgo.prioridad)
+        : 100;
+    return { calificacion, nivel: nivelEvaluacionV1(calificacion), hallazgo };
+  };
+
+  const evaluacionesPorArea = new Map<string,{calificacion:number;nivel:string}>();
+  for (const area of areas) {
+    const conceptos = conceptosPorArea.get(area.id) ?? [];
+    evaluacionesPorArea.set(area.id,evaluarPromedioV1(conceptos.map((g)=>evaluacionConcepto(g).calificacion)));
+  }
 
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
@@ -392,7 +418,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <p className="mt-8 text-xs font-black uppercase tracking-[.24em] text-amber-300">Certeza Habitacional · Documento técnico de inspección</p>
         </section>
 
-        <Seccion n="01" titulo="Índice" subtitulo="Estructura del reporte">
+        <Seccion folio={inspeccion.folio} n="01" titulo="Índice" subtitulo="Estructura del reporte">
           <ol className="grid gap-2 sm:grid-cols-2">{[
             "Resumen ejecutivo",
             "Datos declarados",
@@ -408,14 +434,14 @@ export default async function ReporteV1Page({ params, searchParams }: {
           ].map((x,i)=><li key={x} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold">{String(i+1).padStart(2,"0")} · {x}</li>)}</ol>
         </Seccion>
 
-        <Seccion n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
+        <Seccion folio={inspeccion.folio} n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
           <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
           <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · Inspeccionados: {metricas.revisados} · No aplica: {metricas.noAplica} · No inspeccionados / sin acceso u otra causa: {Math.max(metricas.aplicables - metricas.revisados, 0)}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
           <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La calificación se expresa de 0 a 100 y se traduce a la escala de evaluación P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99 y SH 100. La prioridad P1–P5 de cada hallazgo se presenta por separado y no debe confundirse con el nivel global de evaluación.</p>
         </Seccion>
 
-        <Seccion n="03" titulo="Datos declarados" subtitulo="Información proporcionada y registrada antes de la visita">
+        <Seccion folio={inspeccion.folio} n="03" titulo="Datos declarados" subtitulo="Información proporcionada y registrada antes de la visita">
           <div className="grid gap-4 sm:grid-cols-2">
             <article className="rounded-2xl bg-slate-100 p-4">
               <h3 className="font-black">Cliente e inmueble declarados</h3>
@@ -451,23 +477,23 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </Seccion>
 
-        <Seccion n="04" titulo="Procedimiento y alcance" subtitulo="Cómo se ejecutó la inspección">
+        <Seccion folio={inspeccion.folio} n="04" titulo="Procedimiento y alcance" subtitulo="Cómo se ejecutó la inspección">
           <p className="text-sm leading-7 text-slate-700">El Método Certeza Habitacional parte del alcance aceptado en la cotización, incorpora la información de proyecto disponible, inicia con las pruebas funcionales e instalaciones y continúa con una revisión secuencial área por área. Cada área se cierra con hallazgos documentados o con evidencia satisfactoria cuando no se identifican anomalías relevantes.</p>
         </Seccion>
 
-        <Seccion n="05" titulo="Servicios y verificaciones instrumentales" subtitulo="Pruebas, mediciones y procesos técnicos ejecutados">
+        <Seccion folio={inspeccion.folio} n="05" titulo="Servicios y verificaciones instrumentales" subtitulo="Pruebas, mediciones y procesos técnicos ejecutados">
           <div className="space-y-3">{procesos.map((p)=><article key={`${p.orden}-${p.nombre}`} className="avoid-break rounded-2xl border border-slate-200 p-4"><div className="flex justify-between gap-3"><h3 className="font-black">{p.nombre}</h3><span className="text-xs font-black text-cyan-700">{p.estado.replaceAll('_',' ')}</span></div>{(p.lecturaInicial!==null||p.lecturaFinal!==null)&&<p className="mt-2 text-sm font-bold text-slate-700">Lectura inicial: {p.lecturaInicial ?? '—'} {p.unidad ?? ''} · Lectura final: {p.lecturaFinal ?? '—'} {p.unidad ?? ''}</p>}{p.comentario&&<p className="mt-2 text-sm leading-6 text-slate-600">{p.comentario}</p>}</article>)}</div>
           <div className="mt-6 rounded-2xl bg-cyan-50 p-5"><p className="text-xs font-black uppercase tracking-wider text-cyan-800">Tecnología aplicada en estos procesos</p><p className="mt-2 text-sm text-slate-700">Las lecturas y verificaciones instrumentales registradas se presentan en su contexto técnico y se resumen nuevamente en la sección de herramientas y tecnología.</p></div>
         </Seccion>
 
-        <Seccion n="06A" titulo="Desarrollo de la inspección · resumen de hallazgos" subtitulo="Clasificación, prioridad y distribución de hallazgos">
+        <Seccion folio={inspeccion.folio} n="06A" titulo="Desarrollo de la inspección · resumen de hallazgos" subtitulo="Clasificación, prioridad y distribución de hallazgos">
           <div className="grid gap-3 sm:grid-cols-5">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
           <div className="mt-5 space-y-3">
             {hallazgosConEvidencia.map((h) => <article key={h.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{h.titulo}</h3><div className="flex gap-2"><span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">{h.clasificacion}</span><span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-900">{h.prioridad}</span></div></div><p className="mt-2 text-sm text-slate-500">{h.area}{h.ubicacion ? ` · ${h.ubicacion}` : ""}</p><p className="mt-2 text-sm leading-6 text-slate-700">{h.descripcion}</p></article>)}
           </div>
         </Seccion>
 
-        <Seccion n="06B" titulo="Desarrollo de la inspección · hallazgos detallados" subtitulo="Hallazgo por hallazgo, con evidencia e interpretación final">
+        <Seccion folio={inspeccion.folio} n="06B" titulo="Desarrollo de la inspección · hallazgos detallados" subtitulo="Hallazgo por hallazgo, con evidencia e interpretación final">
           <div className="space-y-8">
             {hallazgosConEvidencia.length === 0 && <p className="rounded-2xl bg-emerald-50 p-5 font-bold text-emerald-900">No se registraron hallazgos.</p>}
             {hallazgosConEvidencia.map((h,index) => <article key={h.id} className="avoid-break rounded-3xl border border-slate-200 p-5">
@@ -479,11 +505,11 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </Seccion>
 
-        <Seccion n="06C" titulo="Desarrollo de la inspección · conceptos por partida" subtitulo="Conceptos revisados, resultados, hallazgos y evidencia">
+        <Seccion folio={inspeccion.folio} n="06C" titulo="Desarrollo de la inspección · conceptos por partida" subtitulo="Conceptos revisados, resultados, hallazgos y evidencia">
           <div className="space-y-6">{areas.filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.aplicables} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':a.resultado==='NO_APLICA'?'bg-slate-200 text-slate-700':'bg-amber-100 text-amber-900'}`}>{a.resultado==='NO_APLICA'?'NO INSPECCIONADA / DESHABILITADA':(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{(conceptosPorArea.get(a.id)??[]).map((g,index)=>{const obs=observacionConcepto(g.observacion);return <div key={g.id} className="mt-4 rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-black">{index+1}. {g.concepto}</p><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-700">{(g.estadoV3??"PENDIENTE").replaceAll("_"," ")}</span></div>{g.especificacion&&<p className="mt-2 text-xs leading-5 text-slate-500">{g.especificacion}</p>}{obs.descripcionFinal&&<p className="mt-2 text-sm leading-6 text-slate-700"><strong>Interpretación final:</strong> {obs.descripcionFinal}</p>}{(g.valorMedido||g.valorProyecto)&&<p className="mt-2 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}{obs.clasificacionFinal&&<p className="mt-2 text-xs font-bold text-slate-600">Clasificación: {obs.clasificacionFinal}{obs.prioridadFinal?` · Prioridad: ${obs.prioridadFinal}`:""}</p>}</div>})}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
         </Seccion>
 
-        <Seccion n="06D" titulo="Desarrollo de la inspección · evidencias" subtitulo="Fotografías y datos asociados registrados en la inspección">
+        <Seccion folio={inspeccion.folio} n="06D" titulo="Desarrollo de la inspección · evidencias" subtitulo="Fotografías y datos asociados registrados en la inspección">
           <div className="space-y-5">
             {evidencias.length === 0 && <p className="rounded-2xl bg-slate-100 p-5 text-sm text-slate-600">No existen evidencias fotográficas registradas.</p>}
             {evidencias.map((e,index) => {
@@ -498,28 +524,28 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </Seccion>
 
-        <Seccion n="07" titulo="Resumen por partida" subtitulo="Cobertura, resultados por área y evaluación global">
+        <Seccion folio={inspeccion.folio} n="07" titulo="Resumen por partida" subtitulo="Cobertura, resultados por área y evaluación global">
           <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura efectiva" value={`${coberturaTexto}%`}/><Metrica label="Calificación Técnica Certeza" value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Puntos aplicables" value={String(metricas.aplicables)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Hallazgos" value={String(metricas.totalHallazgos)}/></div>
           <p className="mt-3 text-xs font-bold text-slate-500">Áreas satisfactorias: {metricas.areasSinHallazgos} · No aplica: {metricas.noAplica} · No inspeccionados / sin acceso u otra causa: {Math.max(metricas.aplicables - metricas.revisados, 0)} · Carga de severidad: {metricas.cargaSeveridad}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
         </Seccion>
 
-        <Seccion n="08" titulo="Tecnología Certeza Habitacional" subtitulo="Método Certeza, plataforma, IA, instrumentación y criterio técnico humano">
+        <Seccion folio={inspeccion.folio} n="08" titulo="Tecnología Certeza Habitacional" subtitulo="Método Certeza, plataforma, IA, instrumentación y criterio técnico humano">
           <p className="mb-5 text-sm leading-6 text-slate-600">El Método Certeza combina la experiencia y criterio técnico del Inspector con la plataforma Certeza Habitacional, evidencia fotográfica, verificaciones instrumentales y herramientas de inteligencia artificial como apoyo. La IA propone análisis; la interpretación y decisión técnica final corresponde al personal autorizado. Los equipos físicos aparecen únicamente cuando su uso quedó documentado.</p>
           <TecnologiaInspeccionV1 resultados={resultados} mostrarNoEjecutadas />
         </Seccion>
 
-        <Seccion n="09" titulo="Conclusiones" subtitulo="Síntesis técnica objetiva del resultado de la inspección">
+        <Seccion folio={inspeccion.folio} n="09" titulo="Conclusiones" subtitulo="Síntesis técnica objetiva del resultado de la inspección">
           <p className="rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">{metricas.dictamen}</p>
           <p className="mt-4 text-sm leading-7 text-slate-700">Cobertura efectiva: <strong>{coberturaTexto}%</strong>. Calificación Técnica Certeza: <strong>{calificacionTexto}/100</strong>. Hallazgos documentados: <strong>{metricas.totalHallazgos}</strong>. La conclusión se limita al alcance contratado, a las áreas accesibles y a las condiciones visibles o medibles durante la visita.</p>
         </Seccion>
 
-        <Seccion n="10" titulo="Bibliografía y normatividad de apoyo" subtitulo="Referencias utilizadas como marco técnico">
+        <Seccion folio={inspeccion.folio} n="10" titulo="Bibliografía y normatividad de apoyo" subtitulo="Referencias utilizadas como marco técnico">
           <p className="mb-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">Las referencias se aplican únicamente cuando corresponden al elemento y alcance efectivamente revisado. Una inspección visual o instrumental de vivienda no sustituye por sí sola un dictamen oficial de cumplimiento normativo, estructural, eléctrico o de gas emitido por la autoridad o especialista competente.</p>
           <div className="space-y-3">{referencias.map((ref)=><article key={ref.titulo} className="rounded-2xl border border-slate-200 p-4"><h3 className="font-black">{ref.titulo}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{ref.uso}</p><p className="mt-2 break-all text-xs text-cyan-700">{ref.fuente}</p></article>)}</div>
         </Seccion>
 
-        <Seccion n="11" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
+        <Seccion folio={inspeccion.folio} n="11" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
           <div className="grid gap-3 sm:grid-cols-2">{GLOSARIO.map(([t,d])=><article key={t} className="rounded-2xl bg-slate-100 p-4"><h3 className="font-black">{t}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{d}</p></article>)}</div>
         </Seccion>
 
@@ -532,7 +558,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 }
 
-function Seccion({n,titulo,subtitulo,children}:{n:string;titulo:string;subtitulo:string;children:React.ReactNode}){return <section className="px-10 py-8"><header className="mb-5 flex gap-4 border-b border-slate-200 pb-4"><span className="grid h-11 w-11 place-items-center rounded-xl bg-slate-950 text-sm font-black text-amber-300">{n}</span><div><h2 className="text-2xl font-black">{titulo}</h2><p className="mt-1 text-sm text-slate-500">{subtitulo}</p></div></header>{children}</section>}
+function Seccion({n,titulo,subtitulo,folio,children}:{n:string;titulo:string;subtitulo:string;folio:string;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section className="page-break relative min-h-[245mm] px-10 py-8"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-10 border-t border-amber-500/50 pt-4 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">Pre-Reporte de Inspección</p><p className="mt-1">Folio {folio}</p></div></div></footer></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
