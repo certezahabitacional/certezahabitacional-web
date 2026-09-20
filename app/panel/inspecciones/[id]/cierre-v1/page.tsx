@@ -204,6 +204,21 @@ export default async function CierreV1Page({ params, searchParams }: {
         )}
 
         {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && (
+          <section className={`mt-5 rounded-3xl border p-6 ${firmasListas ? "border-emerald-300/20 bg-emerald-300/5" : "border-cyan-300/20 bg-cyan-300/5"}`}>
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Registro de firmas</p>
+            <h2 className="mt-2 text-xl font-black">Firmas del Inspector y del Cliente</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Las firmas forman parte del expediente y aparecerán en el PRE-REPORTE y en el REPORTE FINAL. Deben quedar registradas antes de cerrar la visita.</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href={`/panel/inspecciones/${id}/firmas`} className="inline-block rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
+                {firmasListas ? "CONSULTAR / ACTUALIZAR FIRMAS ✓" : "REGISTRAR FIRMAS"}
+              </Link>
+              <span className={`rounded-xl border px-4 py-3 text-sm font-black ${firmaInspector ? "border-emerald-300/30 text-emerald-300" : "border-amber-300/30 text-amber-300"}`}>Inspector: {firmaInspector ? "registrada" : "pendiente"}</span>
+              <span className={`rounded-xl border px-4 py-3 text-sm font-black ${firmaCliente ? "border-emerald-300/30 text-emerald-300" : "border-amber-300/30 text-amber-300"}`}>Cliente: {firmaCliente ? "registrada" : "pendiente"}</span>
+            </div>
+          </section>
+        )}
+
+        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && (
           <section className={`mt-5 rounded-3xl border p-6 ${listoCampo ? "border-emerald-300/20 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
             <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Etapa 2 · cierre de visita</p>
             <h2 className="mt-2 text-xl font-black">Terminar trabajo de campo</h2>
