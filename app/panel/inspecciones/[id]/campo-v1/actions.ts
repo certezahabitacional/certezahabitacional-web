@@ -469,16 +469,6 @@ export async function reactivarPartidaAreaV1(formData: FormData) {
 
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
 
-  const [control] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null }>>`
-    SELECT "campoFinalizadoEn"
-    FROM "InspeccionControlV2"
-    WHERE "inspeccionId"=${inspeccionId}
-    LIMIT 1
-  `;
-  if (control?.campoFinalizadoEn) {
-    volver(inspeccionId, "error", "La visita ya fue cerrada; esta partida no puede reactivarse desde captura de campo.", areaId);
-  }
-
   const [area] = await prisma.$queryRaw<Array<{ nombre: string; resultado: string | null }>>`
     SELECT "nombre","resultado"
     FROM "AreaInspeccion"
