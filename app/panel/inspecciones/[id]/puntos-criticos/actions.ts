@@ -997,8 +997,8 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   if (!paso.lecturaInicial) volver(inspeccionId, codigo, "error", "Primero registra la foto y lectura inicial.");
   if (paso.lecturaFinal) volver(inspeccionId, codigo, "error", "La prueba prolongada ya fue cerrada.");
 
-  const especiales = await prisma.$queryRaw<Array<{ id: string; concepto: string; fotos: number }>>`
-    SELECT g."id",g."concepto",
+  const especiales = await prisma.$queryRaw<Array<{ id: string; concepto: string; fotos: number; observacion: string | null }>>`
+    SELECT g."id",g."concepto",g."observacion",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos"
     FROM "GuiaInspeccionItem" g
     WHERE g."inspeccionId"=${inspeccionId}
@@ -1010,6 +1010,16 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   const final = especiales.find((item) => /lectura final/i.test(item.concepto));
   if (!inicial || Number(inicial.fotos) !== 1) volver(inspeccionId, codigo, "error", "Falta la fotografía inicial del manómetro.");
   if (!final || Number(final.fotos) !== 1) volver(inspeccionId, codigo, "error", "Falta la fotografía final del manómetro.");
+
+  const interpretacionIa = observacionObjeto(final.observacion);
+  if (!interpretacionIa.descripcionIa || interpretacionIa.descripcionIa.trim().length < 10) {
+    volver(
+      inspeccionId,
+      codigo,
+      "error",
+      "Genera primero la interpretación de IA de la prueba de hermeticidad antes de registrar el cierre final.",
+    );
+  }
 
   const [otros] = await prisma.$queryRaw<Array<{ pendientes: number }>>`
     SELECT COUNT(*) FILTER (
@@ -1026,6 +1036,12 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   }
 
   const observacion = JSON.stringify({
+    descripcionIa: interpretacionIa.descripcionIa,
+    clasificacionSugerida: interpretacionIa.clasificacionSugerida,
+    justificacionIa: interpretacionIa.justificacionIa,
+    lecturaFinalPropuesta: interpretacionIa.lecturaFinalPropuesta,
+    unidadFinalPropuesta: interpretacionIa.unidadFinalPropuesta,
+    variacionPresion: interpretacionIa.variacionPresion,
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
     prioridadFinal: prioridadTexto,
@@ -1064,6 +1080,7 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
           clasificacion,
           prioridad,
           guiaItemId: final.id,
+          textoIaOriginal: interpretacionIa.descripcionIa,
           textoInspectorFinal: descripcionFinal,
         },
       });
@@ -1092,7 +1109,7 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     entidad: "ProtocoloInspeccionPaso",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} cerró la prueba prolongada de ${puntoPorCodigo(codigo).etiqueta}: ${paso.lecturaInicial} ${paso.unidad ?? unidad} → ${lecturaFinal} ${unidad}.`,
+    descripcion: `${responsable} cerró la prueba prolongada de ${puntoPorCodigo(codigo).etiqueta}: ${paso.lecturaInicial} ${paso.unidad ?? unidad} → ${lecturaFinal} ${unidad}. Se generó interpretación IA y se confirmó la interpretación final del Inspector.`,
   });
 
   const siguiente = siguienteCodigo(codigo);
