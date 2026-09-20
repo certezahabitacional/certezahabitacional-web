@@ -7,7 +7,7 @@ import QRCode from "qrcode";
 import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
-import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
+import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import {
   HERRAMIENTAS_INSPECCION,
@@ -46,6 +46,18 @@ type Area = {
 };
 type Proceso = { orden:number; nombre:string; estado:string; lecturaInicial:number|null; lecturaFinal:number|null; unidad:string|null; comentario:string|null };
 type FotoArea = { areaId:string; url:string; descripcion:string|null };
+type ConceptoReporte = {
+  id:string;
+  areaId:string;
+  concepto:string;
+  especificacion:string|null;
+  observacion:string|null;
+  estadoV3:string|null;
+  valorMedido:string|null;
+  valorProyecto:string|null;
+  unidadMedida:string|null;
+  orden:number|null;
+};
 type ControlReporte = {
   campoFinalizadoEn: Date | null;
   inspeccionTecnicaConcluidaEn: Date | null;
@@ -189,6 +201,28 @@ export default async function ReporteV1Page({ params, searchParams }: {
     FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true ORDER BY a."orden",a."nombre"
   `;
 
+  const conceptosReporte = await prisma.$queryRaw<ConceptoReporte[]>`
+    SELECT
+      g."id"::text AS "id",
+      g."areaId"::text AS "areaId",
+      g."concepto",
+      g."especificacion",
+      g."observacion",
+      g."estadoV3",
+      g."valorMedido",
+      g."valorProyecto",
+      g."unidadMedida",
+      g."orden"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."inspeccionId"=${id}
+    ORDER BY g."areaId", COALESCE(g."orden",999999), g."concepto"
+  `;
+  const conceptosPorArea = new Map<string, ConceptoReporte[]>();
+  for (const concepto of conceptosReporte) {
+    if (!["REVISADO","CON_HALLAZGO"].includes(concepto.estadoV3 ?? "")) continue;
+    conceptosPorArea.set(concepto.areaId,[...(conceptosPorArea.get(concepto.areaId)??[]),concepto]);
+  }
+
   const procesos = await prisma.$queryRaw<Proceso[]>`
     SELECT "orden","nombre","estado","lecturaInicial","lecturaFinal","unidad","comentario"
     FROM "ProtocoloInspeccionPaso" WHERE "inspeccionId"=${id} ORDER BY "orden"
@@ -272,6 +306,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const autorizado = Boolean(inspeccion.certificado?.vigente);
   const calificacion = autorizado && inspeccion.certificado ? Number(inspeccion.certificado.ish) : metricas.calificacion;
   const calificacionTexto = Number(calificacion).toFixed(2);
+  const nivelEvaluacion = nivelEvaluacionV1(Number(calificacion));
   const coberturaTexto = metricas.cobertura.toFixed(2);
   const [autorizacionDireccion] = autorizado
     ? await prisma.$queryRaw<AutorizacionDireccion[]>`
@@ -292,7 +327,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const fechaAutorizacion = autorizacionDireccion
     ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
     : null;
-  const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Reporte de Inspección V1";
+  const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Pre-Reporte de Inspección V1";
   const estadoReporte = autorizado ? "REPORTE FINAL AUTORIZADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
 
   let qr:string|null=null;
@@ -360,30 +395,27 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Seccion n="01" titulo="Índice" subtitulo="Estructura del reporte">
           <ol className="grid gap-2 sm:grid-cols-2">{[
             "Resumen ejecutivo",
-            "Datos declarados y alcance de la cotización",
-            "Procedimiento y alcance técnico",
-            "Funcionamiento e instalaciones",
-            "Resumen de hallazgos por clasificación",
-            "Reporte detallado de hallazgos",
-            "Desarrollo por áreas",
-            "Anexo completo de evidencias",
-            "Resumen estadístico y calificación",
-            "Herramientas propuestas y utilizadas",
-            "Conclusiones finales",
-            "Normatividad y bibliografía de apoyo",
+            "Datos declarados",
+            "Procedimiento y alcance",
+            "Servicios y verificaciones instrumentales",
+            "Desarrollo de la inspección",
+            "Resumen por partida",
+            "Tecnología Certeza Habitacional",
+            "Conclusiones",
+            "Bibliografía y normatividad de apoyo",
             "Glosario",
             "Certificado Certeza Habitacional",
           ].map((x,i)=><li key={x} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold">{String(i+1).padStart(2,"0")} · {x}</li>)}</ol>
         </Seccion>
 
         <Seccion n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
-          <div className="grid gap-3 sm:grid-cols-5"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
-          <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · No aplica: {metricas.noAplica} · Aplicables: {metricas.aplicables} · Revisados: {metricas.revisados}</p>
+          <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
+          <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · Inspeccionados: {metricas.revisados} · No aplica: {metricas.noAplica} · No inspeccionados / sin acceso u otra causa: {Math.max(metricas.aplicables - metricas.revisados, 0)}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
-          <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La Calificación Técnica Certeza es un indicador distinto y refleja la severidad acumulada de los hallazgos P1–P5. Una inspección puede alcanzar 100% de cobertura y, al mismo tiempo, obtener una calificación técnica baja si se detectaron condiciones relevantes.</p>
+          <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La calificación se expresa de 0 a 100 y se traduce a la escala de evaluación P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99 y SH 100. La prioridad P1–P5 de cada hallazgo se presenta por separado y no debe confundirse con el nivel global de evaluación.</p>
         </Seccion>
 
-        <Seccion n="03" titulo="Datos declarados y alcance de la cotización" subtitulo="Información base proporcionada antes de la visita">
+        <Seccion n="03" titulo="Datos declarados" subtitulo="Información proporcionada y registrada antes de la visita">
           <div className="grid gap-4 sm:grid-cols-2">
             <article className="rounded-2xl bg-slate-100 p-4">
               <h3 className="font-black">Cliente e inmueble declarados</h3>
@@ -408,18 +440,6 @@ export default async function ReporteV1Page({ params, searchParams }: {
             </p>
           </div>
           <div className="mt-5 rounded-2xl border border-slate-200 p-5">
-            <h3 className="font-black">Alcances comerciales registrados</h3>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <Fila label="Precio base" value={new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(inspeccion.cotizacion?.precioBase ?? 0))}/>
-              <Fila label="Metros adicionales" value={String(inspeccion.cotizacion?.metrosAdicionales ?? "0")}/>
-              <Fila label="Cargo por metros adicionales" value={new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(inspeccion.cotizacion?.cargoMetrosAdicionales ?? 0))}/>
-              <Fila label="Cargos extra" value={new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(inspeccion.cotizacion?.cargosExtra ?? 0))}/>
-              <Fila label="Descuento" value={new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(inspeccion.cotizacion?.descuento ?? 0))}/>
-              <Fila label="Total" value={new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(inspeccion.cotizacion?.total ?? 0))}/>
-            </div>
-            {inspeccion.cotizacion?.notas && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">Notas de cotización: {inspeccion.cotizacion.notas}</p>}
-          </div>
-          <div className="mt-5 rounded-2xl border border-slate-200 p-5">
             <h3 className="font-black">Herramienta propuesta en la cotización</h3>
             {herramientasPropuestas.length > 0 ? (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -435,19 +455,19 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <p className="text-sm leading-7 text-slate-700">El Método Certeza Habitacional parte del alcance aceptado en la cotización, incorpora la información de proyecto disponible, inicia con las pruebas funcionales e instalaciones y continúa con una revisión secuencial área por área. Cada área se cierra con hallazgos documentados o con evidencia satisfactoria cuando no se identifican anomalías relevantes.</p>
         </Seccion>
 
-        <Seccion n="05" titulo="Funcionamiento e instalaciones" subtitulo="Pruebas y procesos técnicos ejecutados">
+        <Seccion n="05" titulo="Servicios y verificaciones instrumentales" subtitulo="Pruebas, mediciones y procesos técnicos ejecutados">
           <div className="space-y-3">{procesos.map((p)=><article key={`${p.orden}-${p.nombre}`} className="avoid-break rounded-2xl border border-slate-200 p-4"><div className="flex justify-between gap-3"><h3 className="font-black">{p.nombre}</h3><span className="text-xs font-black text-cyan-700">{p.estado.replaceAll('_',' ')}</span></div>{(p.lecturaInicial!==null||p.lecturaFinal!==null)&&<p className="mt-2 text-sm font-bold text-slate-700">Lectura inicial: {p.lecturaInicial ?? '—'} {p.unidad ?? ''} · Lectura final: {p.lecturaFinal ?? '—'} {p.unidad ?? ''}</p>}{p.comentario&&<p className="mt-2 text-sm leading-6 text-slate-600">{p.comentario}</p>}</article>)}</div>
           <div className="mt-6 rounded-2xl bg-cyan-50 p-5"><p className="text-xs font-black uppercase tracking-wider text-cyan-800">Tecnología aplicada en estos procesos</p><p className="mt-2 text-sm text-slate-700">Las lecturas y verificaciones instrumentales registradas se presentan en su contexto técnico y se resumen nuevamente en la sección de herramientas y tecnología.</p></div>
         </Seccion>
 
-        <Seccion n="06" titulo="Resumen de hallazgos por clasificación" subtitulo="Prioridad, clasificación y distribución">
+        <Seccion n="06A" titulo="Desarrollo de la inspección · resumen de hallazgos" subtitulo="Clasificación, prioridad y distribución de hallazgos">
           <div className="grid gap-3 sm:grid-cols-5">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
           <div className="mt-5 space-y-3">
             {hallazgosConEvidencia.map((h) => <article key={h.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{h.titulo}</h3><div className="flex gap-2"><span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">{h.clasificacion}</span><span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-900">{h.prioridad}</span></div></div><p className="mt-2 text-sm text-slate-500">{h.area}{h.ubicacion ? ` · ${h.ubicacion}` : ""}</p><p className="mt-2 text-sm leading-6 text-slate-700">{h.descripcion}</p></article>)}
           </div>
         </Seccion>
 
-        <Seccion n="07" titulo="Reporte detallado de hallazgos" subtitulo="Hallazgo por hallazgo, con evidencia e interpretación final">
+        <Seccion n="06B" titulo="Desarrollo de la inspección · hallazgos detallados" subtitulo="Hallazgo por hallazgo, con evidencia e interpretación final">
           <div className="space-y-8">
             {hallazgosConEvidencia.length === 0 && <p className="rounded-2xl bg-emerald-50 p-5 font-bold text-emerald-900">No se registraron hallazgos.</p>}
             {hallazgosConEvidencia.map((h,index) => <article key={h.id} className="avoid-break rounded-3xl border border-slate-200 p-5">
@@ -459,11 +479,11 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </Seccion>
 
-        <Seccion n="08" titulo="Desarrollo por áreas" subtitulo="Conceptos revisados, resultados, hallazgos y evidencia">
-          <div className="space-y-6">{areas.map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.aplicables} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':a.resultado==='NO_APLICA'?'bg-slate-200 text-slate-700':'bg-amber-100 text-amber-900'}`}>{a.resultado==='NO_APLICA'?'NO INSPECCIONADA / DESHABILITADA':(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
+        <Seccion n="06C" titulo="Desarrollo de la inspección · conceptos por partida" subtitulo="Conceptos revisados, resultados, hallazgos y evidencia">
+          <div className="space-y-6">{areas.filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.aplicables} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':a.resultado==='NO_APLICA'?'bg-slate-200 text-slate-700':'bg-amber-100 text-amber-900'}`}>{a.resultado==='NO_APLICA'?'NO INSPECCIONADA / DESHABILITADA':(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{(conceptosPorArea.get(a.id)??[]).map((g,index)=>{const obs=observacionConcepto(g.observacion);return <div key={g.id} className="mt-4 rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-black">{index+1}. {g.concepto}</p><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-700">{(g.estadoV3??"PENDIENTE").replaceAll("_"," ")}</span></div>{g.especificacion&&<p className="mt-2 text-xs leading-5 text-slate-500">{g.especificacion}</p>}{obs.descripcionFinal&&<p className="mt-2 text-sm leading-6 text-slate-700"><strong>Interpretación final:</strong> {obs.descripcionFinal}</p>}{(g.valorMedido||g.valorProyecto)&&<p className="mt-2 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}{obs.clasificacionFinal&&<p className="mt-2 text-xs font-bold text-slate-600">Clasificación: {obs.clasificacionFinal}{obs.prioridadFinal?` · Prioridad: ${obs.prioridadFinal}`:""}</p>}</div>})}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
         </Seccion>
 
-        <Seccion n="09" titulo="Anexo completo de evidencias" subtitulo="Todas las fotografías y datos asociados registrados en la inspección">
+        <Seccion n="06D" titulo="Desarrollo de la inspección · evidencias" subtitulo="Fotografías y datos asociados registrados en la inspección">
           <div className="space-y-5">
             {evidencias.length === 0 && <p className="rounded-2xl bg-slate-100 p-5 text-sm text-slate-600">No existen evidencias fotográficas registradas.</p>}
             {evidencias.map((e,index) => {
@@ -478,34 +498,34 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </Seccion>
 
-        <Seccion n="10" titulo="Resumen estadístico" subtitulo="Cobertura, calificación y distribución de resultados">
-          <div className="grid gap-3 sm:grid-cols-5"><Metrica label="Cobertura efectiva" value={`${coberturaTexto}%`}/><Metrica label="Calificación Técnica Certeza" value={`${calificacionTexto}/100`}/><Metrica label="Puntos aplicables" value={String(metricas.aplicables)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Hallazgos" value={String(metricas.totalHallazgos)}/></div>
-          <p className="mt-3 text-xs font-bold text-slate-500">Áreas satisfactorias: {metricas.areasSinHallazgos} · Carga de severidad: {metricas.cargaSeveridad}</p>
+        <Seccion n="07" titulo="Resumen por partida" subtitulo="Cobertura, resultados por área y evaluación global">
+          <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura efectiva" value={`${coberturaTexto}%`}/><Metrica label="Calificación Técnica Certeza" value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Puntos aplicables" value={String(metricas.aplicables)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Hallazgos" value={String(metricas.totalHallazgos)}/></div>
+          <p className="mt-3 text-xs font-bold text-slate-500">Áreas satisfactorias: {metricas.areasSinHallazgos} · No aplica: {metricas.noAplica} · No inspeccionados / sin acceso u otra causa: {Math.max(metricas.aplicables - metricas.revisados, 0)} · Carga de severidad: {metricas.cargaSeveridad}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
         </Seccion>
 
-        <Seccion n="11" titulo="Herramientas y tecnología utilizadas" subtitulo="Función, aplicación y ventaja técnica">
-          <p className="mb-5 text-sm leading-6 text-slate-600">Esta relación se construye a partir de los resultados efectivamente registrados durante la inspección. La Aplicación Certeza Habitacional forma parte integral del método y los equipos físicos aparecen únicamente cuando su uso quedó documentado.</p>
+        <Seccion n="08" titulo="Tecnología Certeza Habitacional" subtitulo="Método Certeza, plataforma, IA, instrumentación y criterio técnico humano">
+          <p className="mb-5 text-sm leading-6 text-slate-600">El Método Certeza combina la experiencia y criterio técnico del Inspector con la plataforma Certeza Habitacional, evidencia fotográfica, verificaciones instrumentales y herramientas de inteligencia artificial como apoyo. La IA propone análisis; la interpretación y decisión técnica final corresponde al personal autorizado. Los equipos físicos aparecen únicamente cuando su uso quedó documentado.</p>
           <TecnologiaInspeccionV1 resultados={resultados} mostrarNoEjecutadas />
         </Seccion>
 
-        <Seccion n="12" titulo="Conclusiones finales" subtitulo="Síntesis técnica del resultado de la inspección">
+        <Seccion n="09" titulo="Conclusiones" subtitulo="Síntesis técnica objetiva del resultado de la inspección">
           <p className="rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">{metricas.dictamen}</p>
           <p className="mt-4 text-sm leading-7 text-slate-700">Cobertura efectiva: <strong>{coberturaTexto}%</strong>. Calificación Técnica Certeza: <strong>{calificacionTexto}/100</strong>. Hallazgos documentados: <strong>{metricas.totalHallazgos}</strong>. La conclusión se limita al alcance contratado, a las áreas accesibles y a las condiciones visibles o medibles durante la visita.</p>
         </Seccion>
 
-        <Seccion n="13" titulo="Normatividad y bibliografía de apoyo" subtitulo="Referencias utilizadas como marco técnico">
+        <Seccion n="10" titulo="Bibliografía y normatividad de apoyo" subtitulo="Referencias utilizadas como marco técnico">
           <p className="mb-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">Las referencias se aplican únicamente cuando corresponden al elemento y alcance efectivamente revisado. Una inspección visual o instrumental de vivienda no sustituye por sí sola un dictamen oficial de cumplimiento normativo, estructural, eléctrico o de gas emitido por la autoridad o especialista competente.</p>
           <div className="space-y-3">{referencias.map((ref)=><article key={ref.titulo} className="rounded-2xl border border-slate-200 p-4"><h3 className="font-black">{ref.titulo}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{ref.uso}</p><p className="mt-2 break-all text-xs text-cyan-700">{ref.fuente}</p></article>)}</div>
         </Seccion>
 
-        <Seccion n="14" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
+        <Seccion n="11" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
           <div className="grid gap-3 sm:grid-cols-2">{GLOSARIO.map(([t,d])=><article key={t} className="rounded-2xl bg-slate-100 p-4"><h3 className="font-black">{t}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{d}</p></article>)}</div>
         </Seccion>
 
         <section className="page-break px-10 py-10">
-          <ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
-          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
+          <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">12 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
+          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
         </section>
       </article>
     </main>
