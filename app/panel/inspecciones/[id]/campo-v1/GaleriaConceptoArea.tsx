@@ -56,7 +56,7 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
     <label className="block cursor-pointer rounded-xl border border-dashed border-violet-300/40 px-4 py-5 text-center font-black text-violet-200">
       <span className="block text-2xl">🖼️</span>
       <span className="mt-1 block">ELEGIR DE GALERÍA</span>
-      <span className="mt-1 block text-[10px] text-slate-500">1 fotografía · vista previa antes de guardar</span>
+      <span className="mt-1 block text-[10px] text-slate-500">Agregar 1 fotografía · máximo 4 por concepto</span>
       <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={(e) => seleccionar(e.target.files?.[0] ?? null)} />
     </label>
   );
