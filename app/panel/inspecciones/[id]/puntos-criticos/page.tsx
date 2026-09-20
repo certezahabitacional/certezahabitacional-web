@@ -32,6 +32,7 @@ import {
   generarDescripcionIaPuntoCriticoV1,
   guardarResultadoPuntoCriticoV1,
   iniciarPuntosCriticosV1,
+  reactivarPuntoCriticoV1,
   subirFotoPuntoCriticoV1,
 } from "./actions";
 
@@ -471,7 +472,16 @@ export default async function PuntosCriticosPage({
 
             {paso.estado === "NO_APLICA" && (
               <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-950 p-5 text-slate-400">
-                Este punto fue declarado <strong>NO APLICA</strong>.
+                <p>Este punto fue declarado <strong>NO APLICA</strong>.</p>
+                {puedeCapturar && (
+                  <form action={reactivarPuntoCriticoV1} className="mt-4">
+                    <input type="hidden" name="inspeccionId" value={id}/>
+                    <input type="hidden" name="codigo" value={codigoSolicitado}/>
+                    <button className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">
+                      REACTIVAR PARTIDA COMPLETA
+                    </button>
+                  </form>
+                )}
               </div>
             )}
           </article>
