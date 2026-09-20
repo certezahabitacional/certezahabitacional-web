@@ -32,6 +32,7 @@ async function signedUrl(path: string | null) {
 type AreaResumen = {
   nombre: string;
   resultado: string | null;
+  comentarioFinal: string | null;
   hallazgos: number;
   definidos: number;
   aplicables: number;
@@ -95,7 +96,7 @@ export default async function PreReportePage({ params, searchParams }: {
   `;
 
   const areas = await prisma.$queryRaw<AreaResumen[]>`
-    SELECT a."nombre",a."resultado",
+    SELECT a."nombre",a."resultado",a."comentarioFinal",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
@@ -239,7 +240,10 @@ export default async function PreReportePage({ params, searchParams }: {
             <p className="mt-2 text-sm leading-6 text-slate-600">Estas partidas no se consideran inspeccionadas. El expediente conserva la causa documentada para mantener trazabilidad del alcance real.</p>
             <div className="mt-4 grid gap-2">
               {areas.filter((a) => a.resultado === "NO_APLICA").map((a) => (
-                <div key={a.nombre} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">— {a.nombre}</div>
+                <div key={a.nombre} className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
+                  <p className="font-black">— {a.nombre}</p>
+                  {a.comentarioFinal && <p className="mt-1 text-xs leading-5 text-slate-500">{a.comentarioFinal}</p>}
+                </div>
               ))}
             </div>
           </section>
