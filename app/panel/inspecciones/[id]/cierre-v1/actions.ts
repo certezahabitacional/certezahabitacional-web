@@ -61,7 +61,7 @@ async function validarCierreCampo(inspeccionId: string) {
   }>>`
     SELECT
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${inspeccionId} AND a."obligatoria"=true) AS "areasTotal",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${inspeccionId} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${inspeccionId} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${inspeccionId} AND p."obligatorio"=true) AS "protocoloTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${inspeccionId} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "protocoloCompleto",
       (SELECT COUNT(*)::int
@@ -77,7 +77,15 @@ async function validarCierreCampo(inspeccionId: string) {
   if (!v || v.areasTotal === 0) return "No existen áreas obligatorias configuradas para la V1.";
   if (v.areasCompletas !== v.areasTotal) return `Faltan ${v.areasTotal - v.areasCompletas} área(s) por cerrar.`;
   if (v.protocoloTotal === 0 || v.protocoloCompleto !== v.protocoloTotal) return "Faltan procesos técnicos obligatorios por completar.";
-  if (v.fachadaPortadas !== 1) return "Debes seleccionar exactamente una fotografía de fachada frontal para la portada.";
+  const [fachadaFrontal] = await prisma.$queryRaw<Array<{ resultado: string | null }>>`
+    SELECT "resultado"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+    ORDER BY CASE WHEN "codigo"='FACHADA_FRONTAL' THEN 0 ELSE 1 END
+    LIMIT 1
+  `;
+  if (fachadaFrontal?.resultado !== "NO_APLICA" && v.fachadaPortadas !== 1) return "Debes seleccionar exactamente una fotografía de fachada frontal para la portada.";
   if (v.hallazgosIncompletos > 0) return `Existen ${v.hallazgosIncompletos} hallazgo(s) sin una descripción final o fuera del rango de 1 a 4 fotografías.`;
   if (v.syncPendientes > 0) return `Existen ${v.syncPendientes} operación(es) pendientes de sincronizar.`;
   return null;
