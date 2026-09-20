@@ -333,6 +333,17 @@ export async function registrarEvidencia(
         "El hallazgo no pertenece a esta inspección.",
       );
     }
+
+    const totalEvidencias = await prisma.fotografia.count({
+      where: { inspeccionId, hallazgoId },
+    });
+    if (totalEvidencias >= 4) {
+      redirigirError(
+        inspeccionId,
+        hallazgoId,
+        "Este hallazgo ya tiene el máximo de 4 fotografías.",
+      );
+    }
   }
 
   const extension =

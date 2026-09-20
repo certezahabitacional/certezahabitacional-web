@@ -1,3 +1,6 @@
+-- Migración: evidencia V1 de 1 a 4 fotografías por hallazgo/concepto.
+-- Reemplaza la función de validación de cierre con la regla actualizada.
+
 -- Certeza Habitacional · Reglas de cierre V1
 -- 1-4 evidencias por concepto/hallazgo. Una sola descripción final por hallazgo.
 -- Fachada principal: 4 fotografías y exactamente una seleccionada como portada.
@@ -111,3 +114,4 @@ begin
   return new;
 end;
 $function$;
+

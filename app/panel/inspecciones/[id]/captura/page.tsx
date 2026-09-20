@@ -892,15 +892,18 @@ export default async function CapturaPage({
                           : "Editar hallazgo"}
                       </Link>
 
-                      <Link
-                        href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgo.id}`}
-                        className="min-h-11 rounded-2xl bg-cyan-400 px-4 py-3 text-center text-sm font-black text-slate-950"
-                      >
-                        📷{" "}
-                        {fotos > 0
-                          ? `Agregar otra evidencia (${fotos})`
-                          : "Tomar / agregar evidencia"}
-                      </Link>
+                      {fotos < 4 ? (
+                        <Link
+                          href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgo.id}`}
+                          className="min-h-11 rounded-2xl bg-cyan-400 px-4 py-3 text-center text-sm font-black text-slate-950"
+                        >
+                          📷 {fotos > 0 ? `Agregar evidencia ${fotos + 1}/4` : "Agregar primera evidencia"}
+                        </Link>
+                      ) : (
+                        <div className="min-h-11 rounded-2xl border border-emerald-300/20 bg-emerald-300/5 px-4 py-3 text-center text-sm font-black text-emerald-300">
+                          Máximo 4 evidencias ✓
+                        </div>
+                      )}
 
                       {fotos > 0 ? (
                         <Link

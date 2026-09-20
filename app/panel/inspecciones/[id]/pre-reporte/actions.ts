@@ -75,7 +75,7 @@ async function validarTecnicoListoPreReporte(inspeccionId: string) {
        FROM "Hallazgo" h
        WHERE h."inspeccionId"=${inspeccionId}
          AND (
-           (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") < 4
+           (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") NOT BETWEEN 1 AND 4
            OR nullif(btrim(coalesce(h."descripcion",'')),'') IS NULL
          )) AS "hallazgosIncompletos",
       (SELECT COUNT(*)::int

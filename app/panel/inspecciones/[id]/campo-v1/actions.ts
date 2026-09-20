@@ -414,7 +414,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
       (SELECT COUNT(*)::int FROM "Hallazgo" h
        WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre"
          AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL
-         AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id" AND f."inspeccionId"=a."inspeccionId") >= 4) "completos",
+         AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id" AND f."inspeccionId"=a."inspeccionId") BETWEEN 1 AND 4) "completos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
        WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') "pendientes"
     FROM "AreaInspeccion" a
@@ -424,7 +424,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
   if (area.hallazgos < 1) volver(inspeccionId, "error", "Registra al menos un hallazgo antes de cerrar el punto con hallazgos.", areaId);
   if (Number(area.pendientes) > 0) volver(inspeccionId, "error", `Faltan ${area.pendientes} concepto(s) por resolver. El punto debe llegar al 100% antes de cerrarse.`, areaId);
   if (area.completos !== area.hallazgos) {
-    volver(inspeccionId, "error", `Completa los hallazgos del punto: ${area.completos}/${area.hallazgos} tienen descripción y mínimo 4 evidencias.`, areaId);
+    volver(inspeccionId, "error", `Completa los hallazgos del punto: ${area.completos}/${area.hallazgos} tienen una descripción final y entre 1 y 4 evidencias.`, areaId);
   }
 
   const resumen = `Se registraron ${area.hallazgos} hallazgo(s) en ${area.nombre}. Los puntos aplicables fueron revisados y los hallazgos cuentan con la evidencia mínima requerida para su documentación.`;

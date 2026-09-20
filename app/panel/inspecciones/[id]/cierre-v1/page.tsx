@@ -77,7 +77,7 @@ export default async function CierreV1Page({ params, searchParams }: {
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "procesosTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "procesosCompletos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id}) AS "hallazgos",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id} AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") >= 4 AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL) AS "hallazgosCompletos",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id} AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") BETWEEN 1 AND 4 AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL) AS "hallazgosCompletos",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')) AS "fotosFachada",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true) AS "portadaFachada",
       (SELECT COUNT(*)::int FROM "OperacionCampoSync" s WHERE s."inspeccionId"=${id} AND s."estado" <> 'PROCESADA') AS "syncPendientes"

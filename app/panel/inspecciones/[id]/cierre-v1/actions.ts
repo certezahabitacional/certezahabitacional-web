@@ -70,7 +70,7 @@ async function validarCierreCampo(inspeccionId: string) {
        WHERE a."inspeccionId"=${inspeccionId}
          AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
          AND fa."candidataPortada"=true) AS "fachadaPortadas",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${inspeccionId} AND ((SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") < 4 OR nullif(btrim(coalesce(h."descripcion",'')),'') IS NULL)) AS "hallazgosIncompletos",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${inspeccionId} AND (((SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") NOT BETWEEN 1 AND 4) OR nullif(btrim(coalesce(h."descripcion",'')),'') IS NULL)) AS "hallazgosIncompletos",
       (SELECT COUNT(*)::int FROM "OperacionCampoSync" s WHERE s."inspeccionId"=${inspeccionId} AND s."estado" <> 'PROCESADA') AS "syncPendientes"
   `;
   const v = r;
@@ -78,7 +78,7 @@ async function validarCierreCampo(inspeccionId: string) {
   if (v.areasCompletas !== v.areasTotal) return `Faltan ${v.areasTotal - v.areasCompletas} área(s) por cerrar.`;
   if (v.protocoloTotal === 0 || v.protocoloCompleto !== v.protocoloTotal) return "Faltan procesos técnicos obligatorios por completar.";
   if (v.fachadaPortadas !== 1) return "Debes seleccionar exactamente una fotografía de fachada frontal para la portada.";
-  if (v.hallazgosIncompletos > 0) return `Existen ${v.hallazgosIncompletos} hallazgo(s) sin 4 evidencias o descripción completa.`;
+  if (v.hallazgosIncompletos > 0) return `Existen ${v.hallazgosIncompletos} hallazgo(s) sin una descripción final o fuera del rango de 1 a 4 fotografías.`;
   if (v.syncPendientes > 0) return `Existen ${v.syncPendientes} operación(es) pendientes de sincronizar.`;
   return null;
 }
