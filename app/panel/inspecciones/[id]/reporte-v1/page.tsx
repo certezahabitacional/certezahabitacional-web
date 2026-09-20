@@ -316,7 +316,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
             Verifica portada, cotización, áreas declaradas, alcances, herramientas, hallazgos, evidencias, interpretaciones, calificación, conclusiones, referencias y glosario. Si detectas una corrección, pasa a la última revisión y ajuste; cualquier cambio invalidará esta confirmación hasta que vuelvas a revisar el pre-reporte actualizado.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
-            <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white">ÚLTIMA REVISIÓN Y AJUSTE</Link>
+            {controlReporte.preReporteGeneradoEn && (
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white">ÚLTIMA REVISIÓN Y AJUSTE</Link>
+            )}
             <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">CORREGIR PARTIDAS / CONCEPTOS</Link>
             <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">REVISAR EVIDENCIAS</Link>
           </div>
