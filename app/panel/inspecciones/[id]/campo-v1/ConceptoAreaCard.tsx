@@ -8,6 +8,7 @@ import {
   eliminarFotoConceptoAreaV1,
   generarDescripcionIaConceptoAreaV1,
   guardarResultadoConceptoAreaV1,
+  reabrirConceptoAreaV1,
   reactivarConceptoAreaV1,
   subirFotoConceptoAreaV1,
 } from "./conceptos-actions";
@@ -89,10 +90,9 @@ export default async function ConceptoAreaCard({
   const obs = observacion(punto.observacion);
   const noAplica = punto.estadoV3 === "NO_APLICA";
   const cerrado = punto.estadoV3 !== "PENDIENTE";
-  const galeria = fotos.some((foto) => foto.descripcion?.includes("[ORIGEN:GALERIA]"));
-  const requeridas = galeria ? 1 : 4;
-  const evidenciaCompleta = noAplica || fotos.length === requeridas;
+  const evidenciaCompleta = noAplica || (fotos.length >= 1 && fotos.length <= 4);
   const editable = puedeCapturar && areaActiva && !cerrado;
+  const puedeReabrir = puedeCapturar && cerrado && !noAplica;
 
   return (
     <article
@@ -131,7 +131,7 @@ export default async function ConceptoAreaCard({
             </div>
           ) : (
             <p className={`mt-3 text-sm font-black ${evidenciaCompleta ? "text-emerald-300" : "text-amber-300"}`}>
-              📷 Evidencia obligatoria: {galeria ? "1 foto de galería" : "4 fotos tomadas desde la aplicación"} · {fotos.length}/{requeridas}
+              📷 Evidencia: mínimo 1 y máximo 4 fotografías · {fotos.length}/4
             </p>
           )}
 
@@ -189,33 +189,29 @@ export default async function ConceptoAreaCard({
             </form>
           )}
 
-          {editable && !evidenciaCompleta && (
+          {editable && fotos.length < 4 && (
             <div className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-4">
               <p className="text-xs font-black uppercase text-slate-400">
-                {fotos.length === 0 ? "Elige una modalidad de evidencia" : `Agregar fotografía ${fotos.length + 1}/4`}
+                {fotos.length === 0 ? "Agrega la primera evidencia" : `Agregar evidencia opcional ${fotos.length + 1}/4`}
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {!galeria && (
-                  <CapturaConceptoArea
-                    inspeccionId={inspeccionId}
-                    areaId={areaId}
-                    itemId={punto.id}
-                    numeroFoto={fotos.length + 1}
-                    totalFotos={4}
-                    subirFoto={subirFotoConceptoAreaV1}
-                  />
-                )}
-                {fotos.length === 0 && (
-                  <GaleriaConceptoArea
-                    inspeccionId={inspeccionId}
-                    areaId={areaId}
-                    itemId={punto.id}
-                    subirFoto={subirFotoConceptoAreaV1}
-                  />
-                )}
+                <CapturaConceptoArea
+                  inspeccionId={inspeccionId}
+                  areaId={areaId}
+                  itemId={punto.id}
+                  numeroFoto={fotos.length + 1}
+                  totalFotos={4}
+                  subirFoto={subirFotoConceptoAreaV1}
+                />
+                <GaleriaConceptoArea
+                  inspeccionId={inspeccionId}
+                  areaId={areaId}
+                  itemId={punto.id}
+                  subirFoto={subirFotoConceptoAreaV1}
+                />
               </div>
               <p className="mt-3 text-[11px] leading-5 text-slate-500">
-                Una sola modalidad por concepto: 4 fotografías tomadas en la aplicación o 1 fotografía seleccionada de galería.
+                Puedes conservar de 1 a 4 fotografías, tomadas con cámara o seleccionadas de galería. Si modificas la evidencia después de generar IA, deberás generar nuevamente la interpretación.
               </p>
             </div>
           )}
@@ -229,7 +225,7 @@ export default async function ConceptoAreaCard({
             </form>
           )}
 
-          {editable && evidenciaCompleta && (
+          {editable && evidenciaCompleta && obs.descripcionIa && (
             <form action={guardarResultadoConceptoAreaV1} className="rounded-2xl border border-violet-300/20 bg-violet-300/5 p-4">
               <input type="hidden" name="inspeccionId" value={inspeccionId}/>
               <input type="hidden" name="areaId" value={areaId}/>
@@ -248,18 +244,13 @@ export default async function ConceptoAreaCard({
                 </div>
               )}
 
-              {obs.descripcionIa ? (
-                <div className="mb-4 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
-                  <p className="text-xs font-black uppercase text-cyan-200">Interpretación sugerida por IA</p>
-                  <p className="mt-2 text-xs leading-5 text-cyan-50">{obs.descripcionIa}</p>
-                </div>
-              ) : (
-                <p className="mb-4 rounded-xl bg-white/5 p-3 text-xs text-slate-400">
-                  La IA es opcional. El Inspector conserva la decisión técnica final.
-                </p>
-              )}
+              <div className="mb-4 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
+                <p className="text-xs font-black uppercase text-cyan-200">Interpretación inicial de IA</p>
+                <p className="mt-2 text-xs leading-5 text-cyan-50">{obs.descripcionIa}</p>
+                <p className="mt-2 text-[11px] leading-5 text-cyan-200/70">La IA relacionó la partida, el concepto y el grupo completo de fotografías. El texto de abajo se carga automáticamente como copia editable.</p>
+              </div>
 
-              <label className="text-xs font-black uppercase text-slate-400">Interpretación / comentario del Inspector</label>
+              <label className="text-xs font-black uppercase text-slate-400">Descripción final editable por el Inspector</label>
               <textarea
                 name="descripcionFinal"
                 required
@@ -296,10 +287,20 @@ export default async function ConceptoAreaCard({
               <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
               {obs.prioridadFinal && <p>Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
               {obs.descripcionFinal && <p className="mt-2 text-xs leading-5">{obs.descripcionFinal}</p>}
+              {puedeReabrir && (
+                <form action={reabrirConceptoAreaV1} className="mt-4">
+                  <input type="hidden" name="inspeccionId" value={inspeccionId}/>
+                  <input type="hidden" name="areaId" value={areaId}/>
+                  <input type="hidden" name="itemId" value={punto.id}/>
+                  <button className="w-full rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-200">
+                    EDITAR CONCEPTO CERRADO
+                  </button>
+                </form>
+              )}
             </div>
           )}
 
-          {noAplica && puedeCapturar && areaActiva && (
+          {noAplica && puedeCapturar && (
             <form action={reactivarConceptoAreaV1} className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
               <input type="hidden" name="inspeccionId" value={inspeccionId}/>
               <input type="hidden" name="areaId" value={areaId}/>
