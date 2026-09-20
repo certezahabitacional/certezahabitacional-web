@@ -233,6 +233,18 @@ export default async function PreReportePage({ params, searchParams }: {
           </div>
         </section>
 
+        {areas.some((a) => a.resultado === "NO_APLICA") && (
+          <section className="border-t border-slate-200 px-7 py-7">
+            <h2 className="text-2xl font-black">Partidas no inspeccionadas / deshabilitadas</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Estas partidas no se consideran inspeccionadas. El expediente conserva la causa documentada para mantener trazabilidad del alcance real.</p>
+            <div className="mt-4 grid gap-2">
+              {areas.filter((a) => a.resultado === "NO_APLICA").map((a) => (
+                <div key={a.nombre} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">— {a.nombre}</div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="border-t border-slate-200 px-7 py-7">
           <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-700">Tecnología aplicada</p>
           <h2 className="mt-2 text-2xl font-black">Herramientas que respaldaron la inspección</h2>
