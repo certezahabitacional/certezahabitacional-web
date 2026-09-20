@@ -306,13 +306,35 @@ export default async function ReporteV1Page({ params, searchParams }: {
       <style>{`@page{size:Letter;margin:12mm} @media print{.no-print{display:none!important}.page-break{break-before:page;page-break-before:always}.avoid-break{break-inside:avoid;page-break-inside:avoid}}`}</style>
       <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">{autorizado ? "REPORTE FINAL V1" : "PRE-REPORTE INTEGRAL V1"}</span></div>
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
-      {!autorizado && esInspector && controlReporte?.inspeccionTecnicaConcluidaEn && !controlReporte.campoFinalizadoEn && (
+      {!autorizado && esInspector && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">Pre-reporte para revisión antes de salir del inmueble</p>
+          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">
+            {controlReporte.campoFinalizadoEn ? "Pre-reporte actualizado · última revisión del Inspector" : "Pre-reporte para revisión antes de salir del inmueble"}
+          </p>
           <h2 className="mt-2 text-xl font-black">Revisa el documento completo</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-700">Verifica portada, cotización, áreas declaradas, alcances, herramientas, hallazgos, evidencias, interpretaciones, calificación, conclusiones, referencias y glosario. Si detectas una corrección, vuelve a la inspección antes de confirmar.</p>
-          <div className="mt-4 flex flex-wrap gap-3"><Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">VOLVER A CORREGIR INSPECCIÓN</Link><Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">REVISAR EVIDENCIAS</Link></div>
-          <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button disabled={Boolean(controlReporte.preReporteGeneradoEn)} className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-40">{controlReporte.preReporteGeneradoEn ? "PRE-REPORTE REVISADO EN SITIO ✓" : "CONFIRMAR REVISIÓN DEL PRE-REPORTE INTEGRAL"}</button></form>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            Verifica portada, cotización, áreas declaradas, alcances, herramientas, hallazgos, evidencias, interpretaciones, calificación, conclusiones, referencias y glosario. Si detectas una corrección, pasa a la última revisión y ajuste; cualquier cambio invalidará esta confirmación hasta que vuelvas a revisar el pre-reporte actualizado.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white">ÚLTIMA REVISIÓN Y AJUSTE</Link>
+            <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">CORREGIR PARTIDAS / CONCEPTOS</Link>
+            <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">REVISAR EVIDENCIAS</Link>
+          </div>
+          <form action={confirmarPreReporteSitioV1} className="mt-4">
+            <input type="hidden" name="inspeccionId" value={id}/>
+            <button disabled={Boolean(controlReporte.preReporteGeneradoEn)} className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+              {controlReporte.preReporteGeneradoEn
+                ? "PRE-REPORTE ACTUAL CONFIRMADO ✓"
+                : controlReporte.campoFinalizadoEn
+                  ? "CONFIRMAR PRE-REPORTE ACTUALIZADO"
+                  : "CONFIRMAR REVISIÓN DEL PRE-REPORTE INTEGRAL"}
+            </button>
+          </form>
+          {controlReporte.preReporteGeneradoEn && (
+            <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="mt-4 block rounded-xl bg-violet-700 px-5 py-3 text-center font-black text-white">
+              PASAR A ÚLTIMA REVISIÓN Y AJUSTE →
+            </Link>
+          )}
         </section>
       )}
       <article className="mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
