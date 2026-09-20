@@ -7,7 +7,7 @@ import QRCode from "qrcode";
 import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
-import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
+import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import {
   HERRAMIENTAS_INSPECCION,
@@ -272,6 +272,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const autorizado = Boolean(inspeccion.certificado?.vigente);
   const calificacion = autorizado && inspeccion.certificado ? Number(inspeccion.certificado.ish) : metricas.calificacion;
   const calificacionTexto = Number(calificacion).toFixed(2);
+  const nivelEvaluacion = nivelEvaluacionV1(Number(calificacion));
   const coberturaTexto = metricas.cobertura.toFixed(2);
   const [autorizacionDireccion] = autorizado
     ? await prisma.$queryRaw<AutorizacionDireccion[]>`
@@ -292,7 +293,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const fechaAutorizacion = autorizacionDireccion
     ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
     : null;
-  const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Reporte de Inspección V1";
+  const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Pre-Reporte de Inspección V1";
   const estadoReporte = autorizado ? "REPORTE FINAL AUTORIZADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
 
   let qr:string|null=null;
@@ -377,13 +378,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
-          <div className="grid gap-3 sm:grid-cols-5"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
+          <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
           <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · No aplica: {metricas.noAplica} · Aplicables: {metricas.aplicables} · Revisados: {metricas.revisados}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
           <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La Calificación Técnica Certeza es un indicador distinto y refleja la severidad acumulada de los hallazgos P1–P5. Una inspección puede alcanzar 100% de cobertura y, al mismo tiempo, obtener una calificación técnica baja si se detectaron condiciones relevantes.</p>
         </Seccion>
 
-        <Seccion n="03" titulo="Datos declarados y alcance de la cotización" subtitulo="Información base proporcionada antes de la visita">
+        <Seccion n="03" titulo="Datos declarados" subtitulo="Información proporcionada y registrada antes de la visita">
           <div className="grid gap-4 sm:grid-cols-2">
             <article className="rounded-2xl bg-slate-100 p-4">
               <h3 className="font-black">Cliente e inmueble declarados</h3>
@@ -435,7 +436,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <p className="text-sm leading-7 text-slate-700">El Método Certeza Habitacional parte del alcance aceptado en la cotización, incorpora la información de proyecto disponible, inicia con las pruebas funcionales e instalaciones y continúa con una revisión secuencial área por área. Cada área se cierra con hallazgos documentados o con evidencia satisfactoria cuando no se identifican anomalías relevantes.</p>
         </Seccion>
 
-        <Seccion n="05" titulo="Funcionamiento e instalaciones" subtitulo="Pruebas y procesos técnicos ejecutados">
+        <Seccion n="05" titulo="Servicios y verificaciones instrumentales" subtitulo="Pruebas, mediciones y procesos técnicos ejecutados">
           <div className="space-y-3">{procesos.map((p)=><article key={`${p.orden}-${p.nombre}`} className="avoid-break rounded-2xl border border-slate-200 p-4"><div className="flex justify-between gap-3"><h3 className="font-black">{p.nombre}</h3><span className="text-xs font-black text-cyan-700">{p.estado.replaceAll('_',' ')}</span></div>{(p.lecturaInicial!==null||p.lecturaFinal!==null)&&<p className="mt-2 text-sm font-bold text-slate-700">Lectura inicial: {p.lecturaInicial ?? '—'} {p.unidad ?? ''} · Lectura final: {p.lecturaFinal ?? '—'} {p.unidad ?? ''}</p>}{p.comentario&&<p className="mt-2 text-sm leading-6 text-slate-600">{p.comentario}</p>}</article>)}</div>
           <div className="mt-6 rounded-2xl bg-cyan-50 p-5"><p className="text-xs font-black uppercase tracking-wider text-cyan-800">Tecnología aplicada en estos procesos</p><p className="mt-2 text-sm text-slate-700">Las lecturas y verificaciones instrumentales registradas se presentan en su contexto técnico y se resumen nuevamente en la sección de herramientas y tecnología.</p></div>
         </Seccion>
@@ -484,22 +485,22 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={prioridad} value={String(total)}/>)}</div>
         </Seccion>
 
-        <Seccion n="11" titulo="Herramientas y tecnología utilizadas" subtitulo="Función, aplicación y ventaja técnica">
+        <Seccion n="08" titulo="Tecnología Certeza Habitacional" subtitulo="Método Certeza, plataforma, IA, instrumentación y criterio técnico humano">
           <p className="mb-5 text-sm leading-6 text-slate-600">Esta relación se construye a partir de los resultados efectivamente registrados durante la inspección. La Aplicación Certeza Habitacional forma parte integral del método y los equipos físicos aparecen únicamente cuando su uso quedó documentado.</p>
           <TecnologiaInspeccionV1 resultados={resultados} mostrarNoEjecutadas />
         </Seccion>
 
-        <Seccion n="12" titulo="Conclusiones finales" subtitulo="Síntesis técnica del resultado de la inspección">
+        <Seccion n="09" titulo="Conclusiones" subtitulo="Síntesis técnica objetiva del resultado de la inspección">
           <p className="rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">{metricas.dictamen}</p>
           <p className="mt-4 text-sm leading-7 text-slate-700">Cobertura efectiva: <strong>{coberturaTexto}%</strong>. Calificación Técnica Certeza: <strong>{calificacionTexto}/100</strong>. Hallazgos documentados: <strong>{metricas.totalHallazgos}</strong>. La conclusión se limita al alcance contratado, a las áreas accesibles y a las condiciones visibles o medibles durante la visita.</p>
         </Seccion>
 
-        <Seccion n="13" titulo="Normatividad y bibliografía de apoyo" subtitulo="Referencias utilizadas como marco técnico">
+        <Seccion n="10" titulo="Bibliografía y normatividad de apoyo" subtitulo="Referencias utilizadas como marco técnico">
           <p className="mb-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">Las referencias se aplican únicamente cuando corresponden al elemento y alcance efectivamente revisado. Una inspección visual o instrumental de vivienda no sustituye por sí sola un dictamen oficial de cumplimiento normativo, estructural, eléctrico o de gas emitido por la autoridad o especialista competente.</p>
           <div className="space-y-3">{referencias.map((ref)=><article key={ref.titulo} className="rounded-2xl border border-slate-200 p-4"><h3 className="font-black">{ref.titulo}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{ref.uso}</p><p className="mt-2 break-all text-xs text-cyan-700">{ref.fuente}</p></article>)}</div>
         </Seccion>
 
-        <Seccion n="14" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
+        <Seccion n="11" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
           <div className="grid gap-3 sm:grid-cols-2">{GLOSARIO.map(([t,d])=><article key={t} className="rounded-2xl bg-slate-100 p-4"><h3 className="font-black">{t}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{d}</p></article>)}</div>
         </Seccion>
 
