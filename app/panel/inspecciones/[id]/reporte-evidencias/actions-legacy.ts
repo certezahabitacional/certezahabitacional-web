@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
+import { invalidarPreReportePorAjusteV1 } from "@/lib/revision-pre-reporte-v1";
 
 function texto(fd: FormData, campo: string) {
   return String(fd.get(campo) ?? "").trim();
@@ -143,6 +144,8 @@ export async function cambiarSeleccionEvidencia(formData: FormData) {
     `;
   }
 
+  await invalidarPreReportePorAjusteV1(inspeccionId);
+
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,
     entidad: "SeleccionEvidenciaReporte",
@@ -192,6 +195,7 @@ export async function actualizarOrdenEvidencia(formData: FormData) {
     ]);
   }
 
+  await invalidarPreReportePorAjusteV1(inspeccionId);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-evidencias`);
   redirect(`/panel/inspecciones/${inspeccionId}/reporte-evidencias`);
 }
