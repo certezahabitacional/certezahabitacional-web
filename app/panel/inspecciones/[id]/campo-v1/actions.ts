@@ -356,6 +356,195 @@ export async function agregarPuntoInspectorV1(formData: FormData) {
   volver(inspeccionId, "ok", "Punto adicional incorporado al plan V1.");
 }
 
+export async function deshabilitarPartidaAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  const causa = texto(formData, "causa");
+  const motivo = texto(formData, "motivo");
+  if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
+
+  const causasPermitidas = ["SIN_ACCESO", "CONDICION_INSEGURA", "NO_APLICA", "OTRO"] as const;
+  if (!causasPermitidas.includes(causa as (typeof causasPermitidas)[number])) {
+    volver(inspeccionId, "error", "Selecciona un motivo válido para deshabilitar la partida.", areaId);
+  }
+  if (motivo.length < 3) {
+    volver(inspeccionId, "error", "Describe brevemente por qué la partida no puede inspeccionarse.", areaId);
+  }
+
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  await exigirAreaActivaV1(inspeccionId, areaId);
+
+  const [control] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null }>>`
+    SELECT "campoFinalizadoEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+  if (control?.campoFinalizadoEn) {
+    volver(inspeccionId, "error", "La visita ya fue cerrada; esta partida ya no puede deshabilitarse desde captura de campo.", areaId);
+  }
+
+  const [area] = await prisma.$queryRaw<Array<{ nombre: string; hallazgos: number; resueltos: number }>>`
+    SELECT a."nombre",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") AS "hallazgos",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"<>'PENDIENTE') AS "resueltos"
+    FROM "AreaInspeccion" a
+    WHERE a."id"=${areaId}::uuid AND a."inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+  if (!area) volver(inspeccionId, "error", "Partida no encontrada.", areaId);
+
+  const etiquetas: Record<string, string> = {
+    SIN_ACCESO: "Sin acceso",
+    CONDICION_INSEGURA: "Condición insegura",
+    NO_APLICA: "No aplica",
+    OTRO: "Otro motivo",
+  };
+  const etiqueta = etiquetas[causa] ?? causa;
+  const prefijo = `[PARTIDA_COMPLETA:${causa}]`;
+  const comentario = `Partida no inspeccionada / deshabilitada. Causa: ${etiqueta}. Motivo: ${motivo}. La evidencia o conceptos capturados previamente, si existen, se conservan como antecedente y no significan que la partida haya sido inspeccionada en su totalidad.`;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='NO_APLICA',
+          "motivoNoAplica"=${`${prefijo} ${motivo}`},
+          "completado"=true,
+          "cerradoEn"=NOW(),
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "areaId"=${areaId}::uuid
+        AND "estadoV3"='PENDIENTE'
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "resultado"='NO_APLICA',
+          "estado"='REVISADA',
+          "comentarioFinal"=${comentario},
+          "textoSinHallazgo"=NULL,
+          "revisadaEn"=NOW(),
+          "cerradaEn"=NOW(),
+          "cerradaPorId"=${usuario.id},
+          "actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid
+        AND "inspeccionId"=${inspeccionId}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "inspeccionTecnicaConcluidaEn"=NULL,
+          "inspeccionTecnicaConcluidaPorId"=NULL,
+          "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "AreaInspeccion",
+    entidadId: areaId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} deshabilitó la partida completa “${area.nombre}”. Causa: ${etiqueta}. Motivo: ${motivo}. Conceptos previamente resueltos: ${area.resueltos}; hallazgos previos conservados: ${area.hallazgos}.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+  const siguiente = await siguienteAreaPendienteV1(inspeccionId);
+  if (siguiente) {
+    volver(inspeccionId, "ok", `${area.nombre} quedó deshabilitada por “${etiqueta}”. Continúa con la siguiente partida.`, siguiente);
+  }
+  volver(inspeccionId, "ok", `${area.nombre} quedó deshabilitada. Todas las partidas de área quedaron resueltas.`, areaId);
+}
+
+export async function reactivarPartidaAreaV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const areaId = texto(formData, "areaId");
+  if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
+
+  const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+
+  const [control] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null }>>`
+    SELECT "campoFinalizadoEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+  if (control?.campoFinalizadoEn) {
+    volver(inspeccionId, "error", "La visita ya fue cerrada; esta partida no puede reactivarse desde captura de campo.", areaId);
+  }
+
+  const [area] = await prisma.$queryRaw<Array<{ nombre: string; resultado: string | null }>>`
+    SELECT "nombre","resultado"
+    FROM "AreaInspeccion"
+    WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+  if (!area) volver(inspeccionId, "error", "Partida no encontrada.", areaId);
+  if (area.resultado !== "NO_APLICA") {
+    volver(inspeccionId, "error", "Sólo una partida deshabilitada puede reactivarse con esta opción.", areaId);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='PENDIENTE',
+          "motivoNoAplica"=NULL,
+          "completado"=false,
+          "cerradoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "areaId"=${areaId}::uuid
+        AND "estadoV3"='NO_APLICA'
+        AND "motivoNoAplica" LIKE '[PARTIDA_COMPLETA:%'
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "resultado"=NULL,
+          "estado"='PENDIENTE',
+          "comentarioFinal"=NULL,
+          "textoSinHallazgo"=NULL,
+          "revisadaEn"=NULL,
+          "cerradaEn"=NULL,
+          "cerradaPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid
+        AND "inspeccionId"=${inspeccionId}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "inspeccionTecnicaConcluidaEn"=NULL,
+          "inspeccionTecnicaConcluidaPorId"=NULL,
+          "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "AreaInspeccion",
+    entidadId: areaId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} reactivó la partida “${area.nombre}” para continuar su inspección. Los conceptos marcados automáticamente por la deshabilitación volvieron a PENDIENTE.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/flujo`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
+  volver(inspeccionId, "ok", `${area.nombre} fue reactivada y vuelve a ser parte del recorrido pendiente.`, areaId);
+}
+
 export async function cerrarAreaSinHallazgosV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const areaId = texto(formData, "areaId");
