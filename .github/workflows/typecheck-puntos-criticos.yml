@@ -21,6 +21,7 @@ on:
       - fix/foco-acciones-reales-puntos-criticos
       - fix/cierre-puntos-criticos-resultado-valido
       - feature/no-aplica-concepto-manual-puntos-criticos
+      - fix/pre-reporte-punto4-cotizacion
 
 jobs:
   typecheck:
