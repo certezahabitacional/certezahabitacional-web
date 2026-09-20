@@ -225,7 +225,7 @@ export default async function ConceptoAreaCard({
             </form>
           )}
 
-          {editable && evidenciaCompleta && obs.descripcionIa && (
+          {editable && evidenciaCompleta && (obs.descripcionIa || obs.descripcionFinal) && (
             <form action={guardarResultadoConceptoAreaV1} className="rounded-2xl border border-violet-300/20 bg-violet-300/5 p-4">
               <input type="hidden" name="inspeccionId" value={inspeccionId}/>
               <input type="hidden" name="areaId" value={areaId}/>
@@ -244,11 +244,17 @@ export default async function ConceptoAreaCard({
                 </div>
               )}
 
-              <div className="mb-4 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
-                <p className="text-xs font-black uppercase text-cyan-200">Interpretación inicial de IA</p>
-                <p className="mt-2 text-xs leading-5 text-cyan-50">{obs.descripcionIa}</p>
-                <p className="mt-2 text-[11px] leading-5 text-cyan-200/70">La IA relacionó la partida, el concepto y el grupo completo de fotografías. El texto de abajo se carga automáticamente como copia editable.</p>
-              </div>
+              {obs.descripcionIa ? (
+                <div className="mb-4 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
+                  <p className="text-xs font-black uppercase text-cyan-200">Interpretación inicial de IA</p>
+                  <p className="mt-2 text-xs leading-5 text-cyan-50">{obs.descripcionIa}</p>
+                  <p className="mt-2 text-[11px] leading-5 text-cyan-200/70">La IA relacionó la partida, el concepto y el grupo completo de fotografías. El texto de abajo se carga automáticamente como copia editable.</p>
+                </div>
+              ) : (
+                <div className="mb-4 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
+                  Este concepto fue reabierto. Puedes editar directamente la descripción final ya guardada o generar nuevamente la IA si deseas una nueva interpretación.
+                </div>
+              )}
 
               <label className="text-xs font-black uppercase text-slate-400">Descripción final editable por el Inspector</label>
               <textarea
