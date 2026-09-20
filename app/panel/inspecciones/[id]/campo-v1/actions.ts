@@ -433,9 +433,7 @@ export async function deshabilitarPartidaAreaV1(formData: FormData) {
 
     await tx.$executeRaw`
       UPDATE "InspeccionControlV2"
-      SET "inspeccionTecnicaConcluidaEn"=NULL,
-          "inspeccionTecnicaConcluidaPorId"=NULL,
-          "preReporteGeneradoEn"=NULL,
+      SET "preReporteGeneradoEn"=NULL,
           "revisionInspectorFinalEn"=NULL,
           "revisionInspectorFinalPorId"=NULL,
           "actualizadoEn"=NOW()
@@ -510,9 +508,7 @@ export async function reactivarPartidaAreaV1(formData: FormData) {
 
     await tx.$executeRaw`
       UPDATE "InspeccionControlV2"
-      SET "inspeccionTecnicaConcluidaEn"=NULL,
-          "inspeccionTecnicaConcluidaPorId"=NULL,
-          "preReporteGeneradoEn"=NULL,
+      SET "preReporteGeneradoEn"=NULL,
           "revisionInspectorFinalEn"=NULL,
           "revisionInspectorFinalPorId"=NULL,
           "actualizadoEn"=NOW()
