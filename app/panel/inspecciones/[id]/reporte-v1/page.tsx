@@ -46,6 +46,18 @@ type Area = {
 };
 type Proceso = { orden:number; nombre:string; estado:string; lecturaInicial:number|null; lecturaFinal:number|null; unidad:string|null; comentario:string|null };
 type FotoArea = { areaId:string; url:string; descripcion:string|null };
+type ConceptoReporte = {
+  id:string;
+  areaId:string;
+  concepto:string;
+  especificacion:string|null;
+  observacion:string|null;
+  estadoV3:string|null;
+  valorMedido:string|null;
+  valorProyecto:string|null;
+  unidadMedida:string|null;
+  orden:number|null;
+};
 type ControlReporte = {
   campoFinalizadoEn: Date | null;
   inspeccionTecnicaConcluidaEn: Date | null;
@@ -188,6 +200,27 @@ export default async function ReporteV1Page({ params, searchParams }: {
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
     FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true ORDER BY a."orden",a."nombre"
   `;
+
+  const conceptosReporte = await prisma.$queryRaw<ConceptoReporte[]>`
+    SELECT
+      g."id"::text AS "id",
+      g."areaId"::text AS "areaId",
+      g."concepto",
+      g."especificacion",
+      g."observacion",
+      g."estadoV3",
+      g."valorMedido",
+      g."valorProyecto",
+      g."unidadMedida",
+      g."orden"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."inspeccionId"=${id}
+    ORDER BY g."areaId", COALESCE(g."orden",999999), g."concepto"
+  `;
+  const conceptosPorArea = new Map<string, ConceptoReporte[]>();
+  for (const concepto of conceptosReporte) {
+    conceptosPorArea.set(concepto.areaId,[...(conceptosPorArea.get(concepto.areaId)??[]),concepto]);
+  }
 
   const procesos = await prisma.$queryRaw<Proceso[]>`
     SELECT "orden","nombre","estado","lecturaInicial","lecturaFinal","unidad","comentario"
@@ -446,7 +479,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion n="06C" titulo="Desarrollo de la inspección · conceptos por partida" subtitulo="Conceptos revisados, resultados, hallazgos y evidencia">
-          <div className="space-y-6">{areas.map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.aplicables} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':a.resultado==='NO_APLICA'?'bg-slate-200 text-slate-700':'bg-amber-100 text-amber-900'}`}>{a.resultado==='NO_APLICA'?'NO INSPECCIONADA / DESHABILITADA':(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
+          <div className="space-y-6">{areas.map((a)=>{const hs=inspeccion.hallazgos.filter(h=>h.area===a.nombre);const fs=fotosPorArea.get(a.id)??[];return <article key={a.id} className="rounded-3xl border border-slate-200 p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-black">{a.nombre}</h3><p className="mt-1 text-xs font-bold text-slate-500">{a.aplicables} puntos aplicables · {a.noAplica} excluidos por No aplica</p></div><span className={`rounded-full px-3 py-2 text-xs font-black ${a.resultado==='SIN_HALLAZGOS'?'bg-emerald-100 text-emerald-800':a.resultado==='NO_APLICA'?'bg-slate-200 text-slate-700':'bg-amber-100 text-amber-900'}`}>{a.resultado==='NO_APLICA'?'NO INSPECCIONADA / DESHABILITADA':(a.resultado??'PENDIENTE').replaceAll('_',' ')}</span></div>{a.comentarioFinal&&<p className="mt-4 text-sm leading-7 text-slate-700">{a.comentarioFinal}</p>}{(conceptosPorArea.get(a.id)??[]).map((g,index)=>{const obs=observacionConcepto(g.observacion);return <div key={g.id} className="mt-4 rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-black">{index+1}. {g.concepto}</p><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-700">{(g.estadoV3??"PENDIENTE").replaceAll("_"," ")}</span></div>{g.especificacion&&<p className="mt-2 text-xs leading-5 text-slate-500">{g.especificacion}</p>}{obs.descripcionFinal&&<p className="mt-2 text-sm leading-6 text-slate-700"><strong>Interpretación final:</strong> {obs.descripcionFinal}</p>}{(g.valorMedido||g.valorProyecto)&&<p className="mt-2 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}{obs.clasificacionFinal&&<p className="mt-2 text-xs font-bold text-slate-600">Clasificación: {obs.clasificacionFinal}{obs.prioridadFinal?` · Prioridad: ${obs.prioridadFinal}`:""}</p>}</div>})}{hs.map(h=><div key={h.id} className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><div className="flex justify-between gap-3"><h4 className="font-black">{h.titulo}</h4><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{h.prioridad}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{h.descripcion}</p></div>)}{fs.length>0&&<div className="mt-4 grid grid-cols-2 gap-3">{fs.slice(0,4).map((f,i)=><figure key={`${a.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{f.urlFirmada?<img src={f.urlFirmada} alt={f.descripcion??a.nombre} className="h-44 w-full object-cover"/>:<div className="grid h-44 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-xs text-slate-500">{f.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}</article>})}</div>
         </Seccion>
 
         <Seccion n="06D" titulo="Desarrollo de la inspección · evidencias" subtitulo="Fotografías y datos asociados registrados en la inspección">
