@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { PUNTOS_CRITICOS_V1 } from "@/lib/puntos-criticos-v1";
 import {
   agregarPuntoInspectorV1,
   cerrarAreaConHallazgosV1,
@@ -80,6 +81,19 @@ export default async function CampoV1Page({ params, searchParams }: {
       )::int AS "bloqueantes"
     FROM "ProtocoloInspeccionPaso" p
     WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
+  `;
+
+  const pasosCriticos = await prisma.$queryRaw<Array<{
+    clave: string;
+    estado: string;
+    lecturaInicial: string | null;
+    lecturaFinal: string | null;
+    datos: unknown;
+  }>>`
+    SELECT "clave","estado","lecturaInicial","lecturaFinal","datos"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
+    ORDER BY "orden"
   `;
   if (Number(critical?.total ?? 0) < 7 || Number(critical?.bloqueantes ?? 0) > 0) {
     redirect(`/panel/inspecciones/${id}/puntos-criticos`);
@@ -167,6 +181,52 @@ export default async function CampoV1Page({ params, searchParams }: {
 
         <div className="mt-6 grid gap-5 lg:grid-cols-[320px_1fr]">
           <aside className="space-y-2">
+            <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-3">
+              <p className="text-[10px] font-black uppercase tracking-[.18em] text-cyan-300">Recorrido completo</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">Puedes regresar a cualquier punto ya inspeccionado. Los puntos futuros permanecen bloqueados hasta que corresponda.</p>
+            </div>
+
+            <Link
+              href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`}
+              className="block rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs font-black text-slate-500">1/{totalRecorrido}</span>
+                <span className="text-xs font-black text-emerald-300">
+                  {pasosCriticos.some((p) => ["PC_HIDRAULICA","PC_GAS"].includes(p.clave) && p.lecturaInicial) ? "INSPECCIONADO · VER" : "PENDIENTE"}
+                </span>
+              </div>
+              <p className="mt-1 font-black">Pruebas de hermeticidad</p>
+              <p className="mt-1 text-xs text-slate-400">Hidráulica y gas · lecturas iniciales/finales</p>
+            </Link>
+
+            {PUNTOS_CRITICOS_V1.map((punto, index) => {
+              const paso = pasosCriticos.find((p) => p.clave === `PC_${punto.codigo}`);
+              const terminado = paso?.estado === "COMPLETADO" || paso?.estado === "NO_APLICA";
+              const inspeccionado = terminado || paso?.estado === "EN_PROCESO";
+              return (
+                <Link
+                  key={punto.codigo}
+                  href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`}
+                  className={`block rounded-2xl border p-4 ${terminado
+                    ? "border-emerald-400/15 bg-emerald-400/5"
+                    : inspeccionado
+                      ? "border-amber-300/20 bg-amber-300/5"
+                      : "border-white/10 bg-slate-900"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-xs font-black text-slate-500">{index + 2}/{totalRecorrido}</span>
+                    <span className={`text-xs font-black ${terminado ? "text-emerald-300" : inspeccionado ? "text-amber-300" : "text-slate-500"}`}>
+                      {terminado ? "INSPECCIONADO · VER" : paso?.estado?.replaceAll("_"," ") ?? "PENDIENTE"}
+                    </span>
+                  </div>
+                  <p className="mt-1 font-black">{punto.etiqueta}</p>
+                </Link>
+              );
+            })}
+
+            <div className="my-3 border-t border-white/10" />
+
             {areas.map((area, index) => {
               const activa = area.id === areaActivaId;
               const cerrada = area.estado === "REVISADA";
