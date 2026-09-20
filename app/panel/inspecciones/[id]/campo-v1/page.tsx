@@ -9,7 +9,9 @@ import {
   agregarPuntoInspectorV1,
   cerrarAreaConHallazgosV1,
   cerrarAreaSinHallazgosV1,
+  deshabilitarPartidaAreaV1,
   inicializarPlanAreasV1,
+  reactivarPartidaAreaV1,
 } from "./actions";
 import ConceptoAreaCard, { type PuntoArea } from "./ConceptoAreaCard";
 
@@ -235,8 +237,14 @@ export default async function CampoV1Page({ params, searchParams }: {
                 <>
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-xs font-black text-slate-500">{9 + index}/{totalRecorrido}</span>
-                    <span className={`text-xs font-black ${cerrada ? "text-emerald-300" : activa ? "text-amber-300" : "text-slate-600"}`}>
-                      {cerrada ? "CERRADA 100% · EDITABLE" : activa ? `${area.pendientes} pendientes` : "BLOQUEADO"}
+                    <span className={`text-xs font-black ${area.resultado === "NO_APLICA" ? "text-slate-300" : cerrada ? "text-emerald-300" : activa ? "text-amber-300" : "text-slate-600"}`}>
+                      {area.resultado === "NO_APLICA"
+                        ? "DESHABILITADA · EDITABLE"
+                        : cerrada
+                          ? "CERRADA 100% · EDITABLE"
+                          : activa
+                            ? `${area.pendientes} pendientes`
+                            : "BLOQUEADO"}
                     </span>
                   </div>
                   <p className="mt-1 font-black">{area.nombre}</p>
@@ -263,8 +271,22 @@ export default async function CampoV1Page({ params, searchParams }: {
               <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">{numeroAreaActiva ? `Punto ${numeroAreaActiva} de ${totalRecorrido}` : "Área activa"}</p><h2 className="mt-1 text-2xl font-black">{areaSeleccionada.nombre}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} conceptos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
-                  {areaSeleccionada.resultado && <span className="rounded-full bg-emerald-300/10 px-3 py-2 text-xs font-black text-emerald-300">{areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
+                  {areaSeleccionada.resultado && <span className={`rounded-full px-3 py-2 text-xs font-black ${areaSeleccionada.resultado === "NO_APLICA" ? "bg-slate-300/10 text-slate-300" : "bg-emerald-300/10 text-emerald-300"}`}>{areaSeleccionada.resultado === "NO_APLICA" ? "PARTIDA DESHABILITADA" : areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
                 </div>
+
+                {areaSeleccionada.resultado === "NO_APLICA" && (
+                  <div className="mt-5 rounded-2xl border border-slate-300/15 bg-slate-300/5 p-4">
+                    <p className="font-black text-slate-200">Partida completa deshabilitada</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">Esta partida quedó fuera de la inspección por una condición documentada. No bloquea el avance y conservará la causa en el reporte.</p>
+                    {areaSeleccionada.resultado === "NO_APLICA" && puedeCapturar && (
+                      <form action={reactivarPartidaAreaV1} className="mt-4">
+                        <input type="hidden" name="inspeccionId" value={id}/>
+                        <input type="hidden" name="areaId" value={areaSeleccionada.id}/>
+                        <button className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">REACTIVAR PARTIDA PARA INSPECCIONAR</button>
+                      </form>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-5 space-y-4">
                   {puntos.map((punto) => (
@@ -280,7 +302,26 @@ export default async function CampoV1Page({ params, searchParams }: {
                 </div>
 
                 {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (
-                  <div className="mt-6 grid gap-4 xl:grid-cols-2">
+                  <>
+                    <div className="mt-6 rounded-2xl border border-rose-300/20 bg-rose-300/5 p-4">
+                      <p className="font-black text-rose-200">DESHABILITAR PARTIDA COMPLETA</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">Úsalo cuando no exista acceso, continuar represente un riesgo, la partida no aplique o exista otra imposibilidad documentable. La partida quedará resuelta sin bloquear el recorrido y el motivo aparecerá en el expediente.</p>
+                      <form action={deshabilitarPartidaAreaV1} className="mt-3 grid gap-3 sm:grid-cols-[220px_1fr_auto]">
+                        <input type="hidden" name="inspeccionId" value={id}/>
+                        <input type="hidden" name="areaId" value={areaSeleccionada.id}/>
+                        <select name="causa" required className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm">
+                          <option value="">Seleccionar causa</option>
+                          <option value="SIN_ACCESO">Sin acceso</option>
+                          <option value="CONDICION_INSEGURA">Condición insegura</option>
+                          <option value="NO_APLICA">No aplica</option>
+                          <option value="OTRO">Otro motivo</option>
+                        </select>
+                        <input name="motivo" required placeholder="Describe brevemente la condición" className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+                        <button className="rounded-xl border border-rose-300/30 px-4 py-2 text-sm font-black text-rose-200">DESHABILITAR</button>
+                      </form>
+                    </div>
+
+                    <div className="mt-6 grid gap-4 xl:grid-cols-2">
                     <form action={agregarPuntoInspectorV1} className="rounded-2xl border border-violet-300/15 bg-violet-300/5 p-4">
                       <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/>
                       <p className="font-black text-violet-200">+ AGREGAR CONCEPTO MANUALMENTE</p>
@@ -303,7 +344,8 @@ export default async function CampoV1Page({ params, searchParams }: {
                         <form action={cerrarAreaConHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.pendientes)>0} className="w-full rounded-xl bg-amber-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PUNTO AL 100% · {areaSeleccionada.hallazgos} HALLAZGO(S)</button></form>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </>
                 )}
 
                 {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (

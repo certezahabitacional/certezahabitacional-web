@@ -80,7 +80,7 @@ export async function obtenerMetricasV1(inspeccionId: string) {
 
   const [conteoAreas] = await prisma.$queryRaw<ConteoAreas[]>`
     SELECT
-      COUNT(*) FILTER (WHERE "obligatoria" = true)::int AS "total",
+      COUNT(*) FILTER (WHERE "obligatoria" = true AND "resultado" <> 'NO_APLICA')::int AS "total",
       COUNT(*) FILTER (WHERE "obligatoria" = true AND "resultado" = 'SIN_HALLAZGOS')::int AS "sinHallazgos"
     FROM "AreaInspeccion"
     WHERE "inspeccionId" = ${inspeccionId}
