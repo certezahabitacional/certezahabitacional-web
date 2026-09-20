@@ -53,6 +53,9 @@ type Observacion = {
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
   variacionPresion?: string;
+  diagnosticoProbable?: string;
+  causasPosibles?: string[];
+  verificacionesSugeridas?: string[];
 };
 
 function datosPaso(valor: unknown): DatosPaso {
@@ -376,9 +379,31 @@ export default async function HermeticidadPage({
                               {obs.descripcionIa ? (
                                 <div className="mt-4 rounded-xl border border-cyan-300/20 bg-slate-950 p-4 text-sm text-cyan-50">
                                   <p className="text-[11px] font-black uppercase tracking-wider text-cyan-300">Interpretación generada por IA</p>
-                                  <p className="mt-2 leading-6">{obs.descripcionIa}</p>
-                                  {obs.variacionPresion && <p className="mt-2 text-xs text-cyan-200"><strong>Variación:</strong> {obs.variacionPresion}</p>}
-                                  {obs.clasificacionSugerida && <p className="mt-1 text-xs text-cyan-200"><strong>Clasificación sugerida:</strong> {obs.clasificacionSugerida}</p>}
+                                  <p className="mt-2 whitespace-pre-line leading-6">{obs.descripcionIa}</p>
+                                  {obs.variacionPresion && <p className="mt-3 text-xs text-cyan-200"><strong>Variación:</strong> {obs.variacionPresion}</p>}
+                                  {obs.diagnosticoProbable && (
+                                    <div className="mt-3 rounded-lg bg-cyan-300/10 p-3">
+                                      <p className="text-xs font-black uppercase text-cyan-200">Diagnóstico probable</p>
+                                      <p className="mt-1 text-xs leading-5 text-cyan-50">{obs.diagnosticoProbable}</p>
+                                    </div>
+                                  )}
+                                  {obs.causasPosibles && obs.causasPosibles.length > 0 && (
+                                    <div className="mt-3">
+                                      <p className="text-xs font-black uppercase text-cyan-200">Posibles causas a considerar</p>
+                                      <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-5 text-slate-300">
+                                        {obs.causasPosibles.map((causa) => <li key={causa}>{causa}</li>)}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {obs.verificacionesSugeridas && obs.verificacionesSugeridas.length > 0 && (
+                                    <div className="mt-3">
+                                      <p className="text-xs font-black uppercase text-cyan-200">Qué conviene verificar</p>
+                                      <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-5 text-slate-300">
+                                        {obs.verificacionesSugeridas.map((paso) => <li key={paso}>{paso}</li>)}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {obs.clasificacionSugerida && <p className="mt-3 text-xs text-cyan-200"><strong>Clasificación sugerida:</strong> {obs.clasificacionSugerida}</p>}
                                   {obs.justificacionIa && <p className="mt-2 text-xs leading-5 text-slate-400"><strong>Justificación IA:</strong> {obs.justificacionIa}</p>}
                                 </div>
                               ) : (

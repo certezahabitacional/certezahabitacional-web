@@ -50,6 +50,9 @@ type ObservacionItemCritico = {
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
   variacionPresion?: string;
+  diagnosticoProbable?: string;
+  causasPosibles?: string[];
+  verificacionesSugeridas?: string[];
   actualizadoEn?: string;
 };
 
@@ -887,11 +890,15 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
       `Lectura final registrada para análisis: ${lecturaFinalPropuesta} ${unidadFinalPropuesta}.`,
       `Variación numérica calculada por el sistema: ${variacionPresion ?? "no calculable automáticamente"}.`,
       "Compara ambos momentos de la prueba y las dos fotografías.",
-      "Describe objetivamente si la presión se mantiene, aumenta o disminuye según los valores proporcionados.",
-      "No inventes causas, fugas ocultas, cumplimiento normativo ni condiciones que no puedan demostrarse con las fotografías y lecturas.",
-      "Redacta una interpretación técnica breve y útil para expediente.",
+      "Describe objetivamente si la presión se mantiene, aumenta o disminuye y cuantifica la variación.",
+      "Después del resultado observado, formula un DIAGNÓSTICO PROBABLE en lenguaje técnico pero prudente. No afirmes una causa como hecho si la prueba no la demuestra.",
+      codigo === "HIDRAULICA"
+        ? "Si existe pérdida de presión, considera como hipótesis técnicas, según lo que resulte compatible con la evidencia: pérdida de hermeticidad en la red, fuga en unión o conexión, válvula que no sella correctamente, fuga en accesorio o mueble conectado, conexión del manómetro con fuga, aire atrapado o una condición de medición que deba descartarse."
+        : "Si existe pérdida de presión, considera como hipótesis técnicas, según lo que resulte compatible con la evidencia: pérdida de hermeticidad, fuga en unión o conexión, válvula que no sella correctamente, regulador o accesorio con fuga, conexión del manómetro con fuga o una condición de medición que deba descartarse.",
+      "Ordena las causas posibles de mayor a menor plausibilidad con base en las lecturas y fotografías. Usa expresiones como 'podría deberse a', 'es compatible con' o 'conviene descartar'.",
+      "Indica verificaciones concretas que el Inspector podría realizar para confirmar o descartar las hipótesis, sin presentar la IA como un dictamen definitivo.",
       "Sugiere una clasificación C, O, NC, CR o NA; la decisión final corresponde al Inspector.",
-      "Devuelve únicamente JSON con: descripcion, clasificacionSugerida, justificacion."
+      "Devuelve únicamente JSON con: descripcion, diagnosticoProbable, causasPosibles, verificacionesSugeridas, clasificacionSugerida, justificacion. causasPosibles y verificacionesSugeridas deben ser arreglos de textos breves."
     ].join(" "),
   });
 
@@ -927,15 +934,35 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
     volver(inspeccionId, codigo, "error", "Gemini devolvió una respuesta que no pudo estructurarse.");
   }
 
-  const descripcionIa = String(parsed.descripcion ?? "").trim();
+  const descripcionBase = String(parsed.descripcion ?? "").trim();
+  const diagnosticoProbable = String(parsed.diagnosticoProbable ?? "").trim();
+  const causasPosibles = Array.isArray(parsed.causasPosibles)
+    ? parsed.causasPosibles.map((v) => String(v).trim()).filter(Boolean).slice(0, 5)
+    : [];
+  const verificacionesSugeridas = Array.isArray(parsed.verificacionesSugeridas)
+    ? parsed.verificacionesSugeridas.map((v) => String(v).trim()).filter(Boolean).slice(0, 5)
+    : [];
   const sugerida = String(parsed.clasificacionSugerida ?? "").trim().toUpperCase();
   const justificacionIa = String(parsed.justificacion ?? "").trim();
-  if (!descripcionIa) volver(inspeccionId, codigo, "error", "Gemini no generó una interpretación técnica válida.");
+
+  if (!descripcionBase || !diagnosticoProbable) {
+    volver(inspeccionId, codigo, "error", "Gemini no generó una interpretación diagnóstica completa.");
+  }
+
+  const descripcionIa = [
+    descripcionBase,
+    `Diagnóstico probable: ${diagnosticoProbable}`,
+    causasPosibles.length ? `Posibles causas: ${causasPosibles.join("; ")}.` : "",
+    verificacionesSugeridas.length ? `Verificaciones sugeridas: ${verificacionesSugeridas.join("; ")}.` : "",
+  ].filter(Boolean).join("\n\n");
 
   const anterior = observacionObjeto(final.observacion);
   const observacion: ObservacionItemCritico = {
     ...anterior,
     descripcionIa,
+    diagnosticoProbable,
+    causasPosibles,
+    verificacionesSugeridas,
     clasificacionSugerida: ["C", "O", "NC", "CR", "NA"].includes(sugerida) ? sugerida : "O",
     justificacionIa,
     lecturaFinalPropuesta,
@@ -1042,6 +1069,9 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     lecturaFinalPropuesta: interpretacionIa.lecturaFinalPropuesta,
     unidadFinalPropuesta: interpretacionIa.unidadFinalPropuesta,
     variacionPresion: interpretacionIa.variacionPresion,
+    diagnosticoProbable: interpretacionIa.diagnosticoProbable,
+    causasPosibles: interpretacionIa.causasPosibles,
+    verificacionesSugeridas: interpretacionIa.verificacionesSugeridas,
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
     prioridadFinal: prioridadTexto,
