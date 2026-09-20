@@ -367,30 +367,43 @@ export default async function HermeticidadPage({
                               <input type="hidden" name="inspeccionId" value={id} />
                               <input type="hidden" name="codigo" value={codigo} />
                               <input type="hidden" name="retorno" value="HERMETICIDAD_CIERRE" />
-                              <p className="text-xs font-black uppercase text-cyan-200">Interpretación IA</p>
+                              <p className="text-xs font-black uppercase text-cyan-200">Interpretación IA · obligatoria antes del cierre</p>
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 <input name="lecturaFinal" required defaultValue={obs.lecturaFinalPropuesta ?? ""} placeholder="Lectura final" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2" />
                                 <input name="unidad" required defaultValue={obs.unidadFinalPropuesta ?? paso.unidad ?? ""} placeholder="Unidad" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2" />
                               </div>
                               <div className="mt-3"><BotonGenerarIa /></div>
+                              {obs.descripcionIa ? (
+                                <div className="mt-4 rounded-xl border border-cyan-300/20 bg-slate-950 p-4 text-sm text-cyan-50">
+                                  <p className="text-[11px] font-black uppercase tracking-wider text-cyan-300">Interpretación generada por IA</p>
+                                  <p className="mt-2 leading-6">{obs.descripcionIa}</p>
+                                  {obs.variacionPresion && <p className="mt-2 text-xs text-cyan-200"><strong>Variación:</strong> {obs.variacionPresion}</p>}
+                                  {obs.clasificacionSugerida && <p className="mt-1 text-xs text-cyan-200"><strong>Clasificación sugerida:</strong> {obs.clasificacionSugerida}</p>}
+                                  {obs.justificacionIa && <p className="mt-2 text-xs leading-5 text-slate-400"><strong>Justificación IA:</strong> {obs.justificacionIa}</p>}
+                                </div>
+                              ) : (
+                                <p className="mt-3 rounded-xl bg-amber-300/10 p-3 text-xs font-bold text-amber-200">
+                                  Genera primero la interpretación de IA. El sistema no permitirá cerrar la prueba sin este paso.
+                                </p>
+                              )}
                             </form>
 
                             <form action={cerrarPruebaProlongadaV1} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-4">
                               <input type="hidden" name="inspeccionId" value={id} />
                               <input type="hidden" name="codigo" value={codigo} />
                               <input type="hidden" name="retorno" value="HERMETICIDAD_CIERRE" />
-                              <p className="text-xs font-black uppercase text-emerald-200">Cierre técnico</p>
+                              <p className="text-xs font-black uppercase text-emerald-200">Cierre técnico · interpretación final del Inspector</p>
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 <input name="lecturaFinal" required defaultValue={obs.lecturaFinalPropuesta ?? ""} placeholder="Lectura final" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2" />
                                 <input name="unidad" required defaultValue={obs.unidadFinalPropuesta ?? paso.unidad ?? ""} placeholder="Unidad" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2" />
                               </div>
-                              {obs.descripcionIa && (
-                                <div className="mt-3 rounded-xl bg-cyan-300/10 p-3 text-xs text-cyan-100">
-                                  <strong>IA:</strong> {obs.descripcionIa}
-                                  {obs.variacionPresion && <div className="mt-1">Variación: {obs.variacionPresion}</div>}
-                                </div>
-                              )}
-                              <textarea name="descripcionFinal" required defaultValue={obs.descripcionIa ?? ""} placeholder="Comentario / interpretación final del inspector" className="mt-3 min-h-28 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2" />
+                              <label className="mt-3 block text-xs font-black uppercase tracking-wider text-emerald-200">
+                                Interpretación final del Inspector
+                                <textarea name="descripcionFinal" required defaultValue={obs.descripcionIa ?? ""} placeholder="La interpretación IA aparecerá aquí automáticamente para que el Inspector la confirme o ajuste." className="mt-2 min-h-32 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm font-normal normal-case tracking-normal text-white" />
+                              </label>
+                              <p className="mt-2 text-xs leading-5 text-slate-400">
+                                La IA sirve como propuesta técnica. Este campo es la interpretación final que quedará en el reporte; puede conservarse tal cual o ajustarse por el Inspector.
+                              </p>
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 <select name="clasificacion" defaultValue={obs.clasificacionSugerida ?? "C"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
                                   <option value="C">C · Conforme</option>
@@ -407,8 +420,8 @@ export default async function HermeticidadPage({
                                   <option value="P5">P5</option>
                                 </select>
                               </div>
-                              <button className="mt-3 w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950">
-                                REGISTRAR LECTURA FINAL Y CERRAR PRUEBA
+                              <button disabled={!obs.descripcionIa} className="mt-3 w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
+                                {obs.descripcionIa ? "REGISTRAR LECTURA FINAL Y CERRAR PRUEBA" : "GENERA PRIMERO LA INTERPRETACIÓN IA"}
                               </button>
                             </form>
                           </div>

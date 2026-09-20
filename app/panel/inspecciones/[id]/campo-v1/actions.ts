@@ -134,7 +134,10 @@ async function exigirResponsableV1(inspeccionId: string) {
   const director = usuario.rol === RolUsuario.DIRECTOR;
   if (!inspectorAsignado && !director) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "Este recorrido guiado corresponde únicamente a V1.");
-  if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "La captura técnica solo está disponible mientras V1 está EN PROCESO.");
+  if (
+    inspeccion.estado !== EstadoInspeccion.EN_PROCESO &&
+    !(director && inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE)
+  ) volver(inspeccionId, "error", "La captura técnica está disponible para el Inspector mientras V1 está EN PROCESO y para Dirección mientras el reporte espera autorización.");
   return { usuario, responsable: director ? "Director" : "Inspector" };
 }
 
@@ -433,13 +436,15 @@ export async function deshabilitarPartidaAreaV1(formData: FormData) {
 
     await tx.$executeRaw`
       UPDATE "InspeccionControlV2"
-      SET "inspeccionTecnicaConcluidaEn"=NULL,
-          "inspeccionTecnicaConcluidaPorId"=NULL,
-          "preReporteGeneradoEn"=NULL,
+      SET "preReporteGeneradoEn"=NULL,
           "revisionInspectorFinalEn"=NULL,
           "revisionInspectorFinalPorId"=NULL,
           "actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId}
+        AND EXISTS (
+          SELECT 1 FROM "Inspeccion" i
+          WHERE i."id"=${inspeccionId} AND i."estado"='EN_PROCESO'
+        )
     `;
   });
 
@@ -468,16 +473,6 @@ export async function reactivarPartidaAreaV1(formData: FormData) {
   if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
 
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
-
-  const [control] = await prisma.$queryRaw<Array<{ campoFinalizadoEn: Date | null }>>`
-    SELECT "campoFinalizadoEn"
-    FROM "InspeccionControlV2"
-    WHERE "inspeccionId"=${inspeccionId}
-    LIMIT 1
-  `;
-  if (control?.campoFinalizadoEn) {
-    volver(inspeccionId, "error", "La visita ya fue cerrada; esta partida no puede reactivarse desde captura de campo.", areaId);
-  }
 
   const [area] = await prisma.$queryRaw<Array<{ nombre: string; resultado: string | null }>>`
     SELECT "nombre","resultado"
@@ -520,13 +515,15 @@ export async function reactivarPartidaAreaV1(formData: FormData) {
 
     await tx.$executeRaw`
       UPDATE "InspeccionControlV2"
-      SET "inspeccionTecnicaConcluidaEn"=NULL,
-          "inspeccionTecnicaConcluidaPorId"=NULL,
-          "preReporteGeneradoEn"=NULL,
+      SET "preReporteGeneradoEn"=NULL,
           "revisionInspectorFinalEn"=NULL,
           "revisionInspectorFinalPorId"=NULL,
           "actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId}
+        AND EXISTS (
+          SELECT 1 FROM "Inspeccion" i
+          WHERE i."id"=${inspeccionId} AND i."estado"='EN_PROCESO'
+        )
     `;
   });
 

@@ -84,7 +84,10 @@ async function exigirResponsable(inspeccionId: string) {
   const director = usuario.rol === RolUsuario.DIRECTOR;
   if (!inspectorAsignado && !director) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${inspeccionId}/flujo`);
-  if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) redirect(`/panel/inspecciones/${inspeccionId}`);
+  if (
+    inspeccion.estado !== EstadoInspeccion.EN_PROCESO &&
+    !(director && inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE)
+  ) redirect(`/panel/inspecciones/${inspeccionId}`);
 
   return { usuario, responsable: director ? "Director" : "Inspector" };
 }
@@ -608,6 +611,10 @@ export async function reabrirConceptoAreaV1(formData: FormData) {
           "revisionInspectorFinalPorId"=NULL,
           "actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId}
+        AND EXISTS (
+          SELECT 1 FROM "Inspeccion" i
+          WHERE i."id"=${inspeccionId} AND i."estado"='EN_PROCESO'
+        )
     `;
   });
 
@@ -653,6 +660,10 @@ export async function reactivarConceptoAreaV1(formData: FormData) {
           "revisionInspectorFinalPorId"=NULL,
           "actualizadoEn"=NOW()
       WHERE "inspeccionId"=${inspeccionId}
+        AND EXISTS (
+          SELECT 1 FROM "Inspeccion" i
+          WHERE i."id"=${inspeccionId} AND i."estado"='EN_PROCESO'
+        )
     `;
   });
   await registrarAuditoria({

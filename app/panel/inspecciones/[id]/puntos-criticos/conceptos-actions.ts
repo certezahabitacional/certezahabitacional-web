@@ -176,6 +176,87 @@ export async function marcarConceptoNoAplicaV1(formData: FormData) {
   volver(inspeccionId, codigo, "ok", "Concepto marcado como NO APLICA.", itemId);
 }
 
+export async function reabrirConceptoPuntoCriticoV1(formData: FormData) {
+  const inspeccionId = texto(formData, "inspeccionId");
+  const codigoTexto = texto(formData, "codigo");
+  const itemId = texto(formData, "itemId");
+
+  if (!inspeccionId || !esCodigo(codigoTexto) || !itemId) {
+    redirect("/panel/inspecciones");
+  }
+
+  const codigo = codigoTexto;
+  const { usuario, responsable } = await exigirResponsable(inspeccionId);
+
+  const [item] = await prisma.$queryRaw<Array<{ concepto: string; estadoV3: string }>>`
+    SELECT "concepto","estadoV3"
+    FROM "GuiaInspeccionItem"
+    WHERE "id"=${itemId}
+      AND "inspeccionId"=${inspeccionId}
+      AND "area"=${`__PUNTO_CRITICO__:${codigo}`}
+    LIMIT 1
+  `;
+  if (!item) volver(inspeccionId, codigo, "error", "Concepto no encontrado.");
+  if (item.estadoV3 !== "REVISADO") {
+    volver(inspeccionId, codigo, "error", "Sólo un concepto cerrado puede reabrirse para edición.", itemId);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='PENDIENTE',
+          "completado"=false,
+          "cerradoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "ProtocoloInspeccionPaso"
+      SET "estado"='EN_PROCESO',
+          "completadoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "clave"=${`PC_${codigo}`}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',
+          "resultado"=NULL,
+          "comentarioFinal"=NULL,
+          "revisadaEn"=NULL,
+          "cerradaEn"=NULL,
+          "cerradaPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "codigo"=${`PC_${codigo}`}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
+
+  await registrarAuditoria({
+    tipo: TipoEvento.EDITAR,
+    entidad: "GuiaInspeccionItem",
+    entidadId: itemId,
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: `${responsable} reabrió el concepto crítico “${item.concepto}” para corregirlo durante la última revisión.`,
+  });
+
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  volver(inspeccionId, codigo, "ok", "Concepto abierto para edición. Corrígelo y vuelve a cerrarlo.", itemId);
+}
+
 export async function reactivarConceptoPuntoCriticoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   const codigoTexto = texto(formData, "codigo");
@@ -211,15 +292,48 @@ export async function reactivarConceptoPuntoCriticoV1(formData: FormData) {
     );
   }
 
-  await prisma.$executeRaw`
-    UPDATE "GuiaInspeccionItem"
-    SET "estadoV3"='PENDIENTE',
-        "completado"=false,
-        "motivoNoAplica"=NULL,
-        "cerradoEn"=NULL,
-        "actualizadoEn"=NOW()
-    WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
-  `;
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='PENDIENTE',
+          "completado"=false,
+          "motivoNoAplica"=NULL,
+          "cerradoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "ProtocoloInspeccionPaso"
+      SET "estado"='EN_PROCESO',
+          "completadoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "clave"=${`PC_${codigo}`}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',
+          "resultado"=NULL,
+          "comentarioFinal"=NULL,
+          "revisadaEn"=NULL,
+          "cerradaEn"=NULL,
+          "cerradaPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "codigo"=${`PC_${codigo}`}
+    `;
+
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
 
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,

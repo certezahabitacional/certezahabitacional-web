@@ -141,7 +141,11 @@ export default async function CampoV1Page({ params, searchParams }: {
   const totalRecorrido = 8 + areas.length;
   const indiceAreaActiva = areaSeleccionada ? areas.findIndex((area) => area.id === areaSeleccionada.id) : -1;
   const numeroAreaActiva = indiceAreaActiva >= 0 ? 9 + indiceAreaActiva : null;
-  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const puedeCapturar =
+    (esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO) ||
+    (esDirector &&
+      (inspeccion.estado === EstadoInspeccion.EN_PROCESO ||
+       inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE));
   const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (

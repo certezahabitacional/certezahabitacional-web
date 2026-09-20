@@ -129,9 +129,10 @@ export async function confirmarPreReporteSitioV1(formData: FormData) {
   if (!control?.inspeccionTecnicaConcluidaEn) {
     redirect(`/panel/inspecciones/${inspeccionId}/flujo`);
   }
-  if (control.campoFinalizadoEn) {
-    redirect(`/panel/inspecciones/${inspeccionId}/pre-reporte?error=${encodeURIComponent("La visita ya fue cerrada en sitio. La revisión preliminar debía confirmarse antes de que el Inspector se retirara del inmueble.")}`);
-  }
+  // Después del cierre físico de la visita el Inspector todavía conserva una
+  // última ventana de revisión/ajuste. Si modifica datos, puede generar una nueva
+  // versión del pre-reporte antes de confirmar su revisión final y enviarlo a Dirección.
+
 
   const metricas = await obtenerMetricasV1(inspeccionId);
   const [versionActual] = await prisma.$queryRaw<Array<{ version: number }>>`
@@ -141,7 +142,7 @@ export async function confirmarPreReporteSitioV1(formData: FormData) {
   `;
   const version = Number(versionActual?.version ?? 0) + 1;
   const resumen = {
-    etapa: "REVISION_PRELIMINAR_EN_SITIO",
+    etapa: control.campoFinalizadoEn ? "ULTIMA_REVISION_INSPECTOR" : "REVISION_PRELIMINAR_EN_SITIO",
     definidos: metricas.definidos,
     noAplica: metricas.noAplica,
     aplicables: metricas.aplicables,
@@ -160,7 +161,9 @@ export async function confirmarPreReporteSitioV1(formData: FormData) {
       VALUES (
         ${inspeccionId},${version},${usuario.id},${metricas.calificacion},${metricas.cobertura},
         ${JSON.stringify(resumen)}::jsonb,
-        'PRELIMINAR - REVISADO EN SITIO - PENDIENTE DE AJUSTE DEL INSPECTOR Y AUTORIZACION DE DIRECCION'
+        ${control.campoFinalizadoEn
+          ? 'PRELIMINAR - VERSION ACTUALIZADA EN REVISION FINAL DEL INSPECTOR - PENDIENTE DE DIRECCION'
+          : 'PRELIMINAR - REVISADO EN SITIO - PENDIENTE DE AJUSTE DEL INSPECTOR Y AUTORIZACION DE DIRECCION'}
       )
     `;
 
@@ -180,12 +183,18 @@ export async function confirmarPreReporteSitioV1(formData: FormData) {
     entidad: "PreReporteInspeccion",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Inspector confirmó la revisión preliminar en sitio del reporte V1 ${inspeccion.folio}, antes de retirarse del inmueble. Se generó versión ${version}.`,
+    descripcion: control.campoFinalizadoEn
+      ? `Inspector generó y revisó una nueva versión del pre-reporte V1 ${inspeccion.folio} durante su última revisión y ajuste. Se generó versión ${version}.`
+      : `Inspector confirmó la revisión preliminar en sitio del reporte V1 ${inspeccion.folio}, antes de retirarse del inmueble. Se generó versión ${version}.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/pre-reporte`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
-  redirect(`/panel/inspecciones/${inspeccionId}/pre-reporte?ok=${encodeURIComponent("Pre-reporte revisado en sitio. Si detectas algo por ajustar, corrígelo antes de terminar la visita y salir del inmueble.")}`);
+  redirect(`/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent(
+    control.campoFinalizadoEn
+      ? "Pre-reporte actualizado después de los ajustes. Continúa con la revisión final del Inspector."
+      : "Pre-reporte revisado en sitio. Puedes pasar a la última revisión y ajuste antes de enviarlo a Dirección.",
+  )}`);
 }
 
 export async function registrarDecisionClienteSitioV1(formData: FormData) {
