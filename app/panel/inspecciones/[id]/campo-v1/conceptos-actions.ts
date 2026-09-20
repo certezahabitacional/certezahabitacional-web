@@ -42,12 +42,6 @@ function observacionObjeto(valor: string | null): ObservacionConcepto {
   }
 }
 
-function origenEvidenciaDescripcion(valor: string | null | undefined): OrigenEvidencia | null {
-  if (valor?.includes("[ORIGEN:GALERIA]")) return "GALERIA";
-  if (valor?.includes("[ORIGEN:CAMARA]")) return "CAMARA";
-  return null;
-}
-
 const MIN_FOTOS_CONCEPTO = 1;
 const MAX_FOTOS_CONCEPTO = 4;
 
@@ -382,8 +376,7 @@ export async function generarDescripcionIaConceptoAreaV1(formData: FormData) {
   partes.push({
     text: [
       "Actúa como asistente técnico de una inspección habitacional.",
-      `Área de la vivienda: ${item.areaNombre}.`,
-      `Partida / área: ${item.areaNombre}.`,
+      `Partida / área de la vivienda: ${item.areaNombre}.`,
       `Concepto específico: ${item.concepto}.`,
       `Se adjuntan ${fotos.length} fotografía(s) que constituyen un solo grupo de evidencia para este concepto.`,
       "Interpreta todas las fotografías de manera conjunta y correlacionada; no redactes conclusiones independientes por foto.",
@@ -607,6 +600,14 @@ export async function reabrirConceptoAreaV1(formData: FormData) {
       SET "estado"='PENDIENTE',"resultado"=NULL,"cerradaEn"=NULL,"revisadaEn"=NULL,
           "comentarioFinal"=NULL,"actualizadoEn"=NOW()
       WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
     `;
   });
 
