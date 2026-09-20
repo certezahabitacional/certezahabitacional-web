@@ -50,6 +50,7 @@ type ConceptoReporte = {
   especificacion:string|null;
   observacion:string|null;
   estadoV3:string|null;
+  motivoNoAplica:string|null;
   valorMedido:string|null;
   valorProyecto:string|null;
   unidadMedida:string|null;
@@ -230,6 +231,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       g."especificacion",
       g."observacion",
       g."estadoV3",
+      g."motivoNoAplica",
       g."valorMedido",
       g."valorProyecto",
       g."unidadMedida",
@@ -238,8 +240,21 @@ export default async function ReporteV1Page({ params, searchParams }: {
     WHERE g."inspeccionId"=${id}
     ORDER BY g."areaId", COALESCE(g."orden",999999), g."concepto"
   `;
+  const esConceptoHermeticidad = (areaCodigo: string, concepto: ConceptoReporte) =>
+    ["PC_HIDRAULICA","PC_GAS"].includes(areaCodigo)
+    && /fotografía del manómetro al iniciar|lectura final de presión/i.test(concepto.concepto);
+
+  const areaPorId = new Map(areas.map((a)=>[a.id,a]));
+  const conceptosTodosPorArea = new Map<string, ConceptoReporte[]>();
   const conceptosPorArea = new Map<string, ConceptoReporte[]>();
+  const conceptosHermeticidad: ConceptoReporte[] = [];
   for (const concepto of conceptosReporte) {
+    conceptosTodosPorArea.set(concepto.areaId,[...(conceptosTodosPorArea.get(concepto.areaId)??[]),concepto]);
+    const area = areaPorId.get(concepto.areaId);
+    if (area && esConceptoHermeticidad(area.codigo,concepto)) {
+      conceptosHermeticidad.push(concepto);
+      continue;
+    }
     if (!["REVISADO","CON_HALLAZGO"].includes(concepto.estadoV3 ?? "")) continue;
     conceptosPorArea.set(concepto.areaId,[...(conceptosPorArea.get(concepto.areaId)??[]),concepto]);
   }
@@ -249,12 +264,21 @@ export default async function ReporteV1Page({ params, searchParams }: {
     FROM "ProtocoloInspeccionPaso" WHERE "inspeccionId"=${id} ORDER BY "orden"
   `;
   const procesoPorNombre = new Map(procesos.map((p)=>[p.nombre.toUpperCase(),p]));
+  const ordenCritico: Record<string,number> = {
+    PC_HIDRAULICA: 2,
+    PC_SANITARIA: 3,
+    PC_PLUVIAL: 4,
+    PC_GAS: 5,
+    PC_DUCTOS: 6,
+    PC_ELECTRICA: 7,
+    PC_LOSAS_AZOTEA: 8,
+  };
   const partidasReporte = [...areas].sort((a,b)=>{
-    const prioridadA = a.tipo === "PUNTO_CRITICO" ? 0 : 1;
-    const prioridadB = b.tipo === "PUNTO_CRITICO" ? 0 : 1;
-    return prioridadA - prioridadB || a.orden - b.orden || a.nombre.localeCompare(b.nombre,"es");
+    const oa = ordenCritico[a.codigo] ?? (1000 + a.orden);
+    const ob = ordenCritico[b.codigo] ?? (1000 + b.orden);
+    return oa - ob || a.nombre.localeCompare(b.nombre,"es");
   });
-  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+1]));
+  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+2]));
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
     SELECT fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
@@ -354,12 +378,46 @@ export default async function ReporteV1Page({ params, searchParams }: {
   };
 
   const evaluacionesPorArea = new Map<string,{calificacion:number;nivel:string}>();
+  const conteosPorArea = new Map<string,{definidos:number;aplicables:number;revisados:number;noAplica:number;hallazgos:number}>();
   const numeroPunto = new Map<string,number>();
+  let consecutivoPunto = 3;
   for (const area of partidasReporte) {
+    const todos = (conceptosTodosPorArea.get(area.id) ?? []).filter((g)=>!esConceptoHermeticidad(area.codigo,g));
     const conceptos = conceptosPorArea.get(area.id) ?? [];
-    conceptos.forEach((concepto,index)=>numeroPunto.set(concepto.id,index+1));
+    for (const concepto of conceptos) {
+      numeroPunto.set(concepto.id,consecutivoPunto);
+      consecutivoPunto += 1;
+    }
+    const ids = new Set(todos.map((g)=>g.id));
+    conteosPorArea.set(area.id,{
+      definidos: todos.length,
+      noAplica: todos.filter((g)=>g.estadoV3==="NO_APLICA").length,
+      aplicables: todos.filter((g)=>g.estadoV3!=="NO_APLICA").length,
+      revisados: todos.filter((g)=>["REVISADO","CON_HALLAZGO"].includes(g.estadoV3??"")).length,
+      hallazgos: inspeccion.hallazgos.filter((h)=>h.guiaItemId && ids.has(h.guiaItemId)).length,
+    });
     evaluacionesPorArea.set(area.id,evaluarPromedioV1(conceptos.map((g)=>evaluacionConcepto(g).calificacion)));
   }
+
+  const hermeticidadAreas = {
+    hidraulica: areas.find((a)=>a.codigo==="PC_HIDRAULICA"),
+    gas: areas.find((a)=>a.codigo==="PC_GAS"),
+  };
+  const pruebaHermeticidad = (codigo:"PC_HIDRAULICA"|"PC_GAS", etiqueta:string) => {
+    const area = areas.find((a)=>a.codigo===codigo);
+    const proceso = area ? procesoPorNombre.get(area.nombre.toUpperCase()) : undefined;
+    const conceptos = area ? conceptosHermeticidad.filter((g)=>g.areaId===area.id) : [];
+    const final = conceptos.find((g)=>/lectura final de presión/i.test(g.concepto));
+    const hallazgo = final ? inspeccion.hallazgos.find((h)=>h.guiaItemId===final.id) : undefined;
+    const inspeccionada = Boolean(proceso && proceso.estado==="COMPLETADO");
+    const calificacion = inspeccionada ? (hallazgo ? referenciaPrioridadV1(hallazgo.prioridad) : 100) : 100;
+    return { codigo,etiqueta,area,proceso,conceptos,final,hallazgo,inspeccionada,calificacion,nivel:nivelEvaluacionV1(calificacion) };
+  };
+  const pruebasHermeticidad = [
+    pruebaHermeticidad("PC_HIDRAULICA","Prueba de hermeticidad hidráulica"),
+    pruebaHermeticidad("PC_GAS","Prueba de hermeticidad de gas"),
+  ];
+  const evaluacionHermeticidad = evaluarPromedioV1(pruebasHermeticidad.filter((p)=>p.inspeccionada).map((p)=>p.calificacion));
 
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
@@ -498,6 +556,23 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion folio={inspeccion.folio} n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
+            <article className="rounded-3xl border-2 border-amber-300 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida 1</p><h3 className="mt-1 text-2xl font-black">Pruebas de hermeticidad</h3><p className="mt-2 text-xs font-bold text-slate-500">Pruebas de hermeticidad de las instalaciones hidráulica y de gas.</p></div>
+                <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionHermeticidad.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionHermeticidad.nivel}</span></p></div>
+              </div>
+              <div className="mt-5 space-y-5">
+                {pruebasHermeticidad.filter((p)=>p.inspeccionada).map((p,index)=>{
+                  const fotos=(p.area ? (fotosPorArea.get(p.area.id)??[]) : []).filter((foto)=>p.conceptos.some((g)=>g.id===foto.guiaItemId));
+                  return <section key={p.codigo} className="avoid-break rounded-2xl border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-lg font-black">{p.etiqueta}</h4></div><span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{p.calificacion.toFixed(0)}/100 · {p.nivel}</span></div>
+                    {p.proceso&&<div className="mt-4 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Lecturas:</strong> inicial {p.proceso.lecturaInicial??"—"} {p.proceso.unidad??""} · final {p.proceso.lecturaFinal??"—"} {p.proceso.unidad??""}{p.proceso.lecturaInicial!==null&&p.proceso.lecturaFinal!==null?` · variación ${Number(p.proceso.lecturaFinal)-Number(p.proceso.lecturaInicial)} ${p.proceso.unidad??""}`:""}</div>}
+                    {p.hallazgo&&<div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Resultado / hallazgo</p><p className="mt-1 text-sm font-black">{p.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{p.hallazgo.descripcion}</p><p className="mt-2 text-xs font-bold text-slate-300">Clasificación: {p.hallazgo.clasificacion} · Prioridad: {p.hallazgo.prioridad}</p></div>}
+                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${p.codigo}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
+                  </section>;
+                })}
+              </div>
+            </article>
             {partidasReporte.filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).map((a)=>{
               const conceptos=conceptosPorArea.get(a.id)??[];
               const evaluacionArea=evaluacionesPorArea.get(a.id);
@@ -506,7 +581,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                   <div>
                     <p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida {numeroPartida.get(a.id)}</p>
                     <h3 className="mt-1 text-2xl font-black">{a.nombre}</h3>
-                    <p className="mt-2 text-xs font-bold text-slate-500">{conceptos.length} conceptos inspeccionados · {a.noAplica} no aplica · {Math.max(a.aplicables-a.revisados,0)} no inspeccionados / sin acceso u otra causa</p>
+                    {(()=>{const ct=conteosPorArea.get(a.id);return <p className="mt-2 text-xs font-bold text-slate-500">{conceptos.length} puntos inspeccionados · {ct?.noAplica??0} no aplica · {Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</p>})()}
                   </div>
                   {evaluacionArea&&<div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionArea.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionArea.nivel}</span></p></div>}
                 </div>
@@ -516,13 +591,11 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     const ev=evaluacionConcepto(g);
                     const fotos=fotosPorConcepto.get(g.id)??[];
                     const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
-                    const proceso=procesoPorNombre.get(a.nombre.toUpperCase());
-                    const esHermeticidad=Boolean(proceso && (proceso.lecturaInicial!==null || proceso.lecturaFinal!==null) && /manómetro|presión/i.test(g.concepto));
                     return <section key={g.id} className="avoid-break rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
-                          <h4 className="mt-1 text-lg font-black">{esHermeticidad && /Lectura final/i.test(g.concepto) ? `Prueba de hermeticidad · ${g.concepto}` : g.concepto}</h4>
+                          <h4 className="mt-1 text-lg font-black">{g.concepto}</h4>
                           {g.especificacion&&<p className="mt-1 text-xs leading-5 text-slate-500">{g.especificacion}</p>}
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -532,7 +605,6 @@ export default async function ReporteV1Page({ params, searchParams }: {
                       </div>
                       {ev.hallazgo&&<div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Hallazgo</p><p className="mt-1 text-sm font-black">{ev.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{ev.hallazgo.descripcion}</p>{ev.hallazgo.recomendacion&&<p className="mt-2 text-sm leading-6 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
                       {obs.descripcionFinal&&<p className="mt-4 text-sm leading-6 text-slate-700"><strong>Interpretación final del Inspector:</strong> {obs.descripcionFinal}</p>}
-                      {esHermeticidad&&proceso&&<div className="mt-3 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Prueba de hermeticidad:</strong> lectura inicial {proceso.lecturaInicial??"—"} {proceso.unidad??""} · lectura final {proceso.lecturaFinal??"—"} {proceso.unidad??""}{proceso.lecturaInicial!==null&&proceso.lecturaFinal!==null?` · variación ${Number(proceso.lecturaFinal)-Number(proceso.lecturaInicial)} ${proceso.unidad??""}`:""}</div>}
                       {(g.valorMedido||g.valorProyecto)&&<p className="mt-3 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Referencia/proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
                       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-600">
                         <span>Clasificación: {obs.clasificacionFinal??ev.hallazgo?.clasificacion??(tieneHallazgo?"—":"SIN HALLAZGO")}</span>
@@ -554,14 +626,23 @@ export default async function ReporteV1Page({ params, searchParams }: {
             <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white">
               <span>Partida</span><span className="text-center">Inspeccionados</span><span className="text-center">Hallazgos</span><span className="text-center">No aplica</span><span className="text-center">Calificación</span><span className="text-center">Nivel</span>
             </div>
+            <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
+              <span><strong>1. Pruebas de hermeticidad</strong><span className="mt-1 block text-[10px] text-slate-500">Hidráulica y gas</span></span>
+              <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>p.inspeccionada).length}</span>
+              <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>Boolean(p.hallazgo)).length}</span>
+              <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>!p.area).length}</span>
+              <span className="text-center font-black">{pruebasHermeticidad.some((p)=>p.inspeccionada)?evaluacionHermeticidad.calificacion.toFixed(2):"—"}</span>
+              <span className="text-center font-black">{pruebasHermeticidad.some((p)=>p.inspeccionada)?evaluacionHermeticidad.nivel:"—"}</span>
+            </div>
             {partidasReporte.map((a)=>{
               const conceptos=conceptosPorArea.get(a.id)??[];
               const ev=evaluacionesPorArea.get(a.id);
+              const ct=conteosPorArea.get(a.id);
               return <div key={a.id} className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
-                <span><strong>{numeroPartida.get(a.id)}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max(a.aplicables-a.revisados,0)} no inspeccionados / sin acceso u otra causa</span></span>
+                <span><strong>{numeroPartida.get(a.id)}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</span></span>
                 <span className="text-center font-bold">{conceptos.length}</span>
-                <span className="text-center font-bold">{a.hallazgos}</span>
-                <span className="text-center font-bold">{a.noAplica}</span>
+                <span className="text-center font-bold">{ct?.hallazgos??0}</span>
+                <span className="text-center font-bold">{ct?.noAplica??0}</span>
                 <span className="text-center font-black">{conceptos.length&&ev?ev.calificacion.toFixed(2):"—"}</span>
                 <span className="text-center font-black">{conceptos.length&&ev?ev.nivel:"—"}</span>
               </div>;
