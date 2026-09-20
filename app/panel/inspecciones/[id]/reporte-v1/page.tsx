@@ -236,7 +236,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
     LEFT JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
     LEFT JOIN "GuiaInspeccionItem" g ON g."id"=fa."guiaItemId"
     WHERE f."inspeccionId"=${id}
-    ORDER BY COALESCE(a."orden",999999),COALESCE(g."orden",999999),COALESCE(fa."orden",999999),f."creadoEn"
+    ORDER BY COALESCE(a."orden",999999),COALESCE(g."orden",999999),COALESCE(fa."orden",999999),f."creadaEn"
   `;
   const evidencias = await Promise.all(
     evidenciasBase.map(async (e) => ({...e,urlFirmada:await signedUrl(e.url)})),
