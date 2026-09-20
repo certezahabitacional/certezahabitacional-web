@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
 
 import { auth } from "@/auth";
@@ -16,20 +15,13 @@ import {
   obtenerHerramientasCotizadasDesdeCotizacion,
 } from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { confirmarPreReporteSitioV1 } from "../pre-reporte/actions";
-
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
 
 async function signedUrl(path: string | null) {
   if (!path) return null;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  const sb = supabaseAdmin();
-  if (!sb) return null;
+  const sb = obtenerSupabaseAdmin();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 60 * 60);
   return error ? null : data.signedUrl;
