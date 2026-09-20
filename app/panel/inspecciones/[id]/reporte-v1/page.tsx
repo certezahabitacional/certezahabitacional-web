@@ -8,6 +8,14 @@ import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
+import {
+  ESCALA_EVALUACION_CERTEZA,
+  evaluarPromedioV1,
+  nivelDesdeCalificacionV1,
+  rangoNivelV1,
+  referenciaPrioridadV1,
+  type NivelEvaluacionCerteza,
+} from "@/lib/evaluacion-reporte-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
 import {
   HERRAMIENTAS_INSPECCION,
@@ -71,15 +79,36 @@ type ObservacionConcepto = {
   clasificacionFinal?: string;
   prioridadFinal?: string;
 };
+type ConceptoReporte = {
+  id:string;
+  areaId:string|null;
+  areaNombre:string|null;
+  areaOrden:number|null;
+  concepto:string;
+  especificacion:string|null;
+  observacion:string|null;
+  estadoV3:string;
+  valorMedido:string|null;
+  valorProyecto:string|null;
+  unidadMedida:string|null;
+  herramientaSugerida:string|null;
+  orden:number;
+  hallazgoId:string|null;
+  hallazgoDescripcion:string|null;
+  hallazgoClasificacion:string|null;
+  hallazgoPrioridad:"P1"|"P2"|"P3"|"P4"|"P5"|null;
+  hallazgoRecomendacion:string|null;
+};
 type SnapshotCotizacion = Record<string, unknown>;
 type AutorizacionDireccion = { nombre: string; creadaEn: Date };
 
 const GLOSARIO = [
-  ["P1", "Prioridad crítica o urgente; requiere atención inmediata por la relevancia de la condición observada."],
-  ["P2", "Prioridad alta; condición relevante que debe atenderse con prontitud."],
-  ["P3", "Prioridad media; condición que requiere corrección programada o seguimiento."],
-  ["P4", "Prioridad baja; detalle de menor impacto que conviene corregir."],
-  ["P5", "Prioridad muy baja; detalle menor, principalmente de terminación, apariencia o mejora."],
+  ["P1 · 0–49", "Evaluación de condición crítica o de atención prioritaria."],
+  ["P2 · 50–69", "Evaluación de condición relevante de atención alta."],
+  ["P3 · 70–79", "Evaluación de condición de atención media."],
+  ["P4 · 80–89", "Evaluación de condición de atención baja."],
+  ["P5 · 90–99", "Evaluación de detalle menor o de mejora."],
+  ["SH · 100", "Sin hallazgo. El concepto inspeccionado no registró una condición adversa dentro del alcance revisado."],
   ["Hermeticidad", "Capacidad de una instalación para mantener presión o estanqueidad durante una prueba controlada."],
   ["Desplome", "Desviación de un elemento vertical respecto de la vertical esperada."],
   ["Auscultación", "Revisión mediante percusión, rodamiento u otra técnica para identificar indicios de huecos, desprendimientos u otras condiciones."],
@@ -192,6 +221,45 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const procesos = await prisma.$queryRaw<Proceso[]>`
     SELECT "orden","nombre","estado","lecturaInicial","lecturaFinal","unidad","comentario"
     FROM "ProtocoloInspeccionPaso" WHERE "inspeccionId"=${id} ORDER BY "orden"
+  `;
+
+  const conceptosReporte = await prisma.$queryRaw<ConceptoReporte[]>`
+    SELECT
+      g."id",
+      g."areaId"::text AS "areaId",
+      a."nombre" AS "areaNombre",
+      a."orden" AS "areaOrden",
+      g."concepto",
+      g."especificacion",
+      g."observacion",
+      g."estadoV3",
+      g."valorMedido",
+      g."valorProyecto",
+      g."unidadMedida",
+      g."herramientaSugerida",
+      g."orden",
+      h."id" AS "hallazgoId",
+      h."descripcion" AS "hallazgoDescripcion",
+      h."clasificacion"::text AS "hallazgoClasificacion",
+      h."prioridad"::text AS "hallazgoPrioridad",
+      h."recomendacion" AS "hallazgoRecomendacion"
+    FROM "GuiaInspeccionItem" g
+    LEFT JOIN "AreaInspeccion" a ON a."id"=g."areaId"
+    LEFT JOIN LATERAL (
+      SELECT h.*
+      FROM "Hallazgo" h
+      WHERE h."inspeccionId"=g."inspeccionId"
+        AND h."guiaItemId"=g."id"
+      ORDER BY
+        CASE h."prioridad"
+          WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3
+          WHEN 'P4' THEN 4 WHEN 'P5' THEN 5 ELSE 6
+        END,
+        h."creadoEn" DESC
+      LIMIT 1
+    ) h ON true
+    WHERE g."inspeccionId"=${id}
+    ORDER BY COALESCE(a."orden",999999),g."orden",g."concepto"
   `;
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
