@@ -135,7 +135,7 @@ export default async function PreReportePage({ params, searchParams }: {
   }>>`
     SELECT
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."tipo" <> 'PUNTO_CRITICO') AS "areasTotal",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."tipo" <> 'PUNTO_CRITICO' AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."tipo" <> 'PUNTO_CRITICO' AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "procesosTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "procesosCompletos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id}) AS "hallazgos",
@@ -151,7 +151,7 @@ export default async function PreReportePage({ params, searchParams }: {
     estadoTecnico.procesosCompletos === estadoTecnico.procesosTotal &&
     estadoTecnico.hallazgos === estadoTecnico.hallazgosCompletos &&
     estadoTecnico.syncPendientes === 0 &&
-    estadoTecnico.portadaFachada === 1
+    (estadoTecnico.portadaFachada === 1 || areas.some((a) => a.resultado === "NO_APLICA" && /fachada/i.test(a.nombre)))
   );
   const revisadoEnSitio = Boolean(control?.preReporteGeneradoEn);
   const campoTerminado = Boolean(control?.campoFinalizadoEn);
