@@ -10,6 +10,7 @@ import CargaGaleriaConPreview from "../CargaGaleriaConPreview";
 import BotonGenerarIa from "../BotonGenerarIa";
 import {
   cerrarPruebaProlongadaV1,
+  continuarPreReporteDesdeHermeticidadV1,
   generarInterpretacionIaPruebaProlongadaV1,
   registrarInicioPruebaProlongadaV1,
   subirFotoPuntoCriticoV1,
@@ -476,11 +477,14 @@ export default async function HermeticidadPage({
           <div className="mt-7 rounded-3xl border border-emerald-300/25 bg-emerald-300/5 p-6">
             <p className="font-black text-emerald-200">PRUEBAS DE HERMETICIDAD CERRADAS ✓</p>
             <p className="mt-2 text-sm text-slate-300">
-              Las lecturas iniciales y finales de Hidráulica y Gas ya quedaron documentadas. Puedes continuar al cierre y revisión de la inspección.
+              Las lecturas iniciales y finales de Hidráulica y Gas ya quedaron documentadas. El siguiente paso es el pre-reporte integral.
             </p>
-            <Link href={`/panel/inspecciones/${id}`} className="mt-4 inline-block rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">
-              CONTINUAR AL EXPEDIENTE
-            </Link>
+            <form action={continuarPreReporteDesdeHermeticidadV1} className="mt-4">
+              <input type="hidden" name="inspeccionId" value={id}/>
+              <button className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">
+                CONTINUAR AL PRE-REPORTE
+              </button>
+            </form>
           </div>
         )}
       </div>
