@@ -646,6 +646,14 @@ export async function reactivarConceptoAreaV1(formData: FormData) {
           "comentarioFinal"=NULL,"actualizadoEn"=NOW()
       WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
     `;
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
   });
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,
