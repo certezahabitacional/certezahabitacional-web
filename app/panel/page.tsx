@@ -8,7 +8,8 @@ import { prisma } from "@/lib/prisma";
 export default async function PanelPage({ searchParams }: { searchParams: Promise<{ zonaId?: string }> }) {
   const usuarioActual=await obtenerUsuarioConAlcanceZona("/panel");
   const rol=usuarioActual.rol;
-  const esDirector=rol===RolUsuario.DIRECTOR,esAdministrador=rol===RolUsuario.ADMINISTRADOR,esGerente=rol===RolUsuario.GERENTE,esCoordinador=rol===RolUsuario.COORDINADOR;
+  const esDirector=rol===RolUsuario.DIRECTOR,esAdministrador=rol===RolUsuario.ADMINISTRADOR,esVendedor=rol===RolUsuario.VENDEDOR,esGerente=rol===RolUsuario.GERENTE,esCoordinador=rol===RolUsuario.COORDINADOR;
+  if(esVendedor) redirect("/panel/pre-cotizaciones");
   if(!esDirector&&!esAdministrador&&!esGerente&&!esCoordinador) redirect("/acceso");
   const p=await searchParams;
   const zonaId=zonaEfectivaId(usuarioActual,p.zonaId);

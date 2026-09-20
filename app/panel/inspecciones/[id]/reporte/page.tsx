@@ -490,7 +490,7 @@ export default async function ReportePage({
         </Link>
 
         <div className="flex gap-3">
-          {seleccionEditorial.disponible && (
+          {seleccionEditorial.disponible && usuarioActual.rol !== RolUsuario.VENDEDOR && (
             <Link
               href={`/panel/inspecciones/${inspeccion.id}/reporte-evidencias`}
               className="rounded-full border border-violet-400 px-5 py-3 font-bold text-violet-800"

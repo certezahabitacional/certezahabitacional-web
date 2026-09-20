@@ -89,6 +89,7 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
 };
 
 export function puedeVerModuloPanel(rol: RolUsuario, modulo: ModuloPanel): boolean {
+  if (rol === RolUsuario.DIRECTOR) return true;
   return MODULOS_POR_ROL[rol]?.has(modulo) ?? false;
 }
 
