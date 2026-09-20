@@ -143,7 +143,9 @@ export default async function CampoV1Page({ params, searchParams }: {
   const numeroAreaActiva = indiceAreaActiva >= 0 ? 9 + indiceAreaActiva : null;
   const puedeCapturar =
     (esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO) ||
-    (esDirector && [EstadoInspeccion.EN_PROCESO, EstadoInspeccion.REPORTE_PENDIENTE].includes(inspeccion.estado));
+    (esDirector &&
+      (inspeccion.estado === EstadoInspeccion.EN_PROCESO ||
+       inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE));
   const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (
