@@ -30,6 +30,12 @@ type Area = {
   noAplica: number;
 };
 
+function tituloPartida(valor: string) {
+  return valor
+    .toLocaleLowerCase("es-MX")
+    .replace(/(^|[\s/\-])([a-záéíóúüñ])/g, (_, separador: string, letra: string) => `${separador}${letra.toLocaleUpperCase("es-MX")}`);
+}
+
 export default async function CampoV1Page({ params, searchParams }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ ok?: string; error?: string; area?: string }>;
@@ -146,24 +152,24 @@ export default async function CampoV1Page({ params, searchParams }: {
     ORDER BY g."orden",g."concepto"
   ` : [];
 
-  const puntosInspeccionados = await prisma.$queryRaw<Array<{
+  const puntosNavegacion = await prisma.$queryRaw<Array<{
     id:string; areaId:string|null; area:string; concepto:string; estadoV3:string; orden:number|null;
   }>>`
     SELECT g."id"::text AS "id",g."areaId"::text AS "areaId",g."area",g."concepto",g."estadoV3",g."orden"
     FROM "GuiaInspeccionItem" g
     WHERE g."inspeccionId"=${id}
-      AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO','NO_APLICA')
       AND g."concepto" NOT ILIKE '%manómetro%'
       AND g."concepto" NOT ILIKE '%lectura final%'
     ORDER BY COALESCE(g."orden",999999),g."concepto"
   `;
-  const puntosFisicosPorArea = new Map<string, typeof puntosInspeccionados>();
-  const puntosCriticosInspeccionados = new Map<string, typeof puntosInspeccionados>();
-  for (const p of puntosInspeccionados) {
-    if (p.areaId) puntosFisicosPorArea.set(p.areaId,[...(puntosFisicosPorArea.get(p.areaId)??[]),p]);
-    else if (p.area.startsWith("__PUNTO_CRITICO__:")) {
+  const puntosFisicosPorArea = new Map<string, typeof puntosNavegacion>();
+  const puntosCriticosPorCodigo = new Map<string, typeof puntosNavegacion>();
+  for (const p of puntosNavegacion) {
+    if (p.area.startsWith("__PUNTO_CRITICO__:")) {
       const codigo=p.area.replace("__PUNTO_CRITICO__:","");
-      puntosCriticosInspeccionados.set(codigo,[...(puntosCriticosInspeccionados.get(codigo)??[]),p]);
+      puntosCriticosPorCodigo.set(codigo,[...(puntosCriticosPorCodigo.get(codigo)??[]),p]);
+    } else if (p.areaId) {
+      puntosFisicosPorArea.set(p.areaId,[...(puntosFisicosPorArea.get(p.areaId)??[]),p]);
     }
   }
 
@@ -180,11 +186,22 @@ export default async function CampoV1Page({ params, searchParams }: {
   const totalPuntos = areas.reduce((s, a) => s + Number(a.puntos), 0);
   const totalPendientes = areas.reduce((s, a) => s + Number(a.pendientes), 0);
   const cerradas = areas.filter((a) => a.estado === "REVISADA").length;
-  const avance = areas.length ? Math.round((cerradas / areas.length) * 100) : 0;
+  const criticosCerrados = pasosCriticos.filter((p) => p.estado === "COMPLETADO" || p.estado === "NO_APLICA").length;
+  const hermeticidadCerrada = ["PC_HIDRAULICA","PC_GAS"].every((clave) => {
+    const paso = pasosCriticos.find((p) => p.clave === clave);
+    if (!paso) return false;
+    if (paso.estado === "NO_APLICA") return true;
+    return paso.estado === "COMPLETADO" && Boolean(paso.lecturaInicial) && Boolean(paso.lecturaFinal);
+  });
   const totalRecorrido = 8 + areas.length;
+  const partidasCerradas = cerradas + criticosCerrados + (hermeticidadCerrada ? 1 : 0);
+  const avance = totalRecorrido ? Math.round((partidasCerradas / totalRecorrido) * 100) : 0;
   const desarrolloCompleto =
-    areas.length > 0 &&
+    totalRecorrido > 8 &&
+    partidasCerradas === totalRecorrido &&
     cerradas === areas.length &&
+    criticosCerrados === 7 &&
+    hermeticidadCerrada &&
     Number(protocoloEstado?.total ?? 0) > 0 &&
     Number(protocoloEstado?.total ?? 0) === Number(protocoloEstado?.completos ?? 0) &&
     totalPendientes === 0;
@@ -225,22 +242,35 @@ export default async function CampoV1Page({ params, searchParams }: {
             </summary>
             <div className="absolute left-0 z-40 mt-2 max-h-[70vh] w-[min(92vw,560px)] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl">
               <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="block rounded-xl border border-white/10 p-3">
-                <span className="text-[10px] font-black text-slate-500">PARTIDA 1</span>
-                <p className="font-black">Pruebas de hermeticidad</p>
-                <p className="mt-1 text-xs text-slate-400">Concepto 1 · Hermeticidad hidráulica · Concepto 2 · Hermeticidad de gas</p>
+                <span className="text-[9px] font-black text-slate-500">Partida 1</span>
+                <p className="text-sm font-black">Pruebas De Hermeticidad</p>
+                <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                  <p>Concepto 1 · Hermeticidad Hidráulica</p>
+                  <p>Concepto 2 · Hermeticidad De Gas</p>
+                </div>
               </Link>
               {PUNTOS_CRITICOS_V1.map((punto,index)=>{
-                const inspeccionados=puntosCriticosInspeccionados.get(punto.codigo)??[];
+                const conceptos=puntosCriticosPorCodigo.get(punto.codigo)??[];
                 return <div key={punto.codigo} className="mt-2 rounded-xl border border-white/10 p-3">
-                  <Link href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`} className="block font-black"><span className="mr-2 text-[10px] text-slate-500">PARTIDA {index+2}</span>{punto.etiqueta}</Link>
-                  {inspeccionados.length>0&&<div className="mt-2 space-y-1">{inspeccionados.map((p)=><Link key={p.id} href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}&foco=${p.id}`} className="block rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">{p.concepto}</Link>)}</div>}
+                  <Link href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`} className="block text-sm font-black"><span className="mr-2 text-[9px] text-slate-500">Partida {index+2}</span>{tituloPartida(punto.etiqueta)}</Link>
+                  {conceptos.length>0&&<div className="mt-2 space-y-1">{conceptos.map((p)=>{
+                    const inspeccionado=["REVISADO","CON_HALLAZGO","NO_APLICA"].includes(p.estadoV3);
+                    return inspeccionado
+                      ? <Link key={p.id} href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}&foco=${p.id}`} className="block rounded-lg bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">{tituloPartida(p.concepto)}</Link>
+                      : <span key={p.id} className="block rounded-lg bg-white/[.03] px-3 py-1.5 text-[11px] text-slate-600">{tituloPartida(p.concepto)} · Pendiente</span>;
+                  })}</div>}
                 </div>;
               })}
               {areas.map((area,index)=>{
-                const inspeccionados=puntosFisicosPorArea.get(area.id)??[];
+                const conceptos=puntosFisicosPorArea.get(area.id)??[];
                 return <div key={area.id} className="mt-2 rounded-xl border border-white/10 p-3">
-                  <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block font-black"><span className="mr-2 text-[10px] text-slate-500">PARTIDA {index+9}</span>{area.nombre}</Link>
-                  {inspeccionados.length>0&&<div className="mt-2 space-y-1">{inspeccionados.map((p)=><a key={p.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}#item-${p.id}`} className="block rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">{p.concepto}</a>)}</div>}
+                  <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block text-sm font-black"><span className="mr-2 text-[9px] text-slate-500">Partida {index+9}</span>{tituloPartida(area.nombre)}</Link>
+                  {conceptos.length>0&&<div className="mt-2 space-y-1">{conceptos.map((p)=>{
+                    const inspeccionado=["REVISADO","CON_HALLAZGO","NO_APLICA"].includes(p.estadoV3);
+                    return inspeccionado
+                      ? <a key={p.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}#item-${p.id}`} className="block rounded-lg bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">{tituloPartida(p.concepto)}</a>
+                      : <span key={p.id} className="block rounded-lg bg-white/[.03] px-3 py-1.5 text-[11px] text-slate-600">{tituloPartida(p.concepto)} · Pendiente</span>;
+                  })}</div>}
                 </div>;
               })}
             </div>
@@ -263,7 +293,7 @@ export default async function CampoV1Page({ params, searchParams }: {
         </section>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-4">
-          <Card titulo="Partidas físicas cerradas" valor={`${cerradas}/${areas.length}`} />
+          <Card titulo="Partidas cerradas" valor={`${partidasCerradas}/${totalRecorrido}`} />
           <Card titulo="Puntos del plan" valor={String(totalPuntos)} />
           <Card titulo="Pendientes" valor={String(totalPendientes)} />
           <Card titulo="Avance" valor={`${avance}%`} />
@@ -283,7 +313,7 @@ export default async function CampoV1Page({ params, searchParams }: {
             {!areaSeleccionada ? <div className="rounded-3xl border border-white/10 bg-slate-900 p-8 text-slate-400">Aún no existen áreas para V1.</div> : (
               <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">{numeroAreaActiva ? `Partida ${numeroAreaActiva} de ${totalRecorrido}` : "Partida activa"}</p><h2 className="mt-1 text-2xl font-black">{areaSeleccionada.nombre}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} conceptos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
+                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">{numeroAreaActiva ? `Partida ${numeroAreaActiva} de ${totalRecorrido}` : "Partida activa"}</p><h2 className="mt-1 text-xl font-black">{tituloPartida(areaSeleccionada.nombre)}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} conceptos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
                   {areaSeleccionada.resultado && <span className={`rounded-full px-3 py-2 text-xs font-black ${areaSeleccionada.resultado === "NO_APLICA" ? "bg-slate-300/10 text-slate-300" : "bg-emerald-300/10 text-emerald-300"}`}>{areaSeleccionada.resultado === "NO_APLICA" ? "PARTIDA DESHABILITADA" : areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
                 </div>
 

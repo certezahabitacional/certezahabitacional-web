@@ -34,6 +34,8 @@ on:
 
       - fix/navegacion-compacta-pre-reporte-v1
 
+      - fix/congruencia-27-partidas-reporte-paginacion
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest

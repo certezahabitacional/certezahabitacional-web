@@ -714,11 +714,12 @@ export default async function PuntosCriticosPage({
 
                           <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
                             <p className="text-xs font-black uppercase text-cyan-200">Calificación automática por IA</p>
-                            <p className="mt-2 text-[11px] leading-5 text-cyan-50">El Inspector fija la prioridad y la IA define la cifra exacta dentro de su rango: P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99. Conforme = SH 100.</p>
+                            <p className="mt-2 text-[11px] leading-5 text-cyan-50">El Inspector selecciona SH cuando el concepto es Conforme y no existe hallazgo. SH = 100. Si existe hallazgo, selecciona P1–P5 y la IA define la cifra exacta dentro del rango correspondiente.</p>
                           </div>
 
-                          <label className="mt-3 block text-xs font-black uppercase text-slate-400">Nivel de prioridad del hallazgo</label>
-                          <select name="prioridad" defaultValue={obs.prioridadFinal ?? "P3"} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2">
+                          <label className="mt-3 block text-xs font-black uppercase text-slate-400">Evaluación / prioridad final</label>
+                          <select name="prioridad" defaultValue={obs.prioridadFinal ?? obs.prioridadEvaluadaIa ?? "SH"} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2">
+                            <option value="SH">SH · Sin hallazgo · 100/100</option>
                             <option value="P1">P1 · Atención inmediata / crítica</option>
                             <option value="P2">P2 · Muy alta</option>
                             <option value="P3">P3 · Alta / corregir</option>
@@ -754,7 +755,7 @@ export default async function PuntosCriticosPage({
                           <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
                             <p className="font-black">CONCEPTO CERRADO ✓</p>
                             <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
-                            {obs.calificacionFinal !== undefined && <p className="mt-1">Evaluación IA: <strong>{obs.calificacionFinal}/100</strong>{obs.prioridadEvaluadaIa ? <> · Rango <strong>{obs.prioridadEvaluadaIa}</strong></> : null}</p>}{obs.justificacionCalificacionIa && <p className="mt-1 text-xs text-emerald-100/80">{obs.justificacionCalificacionIa}</p>}{obs.prioridadFinal && <p className="mt-1">Prioridad elegida por el Inspector: <strong>{obs.prioridadFinal}</strong></p>}
+                            {obs.calificacionFinal !== undefined && <p className="mt-1">Evaluación IA: <strong>{obs.calificacionFinal}/100</strong>{obs.prioridadEvaluadaIa ? <> · Rango <strong>{obs.prioridadEvaluadaIa}</strong></> : null}</p>}{obs.justificacionCalificacionIa && <p className="mt-1 text-xs text-emerald-100/80">{obs.justificacionCalificacionIa}</p>}{obs.prioridadFinal && <p className="mt-1">Evaluación / prioridad elegida por el Inspector: <strong>{obs.prioridadFinal}</strong></p>}
                             {item.requiereMedicion && item.valorMedido && (
                               <p className="mt-2 text-xs">
                                 Medición: <strong>{item.valorMedido} {item.unidadMedida ?? ""}</strong>
