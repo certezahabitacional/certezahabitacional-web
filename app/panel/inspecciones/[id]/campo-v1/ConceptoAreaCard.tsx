@@ -38,6 +38,7 @@ type Observacion = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
 };
 
 function observacion(valor: string | null): Observacion {
@@ -273,7 +274,20 @@ export default async function ConceptoAreaCard({
                 <option value="CR">CR · Crítico</option>
               </select>
 
-              <label className="mt-3 block text-xs font-black uppercase text-slate-400">Prioridad</label>
+              <label className="mt-3 block text-xs font-black uppercase text-slate-400">Evaluación final del punto · 0 a 100</label>
+              <input
+                type="number"
+                name="calificacionFinal"
+                required
+                min={0}
+                max={100}
+                step={1}
+                defaultValue={obs.calificacionFinal ?? (obs.clasificacionFinal === "C" ? 100 : 100)}
+                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2"
+              />
+              <p className="mt-2 text-[11px] leading-5 text-slate-500">SH = 100. Si existe hallazgo, la evaluación debe quedar entre 0 y 99 de acuerdo con la interpretación técnica final.</p>
+
+              <label className="mt-3 block text-xs font-black uppercase text-slate-400">Prioridad del hallazgo</label>
               <select name="prioridad" defaultValue={obs.prioridadFinal ?? "P3"} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2">
                 <option value="P1">P1 · Inmediata / crítica</option>
                 <option value="P2">P2 · Muy alta</option>
@@ -291,7 +305,7 @@ export default async function ConceptoAreaCard({
             <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
               <p className="font-black">CONCEPTO CERRADO ✓</p>
               <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
-              {obs.prioridadFinal && <p>Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
+              {obs.calificacionFinal !== undefined && <p>Evaluación: <strong>{obs.calificacionFinal}/100</strong></p>}{obs.prioridadFinal && <p>Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
               {obs.descripcionFinal && <p className="mt-2 text-xs leading-5">{obs.descripcionFinal}</p>}
               {puedeReabrir && (
                 <form action={reabrirConceptoAreaV1} className="mt-4">
