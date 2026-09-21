@@ -44,10 +44,10 @@ export default async function InspeccionLayout({ children, params }: { children:
   const puedeVerAjustes = etapaPosteriorHabilitada && rolesAjustes.includes(usuario.rol);
   const rolesRevision: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR, RolUsuario.INSPECTOR];
   const puedeVerRevision = etapaPosteriorHabilitada && rolesRevision.includes(usuario.rol);
-  const mostrarBarraInferior = !esV1 || puedeVerRevision || puedeVerAjustes;
+  const mostrarBarraInferior = !esV1 && (puedeVerRevision || puedeVerAjustes);
 
   return <>
-    <RevisionCanonicaNotice inspeccionId={id} visible={puedeVerRevision} />
+    <RevisionCanonicaNotice inspeccionId={id} visible={!esV1 && puedeVerRevision} />
     <div className="expediente-metodo-certeza">{children}</div>
     {mostrarBarraInferior ? (
       <>
