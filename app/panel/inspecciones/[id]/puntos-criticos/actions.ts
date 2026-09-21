@@ -13,6 +13,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { calificarPuntoConIaV1 } from "@/lib/calificacion-ia-v1";
 import {
   HERRAMIENTAS_INSPECCION,
   obtenerHerramientasCotizadasDesdeCotizacion,
@@ -48,6 +49,8 @@ type ObservacionItemCritico = {
   clasificacionFinal?: string;
   prioridadFinal?: string;
   calificacionFinal?: number;
+  justificacionCalificacionIa?: string;
+  prioridadEvaluadaIa?: string;
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
   variacionPresion?: string;
@@ -1283,8 +1286,6 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
   const prioridadTexto = texto(formData, "prioridad").toUpperCase();
-  const calificacionTexto = texto(formData, "calificacionFinal");
-  const calificacionFinal = Number(calificacionTexto);
   const retorno = texto(formData, "retorno");
 
   if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
@@ -1299,9 +1300,6 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   if (lecturaFinalNumero === null) volver(inspeccionId, codigo, "error", "La lectura final debe ser un valor numérico válido.");
   if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Describe el resultado o hallazgo de la prueba con al menos 10 caracteres.");
   if (!["C","O","NC","CR"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
-  if (!Number.isFinite(calificacionFinal) || calificacionFinal < 0 || calificacionFinal > 100) volver(inspeccionId, codigo, "error", "Registra una evaluación final entre 0 y 100.");
-  if (clasificacionTexto === "C" && calificacionFinal !== 100) volver(inspeccionId, codigo, "error", "Una prueba Conforme debe registrarse como SH = 100.");
-  if (clasificacionTexto !== "C" && calificacionFinal >= 100) volver(inspeccionId, codigo, "error", "Una prueba con hallazgo debe evaluarse entre 0 y 99.");
   if (clasificacionTexto !== "C" && !["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona una prioridad válida para el hallazgo.");
 
   const [paso] = await prisma.$queryRaw<Array<{
@@ -1378,6 +1376,35 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     volver(inspeccionId, codigo, "error", "Cierra primero todos los demás conceptos. La prueba con manómetro debe ser la única plantilla abierta.");
   }
 
+  const rutasHermeticidad = await prisma.$queryRaw<Array<{url:string}>>`
+    SELECT f."url"
+    FROM "FotografiaArea" fa
+    JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+    WHERE fa."guiaItemId"=ANY(${[inicial.id, final.id]}::text[])
+    ORDER BY fa."orden",fa."creadoEn"
+  `;
+  let calificacionFinal = 100;
+  let justificacionCalificacionIa = "Sin hallazgo: SH = 100.";
+  if (clasificacionTexto !== "C") {
+    try {
+      const evaluacionIa = await calificarPuntoConIaV1({
+        prioridad: prioridadTexto as PrioridadHallazgo,
+        partida: puntoPorCodigo(codigo).etiqueta,
+        concepto: "Prueba de hermeticidad con manómetro",
+        descripcionFinal,
+        especificacion: `Lectura inicial ${paso.lecturaInicial} ${paso.unidad ?? unidad}; lectura final ${lecturaFinal} ${unidad}.`,
+        valorMedido: lecturaFinal,
+        valorProyecto: paso.lecturaInicial,
+        unidadMedida: unidad,
+        rutasEvidencia: rutasHermeticidad.map((foto)=>foto.url),
+      });
+      calificacionFinal = evaluacionIa.calificacion;
+      justificacionCalificacionIa = evaluacionIa.justificacion;
+    } catch (error) {
+      volver(inspeccionId, codigo, "error", error instanceof Error ? error.message : "No fue posible calcular la evaluación de hermeticidad con IA.");
+    }
+  }
+
   const observacion = JSON.stringify({
     descripcionIa: interpretacionIa.descripcionIa,
     clasificacionSugerida: interpretacionIa.clasificacionSugerida,
@@ -1394,6 +1421,8 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     clasificacionFinal: clasificacionTexto,
     prioridadFinal: clasificacionTexto === "C" ? undefined : prioridadTexto,
     calificacionFinal,
+    justificacionCalificacionIa,
+    prioridadEvaluadaIa: clasificacionTexto === "C" ? "SH" : prioridadTexto,
     actualizadoEn: new Date().toISOString(),
   });
   const clasificacion = clasificacionTexto as ClasificacionHallazgo;
@@ -1651,8 +1680,6 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
   const prioridadTexto = texto(formData, "prioridad").toUpperCase();
-  const calificacionTexto = texto(formData, "calificacionFinal");
-  const calificacionFinal = Number(calificacionTexto);
   const valorMedido = texto(formData, "valorMedido");
   const valorProyecto = texto(formData, "valorProyecto");
   const unidadMedida = texto(formData, "unidadMedida");
@@ -1660,14 +1687,12 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   const codigo = codigoTexto;
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
   if (!["C", "O", "NC", "CR"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
-  if (!Number.isFinite(calificacionFinal) || calificacionFinal < 0 || calificacionFinal > 100) volver(inspeccionId, codigo, "error", "Registra una evaluación final entre 0 y 100.");
-  if (clasificacionTexto === "C" && calificacionFinal !== 100) volver(inspeccionId, codigo, "error", "Un concepto Conforme debe registrarse como SH = 100.");
-  if (clasificacionTexto !== "C" && calificacionFinal >= 100) volver(inspeccionId, codigo, "error", "Un concepto con hallazgo debe evaluarse entre 0 y 99.");
   if (clasificacionTexto !== "C" && !["P1", "P2", "P3", "P4", "P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona un nivel de prioridad válido para el hallazgo.");
   if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Confirma una interpretación o comentario técnico de al menos 10 caracteres.");
 
   const [item] = await prisma.$queryRaw<Array<{
     concepto: string;
+    especificacion: string | null;
     observacion: string | null;
     fotos: number;
     requiereMedicion: boolean;
@@ -1676,7 +1701,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     estadoV3: string;
     descripcionPrimera: string | null;
   }>>`
-    SELECT g."concepto",g."observacion",g."requiereMedicion",g."requiereComparacionProyecto",g."origenV3",g."estadoV3",
+    SELECT g."concepto",g."especificacion",g."observacion",g."requiereMedicion",g."requiereComparacionProyecto",g."origenV3",g."estadoV3",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos",
       (
         SELECT f."descripcion"
@@ -1711,12 +1736,42 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   }
 
   const anterior = observacionObjeto(item.observacion);
+  const rutasEvidencia = await prisma.$queryRaw<Array<{url:string}>>`
+    SELECT f."url"
+    FROM "FotografiaArea" fa
+    JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+    WHERE fa."guiaItemId"=${itemId}
+    ORDER BY fa."orden",fa."creadoEn"
+  `;
+  let calificacionFinal = 100;
+  let justificacionCalificacionIa = "Sin hallazgo: SH = 100.";
+  if (clasificacionTexto !== "C") {
+    try {
+      const evaluacionIa = await calificarPuntoConIaV1({
+        prioridad: prioridadTexto as PrioridadHallazgo,
+        partida: puntoPorCodigo(codigo).etiqueta,
+        concepto: item.concepto,
+        descripcionFinal,
+        especificacion: item.especificacion,
+        valorMedido: valorMedido || null,
+        valorProyecto: valorProyecto || null,
+        unidadMedida: unidadMedida || null,
+        rutasEvidencia: rutasEvidencia.map((foto)=>foto.url),
+      });
+      calificacionFinal = evaluacionIa.calificacion;
+      justificacionCalificacionIa = evaluacionIa.justificacion;
+    } catch (error) {
+      volver(inspeccionId, codigo, "error", error instanceof Error ? error.message : "No fue posible calcular la evaluación con IA.");
+    }
+  }
   const observacion: ObservacionItemCritico = {
     ...anterior,
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
     prioridadFinal: clasificacionTexto === "C" ? undefined : prioridadTexto,
     calificacionFinal,
+    justificacionCalificacionIa,
+    prioridadEvaluadaIa: clasificacionTexto === "C" ? "SH" : prioridadTexto,
     actualizadoEn: new Date().toISOString(),
   };
 
