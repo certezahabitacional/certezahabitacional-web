@@ -155,7 +155,8 @@ export default async function CertificadoPage({
   const certificado = inspeccion.certificado;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const urlValidacion = `${baseUrl}/certificados/verificar/${certificado.codigoValidacion}`;
-  const qrDataUrl = await QRCode.toDataURL(urlValidacion, { width: 260, margin: 1, errorCorrectionLevel: "M" });
+  const urlReporteOficial = `${baseUrl}/reportes/verificar/${certificado.codigoValidacion}/pdf`;
+  const qrDataUrl = await QRCode.toDataURL(esV1 ? urlReporteOficial : urlValidacion, { width: 260, margin: 1, errorCorrectionLevel: "M" });
 
   return (
     <main className="min-h-screen bg-slate-200 px-4 py-8 text-slate-950 print:bg-white print:p-0">
@@ -230,15 +231,26 @@ export default async function CertificadoPage({
               <p>Emitido el {certificado.emitidoEn.toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}</p>
               <p className="mt-3 font-black tracking-widest text-slate-950">CÓDIGO DE VALIDACIÓN: {certificado.codigoValidacion}</p>
               <p className="mt-5 leading-6">Este certificado debe interpretarse junto con el reporte técnico completo. No sustituye peritajes estructurales, dictámenes de instalaciones ocultas ni estudios especializados.</p>
-              <p className="mt-5 text-xs">Escanee el código QR para verificar la autenticidad y vigencia del certificado.</p>
+              <p className="mt-5 text-xs">{esV1 ? "Escanee el código QR para abrir directamente el Reporte Oficial autorizado. Desde la página de validación también puede comprobar la vigencia y descargar el PDF." : "Escanee el código QR para verificar la autenticidad y vigencia del certificado."}</p>
             </div>
             <div className="flex flex-col items-center justify-center self-center">
               <img src={qrDataUrl} alt="Código QR de validación" className="mx-auto h-40 w-40" />
-              <p className="mt-2 text-xs font-bold text-slate-700">Verificar certificado</p>
+              <p className="mt-2 text-xs font-bold text-slate-700">{esV1 ? "Abrir Reporte Oficial" : "Verificar certificado"}</p>
             </div>
           </div>
         </div>
       </article>
+
+      {esV1 && certificado.vigente && (
+        <section className="mx-auto mt-6 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-6 shadow-xl print:hidden">
+          <p className="text-xs font-black uppercase tracking-widest text-cyan-800">Reporte Oficial compartible</p>
+          <p className="mt-2 text-sm leading-6 text-slate-700">El QR del certificado abre directamente la versión oficial autorizada. También puedes probar la vista o descargar el PDF desde aquí.</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a href={`/reportes/verificar/${certificado.codigoValidacion}/pdf`} target="_blank" rel="noreferrer" className="rounded-full bg-cyan-700 px-5 py-3 font-black text-white">VER REPORTE OFICIAL</a>
+            <a href={`/reportes/verificar/${certificado.codigoValidacion}/pdf?download=1`} className="rounded-full border border-cyan-700 px-5 py-3 font-black text-cyan-800">DESCARGAR PDF</a>
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto mt-6 max-w-5xl rounded-3xl border border-slate-300 bg-white p-7 shadow-xl print:hidden">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
