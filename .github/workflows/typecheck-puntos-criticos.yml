@@ -32,6 +32,8 @@ on:
 
       - fix/flujo-inspector-6-pasos-partidas-consecutivas
 
+      - fix/navegacion-compacta-pre-reporte-v1
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest

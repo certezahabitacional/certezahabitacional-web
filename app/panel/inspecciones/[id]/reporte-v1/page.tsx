@@ -522,34 +522,31 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && esInspector && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">
-            {controlReporte.campoFinalizadoEn ? "Pre-reporte actualizado · última revisión del Inspector" : "Pre-reporte para revisión antes de salir del inmueble"}
-          </p>
-          <h2 className="mt-2 text-xl font-black">Revisa el documento completo</h2>
+          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PASO 4 · PRE REPORTE</p>
+          <h2 className="mt-2 text-xl font-black">
+            {controlReporte.preReporteGeneradoEn ? "PRE REPORTE generado · disponible para consulta" : "Generar PRE REPORTE"}
+          </h2>
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            Verifica portada, cotización, áreas declaradas, alcances, herramientas, hallazgos, evidencias, interpretaciones, calificación, conclusiones, referencias y glosario. Si detectas una corrección, pasa a la última revisión y ajuste; cualquier cambio invalidará esta confirmación hasta que vuelvas a revisar el pre-reporte actualizado.
+            {controlReporte.preReporteGeneradoEn
+              ? "Consulta el documento completo. Antes de enviarlo a Dirección puedes entrar a Revisión y ajustes o continuar al envío a autorización."
+              : "Revisa el documento completo y confirma esta versión para generar formalmente el PRE REPORTE."}
           </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {controlReporte.preReporteGeneradoEn && (
-              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white">ÚLTIMA REVISIÓN Y AJUSTE</Link>
-            )}
-            <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">CORREGIR PARTIDAS / CONCEPTOS</Link>
-            <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-cyan-700/20 bg-white px-4 py-3 text-sm font-black text-cyan-900">REVISAR EVIDENCIAS</Link>
-          </div>
-          <form action={confirmarPreReporteSitioV1} className="mt-4">
-            <input type="hidden" name="inspeccionId" value={id}/>
-            <button disabled={Boolean(controlReporte.preReporteGeneradoEn)} className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
-              {controlReporte.preReporteGeneradoEn
-                ? "PRE-REPORTE ACTUAL CONFIRMADO ✓"
-                : controlReporte.campoFinalizadoEn
-                  ? "CONFIRMAR PRE-REPORTE ACTUALIZADO"
-                  : "CONFIRMAR REVISIÓN DEL PRE-REPORTE INTEGRAL"}
-            </button>
-          </form>
-          {controlReporte.preReporteGeneradoEn && (
-            <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="mt-4 block rounded-xl bg-violet-700 px-5 py-3 text-center font-black text-white">
-              PASAR A ÚLTIMA REVISIÓN Y AJUSTE →
-            </Link>
+          {!controlReporte.preReporteGeneradoEn ? (
+            <form action={confirmarPreReporteSitioV1} className="mt-4">
+              <input type="hidden" name="inspeccionId" value={id}/>
+              <button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">
+                GENERAR PRE REPORTE
+              </button>
+            </form>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">
+                REVISIÓN Y AJUSTES
+              </Link>
+              <Link href={`/panel/inspecciones/${id}/cierre-v1#envio-autorizacion`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">
+                ENVÍO A AUTORIZACIÓN
+              </Link>
+            </div>
           )}
         </section>
       )}

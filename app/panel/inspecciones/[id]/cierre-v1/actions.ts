@@ -93,6 +93,7 @@ async function validarCierreCampo(inspeccionId: string) {
 
 export async function concluirInspeccionTecnicaV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
+  const retorno = texto(formData, "retorno");
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, inspeccion } = await exigirInspectorV1(inspeccionId);
 
@@ -134,6 +135,10 @@ export async function concluirInspeccionTecnicaV1(formData: FormData) {
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/pre-reporte`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  if (retorno === "PRE_REPORTE") {
+    redirect(`/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent("Inspección concluida. PRE REPORTE listo para generar y revisar.")}`);
+  }
   volver(inspeccionId, "ok", "Inspección concluida. Ya puedes revisar el reporte preliminar y realizar ajustes si procede.");
 }
 

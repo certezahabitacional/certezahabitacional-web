@@ -13,6 +13,7 @@ import {
   inicializarPlanAreasV1,
   reactivarPartidaAreaV1,
 } from "./actions";
+import { concluirInspeccionTecnicaV1 } from "../cierre-v1/actions";
 import ConceptoAreaCard, { type PuntoArea } from "./ConceptoAreaCard";
 
 type Area = {
@@ -97,6 +98,21 @@ export default async function CampoV1Page({ params, searchParams }: {
     WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
     ORDER BY "orden"
   `;
+  const [controlV1] = await prisma.$queryRaw<Array<{
+    inspeccionTecnicaConcluidaEn: Date | null;
+    preReporteGeneradoEn: Date | null;
+  }>>`
+    SELECT "inspeccionTecnicaConcluidaEn","preReporteGeneradoEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${id}
+    LIMIT 1
+  `;
+  const [protocoloEstado] = await prisma.$queryRaw<Array<{ total:number; completos:number }>>`
+    SELECT COUNT(*)::int AS "total",
+           COUNT(*) FILTER (WHERE "estado" IN ('COMPLETADO','NO_APLICA'))::int AS "completos"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${id} AND "obligatorio"=true
+  `;
   if (Number(critical?.total ?? 0) < 7 || Number(critical?.bloqueantes ?? 0) > 0) {
     redirect(`/panel/inspecciones/${id}/puntos-criticos`);
   }
@@ -130,6 +146,27 @@ export default async function CampoV1Page({ params, searchParams }: {
     ORDER BY g."orden",g."concepto"
   ` : [];
 
+  const puntosInspeccionados = await prisma.$queryRaw<Array<{
+    id:string; areaId:string|null; area:string; concepto:string; estadoV3:string; orden:number|null;
+  }>>`
+    SELECT g."id"::text AS "id",g."areaId"::text AS "areaId",g."area",g."concepto",g."estadoV3",g."orden"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."inspeccionId"=${id}
+      AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO','NO_APLICA')
+      AND g."concepto" NOT ILIKE '%manómetro%'
+      AND g."concepto" NOT ILIKE '%lectura final%'
+    ORDER BY COALESCE(g."orden",999999),g."concepto"
+  `;
+  const puntosFisicosPorArea = new Map<string, typeof puntosInspeccionados>();
+  const puntosCriticosInspeccionados = new Map<string, typeof puntosInspeccionados>();
+  for (const p of puntosInspeccionados) {
+    if (p.areaId) puntosFisicosPorArea.set(p.areaId,[...(puntosFisicosPorArea.get(p.areaId)??[]),p]);
+    else if (p.area.startsWith("__PUNTO_CRITICO__:")) {
+      const codigo=p.area.replace("__PUNTO_CRITICO__:","");
+      puntosCriticosInspeccionados.set(codigo,[...(puntosCriticosInspeccionados.get(codigo)??[]),p]);
+    }
+  }
+
   const conceptosCriticos = await prisma.$queryRaw<Array<{ total: number }>>`
     SELECT COUNT(*)::int AS "total"
     FROM "GuiaInspeccionItem"
@@ -145,6 +182,12 @@ export default async function CampoV1Page({ params, searchParams }: {
   const cerradas = areas.filter((a) => a.estado === "REVISADA").length;
   const avance = areas.length ? Math.round((cerradas / areas.length) * 100) : 0;
   const totalRecorrido = 8 + areas.length;
+  const desarrolloCompleto =
+    areas.length > 0 &&
+    cerradas === areas.length &&
+    Number(protocoloEstado?.total ?? 0) > 0 &&
+    Number(protocoloEstado?.total ?? 0) === Number(protocoloEstado?.completos ?? 0) &&
+    totalPendientes === 0;
   const indiceAreaActiva = areaSeleccionada ? areas.findIndex((area) => area.id === areaSeleccionada.id) : -1;
   const numeroAreaActiva = indiceAreaActiva >= 0 ? 9 + indiceAreaActiva : null;
   const puedeCapturar =
@@ -161,7 +204,6 @@ export default async function CampoV1Page({ params, searchParams }: {
           <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
           <div className="flex flex-wrap items-center gap-2">
             {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE {totalRecorrido} PARTIDAS</Link>
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
           </div>
         </div>
@@ -176,20 +218,48 @@ export default async function CampoV1Page({ params, searchParams }: {
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
 
-        <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 3 · DESARROLLO DE LA INSPECCIÓN</p>
-              <h2 className="mt-1 text-xl font-black">Acceso a todas las partidas del recorrido</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-400">Puedes consultar cualquier partida. La captura se conserva en secuencia para evitar omisiones.</p>
+        <section className="mt-6 flex flex-wrap items-center gap-3">
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
+              IR A PARTIDA / CONCEPTO INSPECCIONADO
+            </summary>
+            <div className="absolute left-0 z-40 mt-2 max-h-[70vh] w-[min(92vw,560px)] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl">
+              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="block rounded-xl border border-white/10 p-3">
+                <span className="text-[10px] font-black text-slate-500">PARTIDA 1</span>
+                <p className="font-black">Pruebas de hermeticidad</p>
+                <p className="mt-1 text-xs text-slate-400">Concepto 1 · Hermeticidad hidráulica · Concepto 2 · Hermeticidad de gas</p>
+              </Link>
+              {PUNTOS_CRITICOS_V1.map((punto,index)=>{
+                const inspeccionados=puntosCriticosInspeccionados.get(punto.codigo)??[];
+                return <div key={punto.codigo} className="mt-2 rounded-xl border border-white/10 p-3">
+                  <Link href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`} className="block font-black"><span className="mr-2 text-[10px] text-slate-500">PARTIDA {index+2}</span>{punto.etiqueta}</Link>
+                  {inspeccionados.length>0&&<div className="mt-2 space-y-1">{inspeccionados.map((p)=><Link key={p.id} href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}&foco=${p.id}`} className="block rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">{p.concepto}</Link>)}</div>}
+                </div>;
+              })}
+              {areas.map((area,index)=>{
+                const inspeccionados=puntosFisicosPorArea.get(area.id)??[];
+                return <div key={area.id} className="mt-2 rounded-xl border border-white/10 p-3">
+                  <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block font-black"><span className="mr-2 text-[10px] text-slate-500">PARTIDA {index+9}</span>{area.nombre}</Link>
+                  {inspeccionados.length>0&&<div className="mt-2 space-y-1">{inspeccionados.map((p)=><a key={p.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}#item-${p.id}`} className="block rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">{p.concepto}</a>)}</div>}
+                </div>;
+              })}
             </div>
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-xl border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE {totalRecorrido} PARTIDAS</Link>
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl border border-white/10 bg-slate-950 p-3 text-xs font-black"><span className="block text-[10px] text-slate-500">PARTIDA 1</span>Pruebas de hermeticidad</Link>
-            {PUNTOS_CRITICOS_V1.map((punto,index)=><Link key={punto.codigo} href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`} className="rounded-xl border border-white/10 bg-slate-950 p-3 text-xs font-black"><span className="block text-[10px] text-slate-500">PARTIDA {index+2}</span>{punto.etiqueta}</Link>)}
-            {areas.map((area,index)=><Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="rounded-xl border border-white/10 bg-slate-950 p-3 text-xs font-black"><span className="block text-[10px] text-slate-500">PARTIDA {index+9}</span>{area.nombre}</Link>)}
-          </div>
+          </details>
+          <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-xl border border-amber-300/30 px-4 py-3 text-sm font-black text-amber-200">
+            CONSULTAR PLAN DE {totalRecorrido} PARTIDAS
+          </Link>
+          {desarrolloCompleto && !controlV1?.inspeccionTecnicaConcluidaEn && (
+            <form action={concluirInspeccionTecnicaV1}>
+              <input type="hidden" name="inspeccionId" value={id}/>
+              <input type="hidden" name="retorno" value="PRE_REPORTE"/>
+              <button className="rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950">GENERAR PRE REPORTE</button>
+            </form>
+          )}
+          {controlV1?.inspeccionTecnicaConcluidaEn && (
+            <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950">
+              {controlV1.preReporteGeneradoEn ? "CONSULTAR PRE REPORTE" : "GENERAR PRE REPORTE"}
+            </Link>
+          )}
         </section>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-4">
@@ -208,89 +278,7 @@ export default async function CampoV1Page({ params, searchParams }: {
           </form>
         )}
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-[320px_1fr]">
-          <aside className="space-y-2">
-            <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-3">
-              <p className="text-[10px] font-black uppercase tracking-[.18em] text-cyan-300">Recorrido completo</p>
-              <p className="mt-1 text-xs leading-5 text-slate-400">Puedes regresar a cualquier punto ya inspeccionado. Los puntos futuros permanecen bloqueados hasta que corresponda.</p>
-            </div>
-
-            <Link
-              href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`}
-              className="block rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <span className="text-xs font-black text-slate-500">1/{totalRecorrido}</span>
-                <span className="text-xs font-black text-emerald-300">
-                  {pasosCriticos.some((p) => ["PC_HIDRAULICA","PC_GAS"].includes(p.clave) && p.lecturaInicial) ? "INSPECCIONADO · VER" : "PENDIENTE"}
-                </span>
-              </div>
-              <p className="mt-1 font-black">Pruebas de hermeticidad</p>
-              <p className="mt-1 text-xs text-slate-400">Hidráulica y gas · lecturas iniciales/finales</p>
-            </Link>
-
-            {PUNTOS_CRITICOS_V1.map((punto, index) => {
-              const paso = pasosCriticos.find((p) => p.clave === `PC_${punto.codigo}`);
-              const terminado = paso?.estado === "COMPLETADO" || paso?.estado === "NO_APLICA";
-              const inspeccionado = terminado || paso?.estado === "EN_PROCESO";
-              return (
-                <Link
-                  key={punto.codigo}
-                  href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`}
-                  className={`block rounded-2xl border p-4 ${terminado
-                    ? "border-emerald-400/15 bg-emerald-400/5"
-                    : inspeccionado
-                      ? "border-amber-300/20 bg-amber-300/5"
-                      : "border-white/10 bg-slate-900"}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-xs font-black text-slate-500">{index + 2}/{totalRecorrido}</span>
-                    <span className={`text-xs font-black ${terminado ? "text-emerald-300" : inspeccionado ? "text-amber-300" : "text-slate-500"}`}>
-                      {terminado ? "INSPECCIONADO · VER" : paso?.estado?.replaceAll("_"," ") ?? "PENDIENTE"}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-black">{punto.etiqueta}</p>
-                </Link>
-              );
-            })}
-
-            <div className="my-3 border-t border-white/10" />
-
-            {areas.map((area, index) => {
-              const activa = area.id === areaActivaId;
-              const cerrada = area.estado === "REVISADA";
-              const bloqueada = !cerrada && !activa;
-              const contenido = (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-xs font-black text-slate-500">{9 + index}/{totalRecorrido}</span>
-                    <span className={`text-xs font-black ${area.resultado === "NO_APLICA" ? "text-slate-300" : cerrada ? "text-emerald-300" : activa ? "text-amber-300" : "text-slate-600"}`}>
-                      {area.resultado === "NO_APLICA"
-                        ? "DESHABILITADA · EDITABLE"
-                        : cerrada
-                          ? "CERRADA 100% · EDITABLE"
-                          : activa
-                            ? `${area.pendientes} pendientes`
-                            : "PENDIENTE · CONSULTA"}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-black">{area.nombre}</p>
-                  <p className="mt-1 text-xs text-slate-400">{area.puntos} conceptos · {area.hallazgos} hallazgos · {area.noAplica} no aplica</p>
-                </>
-              );
-              const clases = `block rounded-2xl border p-4 ${areaSeleccionada?.id === area.id
-                ? "border-cyan-300/40 bg-cyan-300/10"
-                : cerrada
-                  ? "border-emerald-400/15 bg-emerald-400/5"
-                  : bloqueada
-                    ? "border-white/10 bg-slate-950 text-slate-400"
-                    : "border-amber-300/20 bg-amber-300/5"}`;
-              return (
-                <Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className={clases}>{contenido}</Link>
-              );
-            })}
-          </aside>
-
+        <div className="mt-6">
           <section>
             {!areaSeleccionada ? <div className="rounded-3xl border border-white/10 bg-slate-900 p-8 text-slate-400">Aún no existen áreas para V1.</div> : (
               <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 sm:p-7">
