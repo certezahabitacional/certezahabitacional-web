@@ -237,7 +237,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')) "revisados",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') "noAplica",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
-    FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true ORDER BY a."orden",a."nombre"
+    FROM "AreaInspeccion" a
+    WHERE a."inspeccionId"=${id}
+      AND (a."obligatoria"=true OR a."tipo"='PUNTO_CRITICO')
+    ORDER BY a."orden",a."nombre"
   `;
 
   const conceptosReporte = await prisma.$queryRaw<ConceptoReporte[]>`
