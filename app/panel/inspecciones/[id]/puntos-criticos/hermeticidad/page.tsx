@@ -56,6 +56,8 @@ type Observacion = {
   clasificacionFinal?: string;
   prioridadFinal?: string;
   calificacionFinal?: number;
+  justificacionCalificacionIa?: string;
+  prioridadEvaluadaIa?: string;
   clasificacionSugerida?: string;
   justificacionIa?: string;
   lecturaFinalPropuesta?: string;
@@ -499,11 +501,10 @@ export default async function HermeticidadPage({
                                   <option value="P5">P5</option>
                                 </select>
                               </div>
-                              <label className="mt-3 block text-xs font-black uppercase tracking-wider text-emerald-200">
-                                Evaluación final de la prueba · 0 a 100
-                                <input type="number" name="calificacionFinal" required min={0} max={100} step={1} defaultValue={obs.calificacionFinal ?? 100} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
-                              </label>
-                              <p className="mt-2 text-xs leading-5 text-slate-400">SH = 100. Si la prueba presenta hallazgo, la evaluación debe quedar entre 0 y 99 conforme a la interpretación final.</p>
+                              <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
+                                <p className="text-xs font-black uppercase text-cyan-200">Calificación automática por IA</p>
+                                <p className="mt-2 text-xs leading-5 text-cyan-50">El Inspector selecciona la prioridad del resultado y la IA define la calificación exacta dentro de ese rango. P1 0–49 · P2 50–69 · P3 70–79 · P4 80–89 · P5 90–99. Conforme = SH 100.</p>
+                              </div>
                               <button disabled={!obs.descripcionIa} className="mt-3 w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
                                 {obs.descripcionIa ? "REGISTRAR LECTURA FINAL Y CERRAR PRUEBA" : "GENERA PRIMERO LA INTERPRETACIÓN IA"}
                               </button>
