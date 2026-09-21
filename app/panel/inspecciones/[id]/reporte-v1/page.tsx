@@ -103,6 +103,20 @@ const ALCANCE_INSPECCION_COTIZACION = [
   ["Climatización y equipos fijos presentes","Condición visible, fijación, alimentación y drenaje de condensados de equipos accesibles; operación básica cuando sea segura y procedente. Mediciones de temperatura, flujo o carga solo si el servicio instrumental correspondiente está incluido."],
 ] as const;
 
+const SERVICIOS_INSTRUMENTALES_COTIZACION = [
+  ["Cámara térmica","Humedad, anomalías térmicas, aislamiento, posibles fugas y calentamientos eléctricos."],
+  ["Probador de contactos GFCI/RCD","Polaridad, tierra, conexiones incorrectas y funcionamiento de protección."],
+  ["Detector de voltaje sin contacto","Presencia de tensión eléctrica."],
+  ["Multímetro profesional","Voltaje, continuidad y verificaciones eléctricas específicas."],
+  ["Nivel láser autonivelante","Desniveles y desviaciones importantes."],
+  ["Medidor láser de distancia","Dimensiones y comprobaciones rápidas."],
+  ["Martillo / rodillo de auscultación","Losetas con indicios de huecos o desprendimiento."],
+  ["Linterna LED profesional","Inspección visual detallada."],
+  ["Manómetro para agua","Presión de suministro hidráulico."],
+  ["Prueba de hermeticidad hidráulica","Verificación de la estanqueidad de la instalación hidráulica cuando sea técnicamente procedente y exista acceso seguro."],
+  ["Prueba de hermeticidad de gas","Verificación de la estanqueidad de la instalación de gas cuando sea técnicamente procedente y exista acceso seguro."],
+] as const;
+
 const GLOSARIO = [
   ["P1 · 0–49", "Nivel de evaluación correspondiente a una condición crítica o severamente deficiente."],
   ["P2 · 50–69", "Nivel de evaluación correspondiente a una condición deficiente que requiere atención importante."],
@@ -557,7 +571,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <p className="text-sm leading-7 text-slate-700">Los siguientes servicios instrumentales están incluidos en esta propuesta. Complementan la inspección estándar, no generan un cargo individual adicional y se aplicarán cuando correspondan a las condiciones del inmueble, exista acceso seguro y el equipo se encuentre operativo.</p>
           <div className="mt-5 overflow-hidden rounded-2xl border border-slate-300">
             <div className="grid grid-cols-[.35fr_1.1fr_2fr] bg-amber-400 px-4 py-3 text-xs font-black text-slate-900"><span>Incl.</span><span>Servicio / equipo</span><span>Aplicación durante la inspección</span></div>
-            {herramientasPropuestas.length>0 ? herramientasPropuestas.map((h)=><div key={h.codigo} className="grid grid-cols-[.35fr_1.1fr_2fr] border-t border-slate-200 text-xs leading-5"><div className="p-4 text-center text-base font-black">✓</div><div className="p-4 font-black">{h.nombre}</div><div className="p-4 text-slate-700">{h.aplicacionCotizacion}</div></div>) : <div className="p-5 text-sm text-slate-600">No existe una selección instrumental estructurada registrada en esta cotización.</div>}
+            {SERVICIOS_INSTRUMENTALES_COTIZACION.map(([servicio,aplicacion])=><div key={servicio} className="grid grid-cols-[.35fr_1.1fr_2fr] border-t border-slate-200 text-xs leading-5"><div className="p-4 text-center text-base font-black">✓</div><div className="p-4 font-black">{servicio}</div><div className="p-4 text-slate-700">{aplicacion}</div></div>)}
           </div>
         </Seccion>
 
