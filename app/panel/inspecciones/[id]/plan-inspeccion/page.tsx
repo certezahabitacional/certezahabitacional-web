@@ -269,7 +269,7 @@ export default async function PlanInspeccionPage({
         <section className="mt-5 grid gap-3 sm:grid-cols-4">
           <Resumen titulo="Partidas / áreas" valor={String(partidas.length)} />
           <Resumen titulo="Conceptos de áreas" valor={String(totalConceptosAreas)} />
-          <Resumen titulo="Conceptos técnicos 2–8" valor={String(totalCriticos)} />
+          <Resumen titulo="Conceptos de partidas 2–8" valor={String(totalCriticos)} />
           <Resumen titulo="Total de criterios previstos" valor={String(totalCriterios)} />
         </section>
 
@@ -303,7 +303,7 @@ export default async function PlanInspeccionPage({
               return (
                 <details key={punto.codigo} className="rounded-2xl border border-white/10 bg-slate-900 p-4">
                   <summary className="cursor-pointer font-black">
-                    {index + 2} · {punto.etiqueta} <span className="ml-2 text-xs text-cyan-300">{conceptos.length} conceptos</span>
+                    Partida {index + 2} · {punto.etiqueta} <span className="ml-2 text-xs text-cyan-300">{conceptos.length} conceptos</span>
                   </summary>
                   <p className="mt-3 text-sm text-slate-400">{punto.descripcion}</p>
                   <div className="mt-4 space-y-2">
@@ -354,7 +354,7 @@ export default async function PlanInspeccionPage({
               return (
                 <details key={partida.id} className="rounded-2xl border border-white/10 bg-slate-900 p-4">
                   <summary className="cursor-pointer">
-                    <span className="font-black">Partida {index + 1} · {partida.nombre}</span>
+                    <span className="font-black">Partida {index + 9} · {partida.nombre}</span>
                     <span className="ml-2 text-xs font-black text-emerald-300">{conceptos.length} conceptos</span>
                   </summary>
                   <div className="mt-4 grid gap-2">

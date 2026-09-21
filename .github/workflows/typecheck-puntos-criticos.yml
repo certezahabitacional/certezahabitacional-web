@@ -23,6 +23,7 @@ on:
       - feature/no-aplica-concepto-manual-puntos-criticos
       - fix/pre-reporte-punto4-cotizacion
       - fix/pre-reporte-punto4-definitivo
+      - fix/partidas-1-8-recorrido-reporte
 
 jobs:
   typecheck:
