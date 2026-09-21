@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 
 import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
-import { DATOS_DOCUMENTALES, datosContactoDocumento } from "@/lib/datos-documentales";
+import { DATOS_DOCUMENTALES, contactoDocumentoPorZona, datosContactoDocumento } from "@/lib/datos-documentales";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { evaluarPromedioV1, referenciaPrioridadV1 } from "@/lib/evaluacion-reporte-v1";
@@ -214,6 +214,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       cliente:true,
       inmueble:true,
       inspector:{include:{usuario:true}},
+      zona:{select:{codigo:true,ciudad:true,nombre:true}},
       cotizacion:{select:{
         folio:true,observacionesInternas:true,notas:true,total:true,subtotal:true,precioBase:true,
         metrosAdicionales:true,cargoMetrosAdicionales:true,cargosExtra:true,descuento:true,
@@ -481,15 +482,32 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Pre-Reporte de Inspección V1";
   const estadoReporte = autorizado ? "REPORTE FINAL AUTORIZADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
 
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const contactoZona = contactoDocumentoPorZona(inspeccion.zona?.codigo, inspeccion.zona?.ciudad ?? inspeccion.ciudad);
+  const urlInstitucional = `${base}/certeza?zona=${encodeURIComponent(inspeccion.zona?.codigo ?? inspeccion.ciudad)}&ciudad=${encodeURIComponent(inspeccion.zona?.ciudad ?? inspeccion.ciudad)}`;
+  const qrInstitucional = await QRCode.toDataURL(urlInstitucional,{width:220,margin:1,errorCorrectionLevel:"M"});
+
   let qr:string|null=null;
   if (autorizado && inspeccion.certificado) {
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     qr = await QRCode.toDataURL(`${base}/certificados/verificar/${inspeccion.certificado.codigoValidacion}`,{width:240,margin:1,errorCorrectionLevel:"M"});
   }
 
   return (
     <main className="min-h-screen bg-slate-200 px-3 py-6 text-slate-950 print:bg-white print:p-0">
-      <style>{`@page{size:Letter;margin:12mm} @media print{.no-print{display:none!important}.page-break{break-before:page;page-break-before:always}.avoid-break{break-inside:avoid;page-break-inside:avoid}}`}</style>
+      <style>{`@page{size:Letter;margin:12mm}
+      .pre-report-watermark-screen{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;z-index:0}
+      .pre-report-watermark-screen span{transform:rotate(-32deg);font-size:72px;font-weight:900;letter-spacing:.22em;color:rgba(148,163,184,.11);white-space:nowrap}
+      .pre-report-watermark-print{display:none}
+      @media print{
+        .no-print{display:none!important}
+        .page-break{break-before:page;page-break-before:always}
+        .avoid-break,.report-card,.report-figure,.report-signature{break-inside:avoid;page-break-inside:avoid}
+        .pre-report-watermark-screen{display:none!important}
+        .pre-report-watermark-print{display:grid!important;position:fixed;inset:0;place-items:center;z-index:9999;pointer-events:none}
+        .pre-report-watermark-print span{transform:rotate(-32deg);font-size:88px;font-weight:900;letter-spacing:.2em;color:rgba(100,116,139,.10);white-space:nowrap}
+        img,figure,svg,canvas{break-inside:avoid;page-break-inside:avoid}
+        tr,thead,tbody{break-inside:avoid;page-break-inside:avoid}
+      }`}</style>
       <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">{autorizado ? "REPORTE FINAL V1" : "PRE-REPORTE INTEGRAL V1"}</span></div>
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && esInspector && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
@@ -525,8 +543,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
           )}
         </section>
       )}
-      <article className="mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
-        <section className="min-h-[245mm] bg-slate-950 p-6 text-white">
+      <article className="relative mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
+        {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
+        <section className="relative min-h-[245mm] bg-slate-950 p-6 text-white">
+          {!autorizado && <div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}
           <div className="min-h-[232mm] border-[3px] border-amber-400/80 p-2">
             <div className="min-h-[228mm] border border-amber-200/30 px-8 py-7">
               <ReportBrandHeader title={autorizado?"REPORTE FINAL":"PRE-REPORTE"} folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
@@ -540,9 +560,21 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 <Dato label="Inspector" value={inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}/>
                 <Dato label="Cotización de origen" value={inspeccion.cotizacion?.folio ?? "Sin folio"}/>
               </div>
-              <div className="mt-5 flex items-end justify-between border-t border-amber-300/30 pt-4">
-                <div><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Método Certeza</p><p className="mt-1 text-xs text-slate-400">Experiencia técnica + metodología + tecnología + criterio profesional</p></div>
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{DATOS_DOCUMENTALES.eslogan}</p>
+              <div className="mt-5 grid items-end gap-4 border-t border-amber-300/30 pt-4 sm:grid-cols-[1fr_145px]">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Método Certeza</p>
+                  <p className="mt-1 text-xs text-slate-400">Experiencia técnica + metodología + tecnología + criterio profesional</p>
+                  <div className="mt-3 text-[10px] leading-5 text-slate-400">
+                    <p className="font-black text-white">{contactoZona.empresa}</p>
+                    <p>{contactoZona.email}</p>
+                    <p>{contactoZona.telefono}</p>
+                    <p>{contactoZona.web.replace(/^https?:\/\//,"")}</p>
+                  </div>
+                </div>
+                <div className="justify-self-end text-center">
+                  <img src={qrInstitucional} alt="QR de información institucional Certeza Habitacional" className="mx-auto h-28 w-28 rounded bg-white p-1"/>
+                  <p className="mt-1 max-w-[145px] text-[9px] font-black uppercase tracking-wide text-slate-400">Información de Certeza Habitacional</p>
+                </div>
               </div>
             </div>
           </div>
@@ -734,16 +766,16 @@ export default async function ReporteV1Page({ params, searchParams }: {
           {!firmaInspector||!firmaCliente?<div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
         </Seccion>
 
-        <section className="page-break px-10 py-10">
+        <section className="page-break relative px-10 py-10">{!autorizado&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10">
           <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">12 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
           {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
-        </section>
+        </div></section>
       </article>
     </main>
   );
 }
 
-function Seccion({n,titulo,subtitulo,folio,final,children}:{n:string;titulo:string;subtitulo:string;folio:string;final:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section className="page-break relative min-h-[245mm] px-10 py-8"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-10 border-t border-amber-500/50 pt-4 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Final de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></section>}
+function Seccion({n,titulo,subtitulo,folio,final,children}:{n:string;titulo:string;subtitulo:string;folio:string;final:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section className="page-break relative min-h-[245mm] px-10 py-8">{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-10 border-t border-amber-500/50 pt-4 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Final de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
