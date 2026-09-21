@@ -706,8 +706,20 @@ export default async function PuntosCriticosPage({
                             <option value="O">O · Observación</option>
                             <option value="NC">NC · No conformidad</option>
                             <option value="CR">CR · Crítico</option>
-                            <option value="NA">NA · No aplica al concepto</option>
                           </select>
+
+                          <label className="mt-3 block text-xs font-black uppercase text-slate-400">Evaluación final del punto · 0 a 100</label>
+                          <input
+                            type="number"
+                            name="calificacionFinal"
+                            required
+                            min={0}
+                            max={100}
+                            step={1}
+                            defaultValue={obs.calificacionFinal ?? 100}
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2"
+                          />
+                          <p className="mt-2 text-[11px] leading-5 text-slate-500">SH = 100. Cuando exista hallazgo, la evaluación debe quedar entre 0 y 99 conforme a la interpretación técnica final.</p>
 
                           <label className="mt-3 block text-xs font-black uppercase text-slate-400">Nivel de prioridad del hallazgo</label>
                           <select name="prioridad" defaultValue={obs.prioridadFinal ?? "P3"} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2">
@@ -718,7 +730,7 @@ export default async function PuntosCriticosPage({
                             <option value="P5">P5 · Baja / seguimiento</option>
                           </select>
                           <p className="mt-2 text-[11px] text-slate-500">
-                            La IA sólo puede sugerir la interpretación y clasificación; comentario, clasificación y prioridad final los confirma el Inspector.
+                            La IA sólo puede sugerir la interpretación y clasificación; comentario, clasificación, evaluación y prioridad final los confirma el Inspector.
                           </p>
                           <button className="mt-3 w-full rounded-xl bg-violet-300 px-3 py-2 text-sm font-black text-slate-950">CERRAR CONCEPTO</button>
                         </form>
@@ -746,7 +758,7 @@ export default async function PuntosCriticosPage({
                           <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
                             <p className="font-black">CONCEPTO CERRADO ✓</p>
                             <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
-                            {obs.prioridadFinal && <p className="mt-1">Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
+                            {obs.calificacionFinal !== undefined && <p className="mt-1">Evaluación: <strong>{obs.calificacionFinal}/100</strong></p>}{obs.prioridadFinal && <p className="mt-1">Prioridad: <strong>{obs.prioridadFinal}</strong></p>}
                             {item.requiereMedicion && item.valorMedido && (
                               <p className="mt-2 text-xs">
                                 Medición: <strong>{item.valorMedido} {item.unidadMedida ?? ""}</strong>
