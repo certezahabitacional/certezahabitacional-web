@@ -13,6 +13,35 @@ export const PESOS_PRIORIDAD_V1: Record<PrioridadHallazgo, number> = {
 export type ResumenPrioridadesV1 = Record<PrioridadHallazgo, number>;
 export type NivelEvaluacionV1 = "P1" | "P2" | "P3" | "P4" | "P5" | "SH";
 
+const REFERENCIA_PRIORIDAD_V1: Record<PrioridadHallazgo, number> = {
+  P1: 25,
+  P2: 60,
+  P3: 75,
+  P4: 85,
+  P5: 95,
+};
+
+type EvaluacionPuntoV1 = {
+  concepto: string;
+  observacion: string | null;
+  prioridad: PrioridadHallazgo | null;
+};
+
+function calificacionPuntoV1(observacion: string | null, prioridad: PrioridadHallazgo | null) {
+  if (observacion) {
+    try {
+      const parsed = JSON.parse(observacion) as { calificacionFinal?: unknown };
+      const capturada = Number(parsed?.calificacionFinal);
+      if (Number.isFinite(capturada) && capturada >= 0 && capturada <= 100) {
+        return capturada;
+      }
+    } catch {
+      // Los registros históricos pueden contener texto plano.
+    }
+  }
+  return prioridad ? REFERENCIA_PRIORIDAD_V1[prioridad] : 100;
+}
+
 export function nivelEvaluacionV1(calificacion: number): NivelEvaluacionV1 {
   if (calificacion >= 100) return "SH";
   if (calificacion >= 90) return "P5";
@@ -27,18 +56,12 @@ export function calcularCargaSeveridadV1(prioridades: PrioridadHallazgo[]) {
 }
 
 /**
- * Calificacion Tecnica Certeza V1.
- *
- * Formula transitoria vigente mientras se incorpora calificacion individual
- * por concepto al modelo de datos:
- *   100 * 100 / (100 + carga de severidad)
- *
- * IMPORTANTE:
- * La escala P1/P2/P3/P4/P5/SH ya queda normalizada:
- * P1 0-49, P2 50-69, P3 70-79, P4 80-89, P5 90-99, SH 100.
- *
- * Cuando el modelo guarde calificacion final por concepto, esta funcion debera
- * sustituirse por el promedio de conceptos evaluables, excluyendo NO_APLICA.
+ * Fórmula histórica de severidad conservada sólo por compatibilidad.
+ * La evaluación oficial V1 se calcula en obtenerMetricasV1 como promedio
+ * de los puntos efectivamente inspeccionados, excluyendo NO_APLICA y
+ * puntos no inspeccionados. Cuando exista calificación final capturada
+ * por el Inspector, esa cifra prevalece; para registros históricos se
+ * conserva un valor de referencia derivado de la prioridad.
  */
 export function calcularCalificacionTecnicaV1(prioridades: PrioridadHallazgo[]) {
   const cargaSeveridad = calcularCargaSeveridadV1(prioridades);
@@ -105,6 +128,20 @@ export async function obtenerMetricasV1(inspeccionId: string) {
     WHERE "inspeccionId" = ${inspeccionId}
   `;
 
+  const evaluaciones = await prisma.$queryRaw<EvaluacionPuntoV1[]>`
+    SELECT
+      g."concepto",
+      g."observacion",
+      h."prioridad"
+    FROM "GuiaInspeccionItem" g
+    LEFT JOIN "Hallazgo" h
+      ON h."guiaItemId" = g."id"
+     AND h."inspeccionId" = g."inspeccionId"
+    WHERE g."inspeccionId" = ${inspeccionId}
+      AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')
+      AND g."concepto" NOT ILIKE '%fotografía del manómetro al iniciar%'
+  `;
+
   const grupos = await prisma.hallazgo.groupBy({
     by: ["prioridad"],
     where: { inspeccionId },
@@ -132,7 +169,10 @@ export async function obtenerMetricasV1(inspeccionId: string) {
   const revisados = Number(conteoPuntos?.revisados ?? 0);
   const cobertura = aplicables > 0 ? Math.round((revisados / aplicables) * 10000) / 100 : 0;
   const cargaSeveridad = calcularCargaSeveridadV1(prioridades);
-  const calificacion = calcularCalificacionTecnicaV1(prioridades);
+  const calificaciones = evaluaciones.map((item) => calificacionPuntoV1(item.observacion, item.prioridad));
+  const calificacion = calificaciones.length
+    ? Math.round((calificaciones.reduce((total, valor) => total + valor, 0) / calificaciones.length) * 100) / 100
+    : 0;
   const nivel = nivelEvaluacionV1(calificacion);
 
   return {

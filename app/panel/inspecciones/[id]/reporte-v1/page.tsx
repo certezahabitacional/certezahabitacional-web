@@ -82,6 +82,8 @@ type ObservacionConcepto = {
   prioridadFinal?: string;
   calificacionFinal?: number;
   evaluacionFinal?: number;
+  justificacionCalificacionIa?: string;
+  prioridadEvaluadaIa?: string;
 };
 type SnapshotCotizacion = Record<string, unknown>;
 type AutorizacionDireccion = { nombre: string; creadaEn: Date };
@@ -101,6 +103,20 @@ const ALCANCE_INSPECCION_COTIZACION = [
   ["Escaleras, terrazas y balcones","Peldaños, descansos, barandales y pasamanos; estabilidad visible, fijaciones, superficies, pendientes, drenajes y condiciones que puedan representar riesgo de caída o filtración."],
   ["Patio, cochera, jardín, bodega y áreas auxiliares","Superficies, pendientes y drenajes visibles; muros, cubiertas o plafones existentes; fisuras, humedad, deterioro y puntos eléctricos, hidráulicos o de gas presentes y accesibles."],
   ["Climatización y equipos fijos presentes","Condición visible, fijación, alimentación y drenaje de condensados de equipos accesibles; operación básica cuando sea segura y procedente. Mediciones de temperatura, flujo o carga solo si el servicio instrumental correspondiente está incluido."],
+] as const;
+
+const SERVICIOS_INSTRUMENTALES_COTIZACION = [
+  ["Cámara térmica","Humedad, anomalías térmicas, aislamiento, posibles fugas y calentamientos eléctricos."],
+  ["Probador de contactos GFCI/RCD","Polaridad, tierra, conexiones incorrectas y funcionamiento de protección."],
+  ["Detector de voltaje sin contacto","Presencia de tensión eléctrica."],
+  ["Multímetro profesional","Voltaje, continuidad y verificaciones eléctricas específicas."],
+  ["Nivel láser autonivelante","Desniveles y desviaciones importantes."],
+  ["Medidor láser de distancia","Dimensiones y comprobaciones rápidas."],
+  ["Martillo / rodillo de auscultación","Losetas con indicios de huecos o desprendimiento."],
+  ["Linterna LED profesional","Inspección visual detallada."],
+  ["Manómetro para agua","Presión de suministro hidráulico."],
+  ["Prueba de hermeticidad hidráulica","Verificación de la estanqueidad de la instalación hidráulica cuando sea técnicamente procedente y exista acceso seguro."],
+  ["Prueba de hermeticidad de gas","Verificación de la estanqueidad de la instalación de gas cuando sea técnicamente procedente y exista acceso seguro."],
 ] as const;
 
 const GLOSARIO = [
@@ -411,7 +427,15 @@ export default async function ReporteV1Page({ params, searchParams }: {
     const final = conceptos.find((g)=>/lectura final de presión/i.test(g.concepto));
     const hallazgo = final ? inspeccion.hallazgos.find((h)=>h.guiaItemId===final.id) : undefined;
     const inspeccionada = Boolean(proceso && proceso.estado==="COMPLETADO");
-    const calificacion = inspeccionada ? (hallazgo ? referenciaPrioridadV1(hallazgo.prioridad) : 100) : 100;
+    const obsFinal = final ? observacionConcepto(final.observacion) : {};
+    const capturada = Number(obsFinal.calificacionFinal ?? obsFinal.evaluacionFinal);
+    const calificacion = inspeccionada
+      ? Number.isFinite(capturada) && capturada >= 0 && capturada <= 100
+        ? capturada
+        : hallazgo
+          ? referenciaPrioridadV1(hallazgo.prioridad)
+          : 100
+      : 100;
     return { codigo,etiqueta,area,proceso,conceptos,final,hallazgo,inspeccionada,calificacion,nivel:nivelEvaluacionV1(calificacion) };
   };
   const pruebasHermeticidad = [
@@ -521,7 +545,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </section>
 
-        <Seccion folio={inspeccion.folio} n="01" titulo="Índice" subtitulo="Estructura del reporte">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="01" titulo="Índice" subtitulo="Estructura del reporte">
           <ol className="grid gap-2 sm:grid-cols-2">{[
             "Resumen ejecutivo",
             "Qué incluye la inspección",
@@ -534,17 +558,17 @@ export default async function ReporteV1Page({ params, searchParams }: {
             "Glosario",
             "Firmas",
             "Certificado Certeza Habitacional",
-          ].map((x,i)=><li key={x} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold">{String(i+1).padStart(2,"0")} · {x}</li>)}</ol>
+          ].map((x,i)=><li key={x} className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold">{String(i+2).padStart(2,"0")} · {x}</li>)}</ol>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
           <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
           <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · Inspeccionados: {metricas.revisados} · No aplica: {metricas.noAplica} · No inspeccionados / sin acceso u otra causa: {Math.max(metricas.aplicables - metricas.revisados, 0)}</p>
           <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={`Prioridad ${prioridad}`} value={String(total)}/>)}</div>
           <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La calificación se expresa de 0 a 100 y se traduce a la escala de evaluación P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99 y SH 100. La prioridad P1–P5 de cada hallazgo se presenta por separado y no debe confundirse con el nivel global de evaluación.</p>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="03" titulo="Qué incluye la inspección" subtitulo="Cobertura estándar incluida en el servicio">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="03" titulo="Qué incluye la inspección" subtitulo="Cobertura estándar incluida en el servicio">
           <p className="text-sm leading-7 text-slate-700">La inspección cubre las áreas declaradas por el cliente que existan en el inmueble y se encuentren accesibles y seguras al momento de la visita. La cobertura siguiente describe las actividades estándar de revisión; no depende del equipo instrumental seleccionado y no modifica el precio de la propuesta.</p>
           <div className="mt-5 overflow-hidden rounded-2xl border border-slate-300">
             <div className="grid grid-cols-[1fr_1.8fr] bg-amber-400 px-4 py-3 text-xs font-black text-slate-900"><span>Área / sistema</span><span>Actividades incluidas</span></div>
@@ -553,15 +577,15 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <p className="mt-5 text-sm leading-7 text-slate-700">La inspección documentará también las áreas o componentes que no puedan revisarse por falta de acceso, condiciones inseguras, ausencia de servicios o restricciones existentes el día de la visita.</p>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="04" titulo="Servicios y verificaciones instrumentales incluidos" subtitulo="Equipos y pruebas incluidos en la propuesta">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="04" titulo="Servicios y verificaciones instrumentales incluidos" subtitulo="Equipos y pruebas incluidos en la propuesta">
           <p className="text-sm leading-7 text-slate-700">Los siguientes servicios instrumentales están incluidos en esta propuesta. Complementan la inspección estándar, no generan un cargo individual adicional y se aplicarán cuando correspondan a las condiciones del inmueble, exista acceso seguro y el equipo se encuentre operativo.</p>
           <div className="mt-5 overflow-hidden rounded-2xl border border-slate-300">
             <div className="grid grid-cols-[.35fr_1.1fr_2fr] bg-amber-400 px-4 py-3 text-xs font-black text-slate-900"><span>Incl.</span><span>Servicio / equipo</span><span>Aplicación durante la inspección</span></div>
-            {herramientasPropuestas.length>0 ? herramientasPropuestas.map((h)=><div key={h.codigo} className="grid grid-cols-[.35fr_1.1fr_2fr] border-t border-slate-200 text-xs leading-5"><div className="p-4 text-center text-base font-black">✓</div><div className="p-4 font-black">{h.nombre}</div><div className="p-4 text-slate-700">{h.aplicacionCotizacion}</div></div>) : <div className="p-5 text-sm text-slate-600">No existe una selección instrumental estructurada registrada en esta cotización.</div>}
+            {SERVICIOS_INSTRUMENTALES_COTIZACION.map(([servicio,aplicacion])=><div key={servicio} className="grid grid-cols-[.35fr_1.1fr_2fr] border-t border-slate-200 text-xs leading-5"><div className="p-4 text-center text-base font-black">✓</div><div className="p-4 font-black">{servicio}</div><div className="p-4 text-slate-700">{aplicacion}</div></div>)}
           </div>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
             <article className="rounded-3xl border-2 border-amber-300 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -615,9 +639,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
                       {(g.valorMedido||g.valorProyecto)&&<p className="mt-3 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Referencia/proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
                       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-600">
                         <span>Clasificación: {obs.clasificacionFinal??ev.hallazgo?.clasificacion??(tieneHallazgo?"—":"SIN HALLAZGO")}</span>
-                        <span>Prioridad: {obs.prioridadFinal??ev.hallazgo?.prioridad??"—"}</span>
-                        <span>Evaluación: {ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
+                        <span>Prioridad elegida por el Inspector: {tieneHallazgo ? (obs.prioridadFinal??ev.hallazgo?.prioridad??"—") : "—"}</span>
+                        <span>Evaluación IA: {ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
                       </div>
+                      {obs.justificacionCalificacionIa&&<p className="mt-2 text-xs leading-5 text-slate-500"><strong>Criterio de calificación IA:</strong> {obs.justificacionCalificacionIa}</p>}
                       {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${g.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
                     </section>;
                   })}
@@ -628,7 +653,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <p className="mt-6 rounded-2xl bg-slate-100 p-4 text-xs leading-6 text-slate-600">Los conceptos marcados como No aplica o no inspeccionados por falta de acceso, seguridad, obstrucción u otra causa no se muestran individualmente en este desarrollo. Su cantidad sí se informa en el resumen estadístico y por partida para transparentar el alcance efectivo de la inspección.</p>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="06" titulo="Resumen por partida" subtitulo="Resultados, alcance efectivo y evaluación de cada partida">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="06" titulo="Resumen por partida" subtitulo="Resultados, alcance efectivo y evaluación de cada partida">
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white">
               <span>Partida</span><span className="text-center">Inspeccionados</span><span className="text-center">Hallazgos</span><span className="text-center">No aplica</span><span className="text-center">Calificación</span><span className="text-center">Nivel</span>
@@ -663,27 +688,27 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="07" titulo="Tecnología Certeza Habitacional" subtitulo="Método Certeza, plataforma, IA, instrumentación y criterio técnico humano">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="07" titulo="Tecnología Certeza Habitacional" subtitulo="Método Certeza, plataforma, IA, instrumentación y criterio técnico humano">
           <p className="mb-5 text-sm leading-6 text-slate-600">El Método Certeza integra una metodología sistematizada de revisión, la experiencia acumulada del equipo, evidencia fotográfica, mediciones y verificaciones instrumentales, una plataforma tecnológica que conserva trazabilidad y herramientas de inteligencia artificial como apoyo analítico. La IA ayuda a ordenar evidencia, comparar datos y proponer interpretaciones; no sustituye al Inspector. La interpretación, clasificación y decisión técnica final corresponden al criterio profesional humano autorizado.</p>
           <div className="mb-5 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-slate-100 p-4"><strong>Cobertura sistemática</strong><p className="mt-2 text-xs leading-5 text-slate-600">La plataforma organiza partidas y conceptos para reducir omisiones y conservar trazabilidad.</p></div><div className="rounded-2xl bg-slate-100 p-4"><strong>Instrumentación</strong><p className="mt-2 text-xs leading-5 text-slate-600">Las herramientas complementan la observación cuando la prueba corresponde y quedó documentada.</p></div><div className="rounded-2xl bg-slate-100 p-4"><strong>Criterio profesional</strong><p className="mt-2 text-xs leading-5 text-slate-600">La tecnología apoya; el Inspector y Dirección conservan la decisión técnica final.</p></div></div>
           <TecnologiaInspeccionV1 resultados={resultados} mostrarNoEjecutadas />
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="08" titulo="Conclusiones" subtitulo="Síntesis técnica objetiva del resultado de la inspección">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="08" titulo="Conclusiones" subtitulo="Síntesis técnica objetiva del resultado de la inspección">
           <p className="rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">{metricas.dictamen}</p>
           <p className="mt-4 text-sm leading-7 text-slate-700">Cobertura efectiva: <strong>{coberturaTexto}%</strong>. Calificación Técnica Certeza: <strong>{calificacionTexto}/100</strong>. Hallazgos documentados: <strong>{metricas.totalHallazgos}</strong>. La conclusión se limita al alcance contratado, a las áreas accesibles y a las condiciones visibles o medibles durante la visita.</p>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="09" titulo="Bibliografía y normatividad de apoyo" subtitulo="Referencias utilizadas como marco técnico">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="09" titulo="Bibliografía y normatividad de apoyo" subtitulo="Referencias utilizadas como marco técnico">
           <p className="mb-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">Las referencias se aplican únicamente cuando corresponden al elemento y alcance efectivamente revisado. Una inspección visual o instrumental de vivienda no sustituye por sí sola un dictamen oficial de cumplimiento normativo, estructural, eléctrico o de gas emitido por la autoridad o especialista competente.</p>
           <div className="space-y-3">{referencias.map((ref)=><article key={ref.titulo} className="rounded-2xl border border-slate-200 p-4"><h3 className="font-black">{ref.titulo}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{ref.uso}</p><p className="mt-2 break-all text-xs text-cyan-700">{ref.fuente}</p></article>)}</div>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="10" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="10" titulo="Glosario" subtitulo="Términos para facilitar la lectura del reporte">
           <div className="grid gap-3 sm:grid-cols-2">{GLOSARIO.map(([t,d])=><article key={t} className="rounded-2xl bg-slate-100 p-4"><h3 className="font-black">{t}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{d}</p></article>)}</div>
         </Seccion>
 
-        <Seccion folio={inspeccion.folio} n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
+        <Seccion final={autorizado} folio={inspeccion.folio} n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
           <p className="mb-6 text-sm leading-7 text-slate-700">Las firmas registradas quedan asociadas al expediente de la inspección y forman parte de la trazabilidad documental. En el pre-reporte se muestran las firmas vigentes del Inspector y del Cliente cuando ya fueron capturadas en el sistema.</p>
           <div className="grid gap-6 sm:grid-cols-2">
             <article className="rounded-3xl border border-slate-200 p-5 text-center">
@@ -715,7 +740,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 }
 
-function Seccion({n,titulo,subtitulo,folio,children}:{n:string;titulo:string;subtitulo:string;folio:string;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section className="page-break relative min-h-[245mm] px-10 py-8"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-10 border-t border-amber-500/50 pt-4 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">Pre-Reporte de Inspección</p><p className="mt-1">Folio {folio}</p></div></div></footer></section>}
+function Seccion({n,titulo,subtitulo,folio,final,children}:{n:string;titulo:string;subtitulo:string;folio:string;final:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section className="page-break relative min-h-[245mm] px-10 py-8"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-10 border-t border-amber-500/50 pt-4 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Final de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}

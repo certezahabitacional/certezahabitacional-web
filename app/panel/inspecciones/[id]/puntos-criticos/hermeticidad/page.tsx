@@ -55,6 +55,9 @@ type Observacion = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
+  justificacionCalificacionIa?: string;
+  prioridadEvaluadaIa?: string;
   clasificacionSugerida?: string;
   justificacionIa?: string;
   lecturaFinalPropuesta?: string;
@@ -484,20 +487,23 @@ export default async function HermeticidadPage({
                                 La IA sirve como propuesta técnica. Este campo es la interpretación final que quedará en el reporte; puede conservarse tal cual o ajustarse por el Inspector.
                               </p>
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <select name="clasificacion" defaultValue={obs.clasificacionSugerida ?? "C"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
+                                <select name="clasificacion" defaultValue={obs.clasificacionFinal ?? obs.clasificacionSugerida ?? "C"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
                                   <option value="C">C · Conforme</option>
                                   <option value="O">O · Observación</option>
                                   <option value="NC">NC · No conformidad</option>
                                   <option value="CR">CR · Crítico</option>
-                                  <option value="NA">NA · No aplica</option>
                                 </select>
-                                <select name="prioridad" defaultValue="P3" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
+                                <select name="prioridad" defaultValue={obs.prioridadFinal ?? "P3"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
                                   <option value="P1">P1</option>
                                   <option value="P2">P2</option>
                                   <option value="P3">P3</option>
                                   <option value="P4">P4</option>
                                   <option value="P5">P5</option>
                                 </select>
+                              </div>
+                              <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
+                                <p className="text-xs font-black uppercase text-cyan-200">Calificación automática por IA</p>
+                                <p className="mt-2 text-xs leading-5 text-cyan-50">El Inspector selecciona la prioridad del resultado y la IA define la calificación exacta dentro de ese rango. P1 0–49 · P2 50–69 · P3 70–79 · P4 80–89 · P5 90–99. Conforme = SH 100.</p>
                               </div>
                               <button disabled={!obs.descripcionIa} className="mt-3 w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
                                 {obs.descripcionIa ? "REGISTRAR LECTURA FINAL Y CERRAR PRUEBA" : "GENERA PRIMERO LA INTERPRETACIÓN IA"}

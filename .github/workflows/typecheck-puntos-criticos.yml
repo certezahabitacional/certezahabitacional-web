@@ -22,6 +22,7 @@ on:
       - fix/cierre-puntos-criticos-resultado-valido
       - feature/no-aplica-concepto-manual-puntos-criticos
       - fix/pre-reporte-punto4-cotizacion
+      - fix/pre-reporte-punto4-definitivo
 
 jobs:
   typecheck:

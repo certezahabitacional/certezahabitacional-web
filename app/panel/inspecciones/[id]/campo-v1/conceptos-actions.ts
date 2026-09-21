@@ -13,6 +13,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { calificarPuntoConIaV1 } from "@/lib/calificacion-ia-v1";
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 
@@ -27,6 +28,9 @@ type ObservacionConcepto = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
+  justificacionCalificacionIa?: string;
+  prioridadEvaluadaIa?: string;
   actualizadoEn?: string;
 };
 
@@ -462,7 +466,7 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   const item = await itemArea(inspeccionId, areaId, itemId);
   if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "El concepto ya está cerrado.", itemId);
   if (!["C","O","NC","CR"].includes(clasificacionTexto)) volver(inspeccionId, areaId, "error", "Selecciona una clasificación válida.", itemId);
-  if (!["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, areaId, "error", "Selecciona una prioridad válida.", itemId);
+  if (clasificacionTexto !== "C" && !["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, areaId, "error", "Selecciona una prioridad válida para el hallazgo.", itemId);
   if (descripcionFinal.length < 10) volver(inspeccionId, areaId, "error", "Registra una interpretación técnica de al menos 10 caracteres.", itemId);
 
   if (Number(item.fotos) < MIN_FOTOS_CONCEPTO || Number(item.fotos) > MAX_FOTOS_CONCEPTO) {
@@ -475,6 +479,34 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   }
 
   const anterior = observacionObjeto(item.observacion);
+  const rutasEvidencia = await prisma.$queryRaw<Array<{ url:string }>>`
+    SELECT f."url"
+    FROM "FotografiaArea" fa
+    JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+    WHERE fa."guiaItemId"=${itemId}
+    ORDER BY fa."orden",fa."creadoEn"
+  `;
+  let calificacionFinal = 100;
+  let justificacionCalificacionIa = "Sin hallazgo: SH = 100.";
+  if (clasificacionTexto !== "C") {
+    try {
+      const evaluacionIa = await calificarPuntoConIaV1({
+        prioridad: prioridadTexto as PrioridadHallazgo,
+        partida: item.areaNombre,
+        concepto: item.concepto,
+        descripcionFinal,
+        especificacion: item.especificacion,
+        valorMedido: valorMedido || null,
+        valorProyecto: valorProyecto || null,
+        unidadMedida: unidadMedida || null,
+        rutasEvidencia: rutasEvidencia.map((foto)=>foto.url),
+      });
+      calificacionFinal = evaluacionIa.calificacion;
+      justificacionCalificacionIa = evaluacionIa.justificacion;
+    } catch (error) {
+      volver(inspeccionId, areaId, "error", error instanceof Error ? error.message : "No fue posible calcular la evaluación con IA.", itemId);
+    }
+  }
   if (!anterior.descripcionIa && !anterior.descripcionFinal) {
     volver(inspeccionId, areaId, "error", "Primero genera la interpretación de IA para este grupo de evidencias.", itemId);
   }
@@ -482,7 +514,10 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   const observacion: ObservacionConcepto = {
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
-    prioridadFinal: prioridadTexto,
+    prioridadFinal: clasificacionTexto === "C" ? undefined : prioridadTexto,
+    calificacionFinal,
+    justificacionCalificacionIa,
+    prioridadEvaluadaIa: clasificacionTexto === "C" ? "SH" : prioridadTexto,
     actualizadoEn: new Date().toISOString(),
   };
   const clasificacion = clasificacionTexto as ClasificacionHallazgo;
@@ -571,7 +606,7 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
     entidadId: itemId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} cerró “${item.concepto}” en ${item.areaNombre} con clasificación ${clasificacionTexto}, prioridad ${prioridadTexto} y ${item.fotos} evidencia(s). Se conservó una sola descripción final.`,
+    descripcion: `${responsable} cerró “${item.concepto}” en ${item.areaNombre} con clasificación ${clasificacionTexto}, evaluación ${calificacionFinal}/100${clasificacionTexto === "C" ? "" : `, prioridad ${prioridadTexto}`} y ${item.fotos} evidencia(s). Se conservó una sola descripción final.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
