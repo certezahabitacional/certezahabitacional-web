@@ -152,10 +152,10 @@ export default async function CampoV1Page({ params, searchParams }: {
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · 27 PARTIDAS</p>
+          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
           <div className="flex flex-wrap items-center gap-2">
             {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE 27 PARTIDAS</Link>
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE {totalRecorrido} PARTIDAS</Link>
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
           </div>
         </div>
