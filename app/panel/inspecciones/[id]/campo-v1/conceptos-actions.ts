@@ -27,6 +27,7 @@ type ObservacionConcepto = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
   actualizadoEn?: string;
 };
 
@@ -452,6 +453,8 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
   const prioridadTexto = texto(formData, "prioridad").toUpperCase();
+  const calificacionTexto = texto(formData, "calificacionFinal");
+  const calificacionFinal = Number(calificacionTexto);
   const valorMedido = texto(formData, "valorMedido");
   const valorProyecto = texto(formData, "valorProyecto");
   const unidadMedida = texto(formData, "unidadMedida");
@@ -462,7 +465,10 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   const item = await itemArea(inspeccionId, areaId, itemId);
   if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "El concepto ya está cerrado.", itemId);
   if (!["C","O","NC","CR"].includes(clasificacionTexto)) volver(inspeccionId, areaId, "error", "Selecciona una clasificación válida.", itemId);
-  if (!["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, areaId, "error", "Selecciona una prioridad válida.", itemId);
+  if (!Number.isFinite(calificacionFinal) || calificacionFinal < 0 || calificacionFinal > 100) volver(inspeccionId, areaId, "error", "Registra una evaluación final entre 0 y 100.", itemId);
+  if (clasificacionTexto === "C" && calificacionFinal !== 100) volver(inspeccionId, areaId, "error", "Un concepto Conforme debe registrarse como SH = 100.", itemId);
+  if (clasificacionTexto !== "C" && calificacionFinal >= 100) volver(inspeccionId, areaId, "error", "Un concepto con hallazgo debe evaluarse entre 0 y 99.", itemId);
+  if (clasificacionTexto !== "C" && !["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, areaId, "error", "Selecciona una prioridad válida para el hallazgo.", itemId);
   if (descripcionFinal.length < 10) volver(inspeccionId, areaId, "error", "Registra una interpretación técnica de al menos 10 caracteres.", itemId);
 
   if (Number(item.fotos) < MIN_FOTOS_CONCEPTO || Number(item.fotos) > MAX_FOTOS_CONCEPTO) {
@@ -482,7 +488,8 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   const observacion: ObservacionConcepto = {
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
-    prioridadFinal: prioridadTexto,
+    prioridadFinal: clasificacionTexto === "C" ? undefined : prioridadTexto,
+    calificacionFinal,
     actualizadoEn: new Date().toISOString(),
   };
   const clasificacion = clasificacionTexto as ClasificacionHallazgo;
@@ -571,7 +578,7 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
     entidadId: itemId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} cerró “${item.concepto}” en ${item.areaNombre} con clasificación ${clasificacionTexto}, prioridad ${prioridadTexto} y ${item.fotos} evidencia(s). Se conservó una sola descripción final.`,
+    descripcion: `${responsable} cerró “${item.concepto}” en ${item.areaNombre} con clasificación ${clasificacionTexto}, evaluación ${calificacionFinal}/100${clasificacionTexto === "C" ? "" : `, prioridad ${prioridadTexto}`} y ${item.fotos} evidencia(s). Se conservó una sola descripción final.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
