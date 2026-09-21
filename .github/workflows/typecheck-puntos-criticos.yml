@@ -26,6 +26,8 @@ on:
       - fix/partidas-1-8-recorrido-reporte
       - fix/recorrido-27-partidas
 
+      - feature/reporte-v1-identidad-qr-watermark
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
