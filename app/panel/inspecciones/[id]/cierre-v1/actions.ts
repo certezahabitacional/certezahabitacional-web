@@ -287,6 +287,15 @@ export async function enviarReporteDireccionV1(formData: FormData) {
   try {
     await prisma.$transaction(async (tx) => {
       await tx.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.REPORTE_PENDIENTE } });
+      await tx.revisionInspeccion.updateMany({
+        where: {
+          inspeccionId,
+          rol: RolUsuario.DIRECTOR,
+          decision: TipoDecisionRevision.DEVUELTO_INSPECTOR,
+          estado: EstadoDecisionRevision.VIGENTE,
+        },
+        data: { estado: EstadoDecisionRevision.SUPERADA },
+      });
       await tx.$executeRaw`
         UPDATE "InspeccionControlV2"
         SET "capturaCerrada"=true,
@@ -310,13 +319,13 @@ export async function enviarReporteDireccionV1(formData: FormData) {
     cotizacionId: inspeccion.cotizacionId,
     usuarioId: usuario.id,
     descripcion: fueraDePlazo
-      ? `Reporte V1 enviado a Dirección fuera de la ventana objetivo de 12 horas, después de la revisión final del Inspector.`
-      : `Reporte V1 enviado a Dirección después de la revisión final del Inspector.`,
+      ? `PRE REPORTE V1 enviado o reenviado a Dirección fuera de la ventana objetivo de 12 horas, después de la revisión final del Inspector.`
+      : `PRE REPORTE V1 enviado o reenviado a Dirección después de la revisión final del Inspector.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision`);
-  redirect(`/panel/inspecciones/${inspeccionId}?ok=${encodeURIComponent("Reporte enviado a Dirección. El Inspector queda en modo de solo lectura hasta nueva indicación.")}`);
+  redirect(`/panel/inspecciones/${inspeccionId}?ok=${encodeURIComponent("PRE REPORTE enviado a Dirección. El Inspector queda en modo de solo lectura hasta autorización o devolución con observaciones.")}`);
 }
 
 export async function devolverReporteInspectorV1(formData: FormData) {
