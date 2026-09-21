@@ -356,21 +356,14 @@ export default async function PuntosCriticosPage({
       <RestaurarFocoConcepto itemId={query.foco} />
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}/proyecto-v1`} className="text-sm font-black text-cyan-300">
-            ← Proyecto digital
+          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · 27 PARTIDAS</p>
+          <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">
+            Consultar plan de 27 partidas
           </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">
-              Plan de inspección
-            </Link>
-            <Link href={`/panel/inspecciones/${id}`} className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-slate-300">
-              Expediente
-            </Link>
-          </div>
         </div>
 
         <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-amber-300">
-          RECORRIDO TÉCNICO · PASO {indicePunto + 2} DE {totalRecorrido}
+          RECORRIDO TÉCNICO · PARTIDA {indicePunto + 2} DE {totalRecorrido}
         </p>
         <h1 className="mt-2 text-3xl font-black">{punto.etiqueta}</h1>
         <p className="mt-2 text-sm text-slate-400">
