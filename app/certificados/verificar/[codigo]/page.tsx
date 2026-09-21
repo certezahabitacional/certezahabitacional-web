@@ -199,9 +199,28 @@ export default async function VerificarCertificadoPage({
 
           <div className="mt-7 rounded-3xl bg-amber-400/10 p-5 text-sm leading-6 text-amber-200">
             {esV1
-              ? "Esta consulta pública confirma autenticidad y vigencia con información limitada. El reporte técnico completo y los datos del cliente permanecen en el portal autenticado de Certeza Habitacional."
+              ? "Esta consulta pública confirma autenticidad y vigencia. El reporte oficial autorizado puede consultarse o descargarse desde esta misma página."
               : "La validación confirma que el certificado está registrado en la plataforma. El documento debe interpretarse junto con el reporte técnico completo de la inspección."}
           </div>
+
+          {esV1 && vigente && (
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              <a
+                href={`/reportes/verificar/${certificado.codigoValidacion}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl bg-cyan-400 px-5 py-4 text-center font-black text-slate-950"
+              >
+                VER REPORTE OFICIAL
+              </a>
+              <a
+                href={`/reportes/verificar/${certificado.codigoValidacion}/pdf?download=1`}
+                className="rounded-2xl border border-cyan-300/30 px-5 py-4 text-center font-black text-cyan-300"
+              >
+                DESCARGAR PDF
+              </a>
+            </div>
+          )}
 
           <footer className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-slate-500">
             Consulta generada directamente desde el registro de Certeza Habitacional.
