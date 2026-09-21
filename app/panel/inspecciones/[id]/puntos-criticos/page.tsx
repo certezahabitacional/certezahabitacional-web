@@ -88,6 +88,9 @@ type ObservacionItem = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
+  justificacionCalificacionIa?: string;
+  prioridadEvaluadaIa?: string;
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
   variacionPresion?: string;
