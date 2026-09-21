@@ -26,6 +26,8 @@ on:
       - fix/partidas-1-8-recorrido-reporte
       - fix/recorrido-27-partidas
 
+      - feature/certificado-reporte-oficial-pdf-v1
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
