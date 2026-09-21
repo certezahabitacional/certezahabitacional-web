@@ -59,6 +59,19 @@ export default async function CierreV1Page({ params, searchParams }: {
       cliente: { select: { nombre: true } },
       inmueble: { select: { alias: true, direccion: true } },
       firmas: { select: { tipo: true, firmadaEn: true } },
+      revisiones: {
+        where: { rol: RolUsuario.DIRECTOR },
+        orderBy: { creadaEn: "desc" },
+        take: 6,
+        select: {
+          id: true,
+          decision: true,
+          estado: true,
+          comentario: true,
+          creadaEn: true,
+          usuario: { select: { nombre: true } },
+        },
+      },
     },
   });
   if (!inspeccion) notFound();
@@ -91,6 +104,10 @@ export default async function CierreV1Page({ params, searchParams }: {
   const firmaInspector = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("inspector"));
   const firmaCliente = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("cliente"));
   const firmasListas = firmaInspector && firmaCliente;
+  const observacionesDireccion = inspeccion.revisiones.filter(
+    (revision) => revision.decision === "DEVUELTO_INSPECTOR" && Boolean(revision.comentario),
+  );
+  const observacionDireccionActual = observacionesDireccion[0] ?? null;
 
   const tecnicoListo = Boolean(
     estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal &&
@@ -125,6 +142,27 @@ export default async function CierreV1Page({ params, searchParams }: {
         </header>
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
+
+        {observacionDireccionActual && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+          <section className="mt-5 rounded-3xl border border-rose-300/20 bg-rose-300/5 p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-rose-300">Observaciones de Dirección pendientes de atender</p>
+            <h2 className="mt-2 text-xl font-black">PRE REPORTE devuelto al Inspector</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-200">
+              {observacionDireccionActual.comentario}
+            </p>
+            <p className="mt-3 text-xs text-slate-500">
+              {observacionDireccionActual.usuario.nombre} · {new Date(observacionDireccionActual.creadaEn).toLocaleString("es-MX")}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-rose-300 px-4 py-3 text-sm font-black text-slate-950">
+                ATENDER OBSERVACIONES
+              </Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">
+                REVISAR PRE REPORTE
+              </Link>
+            </div>
+          </section>
+        )}
 
         {reabiertaEn && !firmasListas && (
           <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5">
@@ -185,7 +223,7 @@ export default async function CierreV1Page({ params, searchParams }: {
             <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Después de concluir la inspección</p>
             <h2 className="mt-2 text-xl font-black">Reporte preliminar para revisión en sitio</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Antes de cerrar la visita, el Inspector debe revisar el pre-reporte completo y corregir cualquier omisión todavía estando en el inmueble.
+              Antes de cerrar la visita, el Inspector debe revisar el PRE REPORTE completo y corregir cualquier omisión todavía estando en el inmueble.
             </p>
             <div className="mt-4">
               <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="inline-block rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
@@ -198,7 +236,7 @@ export default async function CierreV1Page({ params, searchParams }: {
               )}
             </div>
             <p className={`mt-4 text-sm font-bold ${preReporteRevisado ? "text-emerald-300" : "text-amber-300"}`}>
-              {preReporteRevisado ? "✓ Pre-reporte revisado y confirmado en sitio." : "Pendiente: confirmar la revisión preliminar antes de cerrar la visita."}
+              {preReporteRevisado ? "✓ PRE REPORTE revisado y confirmado en sitio." : "Pendiente: confirmar la revisión preliminar antes de cerrar la visita."}
             </p>
           </section>
         )}
@@ -222,7 +260,7 @@ export default async function CierreV1Page({ params, searchParams }: {
           <section className={`mt-5 rounded-3xl border p-6 ${listoCampo ? "border-emerald-300/20 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
             <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Etapa 2 · cierre de visita</p>
             <h2 className="mt-2 text-xl font-black">Terminar trabajo de campo</h2>
-            <p className="mt-2 text-sm text-slate-300">Se habilita únicamente después de confirmar el pre-reporte en sitio y contar con las firmas vigentes. Al cerrar la visita inicia la última revisión del Inspector.</p>
+            <p className="mt-2 text-sm text-slate-300">Se habilita únicamente después de confirmar el PRE REPORTE en sitio y contar con las firmas vigentes. Al cerrar la visita inicia la última revisión del Inspector.</p>
             {esInspector && <form action={terminarTrabajoCampoV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button disabled={!listoCampo} className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR VISITA Y PASAR A REVISIÓN FINAL</button></form>}
           </section>
         )}
@@ -233,7 +271,7 @@ export default async function CierreV1Page({ params, searchParams }: {
             <h2 className="mt-2 text-2xl font-black">{vencido ? "Plazo objetivo vencido" : `${horasRestantes} h ${mins} min restantes`}</h2>
             {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Consultar pre-reporte integral</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Consultar PRE REPORTE integral</Link>
               <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-4 py-3 text-sm font-black text-slate-950">ÚLTIMA REVISIÓN Y AJUSTE</Link>
               <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">AJUSTAR EVIDENCIAS</Link>
             </div>
@@ -247,7 +285,7 @@ export default async function CierreV1Page({ params, searchParams }: {
                 </form>
                 <form action={enviarReporteDireccionV1} className="mt-3">
                   <input type="hidden" name="inspeccionId" value={id}/>
-                  <button disabled={!firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">ENVIAR A REVISIÓN DE DIRECCIÓN</button>
+                  <button disabled={!firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PRE REPORTE Y ENVIAR A DIRECCIÓN</button>
                 </form>
                 <p className="mt-3 text-xs leading-5 text-slate-400">Después del envío, el Inspector queda en sólo lectura. Dirección podrá autorizar o devolver el reporte con retroalimentación y correcciones requeridas.</p>
               </>
