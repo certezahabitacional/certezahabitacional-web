@@ -28,6 +28,8 @@ on:
 
       - feature/flujo-autorizacion-v1-bloque-a
 
+      - feature/integracion-cierre-reporte-v1
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
