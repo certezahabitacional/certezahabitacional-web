@@ -199,6 +199,20 @@ export default async function ExpedientePage({
         : `/panel/inspecciones/${id}/captura`,
     );
   }
+  if (
+    rolActual === RolUsuario.INSPECTOR &&
+    inspeccionAlcance.numeroInspeccion === 1 &&
+    inspeccionAlcance.estado === EstadoInspeccion.REPORTE_PENDIENTE
+  ) {
+    redirect(`/panel/inspecciones/${id}/reporte-v1`);
+  }
+  if (
+    rolActual === RolUsuario.INSPECTOR &&
+    inspeccionAlcance.numeroInspeccion === 1 &&
+    inspeccionAlcance.estado === EstadoInspeccion.FINALIZADA
+  ) {
+    redirect(`/panel/inspecciones/${id}/reporte-v1`);
+  }
 
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id },

@@ -176,8 +176,8 @@ export default async function RevisionInicialPage({
         <section className="mt-6 text-center">
           <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 text-4xl" aria-label="Cámara">📷</div>
           <p className="mt-2 text-xs font-bold text-cyan-200">Toca la cámara para tomar fotografía en sitio</p>
-          <p className="mt-5 text-xs font-black uppercase tracking-[.28em] text-cyan-300">Revisión final con el cliente</p>
-          <h1 className="mt-2 text-3xl font-black sm:text-4xl">Confirmación previa al inicio físico</h1>
+          <p className="mt-5 text-xs font-black uppercase tracking-[.28em] text-cyan-300">PASOS 1 Y 2 · PREPARACIÓN EN SITIO</p>
+          <h1 className="mt-2 text-3xl font-black sm:text-4xl">Preparar la inspección sin salir del flujo</h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-400">Revisa con el cliente la información proporcionada desde la precotización. La inspección seguirá PROGRAMADA hasta presionar INICIAR al final.</p>
         </section>
 
@@ -189,7 +189,7 @@ export default async function RevisionInicialPage({
 
         <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
           <div className="text-center">
-            <h2 className="text-xl font-black">Fotografía definitiva de la fachada principal</h2>
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 1</p><h2 className="mt-1 text-xl font-black">Capturar fotografía definitiva de fachada para portada</h2>
             {!fotoDefinitiva ? (
               <p className="mt-2 text-sm text-slate-400">Elige una ruta: tomar 4 fotografías en sitio y seleccionar la mejor, o usar 1 fotografía existente desde la base de evidencias o desde galería/archivos.</p>
             ) : (
@@ -247,7 +247,7 @@ export default async function RevisionInicialPage({
           )}
         </section>
 
-        <Bloque titulo="Datos del cliente">
+        <div className="mt-8 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4"><p className="text-xs font-black uppercase tracking-widest text-amber-200">PASO 2 · VALIDACIÓN CON EL CLIENTE</p><p className="mt-1 text-sm text-slate-300">Confirma los datos del cliente y del inmueble antes de iniciar el desarrollo técnico.</p></div><Bloque titulo="Datos del cliente">
           <Dato etiqueta="Nombre" valor={textoSnapshot(snapshot, "nombre", inspeccion.cliente.nombre)} />
           <Dato etiqueta="Teléfono" valor={textoSnapshot(snapshot, "telefono", inspeccion.cliente.telefono ?? "—")} />
           <Dato etiqueta="Correo" valor={textoSnapshot(snapshot, "correo", inspeccion.cliente.correo ?? "—")} />
@@ -337,7 +337,7 @@ export default async function RevisionInicialPage({
 
         {responsableRevision && (
           <section className={`mt-7 rounded-3xl border p-6 text-center ${puedeIniciar ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-900"}`}>
-            <h2 className="text-2xl font-black">Inicio físico de la inspección</h2>
+            <h2 className="text-2xl font-black">Continuar al PASO 3 · Desarrollo de la inspección</h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">INICIAR solo se habilita cuando la información fue revisada con el cliente, existe una sola fotografía definitiva —elegida entre 4 tomadas en sitio o cargada como 1 foto existente— y no hay correcciones pendientes.</p>
             {pendientes.length > 0 && <p className="mt-3 font-black text-amber-300">Bloqueado: hay {pendientes.length} corrección(es) pendiente(s).</p>}
             {!fotoDefinitiva && <p className="mt-3 font-black text-amber-300">Bloqueado: define la fachada mediante 4 fotografías en sitio o 1 fotografía existente.</p>}

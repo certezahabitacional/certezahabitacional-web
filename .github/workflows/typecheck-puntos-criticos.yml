@@ -30,6 +30,8 @@ on:
 
       - feature/integracion-cierre-reporte-v1
 
+      - fix/flujo-inspector-6-pasos-partidas-consecutivas
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest

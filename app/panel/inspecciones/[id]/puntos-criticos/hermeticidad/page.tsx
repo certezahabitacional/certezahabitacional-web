@@ -219,16 +219,19 @@ export default async function HermeticidadPage({
     <main className="min-h-screen bg-slate-950 px-4 py-7 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={fase === "inicio" ? `/panel/inspecciones/${id}/proyecto-v1` : `/panel/inspecciones/${id}/areas`} className="text-sm font-black text-cyan-300">
-            ← Regresar
+          <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">
+            ← Retomar recorrido
           </Link>
-          <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">
-            {fase === "inicio" ? "ETAPA INICIAL" : "ETAPA FINAL"}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE {totalRecorrido} PARTIDAS</Link>
+            <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">
+              {fase === "inicio" ? "ETAPA INICIAL" : "ETAPA FINAL"}
+            </span>
+          </div>
         </div>
 
         <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-amber-300">
-          RECORRIDO TÉCNICO · PUNTO 1 DE {totalRecorrido}
+          RECORRIDO TÉCNICO · PARTIDA 1 DE {totalRecorrido}
         </p>
         <h1 className="mt-2 text-4xl font-black">
           {fase === "inicio" ? "Lecturas iniciales antes del recorrido" : "Lecturas finales al terminar la inspección"}
@@ -263,7 +266,7 @@ export default async function HermeticidadPage({
               <section key={codigo} className="rounded-3xl border border-amber-300/25 bg-amber-300/5 p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wider text-amber-200">{etiqueta}</p>
+                    <p className="text-xs font-black uppercase tracking-wider text-amber-200">{codigo === "HIDRAULICA" ? "CONCEPTO 1" : "CONCEPTO 2"} · {etiqueta}</p>
                     <h2 className="mt-1 text-2xl font-black">Prueba de hermeticidad con manómetro</h2>
                   </div>
                   <span className="rounded-full bg-slate-950 px-3 py-2 text-xs font-black text-slate-300">

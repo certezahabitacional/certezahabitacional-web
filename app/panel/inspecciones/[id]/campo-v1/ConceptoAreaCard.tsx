@@ -65,12 +65,14 @@ export default async function ConceptoAreaCard({
   inspeccionId,
   areaId,
   punto,
+  numeroConcepto,
   puedeCapturar,
   areaActiva,
 }: {
   inspeccionId: string;
   areaId: string;
   punto: PuntoArea;
+  numeroConcepto: number;
   puedeCapturar: boolean;
   areaActiva: boolean;
 }) {
@@ -111,6 +113,9 @@ export default async function ConceptoAreaCard({
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         <div>
           <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[10px] font-black uppercase text-cyan-200">
+              CONCEPTO {numeroConcepto}
+            </span>
             <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-black uppercase text-slate-400">
               {punto.grupo ?? "ADICIONAL"}
             </span>

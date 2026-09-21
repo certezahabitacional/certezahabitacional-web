@@ -241,7 +241,7 @@ export default async function PuntosCriticosPage({
     return Boolean(d.pruebaProlongada) && !d.pruebaProlongadaNoAplica && !pasoActual.lecturaInicial;
   });
 
-  if (pasos.length > 0 && faltanLecturasIniciales) {
+  if (pasos.length > 0 && faltanLecturasIniciales && !query.punto) {
     redirect(`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`);
   }
 
@@ -271,21 +271,13 @@ export default async function PuntosCriticosPage({
   }
 
   const codigoSolicitado = query.punto && esCodigo(query.punto) ? query.punto : "HIDRAULICA";
-  if (!puedeEntrarPunto(codigoSolicitado)) {
-    const primerPendiente = PUNTOS_CRITICOS_V1.find((item) => {
-      const pasoItem = pasos.find((pasoActual) => pasoActual.clave === `PC_${item.codigo}`);
-      return pasoItem && pasoItem.estado !== "COMPLETADO" && pasoItem.estado !== "NO_APLICA";
-    });
-    redirect(
-      `/panel/inspecciones/${id}/puntos-criticos?punto=${primerPendiente?.codigo ?? "HIDRAULICA"}&error=${encodeURIComponent("Debes respetar la secuencia obligatoria de puntos críticos.")}`,
-    );
-  }
+  const puntoEnSecuencia = puedeEntrarPunto(codigoSolicitado);
   const punto = PUNTOS_CRITICOS_V1.find((item) => item.codigo === codigoSolicitado)!;
   const paso = pasos.find((item) => item.clave === `PC_${codigoSolicitado}`);
   if (!paso) redirect(`/panel/inspecciones/${id}/puntos-criticos?punto=HIDRAULICA`);
 
   const datos = datosPaso(paso.datos);
-  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO && puntoEnSecuencia;
 
   const items = datos.configurado && datos.aplica
     ? await prisma.$queryRaw<Item[]>`
@@ -297,6 +289,21 @@ export default async function PuntosCriticosPage({
         ORDER BY g."orden"
       `
     : [];
+
+  const conteosConceptosCriticos = await prisma.$queryRaw<Array<{ codigo: string; total: number }>>`
+    SELECT replace("area",'__PUNTO_CRITICO__:','') AS "codigo",
+           COUNT(*) FILTER (
+             WHERE "concepto" NOT ILIKE '%manómetro%'
+               AND "concepto" NOT ILIKE '%lectura final%'
+           )::int AS "total"
+    FROM "GuiaInspeccionItem"
+    WHERE "inspeccionId"=${id} AND "area" LIKE '__PUNTO_CRITICO__:%'
+    GROUP BY "area"
+  `;
+  const conteoPorCodigo = new Map(conteosConceptosCriticos.map((x)=>[x.codigo,Number(x.total)]));
+  const baseConceptoCritico = 2 + PUNTOS_CRITICOS_V1
+    .slice(0, Math.max(PUNTOS_CRITICOS_V1.findIndex((x)=>x.codigo===codigoSolicitado),0))
+    .reduce((s,x)=>s + Number(conteoPorCodigo.get(x.codigo) ?? 0),0);
 
   const itemManometroInicial = items.find((item) => /manómetro/i.test(item.concepto));
   const itemLecturaFinal = items.find((item) => /lectura final/i.test(item.concepto));
@@ -356,9 +363,9 @@ export default async function PuntosCriticosPage({
       <RestaurarFocoConcepto itemId={query.foco} />
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · 27 PARTIDAS</p>
+          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
           <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">
-            Consultar plan de 27 partidas
+            Consultar plan de {totalRecorrido} partidas
           </Link>
         </div>
 
@@ -388,20 +395,21 @@ export default async function PuntosCriticosPage({
           {PUNTOS_CRITICOS_V1.map((item, index) => {
             const estado = pasos.find((p) => p.clave === `PC_${item.codigo}`)?.estado ?? "PENDIENTE";
             const activo = item.codigo === codigoSolicitado;
-            const habilitado = puedeEntrarPunto(item.codigo);
+            const habilitado = true;
+            const capturable = puedeEntrarPunto(item.codigo);
             const contenido = (
               <>
                 <span className="block text-[10px] text-slate-500">{index + 2}/{totalRecorrido}</span>
                 <span className="mt-1 block">{item.etiqueta}</span>
                 <span className="mt-2 block text-[10px]">
-                  {habilitado ? estado.replaceAll("_", " ") : "BLOQUEADO"}
+                  {capturable ? estado.replaceAll("_", " ") : "PENDIENTE · CONSULTA"}
                 </span>
               </>
             );
             const clases = `rounded-2xl border p-3 text-xs font-black ${activo
               ? "border-cyan-300/50 bg-cyan-300/10 text-cyan-200"
-              : !habilitado
-                ? "cursor-not-allowed border-white/5 bg-slate-950 text-slate-700"
+              : !capturable
+                ? "border-white/10 bg-slate-950 text-slate-400"
                 : estado === "COMPLETADO" || estado === "NO_APLICA"
                   ? "border-emerald-300/20 bg-emerald-300/5 text-emerald-300"
                   : estado === "EN_PROCESO"
@@ -517,7 +525,7 @@ export default async function PuntosCriticosPage({
               return (
                 <article id={`item-${item.id}`} key={item.id} className={`scroll-mt-24 rounded-3xl border p-5 ${cerrado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-900"}`}>
                   <div className="grid gap-5 lg:grid-cols-[70px_1fr_340px]">
-                    <div className="font-mono text-lg font-black text-cyan-300">{String(index + 1).padStart(2, "0")}</div>
+                    <div className="font-mono text-sm font-black text-cyan-300">CONCEPTO {baseConceptoCritico + index + 1}</div>
                     <div>
                       <div className="flex flex-wrap gap-2">
                         <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-black text-slate-400">{datos.fuente}</span>
