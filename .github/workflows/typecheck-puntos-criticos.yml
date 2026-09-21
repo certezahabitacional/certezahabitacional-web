@@ -26,6 +26,8 @@ on:
       - fix/partidas-1-8-recorrido-reporte
       - fix/recorrido-27-partidas
 
+      - feature/flujo-autorizacion-v1-bloque-a
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
