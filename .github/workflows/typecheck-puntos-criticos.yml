@@ -27,6 +27,7 @@ on:
       - fix/recorrido-27-partidas
 
       - feature/reporte-v1-identidad-qr-watermark
+      - feature/pdf-calidad-paginacion-v1
 
 jobs:
   typecheck:
