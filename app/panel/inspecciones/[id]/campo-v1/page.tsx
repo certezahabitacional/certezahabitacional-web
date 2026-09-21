@@ -115,12 +115,8 @@ export default async function CampoV1Page({ params, searchParams }: {
   `;
 
   const areaActiva = areas.find((a) => a.estado !== "REVISADA") ?? null;
-  if (query.area && areaActiva) {
-    const solicitada = areas.find((a) => a.id === query.area);
-    if (solicitada && solicitada.estado !== "REVISADA" && solicitada.id !== areaActiva.id) {
-      redirect(`/panel/inspecciones/${id}/campo-v1?area=${areaActiva.id}&error=${encodeURIComponent("Debes concluir al 100% el punto de área activo antes de avanzar al siguiente.")}`);
-    }
-  }
+  // El Inspector puede consultar cualquiera de las partidas 9 en adelante.
+  // La captura permanece habilitada únicamente en la partida activa para conservar la secuencia.
   const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areaActiva ?? areas[0];
   const puntos = areaSeleccionada ? await prisma.$queryRaw<PuntoArea[]>`
     SELECT
@@ -133,6 +129,16 @@ export default async function CampoV1Page({ params, searchParams }: {
     WHERE g."areaId"=${areaSeleccionada.id}::uuid
     ORDER BY g."orden",g."concepto"
   ` : [];
+
+  const conceptosCriticos = await prisma.$queryRaw<Array<{ total: number }>>`
+    SELECT COUNT(*)::int AS "total"
+    FROM "GuiaInspeccionItem"
+    WHERE "inspeccionId"=${id}
+      AND "area" LIKE '__PUNTO_CRITICO__:%'
+      AND "concepto" NOT ILIKE '%manómetro%'
+      AND "concepto" NOT ILIKE '%lectura final%'
+  `;
+  const totalConceptosCriticos = Number(conceptosCriticos[0]?.total ?? 0);
 
   const totalPuntos = areas.reduce((s, a) => s + Number(a.puntos), 0);
   const totalPendientes = areas.reduce((s, a) => s + Number(a.pendientes), 0);
@@ -152,10 +158,10 @@ export default async function CampoV1Page({ params, searchParams }: {
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · 27 PARTIDAS</p>
+          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
           <div className="flex flex-wrap items-center gap-2">
             {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE 27 PARTIDAS</Link>
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE {totalRecorrido} PARTIDAS</Link>
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
           </div>
         </div>
@@ -169,6 +175,22 @@ export default async function CampoV1Page({ params, searchParams }: {
         </div>
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
+
+        <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 3 · DESARROLLO DE LA INSPECCIÓN</p>
+              <h2 className="mt-1 text-xl font-black">Acceso a todas las partidas del recorrido</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-400">Puedes consultar cualquier partida. La captura se conserva en secuencia para evitar omisiones.</p>
+            </div>
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-xl border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE {totalRecorrido} PARTIDAS</Link>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl border border-white/10 bg-slate-950 p-3 text-xs font-black"><span className="block text-[10px] text-slate-500">PARTIDA 1</span>Pruebas de hermeticidad</Link>
+            {PUNTOS_CRITICOS_V1.map((punto,index)=><Link key={punto.codigo} href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`} className="rounded-xl border border-white/10 bg-slate-950 p-3 text-xs font-black"><span className="block text-[10px] text-slate-500">PARTIDA {index+2}</span>{punto.etiqueta}</Link>)}
+            {areas.map((area,index)=><Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="rounded-xl border border-white/10 bg-slate-950 p-3 text-xs font-black"><span className="block text-[10px] text-slate-500">PARTIDA {index+9}</span>{area.nombre}</Link>)}
+          </div>
+        </section>
 
         <section className="mt-6 grid gap-3 sm:grid-cols-4">
           <Card titulo="Partidas físicas cerradas" valor={`${cerradas}/${areas.length}`} />
@@ -249,7 +271,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                           ? "CERRADA 100% · EDITABLE"
                           : activa
                             ? `${area.pendientes} pendientes`
-                            : "BLOQUEADO"}
+                            : "PENDIENTE · CONSULTA"}
                     </span>
                   </div>
                   <p className="mt-1 font-black">{area.nombre}</p>
@@ -261,11 +283,9 @@ export default async function CampoV1Page({ params, searchParams }: {
                 : cerrada
                   ? "border-emerald-400/15 bg-emerald-400/5"
                   : bloqueada
-                    ? "cursor-not-allowed border-white/5 bg-slate-950 text-slate-700"
+                    ? "border-white/10 bg-slate-950 text-slate-400"
                     : "border-amber-300/20 bg-amber-300/5"}`;
-              return bloqueada ? (
-                <div key={area.id} className={clases} aria-disabled="true">{contenido}</div>
-              ) : (
+              return (
                 <Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className={clases}>{contenido}</Link>
               );
             })}
@@ -275,7 +295,7 @@ export default async function CampoV1Page({ params, searchParams }: {
             {!areaSeleccionada ? <div className="rounded-3xl border border-white/10 bg-slate-900 p-8 text-slate-400">Aún no existen áreas para V1.</div> : (
               <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">{numeroAreaActiva ? `Punto ${numeroAreaActiva} de ${totalRecorrido}` : "Área activa"}</p><h2 className="mt-1 text-2xl font-black">{areaSeleccionada.nombre}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} conceptos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
+                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">{numeroAreaActiva ? `Partida ${numeroAreaActiva} de ${totalRecorrido}` : "Partida activa"}</p><h2 className="mt-1 text-2xl font-black">{areaSeleccionada.nombre}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} conceptos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
                   {areaSeleccionada.resultado && <span className={`rounded-full px-3 py-2 text-xs font-black ${areaSeleccionada.resultado === "NO_APLICA" ? "bg-slate-300/10 text-slate-300" : "bg-emerald-300/10 text-emerald-300"}`}>{areaSeleccionada.resultado === "NO_APLICA" ? "PARTIDA DESHABILITADA" : areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
                 </div>
 
@@ -300,6 +320,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                       inspeccionId={id}
                       areaId={areaSeleccionada.id}
                       punto={punto}
+                      numeroConcepto={2 + totalConceptosCriticos + areas.slice(0, Math.max(indiceAreaActiva,0)).reduce((s,a)=>s+Number(a.puntos),0) + puntos.findIndex((x)=>x.id===punto.id) + 1}
                       puedeCapturar={puedeCapturar}
                       areaActiva={areaSeleccionada.id === areaActivaId}
                     />
