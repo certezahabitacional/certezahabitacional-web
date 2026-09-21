@@ -203,6 +203,40 @@ export default async function AreasPage({
           <Resumen titulo="Avance" valor={`${avance}%`} />
         </section>
 
+        <section className="mt-7 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-5 sm:p-6">
+          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-300">
+            Partidas 1 a 8 · acceso permanente
+          </p>
+          <h2 className="mt-2 text-2xl font-black">Instalaciones y pruebas técnicas</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Estas partidas forman parte del mismo recorrido. Puedes regresar a cualquiera ya inspeccionada para consultar o corregir su captura; las partidas físicas continúan a partir de la 9.
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-4">
+              <span className="text-xs font-black text-slate-500">PARTIDA 1</span>
+              <p className="mt-1 font-black text-emerald-200">Pruebas de hermeticidad</p>
+            </Link>
+            {[
+              ["HIDRAULICA", "Instalación hidráulica"],
+              ["SANITARIA", "Instalación sanitaria"],
+              ["PLUVIAL", "Instalación pluvial"],
+              ["GAS", "Instalación de gas"],
+              ["DUCTOS", "Instalación de ductos"],
+              ["ELECTRICA", "Instalación eléctrica"],
+              ["LOSAS_AZOTEA", "Losas de azotea"],
+            ].map(([codigo, nombre], index) => (
+              <Link
+                key={codigo}
+                href={`/panel/inspecciones/${id}/puntos-criticos?punto=${codigo}`}
+                className="rounded-2xl border border-white/10 bg-slate-900 p-4 hover:border-cyan-300/30"
+              >
+                <span className="text-xs font-black text-slate-500">PARTIDA {index + 2}</span>
+                <p className="mt-1 font-black text-cyan-200">{nombre}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         {puedeCapturar && areas.length === 0 && (
           <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
             <h2 className="text-xl font-black">Definir puntos de área del recorrido</h2>
