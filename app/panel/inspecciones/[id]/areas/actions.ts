@@ -26,6 +26,41 @@ function slug(valor: string) {
     .slice(0, 80);
 }
 
+type SnapshotCotizacion = Record<string, unknown>;
+
+function numeroSnapshot(valor: unknown) {
+  const n = Number(String(valor ?? "").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function snapshotCotizacionV1(inspeccionId: string): Promise<SnapshotCotizacion> {
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id: inspeccionId },
+    select: {
+      cotizacion: {
+        select: {
+          versiones: {
+            orderBy: { version: "desc" },
+            take: 1,
+            select: { datos: true },
+          },
+        },
+      },
+    },
+  });
+  const datos = inspeccion?.cotizacion?.versiones[0]?.datos;
+  return datos && typeof datos === "object" && !Array.isArray(datos)
+    ? (datos as SnapshotCotizacion)
+    : {};
+}
+
+function alcanceDinamicoCotizacion(snapshot: SnapshotCotizacion) {
+  const niveles = Math.max(0, Math.floor(numeroSnapshot(snapshot.niveles)));
+  const escalera = niveles > 1 || snapshot.escalera === true;
+  const balcon = snapshot.balcon === true;
+  return { niveles, escalera, balcon };
+}
+
 function prioridadRutaArea(nombre: string, codigo: string) {
   const n = slug(`${nombre} ${codigo}`);
 
@@ -213,6 +248,8 @@ export async function generarAreasDesdeGuia(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  const snapshot = await snapshotCotizacionV1(inspeccionId);
+  const alcance = alcanceDinamicoCotizacion(snapshot);
 
   const items = await prisma.$queryRaw<Array<{ area: string }>>`
     SELECT DISTINCT btrim("area") AS "area"
@@ -243,15 +280,29 @@ export async function generarAreasDesdeGuia(formData: FormData) {
       `;
     }
     let orden = 100;
-    for (const item of items) {
-      const nombre = item.area.trim();
-      if (!nombre) continue;
-      const codigoBase = slug(nombre) || `AREA_${orden}`;
+    const areasGuia = new Set(items.map((item) => slug(item.area.trim())).filter(Boolean));
+
+    // La cotización manda el alcance físico: una vivienda de más de un nivel
+    // incorpora Escalera aunque la guía no la haya materializado todavía.
+    // Balcón solo se incorpora cuando fue declarado expresamente en la cotización.
+    if (alcance.escalera) areasGuia.add("ESCALERA");
+    else areasGuia.delete("ESCALERA");
+
+    if (alcance.balcon) areasGuia.add("BALCON");
+    else areasGuia.delete("BALCON");
+
+    for (const codigoBase of areasGuia) {
       if (/^FACHADA(_|$)/.test(codigoBase)) continue;
       const codigo = codigoBase;
+      const nombre =
+        codigo === "ESCALERA" ? "Escalera" :
+        codigo === "BALCON" ? "Balcón" :
+        items.find((item) => slug(item.area.trim()) === codigo)?.area.trim() ??
+        codigo.replaceAll("_", " ").toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
+
       await tx.$executeRaw`
         INSERT INTO "AreaInspeccion" ("inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria")
-        VALUES (${inspeccionId},${codigo},${nombre},'INTERIOR',${orden},'GUIA_TECNICA',true)
+        VALUES (${inspeccionId},${codigo},${nombre},'INTERIOR',${orden},'COTIZACION_GUIA',true)
         ON CONFLICT ("inspeccionId","codigo") DO NOTHING
       `;
       orden += 10;
@@ -269,7 +320,11 @@ export async function generarAreasDesdeGuia(formData: FormData) {
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
-  volver(inspeccionId, "ok", "Áreas generadas desde la guía técnica. Revísalas y agrega manualmente cualquier área física faltante antes de confirmar.");
+  volver(
+    inspeccionId,
+    "ok",
+    `Áreas generadas conforme a cotización y guía técnica. Niveles declarados: ${alcance.niveles || "sin dato"} · Escalera: ${alcance.escalera ? "incluida" : "no aplica"} · Balcón: ${alcance.balcon ? "incluido" : "no aplica"}. Revisa antes de confirmar.`,
+  );
 }
 
 export async function agregarAreaManual(formData: FormData) {

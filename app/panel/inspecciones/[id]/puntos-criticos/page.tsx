@@ -356,9 +356,9 @@ export default async function PuntosCriticosPage({
       <RestaurarFocoConcepto itemId={query.foco} />
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · 27 PARTIDAS</p>
+          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
           <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">
-            Consultar plan de 27 partidas
+            Consultar plan de {totalRecorrido} partidas
           </Link>
         </div>
 

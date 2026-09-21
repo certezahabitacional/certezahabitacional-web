@@ -52,8 +52,12 @@ function inferirCodigosPartidas(snapshot: Snapshot) {
   if (booleano(snapshot, "sala")) codigos.push("SALA");
   if (booleano(snapshot, "comedor")) codigos.push("COMEDOR");
   if (booleano(snapshot, "cocina")) codigos.push("COCINA");
-  if (booleano(snapshot, "estancia")) codigos.push("ESTANCIA");
   if (booleano(snapshot, "areaLavado") || booleano(snapshot, "lavadero")) codigos.push("LAVANDERIA");
+
+  const niveles = Math.max(0, Math.floor(numero(snapshot.niveles)));
+  if (niveles > 1 || booleano(snapshot, "escalera")) codigos.push("ESCALERA");
+
+  if (booleano(snapshot, "estancia")) codigos.push("ESTANCIA");
   if (booleano(snapshot, "cochera")) codigos.push("COCHERA");
   if (booleano(snapshot, "patio")) codigos.push("PATIO");
   if (booleano(snapshot, "jardin")) codigos.push("JARDIN");
@@ -75,8 +79,6 @@ function inferirCodigosPartidas(snapshot: Snapshot) {
   for (let i = 0; i < completos; i += 1) codigos.push("BANO_COMPLETO");
   if (medio) codigos.push("MEDIO_BANO");
 
-  const niveles = Math.max(0, Math.floor(numero(snapshot.niveles)));
-  if (niveles > 1) codigos.push("ESCALERA");
 
   const otros = String(snapshot.otrosEspacios ?? "").trim();
   if (otros) {
