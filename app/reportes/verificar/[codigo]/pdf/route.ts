@@ -101,7 +101,7 @@ export async function GET(
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  let page: PDFPage;
+  let page!: PDFPage;
   let y = 0;
 
   const newPage = (title?: string) => {
