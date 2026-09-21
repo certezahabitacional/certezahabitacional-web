@@ -318,5 +318,5 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
   revalidatePath("/panel/inspecciones");
   revalidatePath("/panel/agenda");
-  redirect(inspeccion.numeroInspeccion === 1 ? `/panel/inspecciones/${inspeccionId}/areas` : `/panel/inspecciones/${inspeccionId}/captura`);
+  redirect(inspeccion.numeroInspeccion === 1 ? `/panel/inspecciones/${inspeccionId}/flujo` : `/panel/inspecciones/${inspeccionId}/captura`);
 }
