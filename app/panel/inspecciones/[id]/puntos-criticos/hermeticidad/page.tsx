@@ -55,6 +55,7 @@ type Observacion = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
   clasificacionSugerida?: string;
   justificacionIa?: string;
   lecturaFinalPropuesta?: string;
@@ -484,14 +485,13 @@ export default async function HermeticidadPage({
                                 La IA sirve como propuesta técnica. Este campo es la interpretación final que quedará en el reporte; puede conservarse tal cual o ajustarse por el Inspector.
                               </p>
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <select name="clasificacion" defaultValue={obs.clasificacionSugerida ?? "C"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
+                                <select name="clasificacion" defaultValue={obs.clasificacionFinal ?? obs.clasificacionSugerida ?? "C"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
                                   <option value="C">C · Conforme</option>
                                   <option value="O">O · Observación</option>
                                   <option value="NC">NC · No conformidad</option>
                                   <option value="CR">CR · Crítico</option>
-                                  <option value="NA">NA · No aplica</option>
                                 </select>
-                                <select name="prioridad" defaultValue="P3" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
+                                <select name="prioridad" defaultValue={obs.prioridadFinal ?? "P3"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
                                   <option value="P1">P1</option>
                                   <option value="P2">P2</option>
                                   <option value="P3">P3</option>
@@ -499,6 +499,11 @@ export default async function HermeticidadPage({
                                   <option value="P5">P5</option>
                                 </select>
                               </div>
+                              <label className="mt-3 block text-xs font-black uppercase tracking-wider text-emerald-200">
+                                Evaluación final de la prueba · 0 a 100
+                                <input type="number" name="calificacionFinal" required min={0} max={100} step={1} defaultValue={obs.calificacionFinal ?? 100} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
+                              </label>
+                              <p className="mt-2 text-xs leading-5 text-slate-400">SH = 100. Si la prueba presenta hallazgo, la evaluación debe quedar entre 0 y 99 conforme a la interpretación final.</p>
                               <button disabled={!obs.descripcionIa} className="mt-3 w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
                                 {obs.descripcionIa ? "REGISTRAR LECTURA FINAL Y CERRAR PRUEBA" : "GENERA PRIMERO LA INTERPRETACIÓN IA"}
                               </button>
