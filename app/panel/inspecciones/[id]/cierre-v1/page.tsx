@@ -231,7 +231,7 @@ export default async function CierreV1Page({ params, searchParams }: {
               </Link>
               {preReporteRevisado && (
                 <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="ml-3 inline-block rounded-xl border border-violet-300/30 px-4 py-3 text-sm font-black text-violet-200">
-                  PASAR A ÚLTIMA REVISIÓN Y AJUSTE
+                  PASAR A REVISIÓN Y AJUSTES
                 </Link>
               )}
             </div>
@@ -266,13 +266,13 @@ export default async function CierreV1Page({ params, searchParams }: {
         )}
 
         {campoTerminado && (
-          <section className={`mt-5 rounded-3xl border p-6 ${vencido ? "border-rose-300/20 bg-rose-300/5" : "border-cyan-300/20 bg-cyan-300/5"}`}>
+          <section id="envio-autorizacion" className={`scroll-mt-24 mt-5 rounded-3xl border p-6 ${vencido ? "border-rose-300/20 bg-rose-300/5" : "border-cyan-300/20 bg-cyan-300/5"}`}>
             <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Etapa 3 · última revisión del Inspector</p>
             <h2 className="mt-2 text-2xl font-black">{vencido ? "Plazo objetivo vencido" : `${horasRestantes} h ${mins} min restantes`}</h2>
             {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Consultar PRE REPORTE integral</Link>
-              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-4 py-3 text-sm font-black text-slate-950">ÚLTIMA REVISIÓN Y AJUSTE</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">CONSULTAR PRE REPORTE</Link>
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-4 py-3 text-sm font-black text-slate-950">REVISIÓN Y AJUSTES</Link>
               <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">AJUSTAR EVIDENCIAS</Link>
             </div>
             {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
@@ -280,7 +280,7 @@ export default async function CierreV1Page({ params, searchParams }: {
                 <form action={confirmarRevisionFinalInspectorV1} className="mt-5">
                   <input type="hidden" name="inspeccionId" value={id}/>
                   <button disabled={!firmasListas || revisionInspectorFinal} className="w-full rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
-                    {revisionInspectorFinal ? "REVISIÓN FINAL DEL INSPECTOR CONFIRMADA ✓" : "CONFIRMAR ÚLTIMA REVISIÓN Y AJUSTE DEL INSPECTOR"}
+                    {revisionInspectorFinal ? "REVISIÓN FINAL DEL INSPECTOR CONFIRMADA ✓" : "CONFIRMAR REVISIÓN Y AJUSTES DEL INSPECTOR"}
                   </button>
                 </form>
                 <form action={enviarReporteDireccionV1} className="mt-3">
