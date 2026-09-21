@@ -82,6 +82,8 @@ type ObservacionConcepto = {
   prioridadFinal?: string;
   calificacionFinal?: number;
   evaluacionFinal?: number;
+  justificacionCalificacionIa?: string;
+  prioridadEvaluadaIa?: string;
 };
 type SnapshotCotizacion = Record<string, unknown>;
 type AutorizacionDireccion = { nombre: string; creadaEn: Date };
@@ -637,9 +639,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
                       {(g.valorMedido||g.valorProyecto)&&<p className="mt-3 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Referencia/proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
                       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-600">
                         <span>Clasificación: {obs.clasificacionFinal??ev.hallazgo?.clasificacion??(tieneHallazgo?"—":"SIN HALLAZGO")}</span>
-                        <span>Prioridad: {tieneHallazgo ? (obs.prioridadFinal??ev.hallazgo?.prioridad??"—") : "—"}</span>
-                        <span>Evaluación: {ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
+                        <span>Prioridad elegida por el Inspector: {tieneHallazgo ? (obs.prioridadFinal??ev.hallazgo?.prioridad??"—") : "—"}</span>
+                        <span>Evaluación IA: {ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
                       </div>
+                      {obs.justificacionCalificacionIa&&<p className="mt-2 text-xs leading-5 text-slate-500"><strong>Criterio de calificación IA:</strong> {obs.justificacionCalificacionIa}</p>}
                       {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${g.id}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
                     </section>;
                   })}
