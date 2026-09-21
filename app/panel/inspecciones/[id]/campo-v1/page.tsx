@@ -152,26 +152,26 @@ export default async function CampoV1Page({ params, searchParams }: {
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo V1</Link>
+          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · 27 PARTIDAS</p>
           <div className="flex flex-wrap items-center gap-2">
             {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">PLAN DE INSPECCIÓN</Link>
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE 27 PARTIDAS</Link>
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
           </div>
         </div>
 
         <div className="mt-6">
           <p className="text-xs font-black uppercase tracking-[.22em] text-emerald-300">
-            {numeroAreaActiva ? `RECORRIDO TÉCNICO · PUNTO ${numeroAreaActiva} DE ${totalRecorrido}` : "RECORRIDO TÉCNICO"}
+            {numeroAreaActiva ? `RECORRIDO TÉCNICO · PARTIDA ${numeroAreaActiva} DE ${totalRecorrido}` : "RECORRIDO TÉCNICO"}
           </p>
-          <h1 className="mt-2 text-3xl font-black">Recorrido guiado por puntos de área</h1>
+          <h1 className="mt-2 text-3xl font-black">Recorrido guiado por partidas</h1>
           <p className="mt-2 text-sm text-slate-400">{inspeccion.folio} · {inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? inspeccion.inmueble?.direccion ?? "Inmueble"}</p>
         </div>
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
 
         <section className="mt-6 grid gap-3 sm:grid-cols-4">
-          <Card titulo="Puntos de área cerrados" valor={`${cerradas}/${areas.length}`} />
+          <Card titulo="Partidas físicas cerradas" valor={`${cerradas}/${areas.length}`} />
           <Card titulo="Puntos del plan" valor={String(totalPuntos)} />
           <Card titulo="Pendientes" valor={String(totalPendientes)} />
           <Card titulo="Avance" valor={`${avance}%`} />
