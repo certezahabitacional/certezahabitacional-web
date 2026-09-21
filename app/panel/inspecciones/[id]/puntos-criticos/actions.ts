@@ -47,6 +47,7 @@ type ObservacionItemCritico = {
   descripcionFinal?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
+  calificacionFinal?: number;
   lecturaFinalPropuesta?: string;
   unidadFinalPropuesta?: string;
   variacionPresion?: string;
@@ -1282,6 +1283,8 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
   const prioridadTexto = texto(formData, "prioridad").toUpperCase();
+  const calificacionTexto = texto(formData, "calificacionFinal");
+  const calificacionFinal = Number(calificacionTexto);
   const retorno = texto(formData, "retorno");
 
   if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
@@ -1295,8 +1298,11 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
   const lecturaFinalNumero = numeroLectura(lecturaFinal);
   if (lecturaFinalNumero === null) volver(inspeccionId, codigo, "error", "La lectura final debe ser un valor numérico válido.");
   if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Describe el resultado o hallazgo de la prueba con al menos 10 caracteres.");
-  if (!["C","O","NC","CR","NA"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
-  if (!["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona una prioridad válida.");
+  if (!["C","O","NC","CR"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
+  if (!Number.isFinite(calificacionFinal) || calificacionFinal < 0 || calificacionFinal > 100) volver(inspeccionId, codigo, "error", "Registra una evaluación final entre 0 y 100.");
+  if (clasificacionTexto === "C" && calificacionFinal !== 100) volver(inspeccionId, codigo, "error", "Una prueba Conforme debe registrarse como SH = 100.");
+  if (clasificacionTexto !== "C" && calificacionFinal >= 100) volver(inspeccionId, codigo, "error", "Una prueba con hallazgo debe evaluarse entre 0 y 99.");
+  if (clasificacionTexto !== "C" && !["P1","P2","P3","P4","P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona una prioridad válida para el hallazgo.");
 
   const [paso] = await prisma.$queryRaw<Array<{
     datos: unknown;
@@ -1386,7 +1392,8 @@ export async function cerrarPruebaProlongadaV1(formData: FormData) {
     verificacionesSugeridas: interpretacionIa.verificacionesSugeridas,
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
-    prioridadFinal: prioridadTexto,
+    prioridadFinal: clasificacionTexto === "C" ? undefined : prioridadTexto,
+    calificacionFinal,
     actualizadoEn: new Date().toISOString(),
   });
   const clasificacion = clasificacionTexto as ClasificacionHallazgo;
@@ -1644,14 +1651,19 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   const descripcionFinal = texto(formData, "descripcionFinal");
   const clasificacionTexto = texto(formData, "clasificacion").toUpperCase();
   const prioridadTexto = texto(formData, "prioridad").toUpperCase();
+  const calificacionTexto = texto(formData, "calificacionFinal");
+  const calificacionFinal = Number(calificacionTexto);
   const valorMedido = texto(formData, "valorMedido");
   const valorProyecto = texto(formData, "valorProyecto");
   const unidadMedida = texto(formData, "unidadMedida");
   if (!inspeccionId || !esCodigo(codigoTexto) || !itemId) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
-  if (!["C", "O", "NC", "CR", "NA"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
-  if (!["P1", "P2", "P3", "P4", "P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona un nivel de prioridad válido.");
+  if (!["C", "O", "NC", "CR"].includes(clasificacionTexto)) volver(inspeccionId, codigo, "error", "Selecciona una clasificación válida.");
+  if (!Number.isFinite(calificacionFinal) || calificacionFinal < 0 || calificacionFinal > 100) volver(inspeccionId, codigo, "error", "Registra una evaluación final entre 0 y 100.");
+  if (clasificacionTexto === "C" && calificacionFinal !== 100) volver(inspeccionId, codigo, "error", "Un concepto Conforme debe registrarse como SH = 100.");
+  if (clasificacionTexto !== "C" && calificacionFinal >= 100) volver(inspeccionId, codigo, "error", "Un concepto con hallazgo debe evaluarse entre 0 y 99.");
+  if (clasificacionTexto !== "C" && !["P1", "P2", "P3", "P4", "P5"].includes(prioridadTexto)) volver(inspeccionId, codigo, "error", "Selecciona un nivel de prioridad válido para el hallazgo.");
   if (descripcionFinal.length < 10) volver(inspeccionId, codigo, "error", "Confirma una interpretación o comentario técnico de al menos 10 caracteres.");
 
   const [item] = await prisma.$queryRaw<Array<{
@@ -1703,7 +1715,8 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     ...anterior,
     descripcionFinal,
     clasificacionFinal: clasificacionTexto,
-    prioridadFinal: prioridadTexto,
+    prioridadFinal: clasificacionTexto === "C" ? undefined : prioridadTexto,
+    calificacionFinal,
     actualizadoEn: new Date().toISOString(),
   };
 
@@ -1778,7 +1791,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     entidadId: itemId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} cerró el concepto crítico “${item.concepto}” con clasificación ${clasificacionTexto}, prioridad ${prioridadTexto} y ${requeridasItem} evidencia(s).`,
+    descripcion: `${responsable} cerró el concepto crítico “${item.concepto}” con clasificación ${clasificacionTexto}, evaluación ${calificacionFinal}/100${clasificacionTexto === "C" ? "" : `, prioridad ${prioridadTexto}`} y ${requeridasItem} evidencia(s).`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
