@@ -34,12 +34,29 @@ export default async function FlujoV1Page({
     redirect(`/panel/inspecciones/${id}/captura`);
   }
 
-  const [control] = await prisma.$queryRaw<Array<{ proyectoConfirmado: boolean; areasConfirmadas: boolean }>>`
-    SELECT "proyectoConfirmado","areasConfirmadas"
+  const [control] = await prisma.$queryRaw<Array<{
+    proyectoConfirmado: boolean;
+    areasConfirmadas: boolean;
+    inspeccionTecnicaConcluidaEn: Date | null;
+    preReporteGeneradoEn: Date | null;
+    campoFinalizadoEn: Date | null;
+    revisionInspectorFinalEn: Date | null;
+  }>>`
+    SELECT "proyectoConfirmado","areasConfirmadas","inspeccionTecnicaConcluidaEn","preReporteGeneradoEn","campoFinalizadoEn","revisionInspectorFinalEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${id}
     LIMIT 1
   `;
+
+  if (control?.revisionInspectorFinalEn || control?.campoFinalizadoEn) {
+    redirect(`/panel/inspecciones/${id}/cierre-v1`);
+  }
+  if (control?.preReporteGeneradoEn) {
+    redirect(`/panel/inspecciones/${id}/revision-final-inspector`);
+  }
+  if (control?.inspeccionTecnicaConcluidaEn) {
+    redirect(`/panel/inspecciones/${id}/reporte-v1`);
+  }
 
   if (!control?.proyectoConfirmado) {
     redirect(`/panel/inspecciones/${id}/proyecto-v1`);
@@ -95,6 +112,19 @@ export default async function FlujoV1Page({
   }
 
   if (control?.areasConfirmadas) {
+    const [totalesAreas] = await prisma.$queryRaw<Array<{ total: number; completas: number }>>`
+      SELECT COUNT(*)::int AS "total",
+             COUNT(*) FILTER (WHERE "estado"='REVISADA')::int AS "completas"
+      FROM "AreaInspeccion"
+      WHERE "inspeccionId"=${id} AND "tipo" <> 'PUNTO_CRITICO'
+    `;
+    const criticosListos = pasos.every((paso) => paso.estado === "COMPLETADO" || paso.estado === "NO_APLICA" || (
+      ["PC_HIDRAULICA","PC_GAS"].includes(paso.clave) && paso.pruebaProlongada && Boolean(paso.lecturaInicial) && Number(paso.pendientesNormales) === 0
+    ));
+    if (criticosListos && Number(totalesAreas?.total ?? 0) > 0 && Number(totalesAreas?.total ?? 0) === Number(totalesAreas?.completas ?? 0)) {
+      redirect(`/panel/inspecciones/${id}/cierre-v1`);
+    }
+
     const [areaActiva] = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT "id"::text
       FROM "AreaInspeccion"
