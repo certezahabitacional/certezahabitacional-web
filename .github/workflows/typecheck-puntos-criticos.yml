@@ -24,6 +24,7 @@ on:
       - fix/pre-reporte-punto4-cotizacion
       - fix/pre-reporte-punto4-definitivo
       - fix/partidas-1-8-recorrido-reporte
+      - fix/recorrido-27-partidas
 
 jobs:
   typecheck:

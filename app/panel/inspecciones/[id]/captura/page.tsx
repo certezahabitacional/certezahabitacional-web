@@ -149,6 +149,12 @@ export default async function CapturaPage({
     notFound();
   }
 
+  // V1 usa exclusivamente el recorrido unificado de 27 partidas.
+  // La captura legacy se conserva solo para inspecciones de seguimiento (V2+).
+  if (inspeccion.numeroInspeccion === 1) {
+    redirect(`/panel/inspecciones/${id}/flujo`);
+  }
+
   const esSeguimiento = inspeccion.numeroInspeccion > 1;
   const areasV1 = !esSeguimiento
     ? await prisma.$queryRaw<Array<{ nombre: string }>>`

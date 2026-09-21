@@ -185,6 +185,13 @@ export default async function ProyectoV1Page({
   ]);
 
   const control = controlRows[0] ?? null;
+
+  // El proyecto es una etapa de preparación de una sola vez.
+  // Si ya fue confirmado, un enlace guardado o antiguo debe volver al recorrido vigente.
+  if (control?.proyectoConfirmado) {
+    redirect(`/panel/inspecciones/${id}/flujo`);
+  }
+
   const guardado = resumenProyectoGuardado(control?.resumenEstadistico);
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId && Boolean(usuario.inspector?.activo);
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;

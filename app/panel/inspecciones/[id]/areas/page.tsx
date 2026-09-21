@@ -145,6 +145,13 @@ export default async function AreasPage({
   ]);
 
   const control = controlRows[0] ?? null;
+
+  // Esta pantalla queda reservada a la preparación del recorrido.
+  // Una vez confirmadas las áreas, cualquier enlace antiguo regresa al recorrido unificado.
+  if (control?.areasConfirmadas) {
+    redirect(`/panel/inspecciones/${id}/campo-v1`);
+  }
+
   if (inspeccion.estado === EstadoInspeccion.EN_PROCESO && !control?.proyectoConfirmado) {
     redirect(`/panel/inspecciones/${id}/proyecto-v1`);
   }
@@ -179,8 +186,7 @@ export default async function AreasPage({
           <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente</Link>
           <div className="flex flex-wrap gap-2">
             {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
-            <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300">Recorrido V1</Link>
-            <Link href={`/panel/inspecciones/${id}/protocolo`} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-amber-300">Protocolo V1</Link>
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Plan de 27 partidas</Link>
           </div>
         </div>
 
