@@ -54,6 +54,8 @@ on:
 
       - fix/revision-director-y-liberacion-cliente
 
+      - fix/firmas-y-accion-autorizacion-reporte
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
