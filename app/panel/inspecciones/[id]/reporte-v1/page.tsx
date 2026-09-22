@@ -600,6 +600,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
       .report-section h4{font-size:14px!important;line-height:1.35!important}
+      .report-section{align-content:start!important}
+      .signature-pair{align-items:start!important}
+      .signature-card{align-self:start!important}
+      .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
       .inspection-pair.three{grid-template-columns:repeat(3,minmax(0,1fr))}
       .inspection-point-card{padding:12px!important}
@@ -660,7 +664,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
                 {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR PRE REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR PRE REPORTE</div>}
-                {esInspector ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button disabled={!preReportePosteriorAFirmas} className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-30">AUTORIZACIÓN DEL REPORTE</button></form> : <Link href={`/panel/inspecciones/${id}/revision`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">REVISIÓN DE DIRECCIÓN</Link>}
+                {esInspector ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button disabled={!preReportePosteriorAFirmas} className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-30">AUTORIZACIÓN DEL REPORTE</button></form> : <div className="grid gap-2"><div className="rounded-xl border-2 border-cyan-800 px-5 py-4 text-center text-sm font-black text-cyan-900">AUTORIZACIÓN DEL REPORTE · LA SOLICITA EL INSPECTOR</div><Link href={`/panel/inspecciones/${id}/revision`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">REVISIÓN DE DIRECCIÓN</Link></div>}
               </div>
               {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Regenera el PRE REPORTE después de las firmas y de la última revisión antes de enviarlo a Dirección.</p>}
             </>
@@ -879,8 +883,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-firmas" n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
           <p className="mb-6 text-sm leading-7 text-slate-700">Las firmas registradas quedan asociadas al expediente de la inspección y forman parte de la trazabilidad documental. En el pre-reporte se muestran las firmas vigentes del Inspector y del Cliente cuando ya fueron capturadas en el sistema.</p>
-          <div className="grid items-stretch gap-6 sm:grid-cols-2">
-            <article data-page-unit className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
+          <div data-page-unit className="signature-pair grid items-start gap-6 sm:grid-cols-2">
+            <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Inspector</p>
               <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
                 {firmaInspector?.imagenUrl?<img src={firmaInspector.imagenUrl} alt="Firma del Inspector" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
@@ -890,7 +894,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaInspector?.firmadaEn)}</p>
               </div>
             </article>
-            <article data-page-unit className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
+            <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Cliente</p>
               <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
                 {firmaCliente?.imagenUrl?<img src={firmaCliente.imagenUrl} alt="Firma del Cliente" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
