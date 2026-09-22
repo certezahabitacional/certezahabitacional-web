@@ -32,11 +32,30 @@ export default function ReportPageGuides({
         );
 
         for (const el of candidatos) el.style.marginTop = "";
+        const encabezados = Array.from(root.querySelectorAll<HTMLElement>(".partida-header"));
+        for (const el of encabezados) el.style.marginTop = "";
 
         const rootTop = root.getBoundingClientRect().top + window.scrollY;
 
         for (let pasada = 0; pasada < 5; pasada += 1) {
           let cambio = false;
+
+          for (const encabezado of encabezados) {
+            const siguiente = encabezado.parentElement?.querySelector<HTMLElement>(".inspection-pair");
+            if (!siguiente) continue;
+            const er = encabezado.getBoundingClientRect();
+            const sr = siguiente.getBoundingClientRect();
+            const top = er.top + window.scrollY - rootTop;
+            const altoCombinado = (sr.bottom - er.top);
+            const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
+            const offset = top - pagina * PAGE_HEIGHT;
+            const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
+            if (altoCombinado <= PAGE_HEIGHT - TOP_SAFE - BOTTOM_SAFE && offset + altoCombinado > finSeguro) {
+              const salto = PAGE_HEIGHT - offset + TOP_SAFE;
+              encabezado.style.marginTop = `${salto}px`;
+              cambio = true;
+            }
+          }
 
           for (const el of candidatos) {
             const rect = el.getBoundingClientRect();
