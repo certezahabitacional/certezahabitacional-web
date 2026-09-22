@@ -36,6 +36,8 @@ on:
 
       - fix/congruencia-27-partidas-reporte-paginacion
 
+      - fix/firmas-qr-resumen-paginacion-v1
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
