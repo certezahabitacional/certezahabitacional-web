@@ -9,6 +9,7 @@ import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import { DATOS_DOCUMENTALES, contactoDocumentoPorZona, datosContactoDocumento } from "@/lib/datos-documentales";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import IndicePaginasReporte from "@/components/reportes/IndicePaginasReporte";
+import ReportPageGuides from "@/components/reportes/ReportPageGuides";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { evaluarPromedioV1, referenciaPrioridadV1 } from "@/lib/evaluacion-reporte-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
@@ -541,6 +542,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
       .report-section h4{font-size:14px!important;line-height:1.35!important}
+      @media screen{
+        .report-section.page-break{margin-top:24px;border-top:3px dashed #94a3b8;box-shadow:0 -10px 0 #e2e8f0}
+        .report-section.page-break::before{content:"SALTO DE PÁGINA";position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#e2e8f0;color:#475569;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.12em;z-index:30}
+        #sec-certificado.page-break{margin-top:24px;border-top:3px dashed #94a3b8;box-shadow:0 -10px 0 #e2e8f0}
+        #sec-certificado.page-break::before{content:"SALTO DE PÁGINA";position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#e2e8f0;color:#475569;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.12em;z-index:30}
+      }
       @media print{
         html,body{background:#fff!important}
         .no-print{display:none!important}
@@ -594,6 +601,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </section>
       )}
       <article data-report-root className="report-body relative mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
+        <ReportPageGuides />
         {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
         <section className="relative min-h-[245mm] bg-slate-950 p-6 text-white">
           {!autorizado && <div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}
@@ -787,22 +795,26 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-firmas" n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
           <p className="mb-6 text-sm leading-7 text-slate-700">Las firmas registradas quedan asociadas al expediente de la inspección y forman parte de la trazabilidad documental. En el pre-reporte se muestran las firmas vigentes del Inspector y del Cliente cuando ya fueron capturadas en el sistema.</p>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <article className="signature-card rounded-3xl border border-slate-200 p-5 text-center">
+          <div className="grid items-stretch gap-6 sm:grid-cols-2">
+            <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Inspector</p>
               <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
                 {firmaInspector?.imagenUrl?<img src={firmaInspector.imagenUrl} alt="Firma del Inspector" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
               </div>
-              <p className="mt-4 font-black">{firmaInspector?.nombreFirmante ?? inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}</p>
-              <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaInspector?.firmadaEn)}</p>
+              <div className="mt-auto min-h-[58px] pt-4">
+                <p className="font-black">{firmaInspector?.nombreFirmante ?? inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}</p>
+                <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaInspector?.firmadaEn)}</p>
+              </div>
             </article>
-            <article className="signature-card rounded-3xl border border-slate-200 p-5 text-center">
+            <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Cliente</p>
               <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
                 {firmaCliente?.imagenUrl?<img src={firmaCliente.imagenUrl} alt="Firma del Cliente" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
               </div>
-              <p className="mt-4 font-black">{firmaCliente?.nombreFirmante ?? inspeccion.cliente.nombre}</p>
-              <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaCliente?.firmadaEn)}</p>
+              <div className="mt-auto min-h-[58px] pt-4">
+                <p className="font-black">{firmaCliente?.nombreFirmante ?? inspeccion.cliente.nombre}</p>
+                <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaCliente?.firmadaEn)}</p>
+              </div>
             </article>
           </div>
           {!firmaInspector||!firmaCliente?<div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
