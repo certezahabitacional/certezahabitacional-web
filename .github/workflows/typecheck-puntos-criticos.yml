@@ -46,6 +46,8 @@ on:
 
       - fix/integra-flujo-pre-reporte-pr97
 
+      - fix/navegacion-partidas-hermeticidad
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
