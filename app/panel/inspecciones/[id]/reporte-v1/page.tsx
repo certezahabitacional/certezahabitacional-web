@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
+import { headers } from "next/headers";
 import QRCode from "qrcode";
 
 import { auth } from "@/auth";
@@ -451,6 +452,25 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
+
+  const totalPartidasReporte = 1 + partidasReporte.length;
+  const partidasSinHallazgos =
+    (pruebasHermeticidad.some((p)=>p.inspeccionada) && pruebasHermeticidad.every((p)=>!p.inspeccionada || !p.hallazgo) ? 1 : 0)
+    + partidasReporte.filter((a)=>{
+        const ct=conteosPorArea.get(a.id);
+        return Number(ct?.revisados ?? 0) > 0 && Number(ct?.hallazgos ?? 0) === 0;
+      }).length;
+
+  const nivelesConteo = { P1:0, P2:0, P3:0, P4:0, P5:0, SH:0 } as Record<"P1"|"P2"|"P3"|"P4"|"P5"|"SH",number>;
+  for (const p of pruebasHermeticidad) {
+    if (p.inspeccionada) nivelesConteo[p.nivel as keyof typeof nivelesConteo] += 1;
+  }
+  for (const conceptos of conceptosPorArea.values()) {
+    for (const concepto of conceptos) {
+      const nivel = evaluacionConcepto(concepto).nivel as keyof typeof nivelesConteo;
+      nivelesConteo[nivel] += 1;
+    }
+  }
   const firmaInspector = inspeccion.firmas.find((f)=>f.tipo==="INSPECTOR");
   const firmaCliente = inspeccion.firmas.find((f)=>f.tipo==="CLIENTE");
   const fechaFirma = (valor: Date | undefined) => valor
@@ -483,7 +503,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Pre-Reporte de Inspección V1";
   const estadoReporte = autorizado ? "REPORTE FINAL AUTORIZADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
 
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const cabeceras = await headers();
+  const host = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host");
+  const proto = cabeceras.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  const base = (process.env.NEXT_PUBLIC_APP_URL || (host ? `${proto}://${host}` : "https://www.certezahabitacional.com")).replace(/\/$/,"");
   const contactoZona = contactoDocumentoPorZona(inspeccion.zona?.codigo, inspeccion.zona?.ciudad ?? inspeccion.ciudad);
   const urlInstitucional = `${base}/certeza?zona=${encodeURIComponent(inspeccion.zona?.codigo ?? inspeccion.ciudad)}&ciudad=${encodeURIComponent(inspeccion.zona?.ciudad ?? inspeccion.ciudad)}`;
   const qrInstitucional = await QRCode.toDataURL(urlInstitucional,{width:220,margin:1,errorCorrectionLevel:"M"});
@@ -509,7 +532,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
   return (
     <main className="min-h-screen bg-slate-200 px-3 py-6 text-slate-950 print:bg-white print:p-0">
-      <style>{`@page{size:Letter;margin:10mm}
+      <style>{`@page{size:Letter;margin:10mm;@bottom-center{content:"Página " counter(page) " de " counter(pages);font-size:8pt;color:#64748b}}
       .pre-report-watermark-screen{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;z-index:0}
       .pre-report-watermark-screen span{transform:rotate(-32deg);font-size:72px;font-weight:900;letter-spacing:.22em;color:rgba(148,163,184,.11);white-space:nowrap}
       .pre-report-watermark-print{display:none}
@@ -520,11 +543,6 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h4{font-size:14px!important;line-height:1.35!important}
       @media print{
         html,body{background:#fff!important}
-        @page{
-          size:Letter;
-          margin:10mm;
-          @bottom-right{content:"Página " counter(page) " de " counter(pages);font-size:8pt;color:#64748b}
-        }
         .no-print{display:none!important}
         .page-break{break-before:page;page-break-before:always}
         .section-flow{min-height:auto!important}
@@ -618,10 +636,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-resumen" n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
-          <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Áreas" value={String(metricas.areas)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>
+          <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Partidas" value={String(totalPartidasReporte)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>
           <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · Inspeccionados: {metricas.revisados} · No aplica: {metricas.noAplica} · No inspeccionados / sin acceso u otra causa: {Math.max(metricas.aplicables - metricas.revisados, 0)}</p>
-          <div className="mt-4 grid grid-cols-5 gap-2">{hallazgosP.map(({prioridad,total})=><Metrica key={prioridad} label={`Prioridad ${prioridad}`} value={String(total)}/>)}</div>
-          <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La calificación se expresa de 0 a 100 y se traduce a la escala de evaluación P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99 y SH 100. La prioridad P1–P5 de cada hallazgo se presenta por separado y no debe confundirse con el nivel global de evaluación.</p>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
+            {(["P1","P2","P3","P4","P5","SH"] as const).map((nivel)=><Metrica key={nivel} label={`Nivel ${nivel}`} value={String(nivelesConteo[nivel])}/>)}
+          </div>
+          <p className="mt-3 text-xs font-bold text-slate-500">Hallazgos por prioridad: {hallazgosP.map(({prioridad,total})=>`${prioridad} ${total}`).join(" · ")}.</p>
+          <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La calificación se expresa de 0 a 100 y se traduce a la escala de evaluación P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99 y SH 100. SH significa Sin Hallazgo. La prioridad P1–P5 de cada hallazgo se presenta por separado y no debe confundirse con el nivel de evaluación del punto o del inmueble.</p>
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-incluye" n="03" titulo="Qué incluye la inspección" subtitulo="Cobertura estándar incluida en el servicio">
@@ -789,7 +810,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <section id="sec-certificado" className="page-break section-flow relative px-10 py-10">{!autorizado&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10">
           <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">12 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
-          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Áreas revisadas" value={String(metricas.areas)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Áreas sin hallazgos" value={String(metricas.areasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
+          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Partidas revisadas" value={String(totalPartidasReporte)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
         </div></section>
       </article>
     </main>

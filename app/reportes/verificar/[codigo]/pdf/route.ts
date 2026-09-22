@@ -229,7 +229,20 @@ export async function GET(
   y -= 18;
   line(`Código de validación: ${certificado.codigoValidacion}`, { bold: true });
   line("www.certezahabitacional.com", { bold: true });
-  line("Este reporte oficial debe interpretarse conforme al alcance contratado, las áreas accesibles y las condiciones existentes al momento de la inspección.", { size: 9 });
+  line("Este reporte oficial debe interpretarse conforme al alcance contratado, las partidas accesibles y las condiciones existentes al momento de la inspección.", { size: 9 });
+
+  const paginas = pdf.getPages();
+  paginas.forEach((pagina, indice) => {
+    const etiqueta = `Página ${indice + 1} de ${paginas.length}`;
+    const ancho = regular.widthOfTextAtSize(etiqueta, 8);
+    pagina.drawText(etiqueta, {
+      x: (PAGE_W - ancho) / 2,
+      y: 18,
+      size: 8,
+      font: regular,
+      color: rgb(0.39, 0.45, 0.55),
+    });
+  });
 
   const bytes = await pdf.save();
   const descargar = request.nextUrl.searchParams.get("download") === "1";
