@@ -11,9 +11,12 @@ import { iniciarInspeccion } from "./[id]/actions";
 function formatoFecha(fecha: Date, zonaHoraria: string) {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: zonaHoraria }).format(fecha);
 }
-function etiquetaEstado(estado: EstadoInspeccion) { return estado.replaceAll("_", " "); }
+function etiquetaEstado(estado: EstadoInspeccion) {
+  if (estado === EstadoInspeccion.REPORTE_PENDIENTE) return "POR AUTORIZAR";
+  return estado.replaceAll("_", " ");
+}
 function etiquetaEstadoParaRol(estado: EstadoInspeccion, rol: RolUsuario) {
-  if (rol === RolUsuario.DIRECTOR && estado === EstadoInspeccion.REPORTE_PENDIENTE) return "ESPERA AUTORIZACIÓN DIRECCIÓN";
+  void rol;
   return etiquetaEstado(estado);
 }
 
