@@ -50,6 +50,7 @@ export default function FiltroHallazgosReporte({
     <section className="hallazgos-print-view mx-auto mb-4 max-w-5xl rounded-3xl border border-slate-300 bg-white p-5 shadow-sm">
       <style>{`
         @media print {
+          .hallazgos-print-view { display:none!important; }
           html.print-hallazgos-mode body > * { display:none!important; }
           html.print-hallazgos-mode body main { display:block!important; background:#fff!important; padding:0!important; }
           html.print-hallazgos-mode body main > * { display:none!important; }
