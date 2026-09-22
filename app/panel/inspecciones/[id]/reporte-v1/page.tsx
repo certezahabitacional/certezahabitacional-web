@@ -651,7 +651,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
             {(["P1","P2","P3","P4","P5","SH"] as const).map((nivel)=><Metrica key={nivel} label={`Nivel ${nivel}`} value={String(nivelesConteo[nivel])}/>)}
           </div>
           <p className="mt-3 text-xs font-bold text-slate-500">Hallazgos por prioridad: {hallazgosP.map(({prioridad,total})=>`${prioridad} ${total}`).join(" · ")}.</p>
-          <p className="mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La calificación se expresa de 0 a 100 y se traduce a la escala de evaluación P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99 y SH 100. SH significa Sin Hallazgo. La prioridad P1–P5 de cada hallazgo se presenta por separado y no debe confundirse con el nivel de evaluación del punto o del inmueble.</p>
+          <p data-page-unit className="colored-block mt-5 rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">La cobertura expresa qué proporción de los puntos aplicables fue efectivamente revisada. La calificación se expresa de 0 a 100 y se traduce a la escala de evaluación P1 0–49, P2 50–69, P3 70–79, P4 80–89, P5 90–99 y SH 100. SH significa Sin Hallazgo. La prioridad P1–P5 de cada hallazgo se presenta por separado y no debe confundirse con el nivel de evaluación del punto o del inmueble.</p>
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-incluye" n="03" titulo="Qué incluye la inspección" subtitulo="Cobertura estándar incluida en el servicio">
@@ -681,13 +681,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
               <div className="mt-5 space-y-5">
                 {pruebasHermeticidad.filter((p)=>p.inspeccionada).map((p,index)=>{
                   const fotos=(p.area ? (fotosPorArea.get(p.area.id)??[]) : []).filter((foto)=>p.conceptos.some((g)=>g.id===foto.guiaItemId));
-                  return <section key={p.codigo} className="rounded-2xl border border-slate-200 bg-white p-5">
+                  return <section data-page-unit key={p.codigo} className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div data-page-unit>
                     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-base font-black">{p.etiqueta}</h4></div><span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{p.calificacion.toFixed(0)}/100 · {p.nivel}</span></div>
                     {p.proceso&&<div className="mt-4 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Lecturas:</strong> inicial {p.proceso.lecturaInicial??"—"} {p.proceso.unidad??""} · final {p.proceso.lecturaFinal??"—"} {p.proceso.unidad??""}{p.proceso.lecturaInicial!==null&&p.proceso.lecturaFinal!==null?` · variación ${Number(p.proceso.lecturaFinal)-Number(p.proceso.lecturaInicial)} ${p.proceso.unidad??""}`:""}</div>}
                     </div>
                     {p.hallazgo&&<div data-page-unit className="colored-block mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Resultado / hallazgo</p><p className="mt-1 text-sm font-black">{p.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{p.hallazgo.descripcion}</p><p className="mt-2 text-xs font-bold text-slate-300">Clasificación: {p.hallazgo.clasificacion} · Prioridad: {p.hallazgo.prioridad}</p></div>}
-                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure data-page-unit key={`${p.codigo}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
+                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure data-page-unit key={`${p.codigo}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
                   </section>;
                 })}
               </div>
@@ -710,7 +710,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     const ev=evaluacionConcepto(g);
                     const fotos=fotosPorConcepto.get(g.id)??[];
                     const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
-                    return <section key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+                    return <section data-page-unit key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div data-page-unit>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -785,7 +785,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-conclusiones" n="08" titulo="Conclusiones" subtitulo="Síntesis técnica objetiva del resultado de la inspección">
-          <p className="rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">{metricas.dictamen}</p>
+          <p data-page-unit className="colored-block rounded-2xl bg-slate-950 p-5 text-sm leading-7 text-slate-200">{metricas.dictamen}</p>
           <p className="mt-4 text-sm leading-7 text-slate-700">Cobertura efectiva: <strong>{coberturaTexto}%</strong>. Calificación Técnica Certeza: <strong>{calificacionTexto}/100</strong>. Hallazgos documentados: <strong>{metricas.totalHallazgos}</strong>. La conclusión se limita al alcance contratado, a las áreas accesibles y a las condiciones visibles o medibles durante la visita.</p>
         </Seccion>
 
@@ -801,7 +801,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-firmas" n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
           <p className="mb-6 text-sm leading-7 text-slate-700">Las firmas registradas quedan asociadas al expediente de la inspección y forman parte de la trazabilidad documental. En el pre-reporte se muestran las firmas vigentes del Inspector y del Cliente cuando ya fueron capturadas en el sistema.</p>
           <div className="grid items-stretch gap-6 sm:grid-cols-2">
-            <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
+            <article data-page-unit className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Inspector</p>
               <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
                 {firmaInspector?.imagenUrl?<img src={firmaInspector.imagenUrl} alt="Firma del Inspector" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
@@ -811,7 +811,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 <p className="mt-1 text-xs text-slate-500">{fechaFirma(firmaInspector?.firmadaEn)}</p>
               </div>
             </article>
-            <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
+            <article data-page-unit className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Cliente</p>
               <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">
                 {firmaCliente?.imagenUrl?<img src={firmaCliente.imagenUrl} alt="Firma del Cliente" className="max-h-40 max-w-full object-contain"/>:<span className="text-sm font-bold text-slate-400">Firma pendiente</span>}
