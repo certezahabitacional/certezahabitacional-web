@@ -296,8 +296,8 @@ function FirmaCanvas({
 
       <p className="mt-2 text-sm text-slate-400">
         {disabled
-          ? "Firma registrada en el expediente. Esta vista es de solo lectura."
-          : "Firma dentro del recuadro usando el mouse o la pantalla táctil, o inserta una imagen de firma digital."}
+          ? (valor ? "Firma registrada en el expediente. Esta vista es de solo lectura." : "Firma pendiente. Esta vista está temporalmente en modo de solo lectura.")
+          : "Firma dentro del recuadro usando el mouse o la pantalla táctil, o inserta una imagen de firma digital desde el dispositivo."}
       </p>
 
       {!disabled && (
