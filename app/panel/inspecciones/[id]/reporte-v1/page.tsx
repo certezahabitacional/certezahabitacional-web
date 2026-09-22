@@ -20,6 +20,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { confirmarPreReporteSitioV1 } from "../pre-reporte/actions";
+import { enviarReporteDireccionV1 } from "../cierre-v1/actions";
 
 async function signedUrl(path: string | null) {
   if (!path) return null;
@@ -63,6 +64,7 @@ type ControlReporte = {
   campoFinalizadoEn: Date | null;
   inspeccionTecnicaConcluidaEn: Date | null;
   preReporteGeneradoEn: Date | null;
+  reabiertaEn: Date | null;
 };
 type EvidenciaCompleta = {
   fotografiaId:string;
@@ -325,11 +327,30 @@ export default async function ReporteV1Page({ params, searchParams }: {
     WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true LIMIT 1
   `;
   const [controlReporte] = await prisma.$queryRaw<ControlReporte[]>`
-    SELECT "campoFinalizadoEn","inspeccionTecnicaConcluidaEn","preReporteGeneradoEn"
+    SELECT "campoFinalizadoEn","inspeccionTecnicaConcluidaEn","preReporteGeneradoEn","reabiertaEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${id}
     LIMIT 1
   `;
+  const [ultimaVersionPreReporte] = await prisma.$queryRaw<Array<{ generadoEn: Date | null }>>`
+    SELECT MAX("generadoEn") AS "generadoEn"
+    FROM "PreReporteInspeccion"
+    WHERE "inspeccionId"=${id}
+  `;
+  const firmasVigentesReporte = inspeccion.firmas.filter((firma)=>
+    !controlReporte?.reabiertaEn || new Date(firma.firmadaEn) >= new Date(controlReporte.reabiertaEn)
+  );
+  const firmaInspectorVigente = firmasVigentesReporte.some((firma)=>firma.tipo.toLowerCase().includes("inspector"));
+  const firmaClienteVigente = firmasVigentesReporte.some((firma)=>firma.tipo.toLowerCase().includes("cliente"));
+  const firmasCompletasReporte = firmaInspectorVigente && firmaClienteVigente;
+  const ultimaFirmaEn = firmasVigentesReporte.reduce<Date | null>((max,firma)=>{
+    const fecha = new Date(firma.firmadaEn);
+    return !max || fecha > max ? fecha : max;
+  },null);
+  const preReportePosteriorAFirmas = Boolean(
+    ultimaVersionPreReporte?.generadoEn &&
+    (!ultimaFirmaEn || new Date(ultimaVersionPreReporte.generadoEn) >= ultimaFirmaEn)
+  );
   const portada = await signedUrl(fachada?.url ?? null);
 
   const evidenciasBase = await prisma.$queryRaw<EvidenciaCompleta[]>`
@@ -575,36 +596,38 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PASO 4 · PRE REPORTE</p>
-          <h2 className="mt-2 text-xl font-black">
-            {controlReporte.preReporteGeneradoEn ? "PRE REPORTE generado · disponible para consulta" : "Generar PRE REPORTE"}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-700">
-            {controlReporte.preReporteGeneradoEn
-              ? "Consulta el documento completo. Antes de enviarlo a Dirección puedes entrar a Revisión y ajustes o continuar al envío a autorización."
-              : "Revisa el documento completo y confirma esta versión para generar formalmente el PRE REPORTE."}
-          </p>
+          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PRE REPORTE · REVISIÓN EN SITIO</p>
           {!controlReporte.preReporteGeneradoEn ? (
-            <form action={confirmarPreReporteSitioV1} className="mt-4">
-              <input type="hidden" name="inspeccionId" value={id}/>
-              <button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">
-                GENERAR PRE REPORTE
-              </button>
-            </form>
+            <>
+              <h2 className="mt-2 text-xl font-black">Generar PRE REPORTE</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el PRE REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
+              {esInspector && <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">GENERAR PRE REPORTE</button></form>}
+            </>
+          ) : !firmasCompletasReporte ? (
+            <>
+              <h2 className="mt-2 text-xl font-black">Revisión con el cliente antes de firmas</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este PRE REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR · DESDE PARTIDA 1</Link>
+                <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">PASAR A FIRMAS</Link>
+              </div>
+            </>
           ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">
-                REVISAR Y AJUSTAR
-              </Link>
-              <Link href={`/panel/inspecciones/${id}/cierre-v1#envio-autorizacion`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">
-                AUTORIZACIÓN DE PRE REPORTE
-              </Link>
-            </div>
+            <>
+              <h2 className="mt-2 text-xl font-black">Firmas registradas · revisión final antes de Dirección</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el PRE REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
+                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR PRE REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR PRE REPORTE</div>}
+                {esInspector ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button disabled={!preReportePosteriorAFirmas} className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-30">AUTORIZACIÓN DEL REPORTE</button></form> : <Link href={`/panel/inspecciones/${id}/revision`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">REVISIÓN DE DIRECCIÓN</Link>}
+              </div>
+              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Regenera el PRE REPORTE después de las firmas y de la última revisión antes de enviarlo a Dirección.</p>}
+            </>
           )}
         </section>
       )}
       <article data-report-root className="report-body relative mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
-        <ReportPageGuides />
+        <ReportPageGuides folio={inspeccion.folio} final={autorizado} />
         {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
         <section className="cover-report-page relative bg-slate-950 p-5 text-white">
           {!autorizado && <div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}
