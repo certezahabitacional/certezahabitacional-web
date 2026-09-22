@@ -10,6 +10,7 @@ import { DATOS_DOCUMENTALES, contactoDocumentoPorZona, datosContactoDocumento } 
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import IndicePaginasReporte from "@/components/reportes/IndicePaginasReporte";
 import ReportPageGuides from "@/components/reportes/ReportPageGuides";
+import FiltroHallazgosReporte from "@/components/reportes/FiltroHallazgosReporte";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { evaluarPromedioV1, referenciaPrioridadV1 } from "@/lib/evaluacion-reporte-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
@@ -20,6 +21,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { confirmarPreReporteSitioV1 } from "../pre-reporte/actions";
+import { enviarReporteDireccionV1 } from "../cierre-v1/actions";
 
 async function signedUrl(path: string | null) {
   if (!path) return null;
@@ -63,6 +65,7 @@ type ControlReporte = {
   campoFinalizadoEn: Date | null;
   inspeccionTecnicaConcluidaEn: Date | null;
   preReporteGeneradoEn: Date | null;
+  reabiertaEn: Date | null;
 };
 type EvidenciaCompleta = {
   fotografiaId:string;
@@ -168,6 +171,18 @@ function observacionConcepto(valor: string | null): ObservacionConcepto {
   } catch {
     return { descripcionFinal: valor };
   }
+}
+
+function agruparPuntos<T>(items: T[]) {
+  const grupos: T[][] = [];
+  let i = 0;
+  while (i < items.length) {
+    const restantes = items.length - i;
+    const tamano = restantes === 3 ? 3 : Math.min(2, restantes);
+    grupos.push(items.slice(i, i + tamano));
+    i += tamano;
+  }
+  return grupos;
 }
 
 function referenciasNormativas(ciudad: string) {
@@ -325,11 +340,30 @@ export default async function ReporteV1Page({ params, searchParams }: {
     WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true LIMIT 1
   `;
   const [controlReporte] = await prisma.$queryRaw<ControlReporte[]>`
-    SELECT "campoFinalizadoEn","inspeccionTecnicaConcluidaEn","preReporteGeneradoEn"
+    SELECT "campoFinalizadoEn","inspeccionTecnicaConcluidaEn","preReporteGeneradoEn","reabiertaEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${id}
     LIMIT 1
   `;
+  const [ultimaVersionPreReporte] = await prisma.$queryRaw<Array<{ generadoEn: Date | null }>>`
+    SELECT MAX("generadoEn") AS "generadoEn"
+    FROM "PreReporteInspeccion"
+    WHERE "inspeccionId"=${id}
+  `;
+  const firmasVigentesReporte = inspeccion.firmas.filter((firma)=>
+    !controlReporte?.reabiertaEn || new Date(firma.firmadaEn) >= new Date(controlReporte.reabiertaEn)
+  );
+  const firmaInspectorVigente = firmasVigentesReporte.some((firma)=>firma.tipo.toLowerCase().includes("inspector"));
+  const firmaClienteVigente = firmasVigentesReporte.some((firma)=>firma.tipo.toLowerCase().includes("cliente"));
+  const firmasCompletasReporte = firmaInspectorVigente && firmaClienteVigente;
+  const ultimaFirmaEn = firmasVigentesReporte.reduce<Date | null>((max,firma)=>{
+    const fecha = new Date(firma.firmadaEn);
+    return !max || fecha > max ? fecha : max;
+  },null);
+  const preReportePosteriorAFirmas = Boolean(
+    ultimaVersionPreReporte?.generadoEn &&
+    (!ultimaFirmaEn || new Date(ultimaVersionPreReporte.generadoEn) >= ultimaFirmaEn)
+  );
   const portada = await signedUrl(fachada?.url ?? null);
 
   const evidenciasBase = await prisma.$queryRaw<EvidenciaCompleta[]>`
@@ -519,6 +553,23 @@ export default async function ReporteV1Page({ params, searchParams }: {
     qr = await QRCode.toDataURL(`${base}/certificados/verificar/${inspeccion.certificado.codigoValidacion}`,{width:240,margin:1,errorCorrectionLevel:"M"});
   }
 
+  const hallazgosFiltrables = inspeccion.hallazgos
+    .filter((h)=>["P1","P2","P3","P4","P5"].includes(h.prioridad))
+    .map((h)=>{
+      const area = h.areaId ? areaPorId.get(String(h.areaId)) : undefined;
+      const partida = area ? `Partida ${numeroPartida.get(area.id) ?? "—"} · ${area.nombre}` : (h.area || "Partida no identificada");
+      const punto = h.guiaItemId ? conceptosReporte.find((g)=>g.id===h.guiaItemId) : undefined;
+      return {
+        id: h.id,
+        prioridad: h.prioridad as "P1"|"P2"|"P3"|"P4"|"P5",
+        partida,
+        punto: punto ? `Punto ${numeroPunto.get(punto.id) ?? "—"} · ${punto.concepto}` : (h.titulo || "Hallazgo"),
+        titulo: h.titulo,
+        descripcion: h.descripcion,
+        recomendacion: h.recomendacion,
+      };
+    });
+
   const indiceReporte = [
     { id: "sec-resumen", titulo: "Resumen ejecutivo" },
     { id: "sec-incluye", titulo: "Qué incluye la inspección" },
@@ -546,12 +597,20 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
       .report-section h4{font-size:14px!important;line-height:1.35!important}
+      .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
+      .inspection-pair.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .inspection-point-card{padding:12px!important}
+      .inspection-point-card .point-photo{height:120px!important}
+      .inspection-point-card .point-detail{font-size:11px!important;line-height:1.45!important}
+      @media (max-width:760px){.inspection-pair,.inspection-pair.three{grid-template-columns:1fr}}
       @media screen{
         [data-page-unit]{scroll-margin-top:24px}
       }
       @media print{
         html,body{background:#fff!important}
         .no-print{display:none!important}
+        .hallazgos-print-view{display:none!important}
+        html.print-hallazgos-mode .hallazgos-print-view{display:block!important}
         .page-break{break-before:page;page-break-before:always}
         .section-flow{min-height:auto!important}
         .single-report-page{min-height:259mm!important;max-height:259mm!important;overflow:hidden!important}
@@ -575,36 +634,39 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PASO 4 · PRE REPORTE</p>
-          <h2 className="mt-2 text-xl font-black">
-            {controlReporte.preReporteGeneradoEn ? "PRE REPORTE generado · disponible para consulta" : "Generar PRE REPORTE"}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-700">
-            {controlReporte.preReporteGeneradoEn
-              ? "Consulta el documento completo. Antes de enviarlo a Dirección puedes entrar a Revisión y ajustes o continuar al envío a autorización."
-              : "Revisa el documento completo y confirma esta versión para generar formalmente el PRE REPORTE."}
-          </p>
+          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PRE REPORTE · REVISIÓN EN SITIO</p>
           {!controlReporte.preReporteGeneradoEn ? (
-            <form action={confirmarPreReporteSitioV1} className="mt-4">
-              <input type="hidden" name="inspeccionId" value={id}/>
-              <button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">
-                GENERAR PRE REPORTE
-              </button>
-            </form>
+            <>
+              <h2 className="mt-2 text-xl font-black">Generar PRE REPORTE</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el PRE REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
+              {esInspector && <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">GENERAR PRE REPORTE</button></form>}
+            </>
+          ) : !firmasCompletasReporte ? (
+            <>
+              <h2 className="mt-2 text-xl font-black">Revisión con el cliente antes de firmas</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este PRE REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR · DESDE PARTIDA 1</Link>
+                <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">PASAR A FIRMAS</Link>
+              </div>
+            </>
           ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">
-                REVISAR Y AJUSTAR
-              </Link>
-              <Link href={`/panel/inspecciones/${id}/cierre-v1#envio-autorizacion`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">
-                AUTORIZACIÓN DE PRE REPORTE
-              </Link>
-            </div>
+            <>
+              <h2 className="mt-2 text-xl font-black">Firmas registradas · revisión final antes de Dirección</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el PRE REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
+                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR PRE REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR PRE REPORTE</div>}
+                {esInspector ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button disabled={!preReportePosteriorAFirmas} className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-30">AUTORIZACIÓN DEL REPORTE</button></form> : <Link href={`/panel/inspecciones/${id}/revision`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">REVISIÓN DE DIRECCIÓN</Link>}
+              </div>
+              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Regenera el PRE REPORTE después de las firmas y de la última revisión antes de enviarlo a Dirección.</p>}
+            </>
           )}
         </section>
       )}
+      <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
       <article data-report-root className="report-body relative mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
-        <ReportPageGuides />
+        <ReportPageGuides folio={inspeccion.folio} final={autorizado} />
         {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
         <section className="cover-report-page relative bg-slate-950 p-5 text-white">
           {!autorizado && <div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}
@@ -676,20 +738,19 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-desarrollo" n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
             <article className="rounded-3xl border-2 border-amber-300 p-5">
-              <div data-page-unit className="keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div data-page-unit className="partida-header keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                 <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida 1</p><h3 className="mt-1 text-xl font-black">Pruebas de hermeticidad</h3><p className="mt-2 text-xs font-bold text-slate-500">Pruebas de hermeticidad de las instalaciones hidráulica y de gas.</p></div>
                 <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionHermeticidad.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionHermeticidad.nivel}</span></p></div>
               </div>
-              <div className="mt-5 space-y-5">
+              <div data-page-unit className="inspection-pair mt-5">
                 {pruebasHermeticidad.filter((p)=>p.inspeccionada).map((p,index)=>{
                   const fotos=(p.area ? (fotosPorArea.get(p.area.id)??[]) : []).filter((foto)=>p.conceptos.some((g)=>g.id===foto.guiaItemId));
-                  return <section data-page-unit key={p.codigo} className="rounded-2xl border border-slate-200 bg-white p-5">
-                    <div data-page-unit>
-                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-base font-black">{p.etiqueta}</h4></div><span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{p.calificacion.toFixed(0)}/100 · {p.nivel}</span></div>
-                    {p.proceso&&<div className="mt-4 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Lecturas:</strong> inicial {p.proceso.lecturaInicial??"—"} {p.proceso.unidad??""} · final {p.proceso.lecturaFinal??"—"} {p.proceso.unidad??""}{p.proceso.lecturaInicial!==null&&p.proceso.lecturaFinal!==null?` · variación ${Number(p.proceso.lecturaFinal)-Number(p.proceso.lecturaInicial)} ${p.proceso.unidad??""}`:""}</div>}
-                    </div>
-                    {p.hallazgo&&<div data-page-unit className="colored-block mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Resultado / hallazgo</p><p className="mt-1 text-sm font-black">{p.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{p.hallazgo.descripcion}</p><p className="mt-2 text-xs font-bold text-slate-300">Clasificación: {p.hallazgo.clasificacion} · Prioridad: {p.hallazgo.prioridad}</p></div>}
-                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure data-page-unit key={`${p.codigo}-${i}`} className="overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
+                  const foto=fotos[0];
+                  return <section key={p.codigo} className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
+                    <div className="flex items-start justify-between gap-2"><div><p className="text-[9px] font-black uppercase tracking-[.14em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-sm font-black">{p.etiqueta}</h4></div><span className="shrink-0 rounded-full bg-slate-950 px-2 py-1 text-[9px] font-black text-white">{p.calificacion.toFixed(0)} · {p.nivel}</span></div>
+                    {p.proceso&&<p className="point-detail mt-2 rounded-lg bg-cyan-50 p-2 text-slate-700"><strong>Lecturas:</strong> {p.proceso.lecturaInicial??"—"} → {p.proceso.lecturaFinal??"—"} {p.proceso.unidad??""}</p>}
+                    {p.hallazgo&&<div className="point-detail mt-2 rounded-lg bg-slate-950 p-2 text-white"><strong className="text-amber-300">{p.hallazgo.prioridad} · {p.hallazgo.titulo}</strong><p className="mt-1 text-slate-300">{p.hallazgo.descripcion}</p></div>}
+                    {foto&&<figure className="mt-2 overflow-hidden rounded-lg border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="point-photo w-full bg-slate-950 object-contain"/>:<div className="point-photo grid place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-[10px] text-slate-500">{foto.descripcion??"Evidencia principal"}{fotos.length>1?` · +${fotos.length-1} evidencia(s)`:""}</figcaption></figure>}
                   </section>;
                 })}
               </div>
@@ -698,7 +759,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               const conceptos=conceptosPorArea.get(a.id)??[];
               const evaluacionArea=evaluacionesPorArea.get(a.id);
               return <article key={a.id} className="report-card rounded-3xl border-2 border-slate-200 p-5">
-                <div data-page-unit className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                <div data-page-unit className="partida-header flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida {numeroPartida.get(a.id)}</p>
                     <h3 className="mt-1 text-xl font-black">{a.nombre}</h3>
@@ -706,38 +767,32 @@ export default async function ReporteV1Page({ params, searchParams }: {
                   </div>
                   {evaluacionArea&&<div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionArea.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionArea.nivel}</span></p></div>}
                 </div>
-                <div className="mt-5 space-y-5">
-                  {conceptos.map((g)=>{
-                    const obs=observacionConcepto(g.observacion);
-                    const ev=evaluacionConcepto(g);
-                    const fotos=fotosPorConcepto.get(g.id)??[];
-                    const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
-                    return <section data-page-unit key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5">
-                      <div data-page-unit>
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
-                          <h4 className="mt-1 text-base font-black">{g.concepto}</h4>
-                          {g.especificacion&&<p className="mt-1 text-xs leading-5 text-slate-500">{g.especificacion}</p>}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className={`rounded-full px-3 py-1 text-[10px] font-black ${tieneHallazgo?"bg-amber-100 text-amber-900":"bg-emerald-100 text-emerald-900"}`}>{tieneHallazgo?"CON HALLAZGO":"SIN HALLAZGO"}</span>
-                          <span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
-                        </div>
-                      </div>
-                      </div>
-                      {ev.hallazgo&&<div data-page-unit className="colored-block mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Hallazgo</p><p className="mt-1 text-sm font-black">{ev.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{ev.hallazgo.descripcion}</p>{ev.hallazgo.recomendacion&&<p className="mt-2 text-sm leading-6 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
-                      {obs.descripcionFinal&&<p className="mt-4 text-sm leading-6 text-slate-700"><strong>Interpretación final del Inspector:</strong> {obs.descripcionFinal}</p>}
-                      {(g.valorMedido||g.valorProyecto)&&<p className="mt-3 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Referencia/proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
-                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-600">
-                        <span>Clasificación: {obs.clasificacionFinal??ev.hallazgo?.clasificacion??(tieneHallazgo?"—":"SIN HALLAZGO")}</span>
-                        <span>Prioridad elegida por el Inspector: {tieneHallazgo ? (obs.prioridadFinal??ev.hallazgo?.prioridad??"—") : "—"}</span>
-                        <span>Evaluación IA: {ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
-                      </div>
-                      {obs.justificacionCalificacionIa&&<p className="mt-2 text-xs leading-5 text-slate-500"><strong>Criterio de calificación IA:</strong> {obs.justificacionCalificacionIa}</p>}
-                      {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure data-page-unit key={`${g.id}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
-                    </section>;
-                  })}
+                <div className="mt-5 space-y-3">
+                  {agruparPuntos(conceptos).map((grupo,grupoIndex)=>(
+                    <div data-page-unit key={`${a.id}-grupo-${grupoIndex}`} className={`inspection-pair ${grupo.length===3?"three":""}`}>
+                      {grupo.map((g)=>{
+                        const obs=observacionConcepto(g.observacion);
+                        const ev=evaluacionConcepto(g);
+                        const fotos=fotosPorConcepto.get(g.id)??[];
+                        const foto=fotos[0];
+                        const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
+                        return <section key={g.id} className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[9px] font-black uppercase tracking-[.14em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
+                              <h4 className="mt-1 text-sm font-black">{g.concepto}</h4>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black ${tieneHallazgo?"bg-amber-100 text-amber-900":"bg-emerald-100 text-emerald-900"}`}>{ev.nivel} · {ev.calificacion.toFixed(0)}</span>
+                          </div>
+                          {g.especificacion&&<p className="point-detail mt-2 text-slate-500">{g.especificacion}</p>}
+                          {ev.hallazgo&&<div className="point-detail mt-2 rounded-lg bg-slate-950 p-2 text-white"><p className="font-black text-amber-300">{ev.hallazgo.prioridad} · {ev.hallazgo.titulo}</p><p className="mt-1 text-slate-300">{ev.hallazgo.descripcion}</p>{ev.hallazgo.recomendacion&&<p className="mt-1 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
+                          {obs.descripcionFinal&&<p className="point-detail mt-2 text-slate-700"><strong>Inspector:</strong> {obs.descripcionFinal}</p>}
+                          {(g.valorMedido||g.valorProyecto)&&<p className="point-detail mt-2 text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Ref. ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
+                          {foto&&<figure className="mt-2 overflow-hidden rounded-lg border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="point-photo w-full bg-slate-950 object-contain"/>:<div className="point-photo grid place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-[10px] text-slate-500">{foto.descripcion??"Evidencia principal"}{fotos.length>1?` · +${fotos.length-1} evidencia(s)`:""}</figcaption></figure>}
+                        </section>;
+                      })}
+                    </div>
+                  ))}
                 </div>
               </article>;
             })}
