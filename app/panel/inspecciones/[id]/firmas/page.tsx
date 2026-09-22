@@ -261,8 +261,8 @@ function FirmaCanvas({
   }
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="flex h-full min-h-[430px] flex-col rounded-3xl border border-white/10 bg-slate-900 p-6">
+      <div className="min-h-[92px] flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h2 className="text-xl font-black">{titulo}</h2>
 
         {!disabled && (
@@ -321,7 +321,7 @@ function FirmaCanvas({
         onPointerUp={finalizar}
         onPointerCancel={finalizar}
         onPointerLeave={finalizar}
-        className={`mt-5 h-56 w-full rounded-2xl bg-white ${
+        className={`mt-5 h-52 w-full flex-none rounded-2xl bg-white ${
           disabled ? "cursor-not-allowed opacity-90" : "touch-none"
         }`}
       />
@@ -543,7 +543,7 @@ export default function FirmasPage() {
           </p>
         </div>
 
-        <div className="grid gap-7 lg:grid-cols-2">
+        <div className="grid items-stretch gap-7 lg:grid-cols-2">
           <FirmaCanvas
             titulo={`Inspector: ${inspeccion.inspector}`}
             valor={firmas.inspector}
@@ -584,9 +584,7 @@ export default function FirmasPage() {
         )}
 
         <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-6 text-sm leading-7 text-cyan-100">
-          Las firmas quedan asociadas al expediente y pueden consultarse
-          desde los perfiles autorizados. La modificación queda restringida
-          al Inspector asignado mientras la inspección se encuentre EN PROCESO.
+          Las firmas quedan asociadas al expediente y pueden consultarse desde los perfiles autorizados. Mientras la inspección permanezca EN PROCESO, el Inspector asignado o Dirección pueden registrarlas dibujando en pantalla o insertando una imagen digital desde el dispositivo.
         </div>
       </div>
     </main>
