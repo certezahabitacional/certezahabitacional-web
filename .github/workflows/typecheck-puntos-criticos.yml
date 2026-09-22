@@ -50,6 +50,8 @@ on:
 
       - fix/filtro-hallazgos-director-reporte-liberado
 
+      - fix/estatus-por-autorizar-inspecciones
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
