@@ -69,6 +69,19 @@ export default async function RevisionPage({ params, searchParams }: { params: P
         {query.ok && <p className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 font-bold text-emerald-300">{query.ok}</p>}
         {query.error && <p className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 font-bold text-rose-300">{query.error}</p>}
 
+        {esDirector && pendienteRevision && (
+          <section className="mt-5 rounded-3xl border border-violet-300/30 bg-violet-300/10 p-6">
+            <p className="text-xs font-black uppercase tracking-[.18em] text-violet-200">Revisión Director</p>
+            <h2 className="mt-2 text-2xl font-black">PRE REPORTE pendiente de autorización</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Abre primero el PRE REPORTE para revisarlo completo. Después regresa a esta pantalla para autorizar y liberar el reporte/certificado o devolverlo al Inspector con observaciones.
+            </p>
+            <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="mt-4 inline-block rounded-xl bg-violet-300 px-5 py-3 text-sm font-black text-slate-950">
+              ABRIR PRE REPORTE PARA REVISAR
+            </Link>
+          </section>
+        )}
+
         <header className="mt-5 rounded-3xl border border-cyan-400/20 bg-slate-900 p-6">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">Control de revisión</p>
           <h1 className="mt-2 text-3xl font-black">Revisión y liberación Método Certeza®</h1>
