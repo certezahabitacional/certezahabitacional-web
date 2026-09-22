@@ -48,6 +48,8 @@ on:
 
       - fix/navegacion-partidas-hermeticidad
 
+      - fix/filtro-hallazgos-director-reporte-liberado
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
