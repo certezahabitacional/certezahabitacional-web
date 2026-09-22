@@ -40,6 +40,8 @@ on:
 
       - fix/cierre-v1-congruencia-formato-reporte
 
+      - fix/paginacion-real-reporte-v1
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest

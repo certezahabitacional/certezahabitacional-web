@@ -180,8 +180,8 @@ export default async function RevisionFinalInspectorPage({
             <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950">
               VER PRE-REPORTE INTEGRAL
             </Link>
-            <Link href={`/panel/inspecciones/${id}/cierre-v1`} className="rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
-              VOLVER AL CIERRE V1
+            <Link href={`/panel/inspecciones/${id}/cierre-v1#envio-autorizacion`} className="rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
+              SOLICITUD DE AUTORIZACIÓN DE REPORTE →
             </Link>
           </div>
         </section>
