@@ -583,6 +583,24 @@ export default function FirmasPage() {
           </p>
         )}
 
+        {firmas.inspector && firmas.cliente && (
+          <section className="mt-8 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Firmas completas · revisión final antes de Dirección</p>
+            <h2 className="mt-2 text-xl font-black">Vuelve al recorrido desde la Partida 1</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Antes de enviar el reporte a Dirección revisa nuevamente el recorrido completo. Si haces cualquier ajuste, vuelve a generar el PRE REPORTE para que la versión enviada sea la más reciente.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Link href={`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">
+                VOLVER AL RECORRIDO · PARTIDA 1
+              </Link>
+              <Link href={`/panel/inspecciones/${inspeccionId}/reporte-v1`} className="rounded-xl bg-cyan-300 px-5 py-4 text-center text-sm font-black text-slate-950">
+                VOLVER AL PRE REPORTE / REGENERAR
+              </Link>
+            </div>
+          </section>
+        )}
+
         <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-6 text-sm leading-7 text-cyan-100">
           Las firmas quedan asociadas al expediente y pueden consultarse desde los perfiles autorizados. Mientras la inspección permanezca EN PROCESO, el Inspector asignado o Dirección pueden registrarlas dibujando en pantalla o insertando una imagen digital desde el dispositivo.
         </div>

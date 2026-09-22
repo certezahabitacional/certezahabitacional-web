@@ -42,6 +42,8 @@ on:
 
       - fix/paginacion-real-reporte-v1
 
+      - fix/flujo-pre-reporte-autorizacion-y-branding
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest

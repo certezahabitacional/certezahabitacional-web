@@ -7,9 +7,6 @@ import { bloquearContenidoTecnicoV1Finalizado } from "@/lib/acceso-v1-final";
 import { prisma } from "@/lib/prisma";
 import {
   concluirInspeccionTecnicaV1,
-  confirmarRevisionFinalInspectorV1,
-  enviarReporteDireccionV1,
-  terminarTrabajoCampoV1,
 } from "./actions";
 
 type Estado = {
@@ -202,145 +199,75 @@ export default async function CierreV1Page({ params, searchParams }: {
           <Card titulo="Firmas vigentes" valor={`${Number(firmaInspector) + Number(firmaCliente)}/2`} ok={firmasListas} />
         </section>
 
-        {preReporteRevisado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
-          <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Acciones del PRE REPORTE</p>
-            <h2 className="mt-2 text-xl font-black">Revisar, ajustar y solicitar autorización</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              Estas son las dos acciones operativas posteriores a la generación del PRE REPORTE. La solicitud de autorización se habilita cuando la revisión final y las firmas están completas.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">
-                REVISAR Y AJUSTAR
-              </Link>
-              {puedeOperarCierre ? (
-                <form action={enviarReporteDireccionV1}>
-                  <input type="hidden" name="inspeccionId" value={id}/>
-                  <button disabled={!campoTerminado || !firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-4 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
-                    SOLICITAR AUTORIZACIÓN DE PRE REPORTE
-                  </button>
-                </form>
-              ) : (
-                <div className="rounded-xl border border-white/10 px-5 py-4 text-center text-sm font-black text-slate-500">
-                  SOLICITAR AUTORIZACIÓN DE PRE REPORTE
-                </div>
-              )}
-            </div>
-            {!campoTerminado || !revisionInspectorFinal ? (
-              <p className="mt-3 text-xs text-amber-200">Para solicitar autorización primero completa la revisión y ajustes finales del Inspector.</p>
-            ) : null}
-          </section>
-        )}
-
-        <section className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
-          <h2 className="text-xl font-black">Semáforo de salida</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Linea ok={(estado?.fotosFachada ?? 0) >= 4} texto={`Fachada: ${estado?.fotosFachada ?? 0}/4 fotografías`} />
-            <Linea ok={(estado?.portadaFachada ?? 0) === 1} texto={`Foto de portada: ${(estado?.portadaFachada ?? 0) === 1 ? "seleccionada" : "pendiente"}`} />
-            <Linea ok={(estado?.syncPendientes ?? 0) === 0} texto={`Sincronización: ${estado?.syncPendientes ?? 0} pendientes`} />
-            <Linea ok={firmaInspector} texto={`Firma Inspector: ${firmaInspector ? "vigente" : "pendiente"}`} />
-            <Linea ok={firmaCliente} texto={`Firma cliente: ${firmaCliente ? "vigente" : "pendiente"}`} />
-            <Linea ok={listoCampo} texto={listoCampo ? "Visita lista para terminar o reenviar" : "Aún existen requisitos pendientes"} />
+        <section className="mt-6 rounded-3xl border border-white/10 bg-slate-900 p-6">
+          <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-300">Ruta de cierre de la inspección</p>
+          <h2 className="mt-2 text-2xl font-black">Secuencia única antes de Dirección</h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Linea ok={todasPartidasListas} texto="1. Recorrido completo y hermeticidades cerradas" />
+            <Linea ok={preReporteRevisado} texto="2. PRE REPORTE generado y revisado con el cliente" />
+            <Linea ok={firmasListas} texto="3. Firmas Inspector + Cliente" />
+            <Linea ok={inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE || inspeccion.estado === EstadoInspeccion.FINALIZADA} texto="4. Enviado a Dirección" />
           </div>
         </section>
 
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && !tecnicoListo && (
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && !tecnicoListo && (
           <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-amber-300">Inspección en proceso</p>
-            <h2 className="mt-2 text-xl font-black">Continúa con la inspección</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              Durante esta etapa sólo se muestran las herramientas de captura técnica. Las opciones de revisión y ajuste permanecen ocultas.
-            </p>
+            <p className="text-xs font-black uppercase tracking-widest text-amber-300">Inspección todavía en proceso</p>
+            <h2 className="mt-2 text-xl font-black">Concluir todas las partidas y las dos pruebas de hermeticidad</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">El botón GENERAR PRE REPORTE sólo debe habilitarse cuando el recorrido esté realmente terminado al 100%.</p>
+            <Link href={`/panel/inspecciones/${id}/flujo`} className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">VOLVER AL RECORRIDO</Link>
           </section>
         )}
 
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && tecnicoListo && !inspeccionConcluida && (
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && tecnicoListo && !inspeccionConcluida && (
           <section className="mt-5 rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Inspección técnica completada al 100%</p>
-            <h2 className="mt-2 text-xl font-black">Concluir inspección</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              Mientras la inspección está en ejecución no se muestran opciones de revisión ni ajuste. Cuando el Inspector confirme que terminó la inspección, se habilitará la revisión preliminar.
-            </p>
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Recorrido concluido al 100%</p>
+            <h2 className="mt-2 text-xl font-black">Generar PRE REPORTE</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Al generar esta versión comienza la revisión con el cliente antes de retirarse del inmueble.</p>
             {esInspector && (
               <form action={concluirInspeccionTecnicaV1} className="mt-4">
                 <input type="hidden" name="inspeccionId" value={id}/>
-                <button className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">CONCLUIR INSPECCIÓN</button>
+                <input type="hidden" name="retorno" value="PRE_REPORTE"/>
+                <button className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">GENERAR PRE REPORTE</button>
               </form>
             )}
           </section>
         )}
 
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && tecnicoListo && inspeccionConcluida && (
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && !firmasListas && (
           <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Después de concluir la inspección</p>
-            <h2 className="mt-2 text-xl font-black">Reporte preliminar para revisión en sitio</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              Antes de cerrar la visita, el Inspector debe revisar el PRE REPORTE completo y corregir cualquier omisión todavía estando en el inmueble.
-            </p>
-            <div className="mt-4">
-              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="inline-block rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
-                {preReporteRevisado ? "VOLVER A VER PRE-REPORTE INTEGRAL ✓" : "GENERAR / REVISAR PRE-REPORTE INTEGRAL"}
-              </Link>
-              {preReporteRevisado && (
-                <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="ml-3 inline-block rounded-xl border border-violet-300/30 px-4 py-3 text-sm font-black text-violet-200">
-                  PASAR A REVISIÓN Y AJUSTES
-                </Link>
-              )}
-            </div>
-            <p className={`mt-4 text-sm font-bold ${preReporteRevisado ? "text-emerald-300" : "text-amber-300"}`}>
-              {preReporteRevisado ? "✓ PRE REPORTE revisado y confirmado en sitio." : "Pendiente: confirmar la revisión preliminar antes de cerrar la visita."}
-            </p>
-          </section>
-        )}
-
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && (
-          <section className={`mt-5 rounded-3xl border p-6 ${firmasListas ? "border-emerald-300/20 bg-emerald-300/5" : "border-cyan-300/20 bg-cyan-300/5"}`}>
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Registro de firmas</p>
-            <h2 className="mt-2 text-xl font-black">Firmas del Inspector y del Cliente</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">Las firmas forman parte del expediente y aparecerán en el PRE-REPORTE y en el REPORTE FINAL. Deben quedar registradas antes de cerrar la visita.</p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/firmas`} className="inline-block rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
-                {firmasListas ? "CONSULTAR / ACTUALIZAR FIRMAS ✓" : "REGISTRAR FIRMAS"}
-              </Link>
-              <span className={`rounded-xl border px-4 py-3 text-sm font-black ${firmaInspector ? "border-emerald-300/30 text-emerald-300" : "border-amber-300/30 text-amber-300"}`}>Inspector: {firmaInspector ? "registrada" : "pendiente"}</span>
-              <span className={`rounded-xl border px-4 py-3 text-sm font-black ${firmaCliente ? "border-emerald-300/30 text-emerald-300" : "border-amber-300/30 text-amber-300"}`}>Cliente: {firmaCliente ? "registrada" : "pendiente"}</span>
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Revisión con el cliente · antes de retirarse</p>
+            <h2 className="mt-2 text-xl font-black">Revisa el PRE REPORTE y corrige lo necesario antes de firmas</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Si detectas una omisión, vuelve al recorrido desde la Partida 1. Cuando termines los ajustes, registra las firmas del Inspector y del Cliente.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-center text-sm font-black">CONSULTAR PRE REPORTE</Link>
+              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-4 py-3 text-center text-sm font-black text-slate-950">REVISAR Y AJUSTAR · PARTIDA 1</Link>
+              <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-300 px-4 py-3 text-center text-sm font-black text-slate-950">PASAR A FIRMAS</Link>
             </div>
           </section>
         )}
 
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && (
-          <section className={`mt-5 rounded-3xl border p-6 ${listoCampo ? "border-emerald-300/20 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
-            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Etapa 2 · cierre de visita</p>
-            <h2 className="mt-2 text-xl font-black">Terminar trabajo de campo</h2>
-            <p className="mt-2 text-sm text-slate-300">Se habilita únicamente después de confirmar el PRE REPORTE en sitio y contar con las firmas vigentes. Al cerrar la visita inicia la última revisión del Inspector.</p>
-            {esInspector && <form action={terminarTrabajoCampoV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button disabled={!listoCampo} className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR VISITA Y PASAR A REVISIÓN FINAL</button></form>}
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && firmasListas && (
+          <section className="mt-5 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-violet-300">Firmas completas · última revisión del Inspector</p>
+            <h2 className="mt-2 text-xl font-black">Vuelve al recorrido desde la Partida 1 y regenera el PRE REPORTE</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Después de cualquier ajuste, vuelve al PRE REPORTE y genera una nueva versión. Desde esa pantalla aparecerán únicamente las opciones REVISAR Y AJUSTAR y AUTORIZACIÓN DEL REPORTE.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">VOLVER AL RECORRIDO · PARTIDA 1</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-cyan-300 px-5 py-4 text-center text-sm font-black text-slate-950">PRE REPORTE · REGENERAR / AUTORIZAR</Link>
+            </div>
           </section>
         )}
 
-        {campoTerminado && (
-          <section id="envio-autorizacion" className={`scroll-mt-24 mt-5 rounded-3xl border p-6 ${vencido ? "border-rose-300/20 bg-rose-300/5" : "border-cyan-300/20 bg-cyan-300/5"}`}>
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Etapa 3 · última revisión del Inspector</p>
-            <h2 className="mt-2 text-2xl font-black">{vencido ? "Plazo objetivo vencido" : `${horasRestantes} h ${mins} min restantes`}</h2>
-            {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">CONSULTAR PRE REPORTE</Link>
-              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-4 py-3 text-sm font-black text-slate-950">REVISAR Y AJUSTAR</Link>
-              <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">AJUSTAR EVIDENCIAS</Link>
-            </div>
-            {puedeOperarCierre && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
-              <>
-                <form action={confirmarRevisionFinalInspectorV1} className="mt-5">
-                  <input type="hidden" name="inspeccionId" value={id}/>
-                  <button disabled={!firmasListas || revisionInspectorFinal} className="w-full rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
-                    {revisionInspectorFinal ? "REVISIÓN FINAL DEL INSPECTOR CONFIRMADA ✓" : "CONFIRMAR REVISIÓN Y AJUSTES DEL INSPECTOR"}
-                  </button>
-                </form>
-                <form action={enviarReporteDireccionV1} className="mt-3">
-                  <input type="hidden" name="inspeccionId" value={id}/>
-                  <button disabled={!firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SOLICITAR AUTORIZACIÓN DE PRE REPORTE</button>
-                </form>
-                <p className="mt-3 text-xs leading-5 text-slate-400">Después del envío, el Inspector queda en sólo lectura. Dirección podrá autorizar o devolver el reporte con retroalimentación y correcciones requeridas.</p>
-              </>
+        {inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE && (
+          <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-amber-300">Reporte en Dirección</p>
+            <h2 className="mt-2 text-xl font-black">Pendiente de autorización o devolución con observaciones</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Si Dirección devuelve el reporte, el Inspector recuperará el acceso de revisión y ajuste para repetir el ciclo hasta la autorización.</p>
+            {usuario.rol === RolUsuario.DIRECTOR ? (
+              <Link href={`/panel/inspecciones/${id}/revision`} className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">REVISAR · AUTORIZAR O DEVOLVER</Link>
+            ) : (
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="mt-4 inline-block rounded-xl border border-white/15 px-5 py-3 text-sm font-black">CONSULTAR PRE REPORTE ENVIADO</Link>
             )}
           </section>
         )}

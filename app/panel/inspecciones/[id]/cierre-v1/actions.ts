@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { prisma } from "@/lib/prisma";
 
 const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
@@ -124,29 +125,63 @@ export async function concluirInspeccionTecnicaV1(formData: FormData) {
     volver(inspeccionId, "error", "La inspección técnica ya fue concluida por el Inspector.");
   }
 
-  await prisma.$executeRaw`
-    UPDATE "InspeccionControlV2"
-    SET "inspeccionTecnicaConcluidaEn"=NOW(),
-        "inspeccionTecnicaConcluidaPorId"=${usuario.id},
-        "actualizadoEn"=NOW()
+  const metricas = await obtenerMetricasV1(inspeccionId);
+  const [versionActual] = await prisma.$queryRaw<Array<{ version: number }>>`
+    SELECT COALESCE(MAX("version"),0)::int AS "version"
+    FROM "PreReporteInspeccion"
     WHERE "inspeccionId"=${inspeccionId}
   `;
+  const version = Number(versionActual?.version ?? 0) + 1;
+  const resumen = {
+    etapa: "REVISION_CON_CLIENTE_EN_SITIO",
+    definidos: metricas.definidos,
+    noAplica: metricas.noAplica,
+    aplicables: metricas.aplicables,
+    revisados: metricas.revisados,
+    totalHallazgos: metricas.totalHallazgos,
+    prioridades: metricas.resumenPrioridades,
+    semaforo: metricas.semaforo,
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "inspeccionTecnicaConcluidaEn"=NOW(),
+          "inspeccionTecnicaConcluidaPorId"=${usuario.id},
+          "preReporteGeneradoEn"=NOW(),
+          "calificacionPreliminar"=${metricas.calificacion},
+          "coberturaPorcentaje"=${metricas.cobertura},
+          "resumenEstadistico"=${JSON.stringify(resumen)}::jsonb,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+
+    await tx.$executeRaw`
+      INSERT INTO "PreReporteInspeccion"
+        ("inspeccionId","version","generadoPorId","calificacionPreliminar","coberturaPorcentaje","resumen","leyenda")
+      VALUES (
+        ${inspeccionId},${version},${usuario.id},${metricas.calificacion},${metricas.cobertura},
+        ${JSON.stringify(resumen)}::jsonb,
+        'PRELIMINAR - GENERADO AL CONCLUIR EL RECORRIDO - PENDIENTE DE REVISION CON CLIENTE'
+      )
+    `;
+  });
 
   await registrarAuditoria({
     tipo: TipoEvento.FINALIZAR_CAPTURA,
     entidad: "InspeccionControlV2",
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `Inspector concluyó la inspección técnica V1 ${inspeccion.folio}. A partir de este momento se habilita la revisión preliminar y los ajustes que procedan.`,
+    descripcion: `Inspector concluyó la inspección técnica V1 ${inspeccion.folio} y generó el PRE REPORTE versión ${version} para revisión con el cliente en sitio.`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/pre-reporte`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
   if (retorno === "PRE_REPORTE") {
-    redirect(`/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent("Inspección concluida. PRE REPORTE listo para generar y revisar.")}`);
+    redirect(`/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent("Inspección concluida al 100%. PRE REPORTE generado para revisión con el cliente antes de retirarse del inmueble.")}`);
   }
-  volver(inspeccionId, "ok", "Inspección concluida. Ya puedes revisar el reporte preliminar y realizar ajustes si procede.");
+  redirect(`/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent("PRE REPORTE generado. Revísalo con el cliente y realiza los ajustes que procedan antes de firmas.")}`);
 }
 
 export async function terminarTrabajoCampoV1(formData: FormData) {
@@ -266,17 +301,17 @@ export async function enviarReporteDireccionV1(formData: FormData) {
 
   const [control] = await prisma.$queryRaw<Array<{
     campoFinalizadoEn: Date | null;
+    preReporteGeneradoEn: Date | null;
     reporteLimiteEn: Date | null;
     reabiertaEn: Date | null;
     revisionInspectorFinalEn: Date | null;
   }>>`
-    SELECT "campoFinalizadoEn","reporteLimiteEn","reabiertaEn","revisionInspectorFinalEn"
+    SELECT "campoFinalizadoEn","preReporteGeneradoEn","reporteLimiteEn","reabiertaEn","revisionInspectorFinalEn"
     FROM "InspeccionControlV2"
     WHERE "inspeccionId"=${inspeccionId}
     LIMIT 1
   `;
-  if (!control?.campoFinalizadoEn) volver(inspeccionId, "error", "Primero debes terminar formalmente el trabajo de campo.");
-  if (!control.revisionInspectorFinalEn) volver(inspeccionId, "error", "Antes de enviar a Dirección debes confirmar la última revisión y ajuste del Inspector.");
+  if (!control?.preReporteGeneradoEn) volver(inspeccionId, "error", "Primero debes generar o regenerar el PRE REPORTE después de la última revisión del recorrido.");
 
   const reabiertaEn = control.reabiertaEn ? new Date(control.reabiertaEn) : null;
   const firmasVigentes = inspeccion.firmas.filter(
@@ -310,7 +345,11 @@ export async function enviarReporteDireccionV1(formData: FormData) {
       });
       await tx.$executeRaw`
         UPDATE "InspeccionControlV2"
-        SET "capturaCerrada"=true,
+        SET "campoFinalizadoEn"=COALESCE("campoFinalizadoEn",NOW()),
+            "reporteLimiteEn"=COALESCE("reporteLimiteEn",NOW() + interval '12 hours'),
+            "revisionInspectorFinalEn"=COALESCE("revisionInspectorFinalEn",NOW()),
+            "revisionInspectorFinalPorId"=COALESCE("revisionInspectorFinalPorId",${usuario.id}),
+            "capturaCerrada"=true,
             "capturaCerradaEn"=NOW(),
             "capturaCerradaPorId"=${usuario.id},
             "actualizadoEn"=NOW()
