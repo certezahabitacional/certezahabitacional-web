@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { normalizarImagenCliente } from "./normalizarImagenCliente";
 
 type Props = {
   inspeccionId: string;
@@ -14,10 +15,12 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
   const [archivo, setArchivo] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [enviando, startTransition] = useTransition();
+  const [error, setError] = useState("");
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   const seleccionar = (file: File | null) => {
+    setError("");
     if (preview) URL.revokeObjectURL(preview);
     setArchivo(file);
     setPreview(file ? URL.createObjectURL(file) : "");
@@ -25,13 +28,21 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
 
   const guardar = () => {
     if (!archivo) return;
-    const formData = new FormData();
-    formData.set("inspeccionId", inspeccionId);
-    formData.set("areaId", areaId);
-    formData.set("itemId", itemId);
-    formData.set("archivo", archivo);
-    formData.set("origenEvidencia", "GALERIA");
-    startTransition(async () => subirFoto(formData));
+    setError("");
+    startTransition(async () => {
+      try {
+        const normalizado = await normalizarImagenCliente(archivo, { maxDimension: 1920, maxBytes: 2_200_000 });
+        const formData = new FormData();
+        formData.set("inspeccionId", inspeccionId);
+        formData.set("areaId", areaId);
+        formData.set("itemId", itemId);
+        formData.set("archivo", normalizado);
+        formData.set("origenEvidencia", "GALERIA");
+        await subirFoto(formData);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No fue posible preparar la fotografía para cargarla.");
+      }
+    });
   };
 
   if (archivo && preview) {
@@ -41,13 +52,14 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
         <img src={preview} alt="Vista previa" className="h-56 w-full bg-black object-contain" />
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button type="button" onClick={guardar} disabled={enviando} className="rounded-xl bg-violet-300 px-3 py-3 text-sm font-black text-slate-950 disabled:opacity-50">
-            {enviando ? "GUARDANDO..." : "CONSERVAR Y GUARDAR"}
+            {enviando ? "COMPRIMIENDO / GUARDANDO..." : "CONSERVAR Y GUARDAR"}
           </button>
           <button type="button" disabled={enviando} onClick={() => { seleccionar(null); inputRef.current?.click(); }} className="rounded-xl border border-white/15 px-3 py-3 text-sm font-black text-slate-300">
             CAMBIAR FOTO
           </button>
         </div>
         <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={(e) => seleccionar(e.target.files?.[0] ?? null)} />
+        {error && <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">{error}</p>}
       </div>
     );
   }
