@@ -537,7 +537,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .pre-report-watermark-screen{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;z-index:0}
       .pre-report-watermark-screen span{transform:rotate(-32deg);font-size:72px;font-weight:900;letter-spacing:.22em;color:rgba(148,163,184,.11);white-space:nowrap}
       .pre-report-watermark-print{display:none}
-      .report-section{font-size:13px;line-height:1.55}
+      .report-section{font-size:13px;line-height:1.5}
+      .single-report-page{min-height:259mm}
+      .cover-report-page{min-height:259mm}
       .report-section h1{font-size:22px!important;line-height:1.2!important}
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
@@ -553,6 +555,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
         .no-print{display:none!important}
         .page-break{break-before:page;page-break-before:always}
         .section-flow{min-height:auto!important}
+        .single-report-page{min-height:259mm!important;max-height:259mm!important;overflow:hidden!important}
+        .cover-report-page{height:259mm!important;min-height:259mm!important;max-height:259mm!important;overflow:hidden!important}
         .avoid-break,.report-card,.report-figure,.report-signature,.metric-card,.summary-card,.signature-card,.photo-block{break-inside:avoid!important;page-break-inside:avoid!important}
         .keep-with-next{break-after:avoid!important;page-break-after:avoid!important}
         .pre-report-watermark-screen{display:none!important}
@@ -603,13 +607,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
       <article data-report-root className="report-body relative mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
         <ReportPageGuides />
         {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
-        <section className="relative min-h-[245mm] bg-slate-950 p-6 text-white">
+        <section className="cover-report-page relative bg-slate-950 p-5 text-white">
           {!autorizado && <div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}
-          <div className="min-h-[232mm] border-[3px] border-amber-400/80 p-2">
-            <div className="min-h-[228mm] border border-amber-200/30 px-8 py-7">
+          <div className="h-full border-[3px] border-amber-400/80 p-2">
+            <div className="h-full border border-amber-200/30 px-7 py-6">
               <ReportBrandHeader title={autorizado?"REPORTE FINAL":"PRE-REPORTE"} folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
               <div className={`mt-5 rounded-xl border px-5 py-3 text-center text-[10px] font-black uppercase tracking-[.2em] ${autorizado?"border-emerald-300/30 bg-emerald-300/10 text-emerald-200":"border-amber-300/30 bg-amber-300/10 text-amber-200"}`}>{estadoReporte}</div>
-              {portada?<figure className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2"><img src={portada} alt="Fachada frontal de la vivienda" className="h-[310px] w-full object-contain"/><figcaption className="pt-2 text-center text-[10px] uppercase tracking-wider text-slate-400">Fachada frontal de la vivienda inspeccionada</figcaption></figure>:<div className="mt-6 grid h-[310px] place-items-center rounded-2xl border border-dashed border-white/20 text-sm text-slate-400">Fotografía frontal no disponible</div>}
+              {portada?<figure className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2"><img src={portada} alt="Fachada frontal de la vivienda" className="h-[285px] w-full object-contain"/><figcaption className="pt-2 text-center text-[10px] uppercase tracking-wider text-slate-400">Fachada frontal de la vivienda inspeccionada</figcaption></figure>:<div className="mt-6 grid h-[285px] place-items-center rounded-2xl border border-dashed border-white/20 text-sm text-slate-400">Fotografía frontal no disponible</div>}
               <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
                 <Dato label="Cliente" value={inspeccion.cliente.nombre}/>
                 <Dato label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/>
@@ -638,12 +642,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </div>
         </section>
 
-        <Seccion id="sec-indice" final={autorizado} folio={inspeccion.folio} n="01" titulo="Índice" subtitulo="Secciones y página de inicio">
+        <Seccion id="sec-indice" paginaUnica final={autorizado} folio={inspeccion.folio} n="01" titulo="Índice" subtitulo="Secciones y página de inicio">
           <p className="mb-4 text-sm leading-6 text-slate-600">La numeración de la izquierda corresponde a la sección del documento; la columna Página indica la página física donde inicia cada tema. Las secciones extensas, como Desarrollo de la inspección, pueden abarcar varias páginas.</p>
           <IndicePaginasReporte entradas={indiceReporte}/>
         </Seccion>
 
-        <Seccion final={autorizado} folio={inspeccion.folio} id="sec-resumen" n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
+        <Seccion paginaUnica final={autorizado} folio={inspeccion.folio} id="sec-resumen" n="02" titulo="Resumen ejecutivo" subtitulo="Lectura rápida de resultados">
           <div className="grid gap-3 sm:grid-cols-6"><Metrica label="Cobertura" value={`${coberturaTexto}%`}/><Metrica label={etiquetaCalificacion} value={`${calificacionTexto}/100`}/><Metrica label="Nivel de evaluación" value={nivelEvaluacion}/><Metrica label="Partidas" value={String(totalPartidasReporte)}/><Metrica label="Puntos revisados" value={String(metricas.revisados)}/><Metrica label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>
           <p className="mt-3 text-xs font-bold text-slate-500">Puntos definidos: {metricas.definidos} · Inspeccionados: {metricas.revisados} · No aplica: {metricas.noAplica} · No inspeccionados / sin acceso u otra causa: {Math.max(metricas.aplicables - metricas.revisados, 0)}</p>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
@@ -684,7 +688,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-base font-black">{p.etiqueta}</h4></div><span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{p.calificacion.toFixed(0)}/100 · {p.nivel}</span></div>
                     {p.proceso&&<div className="mt-4 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Lecturas:</strong> inicial {p.proceso.lecturaInicial??"—"} {p.proceso.unidad??""} · final {p.proceso.lecturaFinal??"—"} {p.proceso.unidad??""}{p.proceso.lecturaInicial!==null&&p.proceso.lecturaFinal!==null?` · variación ${Number(p.proceso.lecturaFinal)-Number(p.proceso.lecturaInicial)} ${p.proceso.unidad??""}`:""}</div>}
                     {p.hallazgo&&<div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Resultado / hallazgo</p><p className="mt-1 text-sm font-black">{p.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{p.hallazgo.descripcion}</p><p className="mt-2 text-xs font-bold text-slate-300">Clasificación: {p.hallazgo.clasificacion} · Prioridad: {p.hallazgo.prioridad}</p></div>}
-                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${p.codigo}-${i}`} className="photo-block overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
+                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${p.codigo}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
                   </section>;
                 })}
               </div>
@@ -728,7 +732,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                         <span>Evaluación IA: {ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
                       </div>
                       {obs.justificacionCalificacionIa&&<p className="mt-2 text-xs leading-5 text-slate-500"><strong>Criterio de calificación IA:</strong> {obs.justificacionCalificacionIa}</p>}
-                      {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${g.id}-${i}`} className="photo-block overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
+                      {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${g.id}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
                     </section>;
                   })}
                 </div>
@@ -739,7 +743,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-resumen-partida" n="06" titulo="Resumen por partida" subtitulo="Resultados, alcance efectivo y evaluación de cada partida">
-          <div className="photo-block overflow-hidden rounded-2xl border border-slate-200">
+          <div className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">
             <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white">
               <span>Partida</span><span className="text-center">Inspeccionados</span><span className="text-center">Hallazgos</span><span className="text-center">No aplica</span><span className="text-center">Calificación</span><span className="text-center">Nivel</span>
             </div>
@@ -829,7 +833,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 }
 
-function Seccion({id,n,titulo,subtitulo,folio,final,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section id={id} className="report-section page-break section-flow relative px-10 py-8">{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-10 border-t border-amber-500/50 pt-4 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Final de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></div></section>}
+function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}>{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-6 border-t border-amber-500/50 pt-3 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Final de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
