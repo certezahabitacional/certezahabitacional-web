@@ -25,20 +25,44 @@ export default function ReportPageGuides({
     const proteger = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        const candidatos = Array.from(
+        const todosLosCandidatos = Array.from(
           root.querySelectorAll<HTMLElement>(
             '[data-page-unit], .report-figure, .colored-block, .page-row, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
           )
         );
+        const candidatos = todosLosCandidatos.filter((el) => {
+          const padreProtegido = el.parentElement?.closest<HTMLElement>("[data-page-unit]");
+          return !padreProtegido;
+        });
 
-        for (const el of candidatos) el.style.marginTop = "";
+        for (const el of todosLosCandidatos) el.style.marginTop = "";
         const encabezados = Array.from(root.querySelectorAll<HTMLElement>(".partida-header"));
         for (const el of encabezados) el.style.marginTop = "";
+        const secciones = Array.from(root.querySelectorAll<HTMLElement>(".page-break"));
+        for (const el of secciones) el.style.marginTop = "";
 
         const rootTop = root.getBoundingClientRect().top + window.scrollY;
 
         for (let pasada = 0; pasada < 5; pasada += 1) {
           let cambio = false;
+
+          for (const seccion of secciones) {
+            const rect = seccion.getBoundingClientRect();
+            const top = rect.top + window.scrollY - rootTop;
+            const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
+            const offset = top - pagina * PAGE_HEIGHT;
+            const objetivo = pagina === 0 ? 0 : TOP_SAFE;
+            const tolerancia = 6;
+
+            if (pagina === 0 && top < PAGE_HEIGHT - tolerancia) continue;
+            if (Math.abs(offset - objetivo) <= tolerancia) continue;
+
+            const salto = offset < objetivo
+              ? objetivo - offset
+              : PAGE_HEIGHT - offset + TOP_SAFE;
+            seccion.style.marginTop = `${salto}px`;
+            cambio = true;
+          }
 
           for (const encabezado of encabezados) {
             const siguiente = encabezado.parentElement?.querySelector<HTMLElement>(".inspection-pair");
