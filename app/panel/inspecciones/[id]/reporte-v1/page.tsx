@@ -537,8 +537,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const fechaAutorizacion = autorizacionDireccion
     ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
     : null;
-  const tituloReporte = autorizado ? "Reporte Final de Inspección V1" : "Pre-Reporte de Inspección V1";
-  const estadoReporte = autorizado ? "REPORTE FINAL AUTORIZADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
+  const tituloReporte = autorizado ? "Reporte Liberado de Inspección V1" : "Pre-Reporte de Inspección V1";
+  const estadoReporte = autorizado ? "REPORTE LIBERADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
 
   const cabeceras = await headers();
   const host = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host");
@@ -553,7 +553,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
     qr = await QRCode.toDataURL(`${base}/certificados/verificar/${inspeccion.certificado.codigoValidacion}`,{width:240,margin:1,errorCorrectionLevel:"M"});
   }
 
-  const hallazgosFiltrables = inspeccion.hallazgos
+  const hallazgosFiltrables = hallazgosConEvidencia
     .filter((h)=>["P1","P2","P3","P4","P5"].includes(h.prioridad))
     .map((h)=>{
       const area = h.areaId ? areaPorId.get(String(h.areaId)) : undefined;
@@ -567,6 +567,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
         titulo: h.titulo,
         descripcion: h.descripcion,
         recomendacion: h.recomendacion,
+        fotografias: h.fotografiasFirmadas
+          .filter((foto)=>Boolean(foto.urlFirmada))
+          .map((foto)=>({ url: foto.urlFirmada as string, descripcion: foto.descripcion })),
       };
     });
 
@@ -662,6 +665,25 @@ export default async function ReporteV1Page({ params, searchParams }: {
               {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Regenera el PRE REPORTE después de las firmas y de la última revisión antes de enviarlo a Dirección.</p>}
             </>
           )}
+        </section>
+      )}
+      {esDirector && inspeccion.estado === "REPORTE_PENDIENTE" && (
+        <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-violet-300/30 bg-violet-50 p-5">
+          <p className="text-xs font-black uppercase tracking-[.18em] text-violet-800">Dirección · revisión y autorización</p>
+          <h2 className="mt-1 text-xl font-black text-slate-950">PRE REPORTE recibido para revisión</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            Dirección revisa aquí el PRE REPORTE y entra al control de autorización para aprobarlo o devolverlo al Inspector con observaciones.
+          </p>
+          <Link href={`/panel/inspecciones/${id}/revision`} className="mt-4 inline-block rounded-xl bg-violet-700 px-5 py-3 text-sm font-black text-white">
+            IR A REVISIÓN Y AUTORIZACIÓN DE DIRECCIÓN
+          </Link>
+        </section>
+      )}
+      {esDirector && inspeccion.estado !== "REPORTE_PENDIENTE" && !autorizado && (
+        <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-slate-300 bg-white p-4">
+          <p className="text-sm font-bold text-slate-600">
+            Dirección podrá revisar y autorizar cuando el Inspector envíe el PRE REPORTE mediante “AUTORIZACIÓN DEL REPORTE”.
+          </p>
         </section>
       )}
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
@@ -891,7 +913,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 }
 
-function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}>{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-6 border-t border-amber-500/50 pt-3 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Final de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></div></section>}
+function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}>{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-6 border-t border-amber-500/50 pt-3 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Liberado de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
