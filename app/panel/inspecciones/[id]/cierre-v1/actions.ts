@@ -41,8 +41,15 @@ async function exigirInspectorV1(inspeccionId: string) {
     },
   });
 
-  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.activo) redirect("/acceso");
-  if (!inspeccion || inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
+  const esDirector = usuario?.activo && usuario.rol === RolUsuario.DIRECTOR;
+  const esInspectorAsignado =
+    usuario?.activo &&
+    usuario.rol === RolUsuario.INSPECTOR &&
+    Boolean(usuario.inspector?.activo) &&
+    Boolean(inspeccion) &&
+    inspeccion!.inspectorId === usuario.inspector?.id;
+  if (!esDirector && !esInspectorAsignado) redirect("/acceso");
+  if (!inspeccion) redirect("/acceso");
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "Este cierre corresponde únicamente a la primera inspección integral V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "La V1 no se encuentra disponible para cierre de campo.");
 
@@ -192,7 +199,7 @@ export async function terminarTrabajoCampoV1(formData: FormData) {
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/areas`);
-  volver(inspeccionId, "ok", "Visita cerrada. Ahora realiza la última revisión y ajuste del Inspector antes de enviar el reporte a Dirección.");
+  volver(inspeccionId, "ok", "Visita cerrada. Ahora realiza la última revisión y ajuste del Inspector antes de solicitar la autorización del PRE REPORTE a Dirección.");
 }
 
 export async function confirmarRevisionFinalInspectorV1(formData: FormData) {
@@ -249,7 +256,7 @@ export async function confirmarRevisionFinalInspectorV1(formData: FormData) {
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/cierre-v1`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
-  volver(inspeccionId, "ok", "Revisión final del Inspector confirmada. Ya puedes enviar el reporte a Dirección.");
+  volver(inspeccionId, "ok", "Revisión final del Inspector confirmada. Ya puedes solicitar la autorización del PRE REPORTE a Dirección.");
 }
 
 export async function enviarReporteDireccionV1(formData: FormData) {
@@ -283,7 +290,7 @@ export async function enviarReporteDireccionV1(formData: FormData) {
       "error",
       reabiertaEn
         ? "Después de una reapertura técnica de Dirección, el Inspector y el cliente deben registrar nuevas firmas antes de reenviar el reporte."
-        : "Antes de enviar el reporte a Dirección deben estar registradas las firmas del Inspector y del cliente.",
+        : "Antes de solicitar la autorización del PRE REPORTE a Dirección deben estar registradas las firmas del Inspector y del cliente.",
     );
   }
 
@@ -313,7 +320,7 @@ export async function enviarReporteDireccionV1(formData: FormData) {
   } catch (e) {
     const mensaje = e instanceof Error ? e.message : "";
     const idx = mensaje.indexOf("No se puede finalizar");
-    volver(inspeccionId, "error", idx >= 0 ? mensaje.slice(idx).split("\n")[0] : "No fue posible enviar el reporte a Dirección. Revisa los requisitos pendientes.");
+    volver(inspeccionId, "error", idx >= 0 ? mensaje.slice(idx).split("\n")[0] : "No fue posible solicitar la autorización del PRE REPORTE a Dirección. Revisa los requisitos pendientes.");
   }
 
   await registrarAuditoria({
