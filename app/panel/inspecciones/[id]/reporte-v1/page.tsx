@@ -158,6 +158,26 @@ function textoSnapshot(snapshot: SnapshotCotizacion, clave: string) {
   return valor === null || valor === undefined ? "" : String(valor).trim();
 }
 
+function claveNormalizada(valor: string) {
+  return valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function totalBanosDeclarados(snapshot: SnapshotCotizacion) {
+  for (const [clave, valor] of Object.entries(snapshot)) {
+    const normalizada = claveNormalizada(clave);
+    if (!(normalizada.includes("bano") || normalizada.includes("banio"))) continue;
+    if (typeof valor !== "number" && typeof valor !== "string") continue;
+    const numero = Number(String(valor).replace(",", ".").trim());
+    if (Number.isFinite(numero) && numero >= 0.5 && numero <= 20) return numero;
+  }
+  return null;
+}
+
+function esAreaBano(area: Pick<Area, "nombre" | "codigo">) {
+  const texto = claveNormalizada(`${area.nombre} ${area.codigo}`);
+  return texto.includes("bano") || texto.includes("banio");
+}
+
 function observacionConcepto(valor: string | null): ObservacionConcepto {
   if (!valor) return {};
   try {
@@ -366,6 +386,16 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 
   const snapshot = objetoJson(inspeccion.cotizacion?.versiones[0]?.datos);
+  const banosDeclarados = totalBanosDeclarados(snapshot);
+  const partidasBano = partidasReporte.filter(esAreaBano);
+  const indiceMedioBano = banosDeclarados !== null && Math.abs((banosDeclarados % 1) - 0.5) < 0.001
+    ? Math.floor(banosDeclarados)
+    : -1;
+  const nombrePartidaReporte = (area: Area) => {
+    const indice = partidasBano.findIndex((partida) => partida.id === area.id);
+    if (indice >= 0 && indice === indiceMedioBano) return "1/2 Baño";
+    return area.nombre.replace(/^Bano$/i,"Baño");
+  };
   const alcanceCotizacion = textoSnapshot(snapshot,"procedimientoAlcance")
     || textoSnapshot(snapshot,"alcance")
     || textoSnapshot(snapshot,"punto3")
@@ -589,12 +619,15 @@ export default async function ReporteV1Page({ params, searchParams }: {
               </button>
             </form>
           ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl border border-cyan-300 bg-white px-5 py-4 text-center text-sm font-black text-cyan-900">
+                REGISTRO DE FIRMAS
+              </Link>
               <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">
-                REVISIÓN Y AJUSTES
+                REVISIÓN Y AJUSTE
               </Link>
               <Link href={`/panel/inspecciones/${id}/cierre-v1#envio-autorizacion`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">
-                ENVÍO A AUTORIZACIÓN
+                SOLICITUD DE AUTORIZACIÓN DE REPORTE
               </Link>
             </div>
           )}
@@ -696,7 +729,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida {numeroPartida.get(a.id)}</p>
-                    <h3 className="mt-1 text-xl font-black">{a.nombre}</h3>
+                    <h3 className="mt-1 text-xl font-black">{nombrePartidaReporte(a)}</h3>
                     {(()=>{const ct=conteosPorArea.get(a.id);return <p className="mt-2 text-xs font-bold text-slate-500">{conceptos.length} puntos inspeccionados · {ct?.noAplica??0} no aplica · {Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</p>})()}
                   </div>
                   {evaluacionArea&&<div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionArea.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionArea.nivel}</span></p></div>}
@@ -756,7 +789,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               const ev=evaluacionesPorArea.get(a.id);
               const ct=conteosPorArea.get(a.id);
               return <div key={a.id} className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
-                <span><strong>{numeroPartida.get(a.id)}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</span></span>
+                <span><strong>{numeroPartida.get(a.id)}. {nombrePartidaReporte(a)}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</span></span>
                 <span className="text-center font-bold">{conceptos.length}</span>
                 <span className="text-center font-bold">{ct?.hallazgos??0}</span>
                 <span className="text-center font-bold">{ct?.noAplica??0}</span>
