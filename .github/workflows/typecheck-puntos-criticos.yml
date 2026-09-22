@@ -42,6 +42,8 @@ on:
 
       - fix/paginacion-real-reporte-v1
 
+      - fix/carga-fotos-movil-413
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { normalizarImagenCliente } from "./normalizarImagenCliente";
 
 type Props = {
   inspeccionId: string;
@@ -77,8 +78,10 @@ export default function CapturaConceptoArea({
       return;
     }
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const maxDimension = 1920;
+    const escala = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.max(1, Math.round(video.videoWidth * escala));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * escala));
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -90,18 +93,26 @@ export default function CapturaConceptoArea({
       if (preview) URL.revokeObjectURL(preview);
       setPreview(url);
       detener();
-    }, "image/jpeg", 0.92);
+    }, "image/jpeg", 0.78);
   };
 
   const guardar = () => {
     if (!captura) return;
-    const formData = new FormData();
-    formData.set("inspeccionId", inspeccionId);
-    formData.set("areaId", areaId);
-    formData.set("itemId", itemId);
-    formData.set("archivo", captura);
-    formData.set("origenEvidencia", "CAMARA");
-    startTransition(async () => subirFoto(formData));
+    setError("");
+    startTransition(async () => {
+      try {
+        const archivo = await normalizarImagenCliente(captura, { maxDimension: 1920, maxBytes: 2_200_000 });
+        const formData = new FormData();
+        formData.set("inspeccionId", inspeccionId);
+        formData.set("areaId", areaId);
+        formData.set("itemId", itemId);
+        formData.set("archivo", archivo);
+        formData.set("origenEvidencia", "CAMARA");
+        await subirFoto(formData);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No fue posible preparar la fotografía para cargarla.");
+      }
+    });
   };
 
   return (
@@ -128,7 +139,7 @@ export default function CapturaConceptoArea({
           <img src={preview} alt="Vista previa" className="aspect-video w-full rounded-xl bg-black object-cover" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={guardar} disabled={enviando} className="rounded-xl bg-cyan-300 px-3 py-3 text-sm font-black text-slate-950 disabled:opacity-50">
-              {enviando ? "GUARDANDO..." : "GUARDAR FOTO"}
+              {enviando ? "COMPRIMIENDO / GUARDANDO..." : "GUARDAR FOTO"}
             </button>
             <button type="button" disabled={enviando} onClick={() => { setCaptura(null); if (preview) URL.revokeObjectURL(preview); setPreview(""); void abrir(); }} className="rounded-xl border border-white/10 px-3 py-3 text-sm font-black text-slate-300">
               REPETIR
