@@ -29,7 +29,7 @@ export default function ReportPageGuides() {
   }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 hidden print:hidden md:block" aria-hidden="true">
+    <div className="pointer-events-none absolute inset-0 z-20 print:hidden" aria-hidden="true">
       {Array.from({ length: paginas }, (_, index) => {
         const page = index + 1;
         const top = index * LETTER_HEIGHT_PX;
@@ -46,10 +46,10 @@ export default function ReportPageGuides() {
               </div>
             )}
             <div
-              className="absolute right-3 rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-black text-white shadow"
-              style={{ top: top + 10 }}
+              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/95 px-3 py-1 text-[10px] font-black text-slate-600 shadow"
+              style={{ top: top + LETTER_HEIGHT_PX - 28 }}
             >
-              Página {page}
+              Página {page} de {paginas}
             </div>
           </div>
         );

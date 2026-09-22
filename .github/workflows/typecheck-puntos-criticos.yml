@@ -38,6 +38,8 @@ on:
 
       - fix/firmas-qr-resumen-paginacion-v1
 
+      - fix/cierre-v1-congruencia-formato-reporte
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
