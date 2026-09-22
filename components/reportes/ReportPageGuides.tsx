@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-const LETTER_HEIGHT_PX = 1056;
+const PAGE_HEIGHT = 1056;
+const TOP_SAFE = 28;
+const BOTTOM_SAFE = 54;
 
 export default function ReportPageGuides() {
   const [paginas, setPaginas] = useState(1);
@@ -11,46 +13,78 @@ export default function ReportPageGuides() {
     const root = document.querySelector<HTMLElement>("[data-report-root]");
     if (!root) return;
 
-    const recalcular = () => {
-      const alto = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
-      setPaginas(Math.max(1, Math.ceil(alto / LETTER_HEIGHT_PX)));
+    let raf = 0;
+
+    const proteger = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const candidatos = Array.from(
+          root.querySelectorAll<HTMLElement>(
+            '[data-page-unit], .report-figure, .colored-block, .page-row, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
+          )
+        );
+
+        for (const el of candidatos) el.style.marginTop = "";
+
+        const rootTop = root.getBoundingClientRect().top + window.scrollY;
+        for (let pasada = 0; pasada < 3; pasada += 1) {
+          let cambio = false;
+          for (const el of candidatos) {
+            const rect = el.getBoundingClientRect();
+            const alto = rect.height;
+            if (alto <= 0 || alto > PAGE_HEIGHT - TOP_SAFE - BOTTOM_SAFE) continue;
+
+            const top = rect.top + window.scrollY - rootTop;
+            const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
+            const offset = top - pagina * PAGE_HEIGHT;
+            const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
+
+            if (offset + alto > finSeguro) {
+              const actual = Number.parseFloat(el.style.marginTop || "0") || 0;
+              const salto = PAGE_HEIGHT - offset + TOP_SAFE;
+              el.style.marginTop = `${actual + salto}px`;
+              cambio = true;
+            }
+          }
+          if (!cambio) break;
+        }
+
+        const altoTotal = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
+        setPaginas(Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT)));
+      });
     };
 
-    recalcular();
+    proteger();
 
-    const observer = new ResizeObserver(recalcular);
-    observer.observe(root);
-    window.addEventListener("resize", recalcular);
+    const imgs = Array.from(root.querySelectorAll("img"));
+    imgs.forEach((img) => img.addEventListener("load", proteger));
+    window.addEventListener("resize", proteger);
+    const t1 = window.setTimeout(proteger, 250);
+    const t2 = window.setTimeout(proteger, 900);
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", recalcular);
+      cancelAnimationFrame(raf);
+      imgs.forEach((img) => img.removeEventListener("load", proteger));
+      window.removeEventListener("resize", proteger);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
     };
   }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 print:hidden" aria-hidden="true">
+    <div className="pointer-events-none absolute inset-0 z-30 print:hidden" aria-hidden="true">
       {Array.from({ length: paginas }, (_, index) => {
         const page = index + 1;
-        const top = index * LETTER_HEIGHT_PX;
+        const footerTop = page * PAGE_HEIGHT - 34;
         return (
-          <div key={page}>
-            {page > 1 && (
-              <div
-                className="absolute left-0 right-0 border-t-2 border-dashed border-slate-400"
-                style={{ top }}
-              >
-                <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-600 shadow-sm">
-                  Salto de página
-                </span>
-              </div>
-            )}
-            <div
-              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/95 px-3 py-1 text-[10px] font-black text-slate-600 shadow"
-              style={{ top: top + LETTER_HEIGHT_PX - 28 }}
-            >
+          <div
+            key={page}
+            className="absolute left-0 right-0 flex justify-center"
+            style={{ top: footerTop }}
+          >
+            <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[10px] font-black text-slate-500 shadow-sm">
               Página {page} de {paginas}
-            </div>
+            </span>
           </div>
         );
       })}
