@@ -115,11 +115,33 @@ export default async function CierreV1Page({ params, searchParams }: {
     estado.hallazgos === estado.hallazgosCompletos &&
     (estado.portadaFachada === 1 || estado.fotosFachada === 0) && estado.syncPendientes === 0
   );
+  const [hermeticidad] = await prisma.$queryRaw<Array<{ completa: boolean }>>`
+    SELECT (
+      COUNT(*) FILTER (
+        WHERE "clave" IN ('PC_HIDRAULICA','PC_GAS')
+          AND (
+            "estado"='NO_APLICA'
+            OR ("estado"='COMPLETADO' AND "lecturaInicial" IS NOT NULL AND "lecturaFinal" IS NOT NULL)
+          )
+      ) = 2
+    ) AS "completa"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${id}
+  `;
+
+  const totalPartidas = Number(estado?.areasTotal ?? 0) + Number(estado?.procesosTotal ?? 0) + 1;
+  const partidasCompletas =
+    Number(estado?.areasCompletas ?? 0) +
+    Number(estado?.procesosCompletos ?? 0) +
+    Number(Boolean(hermeticidad?.completa));
+  const todasPartidasListas = totalPartidas > 0 && partidasCompletas === totalPartidas;
+
   const inspeccionConcluida = Boolean(estado?.inspeccionTecnicaConcluidaEn);
   const preReporteRevisado = Boolean(estado?.preReporteGeneradoEn);
   const campoTerminado = Boolean(estado?.campoFinalizadoEn);
   const revisionInspectorFinal = Boolean(estado?.revisionInspectorFinalEn);
-  const listoCampo = tecnicoListo && preReporteRevisado && firmasListas;
+  const listoCampo = tecnicoListo && todasPartidasListas && preReporteRevisado && firmasListas;
+  const puedeOperarCierre = esInspector || usuario.rol === RolUsuario.DIRECTOR;
   const ahora = new Date();
   const limite = estado?.reporteLimiteEn ? new Date(estado.reporteLimiteEn) : null;
   const minutosRestantes = limite ? Math.floor((limite.getTime() - ahora.getTime()) / 60000) : null;
@@ -131,7 +153,7 @@ export default async function CierreV1Page({ params, searchParams }: {
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo V1</Link>
+          <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="text-sm font-black text-cyan-300">← PRE REPORTE</Link>
           <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-slate-300">CIERRE V1</span>
         </div>
 
@@ -174,11 +196,41 @@ export default async function CierreV1Page({ params, searchParams }: {
         )}
 
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card titulo="Áreas" valor={`${estado?.areasCompletas ?? 0}/${estado?.areasTotal ?? 0}`} ok={Boolean(estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal)} />
-          <Card titulo="Procesos" valor={`${estado?.procesosCompletos ?? 0}/${estado?.procesosTotal ?? 0}`} ok={Boolean(estado && estado.procesosTotal > 0 && estado.procesosCompletos === estado.procesosTotal)} />
+          <Card titulo="Partidas cerradas" valor={`${partidasCompletas}/${totalPartidas}`} ok={todasPartidasListas} />
+          <Card titulo="PRE REPORTE" valor={preReporteRevisado ? "Generado" : "Pendiente"} ok={preReporteRevisado} />
           <Card titulo="Hallazgos completos" valor={`${estado?.hallazgosCompletos ?? 0}/${estado?.hallazgos ?? 0}`} ok={Boolean(estado && estado.hallazgosCompletos === estado.hallazgos)} />
           <Card titulo="Firmas vigentes" valor={`${Number(firmaInspector) + Number(firmaCliente)}/2`} ok={firmasListas} />
         </section>
+
+        {preReporteRevisado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+          <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Acciones del PRE REPORTE</p>
+            <h2 className="mt-2 text-xl font-black">Revisar, ajustar y solicitar autorización</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Estas son las dos acciones operativas posteriores a la generación del PRE REPORTE. La solicitud de autorización se habilita cuando la revisión final y las firmas están completas.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">
+                REVISAR Y AJUSTAR
+              </Link>
+              {puedeOperarCierre ? (
+                <form action={enviarReporteDireccionV1}>
+                  <input type="hidden" name="inspeccionId" value={id}/>
+                  <button disabled={!campoTerminado || !firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-4 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
+                    SOLICITAR AUTORIZACIÓN DE PRE REPORTE
+                  </button>
+                </form>
+              ) : (
+                <div className="rounded-xl border border-white/10 px-5 py-4 text-center text-sm font-black text-slate-500">
+                  SOLICITAR AUTORIZACIÓN DE PRE REPORTE
+                </div>
+              )}
+            </div>
+            {!campoTerminado || !revisionInspectorFinal ? (
+              <p className="mt-3 text-xs text-amber-200">Para solicitar autorización primero completa la revisión y ajustes finales del Inspector.</p>
+            ) : null}
+          </section>
+        )}
 
         <section className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
           <h2 className="text-xl font-black">Semáforo de salida</h2>
@@ -272,10 +324,10 @@ export default async function CierreV1Page({ params, searchParams }: {
             {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">CONSULTAR PRE REPORTE</Link>
-              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-4 py-3 text-sm font-black text-slate-950">REVISIÓN Y AJUSTES</Link>
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-300 px-4 py-3 text-sm font-black text-slate-950">REVISAR Y AJUSTAR</Link>
               <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">AJUSTAR EVIDENCIAS</Link>
             </div>
-            {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+            {puedeOperarCierre && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
               <>
                 <form action={confirmarRevisionFinalInspectorV1} className="mt-5">
                   <input type="hidden" name="inspeccionId" value={id}/>
@@ -285,7 +337,7 @@ export default async function CierreV1Page({ params, searchParams }: {
                 </form>
                 <form action={enviarReporteDireccionV1} className="mt-3">
                   <input type="hidden" name="inspeccionId" value={id}/>
-                  <button disabled={!firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PRE REPORTE Y ENVIAR A DIRECCIÓN</button>
+                  <button disabled={!firmasListas || !revisionInspectorFinal} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SOLICITAR AUTORIZACIÓN DE PRE REPORTE</button>
                 </form>
                 <p className="mt-3 text-xs leading-5 text-slate-400">Después del envío, el Inspector queda en sólo lectura. Dirección podrá autorizar o devolver el reporte con retroalimentación y correcciones requeridas.</p>
               </>
