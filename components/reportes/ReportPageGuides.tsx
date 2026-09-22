@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LogoCerteza from "@/components/branding/LogoCerteza";
 
 const PAGE_HEIGHT = 1056;
-const TOP_SAFE = 28;
-const BOTTOM_SAFE = 54;
+const TOP_SAFE = 84;
+const BOTTOM_SAFE = 66;
 
-export default function ReportPageGuides() {
+export default function ReportPageGuides({
+  folio,
+  final = false,
+}: {
+  folio?: string;
+  final?: boolean;
+}) {
   const [paginas, setPaginas] = useState(1);
 
   useEffect(() => {
@@ -25,10 +32,31 @@ export default function ReportPageGuides() {
         );
 
         for (const el of candidatos) el.style.marginTop = "";
+        const encabezados = Array.from(root.querySelectorAll<HTMLElement>(".partida-header"));
+        for (const el of encabezados) el.style.marginTop = "";
 
         const rootTop = root.getBoundingClientRect().top + window.scrollY;
-        for (let pasada = 0; pasada < 3; pasada += 1) {
+
+        for (let pasada = 0; pasada < 5; pasada += 1) {
           let cambio = false;
+
+          for (const encabezado of encabezados) {
+            const siguiente = encabezado.parentElement?.querySelector<HTMLElement>(".inspection-pair");
+            if (!siguiente) continue;
+            const er = encabezado.getBoundingClientRect();
+            const sr = siguiente.getBoundingClientRect();
+            const top = er.top + window.scrollY - rootTop;
+            const altoCombinado = (sr.bottom - er.top);
+            const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
+            const offset = top - pagina * PAGE_HEIGHT;
+            const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
+            if (altoCombinado <= PAGE_HEIGHT - TOP_SAFE - BOTTOM_SAFE && offset + altoCombinado > finSeguro) {
+              const salto = PAGE_HEIGHT - offset + TOP_SAFE;
+              encabezado.style.marginTop = `${salto}px`;
+              cambio = true;
+            }
+          }
+
           for (const el of candidatos) {
             const rect = el.getBoundingClientRect();
             const alto = rect.height;
@@ -37,8 +65,15 @@ export default function ReportPageGuides() {
             const top = rect.top + window.scrollY - rootTop;
             const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
             const offset = top - pagina * PAGE_HEIGHT;
-            const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
 
+            if (pagina > 0 && offset < TOP_SAFE) {
+              const actual = Number.parseFloat(el.style.marginTop || "0") || 0;
+              el.style.marginTop = `${actual + (TOP_SAFE - offset)}px`;
+              cambio = true;
+              continue;
+            }
+
+            const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
             if (offset + alto > finSeguro) {
               const actual = Number.parseFloat(el.style.marginTop || "0") || 0;
               const salto = PAGE_HEIGHT - offset + TOP_SAFE;
@@ -46,6 +81,7 @@ export default function ReportPageGuides() {
               cambio = true;
             }
           }
+
           if (!cambio) break;
         }
 
@@ -60,7 +96,7 @@ export default function ReportPageGuides() {
     imgs.forEach((img) => img.addEventListener("load", proteger));
     window.addEventListener("resize", proteger);
     const t1 = window.setTimeout(proteger, 250);
-    const t2 = window.setTimeout(proteger, 900);
+    const t2 = window.setTimeout(proteger, 1000);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -75,16 +111,34 @@ export default function ReportPageGuides() {
     <div className="pointer-events-none absolute inset-0 z-30 print:hidden" aria-hidden="true">
       {Array.from({ length: paginas }, (_, index) => {
         const page = index + 1;
-        const footerTop = page * PAGE_HEIGHT - 34;
+        const top = index * PAGE_HEIGHT;
+        const footerTop = page * PAGE_HEIGHT - 54;
+
         return (
-          <div
-            key={page}
-            className="absolute left-0 right-0 flex justify-center"
-            style={{ top: footerTop }}
-          >
-            <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[10px] font-black text-slate-500 shadow-sm">
-              Página {page} de {paginas}
-            </span>
+          <div key={page}>
+            {page > 1 && (
+              <div
+                className="absolute left-10 right-10 flex h-[62px] items-center justify-between border-b border-amber-500/40 bg-white/95 px-2"
+                style={{ top: top + 10 }}
+              >
+                <div className="flex items-center gap-3">
+                  <LogoCerteza variant="gold" width={70} className="max-h-12" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-700">Certeza Habitacional</p>
+                    <p className="text-[10px] font-bold text-slate-500">{final ? "Reporte oficial de inspección" : "Pre reporte de inspección"}</p>
+                  </div>
+                </div>
+                <p className="text-[10px] font-black text-slate-600">{folio ?? ""}</p>
+              </div>
+            )}
+
+            <div
+              className="absolute left-10 right-10 flex items-center justify-between border-t border-amber-500/40 bg-white/95 px-2 pt-2"
+              style={{ top: footerTop }}
+            >
+              <span className="text-[9px] font-black uppercase tracking-[.14em] text-slate-500">Certeza Habitacional</span>
+              <span className="text-[10px] font-black text-slate-600">Página {page} de {paginas}</span>
+            </div>
           </div>
         );
       })}

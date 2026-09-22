@@ -44,6 +44,8 @@ on:
 
       - fix/carga-fotos-movil-413
 
+      - fix/integra-flujo-pre-reporte-pr97
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
