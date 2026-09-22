@@ -738,7 +738,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-desarrollo" n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
             <article className="rounded-3xl border-2 border-amber-300 p-5">
-              <div data-page-unit className="keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div data-page-unit className="partida-header keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                 <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida 1</p><h3 className="mt-1 text-xl font-black">Pruebas de hermeticidad</h3><p className="mt-2 text-xs font-bold text-slate-500">Pruebas de hermeticidad de las instalaciones hidráulica y de gas.</p></div>
                 <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionHermeticidad.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionHermeticidad.nivel}</span></p></div>
               </div>
@@ -759,7 +759,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               const conceptos=conceptosPorArea.get(a.id)??[];
               const evaluacionArea=evaluacionesPorArea.get(a.id);
               return <article key={a.id} className="report-card rounded-3xl border-2 border-slate-200 p-5">
-                <div data-page-unit className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                <div data-page-unit className="partida-header flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida {numeroPartida.get(a.id)}</p>
                     <h3 className="mt-1 text-xl font-black">{a.nombre}</h3>
