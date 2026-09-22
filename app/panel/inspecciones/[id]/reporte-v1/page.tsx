@@ -232,6 +232,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
   if (!inspeccion) notFound();
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/reporte`);
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
+  const esDirector = usuario.rol === RolUsuario.DIRECTOR;
+  const puedeOperarPreReporte = esInspector || esDirector;
   if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
 
   const areas = await prisma.$queryRaw<Area[]>`
@@ -571,7 +573,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       }`}</style>
       <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">{autorizado ? "REPORTE FINAL V1" : "PRE-REPORTE INTEGRAL V1"}</span></div>
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
-      {!autorizado && esInspector && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
+      {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
           <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PASO 4 · PRE REPORTE</p>
           <h2 className="mt-2 text-xl font-black">
@@ -592,10 +594,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
           ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">
-                REVISIÓN Y AJUSTES
+                REVISAR Y AJUSTAR
               </Link>
               <Link href={`/panel/inspecciones/${id}/cierre-v1#envio-autorizacion`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">
-                ENVÍO A AUTORIZACIÓN
+                AUTORIZACIÓN DE PRE REPORTE
               </Link>
             </div>
           )}
