@@ -557,7 +557,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         .section-flow{min-height:auto!important}
         .single-report-page{min-height:259mm!important;max-height:259mm!important;overflow:hidden!important}
         .cover-report-page{height:259mm!important;min-height:259mm!important;max-height:259mm!important;overflow:hidden!important}
-        .avoid-break,.report-card,.report-figure,.report-signature,.metric-card,.summary-card,.signature-card,.photo-block{break-inside:avoid!important;page-break-inside:avoid!important}
+        .report-figure,.report-signature,.metric-card,.summary-card,.signature-card,.photo-block{break-inside:avoid!important;page-break-inside:avoid!important}
         .keep-with-next{break-after:avoid!important;page-break-after:avoid!important}
         .pre-report-watermark-screen{display:none!important}
         .pre-report-watermark-print{display:grid!important;position:fixed;inset:0;place-items:center;z-index:9999;pointer-events:none}
@@ -570,7 +570,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         tr{break-inside:avoid!important;page-break-inside:avoid!important}
         p,h1,h2,h3,h4{orphans:3;widows:3}
         h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
-        footer{break-inside:avoid;page-break-inside:avoid}
+        footer{break-before:avoid;page-break-before:avoid}
       }`}</style>
       <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">{autorizado ? "REPORTE FINAL V1" : "PRE-REPORTE INTEGRAL V1"}</span></div>
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
@@ -684,7 +684,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               <div className="mt-5 space-y-5">
                 {pruebasHermeticidad.filter((p)=>p.inspeccionada).map((p,index)=>{
                   const fotos=(p.area ? (fotosPorArea.get(p.area.id)??[]) : []).filter((foto)=>p.conceptos.some((g)=>g.id===foto.guiaItemId));
-                  return <section key={p.codigo} className="avoid-break rounded-2xl border border-slate-200 bg-white p-5">
+                  return <section key={p.codigo} className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-base font-black">{p.etiqueta}</h4></div><span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{p.calificacion.toFixed(0)}/100 · {p.nivel}</span></div>
                     {p.proceso&&<div className="mt-4 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Lecturas:</strong> inicial {p.proceso.lecturaInicial??"—"} {p.proceso.unidad??""} · final {p.proceso.lecturaFinal??"—"} {p.proceso.unidad??""}{p.proceso.lecturaInicial!==null&&p.proceso.lecturaFinal!==null?` · variación ${Number(p.proceso.lecturaFinal)-Number(p.proceso.lecturaInicial)} ${p.proceso.unidad??""}`:""}</div>}
                     {p.hallazgo&&<div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Resultado / hallazgo</p><p className="mt-1 text-sm font-black">{p.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{p.hallazgo.descripcion}</p><p className="mt-2 text-xs font-bold text-slate-300">Clasificación: {p.hallazgo.clasificacion} · Prioridad: {p.hallazgo.prioridad}</p></div>}
@@ -711,7 +711,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     const ev=evaluacionConcepto(g);
                     const fotos=fotosPorConcepto.get(g.id)??[];
                     const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
-                    return <section key={g.id} className="avoid-break rounded-2xl border border-slate-200 bg-white p-5">
+                    return <section key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
