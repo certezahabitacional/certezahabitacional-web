@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { PUNTOS_CRITICOS_V1 } from "@/lib/puntos-criticos-v1";
 import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import CapturaCamara from "../CapturaCamara";
 import CargaGaleriaConPreview from "../CargaGaleriaConPreview";
@@ -72,6 +73,12 @@ function datosPaso(valor: unknown): DatosPaso {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as DatosPaso)
     : {};
+}
+
+function tituloPartida(valor: string) {
+  return valor
+    .toLocaleLowerCase("es-MX")
+    .replace(/(^|[\s/\-])([a-záéíóúüñ])/g, (_, separador: string, letra: string) => `${separador}${letra.toLocaleUpperCase("es-MX")}`);
 }
 
 function observacion(valor: string | null): Observacion {
@@ -160,6 +167,35 @@ export default async function HermeticidadPage({
   `;
   const totalRecorrido = 8 + Number(areasRecorrido?.total ?? 0);
 
+  const areasNavegacion = await prisma.$queryRaw<Array<{ id:string; nombre:string }>>`
+    SELECT "id"::text AS "id","nombre"
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${id} AND "tipo" <> 'PUNTO_CRITICO'
+    ORDER BY "orden","nombre"
+  `;
+
+  const puntosNavegacion = await prisma.$queryRaw<Array<{
+    id:string; areaId:string|null; area:string; concepto:string; estadoV3:string;
+  }>>`
+    SELECT g."id"::text AS "id",g."areaId"::text AS "areaId",g."area",g."concepto",g."estadoV3"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."inspeccionId"=${id}
+      AND g."concepto" NOT ILIKE '%manómetro%'
+      AND g."concepto" NOT ILIKE '%lectura final%'
+    ORDER BY COALESCE(g."orden",999999),g."concepto"
+  `;
+
+  const puntosFisicosPorArea = new Map<string, typeof puntosNavegacion>();
+  const puntosCriticosPorCodigo = new Map<string, typeof puntosNavegacion>();
+  for (const p of puntosNavegacion) {
+    if (p.area.startsWith("__PUNTO_CRITICO__:")) {
+      const codigo=p.area.replace("__PUNTO_CRITICO__:","");
+      puntosCriticosPorCodigo.set(codigo,[...(puntosCriticosPorCodigo.get(codigo)??[]),p]);
+    } else if (p.areaId) {
+      puntosFisicosPorArea.set(p.areaId,[...(puntosFisicosPorArea.get(p.areaId)??[]),p]);
+    }
+  }
+
   const pruebas = [];
   for (const paso of pasos) {
     const codigo = paso.clave === "PC_GAS" ? "GAS" : "HIDRAULICA";
@@ -223,6 +259,49 @@ export default async function HermeticidadPage({
             ← Retomar recorrido
           </Link>
           <div className="flex flex-wrap items-center gap-2">
+            <details className="relative">
+              <summary className="cursor-pointer list-none rounded-full bg-cyan-300 px-4 py-2 text-xs font-black text-slate-950">
+                IR A PARTIDA / PUNTO DE INSPECCIÓN
+              </summary>
+              <div className="absolute right-0 z-50 mt-2 max-h-[70vh] w-[min(92vw,560px)] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl">
+                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="block rounded-xl border border-white/10 p-3">
+                  <span className="text-[9px] font-black text-slate-500">Partida 1</span>
+                  <p className="text-sm font-black">Pruebas De Hermeticidad</p>
+                  <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <p>Concepto 1 · Hermeticidad Hidráulica</p>
+                    <p>Concepto 2 · Hermeticidad De Gas</p>
+                  </div>
+                </Link>
+                {PUNTOS_CRITICOS_V1.map((punto,index)=>{
+                  const conceptos=puntosCriticosPorCodigo.get(punto.codigo)??[];
+                  return <div key={punto.codigo} className="mt-2 rounded-xl border border-white/10 p-3">
+                    <Link href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`} className="block text-sm font-black">
+                      <span className="mr-2 text-[9px] text-slate-500">Partida {index+2}</span>{tituloPartida(punto.etiqueta)}
+                    </Link>
+                    {conceptos.length>0&&<div className="mt-2 space-y-1">{conceptos.map((p)=>{
+                      const inspeccionado=["REVISADO","CON_HALLAZGO","NO_APLICA"].includes(p.estadoV3);
+                      return inspeccionado
+                        ? <Link key={p.id} href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}&foco=${p.id}`} className="block rounded-lg bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">{tituloPartida(p.concepto)}</Link>
+                        : <span key={p.id} className="block rounded-lg bg-white/[.03] px-3 py-1.5 text-[11px] text-slate-600">{tituloPartida(p.concepto)} · Pendiente</span>;
+                    })}</div>}
+                  </div>;
+                })}
+                {areasNavegacion.map((area,index)=>{
+                  const conceptos=puntosFisicosPorArea.get(area.id)??[];
+                  return <div key={area.id} className="mt-2 rounded-xl border border-white/10 p-3">
+                    <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block text-sm font-black">
+                      <span className="mr-2 text-[9px] text-slate-500">Partida {index+9}</span>{tituloPartida(area.nombre)}
+                    </Link>
+                    {conceptos.length>0&&<div className="mt-2 space-y-1">{conceptos.map((p)=>{
+                      const inspeccionado=["REVISADO","CON_HALLAZGO","NO_APLICA"].includes(p.estadoV3);
+                      return inspeccionado
+                        ? <a key={p.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}#item-${p.id}`} className="block rounded-lg bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">{tituloPartida(p.concepto)}</a>
+                        : <span key={p.id} className="block rounded-lg bg-white/[.03] px-3 py-1.5 text-[11px] text-slate-600">{tituloPartida(p.concepto)} · Pendiente</span>;
+                    })}</div>}
+                  </div>;
+                })}
+              </div>
+            </details>
             <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-xs font-black text-amber-200">CONSULTAR PLAN DE {totalRecorrido} PARTIDAS</Link>
             <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">
               {fase === "inicio" ? "ETAPA INICIAL" : "ETAPA FINAL"}
