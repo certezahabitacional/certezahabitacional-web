@@ -545,10 +545,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h3{font-size:16px!important;line-height:1.3!important}
       .report-section h4{font-size:14px!important;line-height:1.35!important}
       @media screen{
-        .report-section.page-break{margin-top:24px;border-top:3px dashed #94a3b8;box-shadow:0 -10px 0 #e2e8f0}
-        .report-section.page-break::before{content:"SALTO DE PÁGINA";position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#e2e8f0;color:#475569;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.12em;z-index:30}
-        #sec-certificado.page-break{margin-top:24px;border-top:3px dashed #94a3b8;box-shadow:0 -10px 0 #e2e8f0}
-        #sec-certificado.page-break::before{content:"SALTO DE PÁGINA";position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#e2e8f0;color:#475569;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.12em;z-index:30}
+        [data-page-unit]{scroll-margin-top:24px}
       }
       @media print{
         html,body{background:#fff!important}
@@ -557,7 +554,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         .section-flow{min-height:auto!important}
         .single-report-page{min-height:259mm!important;max-height:259mm!important;overflow:hidden!important}
         .cover-report-page{height:259mm!important;min-height:259mm!important;max-height:259mm!important;overflow:hidden!important}
-        .report-figure,.report-signature,.metric-card,.summary-card,.signature-card,.photo-block{break-inside:avoid!important;page-break-inside:avoid!important}
+        [data-page-unit],.report-figure,.report-signature,.metric-card,.summary-card,.signature-card,.photo-block,.colored-block{break-inside:avoid!important;page-break-inside:avoid!important}
         .keep-with-next{break-after:avoid!important;page-break-after:avoid!important}
         .pre-report-watermark-screen{display:none!important}
         .pre-report-watermark-print{display:grid!important;position:fixed;inset:0;place-items:center;z-index:9999;pointer-events:none}
@@ -677,7 +674,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-desarrollo" n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
             <article className="rounded-3xl border-2 border-amber-300 p-5">
-              <div className="keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div data-page-unit className="keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                 <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida 1</p><h3 className="mt-1 text-xl font-black">Pruebas de hermeticidad</h3><p className="mt-2 text-xs font-bold text-slate-500">Pruebas de hermeticidad de las instalaciones hidráulica y de gas.</p></div>
                 <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionHermeticidad.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionHermeticidad.nivel}</span></p></div>
               </div>
@@ -685,10 +682,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 {pruebasHermeticidad.filter((p)=>p.inspeccionada).map((p,index)=>{
                   const fotos=(p.area ? (fotosPorArea.get(p.area.id)??[]) : []).filter((foto)=>p.conceptos.some((g)=>g.id===foto.guiaItemId));
                   return <section key={p.codigo} className="rounded-2xl border border-slate-200 bg-white p-5">
+                    <div data-page-unit>
                     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-base font-black">{p.etiqueta}</h4></div><span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{p.calificacion.toFixed(0)}/100 · {p.nivel}</span></div>
                     {p.proceso&&<div className="mt-4 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700"><strong>Lecturas:</strong> inicial {p.proceso.lecturaInicial??"—"} {p.proceso.unidad??""} · final {p.proceso.lecturaFinal??"—"} {p.proceso.unidad??""}{p.proceso.lecturaInicial!==null&&p.proceso.lecturaFinal!==null?` · variación ${Number(p.proceso.lecturaFinal)-Number(p.proceso.lecturaInicial)} ${p.proceso.unidad??""}`:""}</div>}
-                    {p.hallazgo&&<div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Resultado / hallazgo</p><p className="mt-1 text-sm font-black">{p.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{p.hallazgo.descripcion}</p><p className="mt-2 text-xs font-bold text-slate-300">Clasificación: {p.hallazgo.clasificacion} · Prioridad: {p.hallazgo.prioridad}</p></div>}
-                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${p.codigo}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
+                    </div>
+                    {p.hallazgo&&<div data-page-unit className="colored-block mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Resultado / hallazgo</p><p className="mt-1 text-sm font-black">{p.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{p.hallazgo.descripcion}</p><p className="mt-2 text-xs font-bold text-slate-300">Clasificación: {p.hallazgo.clasificacion} · Prioridad: {p.hallazgo.prioridad}</p></div>}
+                    {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure data-page-unit key={`${p.codigo}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??p.etiqueta} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
                   </section>;
                 })}
               </div>
@@ -697,7 +696,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               const conceptos=conceptosPorArea.get(a.id)??[];
               const evaluacionArea=evaluacionesPorArea.get(a.id);
               return <article key={a.id} className="report-card rounded-3xl border-2 border-slate-200 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                <div data-page-unit className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida {numeroPartida.get(a.id)}</p>
                     <h3 className="mt-1 text-xl font-black">{a.nombre}</h3>
@@ -712,6 +711,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     const fotos=fotosPorConcepto.get(g.id)??[];
                     const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
                     return <section key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <div data-page-unit>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
@@ -723,7 +723,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
                           <span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black text-white">{ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
                         </div>
                       </div>
-                      {ev.hallazgo&&<div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Hallazgo</p><p className="mt-1 text-sm font-black">{ev.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{ev.hallazgo.descripcion}</p>{ev.hallazgo.recomendacion&&<p className="mt-2 text-sm leading-6 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
+                      </div>
+                      {ev.hallazgo&&<div data-page-unit className="colored-block mt-4 rounded-2xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Hallazgo</p><p className="mt-1 text-sm font-black">{ev.hallazgo.titulo}</p><p className="mt-2 text-sm leading-6 text-slate-300">{ev.hallazgo.descripcion}</p>{ev.hallazgo.recomendacion&&<p className="mt-2 text-sm leading-6 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
                       {obs.descripcionFinal&&<p className="mt-4 text-sm leading-6 text-slate-700"><strong>Interpretación final del Inspector:</strong> {obs.descripcionFinal}</p>}
                       {(g.valorMedido||g.valorProyecto)&&<p className="mt-3 text-sm text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Referencia/proyecto: ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
                       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-600">
@@ -732,7 +733,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                         <span>Evaluación IA: {ev.calificacion.toFixed(0)}/100 · {ev.nivel}</span>
                       </div>
                       {obs.justificacionCalificacionIa&&<p className="mt-2 text-xs leading-5 text-slate-500"><strong>Criterio de calificación IA:</strong> {obs.justificacionCalificacionIa}</p>}
-                      {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure key={`${g.id}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
+                      {fotos.length>0&&<div className="mt-4 grid gap-3 sm:grid-cols-2">{fotos.slice(0,4).map((foto,i)=><figure data-page-unit key={`${g.id}-${i}`} className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="h-52 w-full bg-slate-950 object-contain"/>:<div className="grid h-52 place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-3 text-xs text-slate-500">{foto.descripcion??`Evidencia ${i+1}`}</figcaption></figure>)}</div>}
                     </section>;
                   })}
                 </div>
@@ -747,7 +748,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
             <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white">
               <span>Partida</span><span className="text-center">Inspeccionados</span><span className="text-center">Hallazgos</span><span className="text-center">No aplica</span><span className="text-center">Calificación</span><span className="text-center">Nivel</span>
             </div>
-            <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
+            <div data-page-unit className="page-row grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
               <span><strong>1. Pruebas de hermeticidad</strong><span className="mt-1 block text-[10px] text-slate-500">Hidráulica y gas</span></span>
               <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>p.inspeccionada).length}</span>
               <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>Boolean(p.hallazgo)).length}</span>
@@ -759,7 +760,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               const conceptos=conceptosPorArea.get(a.id)??[];
               const ev=evaluacionesPorArea.get(a.id);
               const ct=conteosPorArea.get(a.id);
-              return <div key={a.id} className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
+              return <div key={a.id} data-page-unit className="page-row grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
                 <span><strong>{numeroPartida.get(a.id)}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</span></span>
                 <span className="text-center font-bold">{conceptos.length}</span>
                 <span className="text-center font-bold">{ct?.hallazgos??0}</span>
