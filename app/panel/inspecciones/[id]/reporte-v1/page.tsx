@@ -619,12 +619,15 @@ export default async function ReporteV1Page({ params, searchParams }: {
               </button>
             </form>
           ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl border border-cyan-300 bg-white px-5 py-4 text-center text-sm font-black text-cyan-900">
+                REGISTRO DE FIRMAS
+              </Link>
               <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">
-                REVISIÓN Y AJUSTES
+                REVISIÓN Y AJUSTE
               </Link>
               <Link href={`/panel/inspecciones/${id}/cierre-v1#envio-autorizacion`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">
-                ENVÍO A AUTORIZACIÓN
+                SOLICITUD DE AUTORIZACIÓN DE REPORTE
               </Link>
             </div>
           )}
