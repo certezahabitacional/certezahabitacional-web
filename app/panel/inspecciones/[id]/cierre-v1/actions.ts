@@ -58,6 +58,36 @@ async function exigirInspectorV1(inspeccionId: string) {
 }
 
 async function validarCierreCampo(inspeccionId: string) {
+  // Reparación defensiva: si todos los conceptos de una partida están resueltos,
+  // la partida no debe permanecer PENDIENTE por un estado padre desfasado.
+  await prisma.$executeRaw`
+    UPDATE "AreaInspeccion" a
+    SET "estado"='REVISADA',
+        "resultado"=CASE
+          WHEN EXISTS (
+            SELECT 1 FROM "Hallazgo" h
+            WHERE h."inspeccionId"=a."inspeccionId" AND h."areaId"=a."id"
+          ) THEN 'CON_HALLAZGOS'
+          ELSE 'SIN_HALLAZGOS'
+        END,
+        "revisadaEn"=COALESCE(a."revisadaEn",NOW()),
+        "cerradaEn"=COALESCE(a."cerradaEn",NOW()),
+        "actualizadoEn"=NOW()
+    WHERE a."inspeccionId"=${inspeccionId}
+      AND a."tipo" <> 'PUNTO_CRITICO'
+      AND a."estado" <> 'REVISADA'
+      AND a."resultado" IS DISTINCT FROM 'NO_APLICA'
+      AND EXISTS (
+        SELECT 1 FROM "GuiaInspeccionItem" g
+        WHERE g."areaId"=a."id"
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM "GuiaInspeccionItem" g
+        WHERE g."areaId"=a."id"
+          AND g."estadoV3" NOT IN ('REVISADO','CON_HALLAZGO','NO_APLICA')
+      )
+  `;
+
   const [r] = await prisma.$queryRaw<Array<{
     areasTotal: number;
     areasCompletas: number;
