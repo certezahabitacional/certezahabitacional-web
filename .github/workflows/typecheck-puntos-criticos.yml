@@ -62,6 +62,8 @@ on:
 
       - fix/comentario-final-autocierre-partidas
 
+      - fix/regla-fachada-autorizacion-v1
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
