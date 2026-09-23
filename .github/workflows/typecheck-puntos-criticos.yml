@@ -58,6 +58,8 @@ on:
 
       - fix/reporte-paginacion-menu-y-solicitud-autorizacion
 
+      - fix/autocierre-partidas-resueltas
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
