@@ -28,7 +28,7 @@ export default function ReportPageGuides({
       raf = requestAnimationFrame(() => {
         const todosLosCandidatos = Array.from(
           root.querySelectorAll<HTMLElement>(
-            '[data-page-unit], .report-figure, .colored-block, .page-row, tr, figure, .signature-pair, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
+            '[data-page-unit], .report-figure, .colored-block, .page-row, tr, figure, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
           )
         );
         const candidatos = todosLosCandidatos.filter((el) => {

@@ -603,6 +603,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section{align-content:start!important;position:relative}
       .report-section>div.relative.z-10{display:block!important}
       .signature-pair{align-items:start!important}
+      #sec-firmas{font-size:12px!important;line-height:1.45!important}
+      #sec-firmas .signature-scope{padding:14px!important;margin-bottom:14px!important}
+      #sec-firmas .signature-scope>div{margin-top:8px!important;gap:5px!important;font-size:12px!important;line-height:1.45!important}
+      #sec-firmas .signature-card{padding:12px!important}
+      #sec-firmas .signature-card>div:nth-of-type(1){height:105px!important}
+      #sec-firmas .signature-card img{max-height:96px!important}
       .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
