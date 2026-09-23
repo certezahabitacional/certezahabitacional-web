@@ -56,11 +56,11 @@ export default function ReportPageGuides({
             const tolerancia = 6;
 
             if (pagina === 0 && top < PAGE_HEIGHT - tolerancia) continue;
+            // Cada tema principal del índice debe iniciar en una hoja nueva.
+            // Si ya está exactamente al inicio seguro de una página, no agregamos espacio.
             if (Math.abs(offset - objetivo) <= tolerancia) continue;
 
-            const salto = offset < objetivo
-              ? objetivo - offset
-              : PAGE_HEIGHT - offset + TOP_SAFE;
+            const salto = PAGE_HEIGHT - offset + TOP_SAFE;
             seccion.style.marginTop = `${salto}px`;
             cambio = true;
           }

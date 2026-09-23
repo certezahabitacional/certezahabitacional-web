@@ -630,9 +630,10 @@ export default async function ReporteV1Page({ params, searchParams }: {
         .pre-report-watermark-print span{transform:rotate(-32deg);font-size:88px;font-weight:900;letter-spacing:.2em;color:rgba(100,116,139,.10);white-space:nowrap}
         img,figure,svg,canvas{break-inside:avoid!important;page-break-inside:avoid!important;max-width:100%!important}
         figure{margin-top:0!important}
-        table{width:100%;border-collapse:collapse}
-        thead{display:table-header-group}
-        tfoot{display:table-footer-group}
+        table{width:100%;border-collapse:collapse;break-inside:auto!important;page-break-inside:auto!important}
+        thead{display:table-header-group!important}
+        tbody{break-inside:auto!important;page-break-inside:auto!important}
+        tfoot{display:table-footer-group!important}
         tr{break-inside:avoid!important;page-break-inside:avoid!important}
         p,h1,h2,h3,h4{orphans:3;widows:3}
         h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
@@ -828,31 +829,24 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-resumen-partida" n="06" titulo="Resumen por partida" subtitulo="Resultados, alcance efectivo y evaluación de cada partida">
-          <div className="photo-block report-figure overflow-hidden rounded-2xl border border-slate-200">
-            <div className="grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white">
-              <span>Partida</span><span className="text-center">Inspeccionados</span><span className="text-center">Hallazgos</span><span className="text-center">No aplica</span><span className="text-center">Calificación</span><span className="text-center">Nivel</span>
-            </div>
-            <div data-page-unit className="page-row grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
-              <span><strong>1. Pruebas de hermeticidad</strong><span className="mt-1 block text-[10px] text-slate-500">Hidráulica y gas</span></span>
-              <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>p.inspeccionada).length}</span>
-              <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>Boolean(p.hallazgo)).length}</span>
-              <span className="text-center font-bold">{pruebasHermeticidad.filter((p)=>!p.area).length}</span>
-              <span className="text-center font-black">{pruebasHermeticidad.some((p)=>p.inspeccionada)?evaluacionHermeticidad.calificacion.toFixed(2):"—"}</span>
-              <span className="text-center font-black">{pruebasHermeticidad.some((p)=>p.inspeccionada)?evaluacionHermeticidad.nivel:"—"}</span>
-            </div>
-            {partidasReporte.map((a)=>{
-              const conceptos=conceptosPorArea.get(a.id)??[];
-              const ev=evaluacionesPorArea.get(a.id);
-              const ct=conteosPorArea.get(a.id);
-              return <div key={a.id} data-page-unit className="page-row grid grid-cols-[1.5fr_.65fr_.65fr_.65fr_.65fr_.65fr] gap-2 border-t border-slate-200 px-4 py-3 text-xs">
-                <span><strong>{numeroPartida.get(a.id)}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</span></span>
-                <span className="text-center font-bold">{conceptos.length}</span>
-                <span className="text-center font-bold">{ct?.hallazgos??0}</span>
-                <span className="text-center font-bold">{ct?.noAplica??0}</span>
-                <span className="text-center font-black">{conceptos.length&&ev?ev.calificacion.toFixed(2):"—"}</span>
-                <span className="text-center font-black">{conceptos.length&&ev?ev.nivel:"—"}</span>
-              </div>;
-            })}
+          <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-950 text-[10px] font-black uppercase tracking-wider text-white">
+                  <th className="w-[30%] px-4 py-3 text-left">Partida</th><th className="px-2 py-3 text-center">Inspeccionados</th><th className="px-2 py-3 text-center">Hallazgos</th><th className="px-2 py-3 text-center">No aplica</th><th className="px-2 py-3 text-center">Calificación</th><th className="px-2 py-3 text-center">Nivel</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-slate-200">
+                  <td className="px-4 py-3"><strong>1. Pruebas de hermeticidad</strong><span className="mt-1 block text-[10px] text-slate-500">Hidráulica y gas</span></td>
+                  <td className="px-2 py-3 text-center font-bold">{pruebasHermeticidad.filter((p)=>p.inspeccionada).length}</td><td className="px-2 py-3 text-center font-bold">{pruebasHermeticidad.filter((p)=>Boolean(p.hallazgo)).length}</td><td className="px-2 py-3 text-center font-bold">{pruebasHermeticidad.filter((p)=>!p.area).length}</td><td className="px-2 py-3 text-center font-black">{pruebasHermeticidad.some((p)=>p.inspeccionada)?evaluacionHermeticidad.calificacion.toFixed(2):"—"}</td><td className="px-2 py-3 text-center font-black">{pruebasHermeticidad.some((p)=>p.inspeccionada)?evaluacionHermeticidad.nivel:"—"}</td>
+                </tr>
+                {partidasReporte.map((a)=>{const conceptos=conceptosPorArea.get(a.id)??[];const ev=evaluacionesPorArea.get(a.id);const ct=conteosPorArea.get(a.id);return <tr key={a.id} className="border-t border-slate-200">
+                  <td className="px-4 py-3"><strong>{numeroPartida.get(a.id)}. {a.nombre}</strong><span className="mt-1 block text-[10px] text-slate-500">{Math.max((ct?.aplicables??0)-(ct?.revisados??0),0)} no inspeccionados / sin acceso u otra causa</span></td>
+                  <td className="px-2 py-3 text-center font-bold">{conceptos.length}</td><td className="px-2 py-3 text-center font-bold">{ct?.hallazgos??0}</td><td className="px-2 py-3 text-center font-bold">{ct?.noAplica??0}</td><td className="px-2 py-3 text-center font-black">{conceptos.length&&ev?ev.calificacion.toFixed(2):"—"}</td><td className="px-2 py-3 text-center font-black">{conceptos.length&&ev?ev.nivel:"—"}</td>
+                </tr>})}
+              </tbody>
+            </table>
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-4">
             <Metrica label="Evaluación global" value={`${calificacionTexto}/100`}/>
@@ -883,7 +877,17 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-firmas" n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
-          <p className="mb-6 text-sm leading-7 text-slate-700">Las firmas registradas quedan asociadas al expediente de la inspección y forman parte de la trazabilidad documental. En el pre-reporte se muestran las firmas vigentes del Inspector y del Cliente cuando ya fueron capturadas en el sistema.</p>
+          <div data-page-unit className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">Alcance y consideraciones de la inspección</h3>
+            <div className="mt-3 space-y-2 text-[11px] leading-5 text-slate-700">
+              <p>La inspección realizada por <strong>Certeza Habitacional</strong> consiste en una revisión técnica y visual de las condiciones observables y accesibles del inmueble al momento de la visita, conforme al alcance del servicio contratado y a los puntos incluidos en el presente REPORTE.</p>
+              <p>Su propósito es identificar y documentar hallazgos, deficiencias, anomalías o condiciones relevantes que puedan ser detectadas mediante observación directa, pruebas funcionales y el uso de herramientas de inspección aplicables, sin efectuar trabajos destructivos, desmontajes, excavaciones, demoliciones ni intervenciones que puedan alterar o dañar el inmueble.</p>
+              <p>Los resultados corresponden a las condiciones existentes y observables en la fecha y hora de la inspección. La inspección no garantiza la inexistencia de defectos ocultos, vicios no visibles, fallas intermitentes o condiciones que no puedan detectarse razonablemente mediante los procedimientos empleados.</p>
+              <p><strong>Certeza Habitacional</strong> documenta y evalúa los hallazgos identificados dentro del alcance contratado. El REPORTE no sustituye dictámenes estructurales, estudios especializados, peritajes, cálculos, pruebas de laboratorio ni diagnósticos que deban ser realizados por especialistas o autoridades competentes.</p>
+              <p>Las áreas, instalaciones o elementos sin acceso, no visibles, desenergizados, fuera de servicio, obstruidos o que por seguridad no puedan revisarse constituyen limitaciones de la inspección y se indican en el REPORTE cuando corresponde. Las recomendaciones orientan al Cliente y, cuando la condición lo amerite, podrán requerir revisión, diagnóstico o reparación por un profesional o técnico especializado.</p>
+              <p className="font-bold text-slate-900">Con su firma, el Inspector hace constar la realización de la inspección y la documentación de sus resultados conforme al alcance establecido. El Cliente confirma la recepción y revisión del REPORTE y reconoce haber sido informado sobre el alcance y las limitaciones generales de la inspección. La firma del Cliente no implica conformidad con los defectos o hallazgos encontrados ni renuncia a derechos que legalmente le correspondan.</p>
+            </div>
+          </div>
           <div data-page-unit className="signature-pair grid items-start gap-6 sm:grid-cols-2">
             <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Inspector</p>
