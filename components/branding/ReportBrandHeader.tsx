@@ -16,10 +16,10 @@ export default function ReportBrandHeader({
   return (
     <header
       className={
-        dark
+        "report-brand-header " + (dark
           ? "relative z-10 flex items-start justify-between gap-6 border-b border-amber-300/30 pb-6"
           : "flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-5"
-      }
+      )}
     >
       <div className="flex items-center gap-5">
         <LogoCerteza variant="gold" width={170} className="max-h-24" />
