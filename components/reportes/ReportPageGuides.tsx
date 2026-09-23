@@ -60,7 +60,9 @@ export default function ReportPageGuides({
             // Si ya está exactamente al inicio seguro de una página, no agregamos espacio.
             if (Math.abs(offset - objetivo) <= tolerancia) continue;
 
-            const salto = PAGE_HEIGHT - offset + TOP_SAFE;
+            const salto = offset < TOP_SAFE
+              ? TOP_SAFE - offset
+              : PAGE_HEIGHT - offset + TOP_SAFE;
             seccion.style.marginTop = `${salto}px`;
             cambio = true;
           }
