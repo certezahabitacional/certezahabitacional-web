@@ -60,6 +60,8 @@ on:
 
       - fix/autocierre-partidas-resueltas
 
+      - fix/comentario-final-autocierre-partidas
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest

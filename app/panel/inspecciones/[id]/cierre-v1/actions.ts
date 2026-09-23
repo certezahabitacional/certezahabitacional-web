@@ -70,6 +70,30 @@ async function validarCierreCampo(inspeccionId: string) {
           ) THEN 'CON_HALLAZGOS'
           ELSE 'SIN_HALLAZGOS'
         END,
+        "comentarioFinal"=COALESCE(
+          NULLIF(BTRIM(a."comentarioFinal"),''),
+          CASE
+            WHEN EXISTS (
+              SELECT 1 FROM "Hallazgo" h
+              WHERE h."inspeccionId"=a."inspeccionId" AND h."areaId"=a."id"
+            )
+            THEN 'Se registraron '||
+              (SELECT COUNT(*)::text FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."areaId"=a."id")||
+              ' hallazgo(s) en '||a."nombre"||'. Los puntos aplicables fueron revisados y los hallazgos cuentan con la evidencia mínima requerida para su documentación.'
+            ELSE 'Se realizó la inspección de '||a."nombre"||' conforme al plan establecido. Todos los puntos aplicables quedaron resueltos y no se identificaron hallazgos que impidan el cierre de la partida.'
+          END
+        ),
+        "textoSinHallazgo"=CASE
+          WHEN NOT EXISTS (
+            SELECT 1 FROM "Hallazgo" h
+            WHERE h."inspeccionId"=a."inspeccionId" AND h."areaId"=a."id"
+          )
+          THEN COALESCE(
+            NULLIF(BTRIM(a."textoSinHallazgo"),''),
+            'Se realizó la inspección de '||a."nombre"||' conforme al plan establecido. Todos los puntos aplicables quedaron resueltos y no se identificaron hallazgos que impidan el cierre de la partida.'
+          )
+          ELSE a."textoSinHallazgo"
+        END,
         "revisadaEn"=COALESCE(a."revisadaEn",NOW()),
         "cerradaEn"=COALESCE(a."cerradaEn",NOW()),
         "actualizadoEn"=NOW()
