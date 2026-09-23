@@ -599,6 +599,34 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
     }
   });
 
+  const [estadoArea] = await prisma.$queryRaw<Array<{ pendientes:number; hallazgos:number }>>`
+    SELECT
+      (SELECT COUNT(*)::int
+       FROM "GuiaInspeccionItem" g
+       WHERE g."areaId"=${areaId}::uuid
+         AND g."estadoV3" NOT IN ('REVISADO','CON_HALLAZGO','NO_APLICA')) AS "pendientes",
+      (SELECT COUNT(*)::int
+       FROM "Hallazgo" h
+       WHERE h."inspeccionId"=${inspeccionId}
+         AND h."areaId"=${areaId}::uuid) AS "hallazgos"
+  `;
+
+  if (Number(estadoArea?.pendientes ?? 1) === 0) {
+    const resultadoArea = Number(estadoArea?.hallazgos ?? 0) > 0 ? "CON_HALLAZGOS" : "SIN_HALLAZGOS";
+    await prisma.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='REVISADA',
+          "resultado"=${resultadoArea},
+          "revisadaEn"=COALESCE("revisadaEn",NOW()),
+          "cerradaEn"=COALESCE("cerradaEn",NOW()),
+          "cerradaPorId"=COALESCE("cerradaPorId",${usuario.id}),
+          "actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid
+        AND "inspeccionId"=${inspeccionId}
+        AND "estado" <> 'REVISADA'
+    `;
+  }
+
   await recalcularIndice(inspeccionId);
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,
