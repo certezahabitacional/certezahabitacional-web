@@ -603,6 +603,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section{align-content:start!important;position:relative}
       .report-section>div.relative.z-10{display:block!important}
       .signature-pair{align-items:start!important}
+      #sec-firmas{font-size:12px!important;line-height:1.45!important}
+      #sec-firmas .signature-scope{padding:14px!important;margin-bottom:12px!important}
+      #sec-firmas .signature-scope>div{margin-top:8px!important;gap:5px!important;font-size:12px!important;line-height:1.45!important}
+      #sec-firmas .signature-card{padding:10px!important}
+      #sec-firmas .signature-card>div:nth-of-type(1){height:96px!important}
+      #sec-firmas .signature-card img{max-height:88px!important}
       .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
@@ -797,14 +803,14 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 </div>
                 <div className="mt-5 space-y-3">
                   {agruparPuntos(conceptos).map((grupo,grupoIndex)=>(
-                    <div data-page-unit key={`${a.id}-grupo-${grupoIndex}`} className={`inspection-pair ${grupo.length===3?"three":""}`}>
+                    <div key={`${a.id}-grupo-${grupoIndex}`} className={`inspection-pair ${grupo.length===3?"three":""}`}>
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
                         const ev=evaluacionConcepto(g);
                         const fotos=fotosPorConcepto.get(g.id)??[];
                         const foto=fotos[0];
                         const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
-                        return <section key={g.id} className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
+                        return <section key={g.id} data-page-unit className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-[9px] font-black uppercase tracking-[.14em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
@@ -877,7 +883,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-firmas" n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
-          <div data-page-unit className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div className="signature-scope mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">Alcance y consideraciones de la inspección</h3>
             <div className="mt-3 space-y-3 text-sm leading-7 text-slate-700">
               <p>La inspección realizada por <strong>Certeza Habitacional</strong> consiste en una revisión técnica y visual de las condiciones observables y accesibles del inmueble al momento de la visita, conforme al alcance del servicio contratado y a los puntos incluidos en el presente REPORTE.</p>
@@ -888,7 +894,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               <p className="font-bold text-slate-900">Con su firma, el Inspector hace constar la realización de la inspección y la documentación de sus resultados conforme al alcance establecido. El Cliente confirma la recepción y revisión del REPORTE y reconoce haber sido informado sobre el alcance y las limitaciones generales de la inspección. La firma del Cliente no implica conformidad con los defectos o hallazgos encontrados ni renuncia a derechos que legalmente le correspondan.</p>
             </div>
           </div>
-          <div data-page-unit className="signature-pair grid items-start gap-6 sm:grid-cols-2">
+          <div className="signature-pair grid items-start gap-4 sm:grid-cols-2">
             <article className="signature-card flex h-full flex-col rounded-3xl border border-slate-200 p-5 text-center">
               <p className="text-xs font-black uppercase tracking-wider text-slate-500">Inspector</p>
               <div className="mt-4 grid h-44 place-items-center rounded-2xl border border-slate-200 bg-white">

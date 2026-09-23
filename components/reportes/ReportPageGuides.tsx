@@ -28,10 +28,11 @@ export default function ReportPageGuides({
       raf = requestAnimationFrame(() => {
         const todosLosCandidatos = Array.from(
           root.querySelectorAll<HTMLElement>(
-            '[data-page-unit], .report-figure, .colored-block, .page-row, tr, figure, .signature-pair, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
+            '[data-page-unit], .report-figure, .colored-block, .page-row, tr, figure, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
           )
         );
         const candidatos = todosLosCandidatos.filter((el) => {
+          if (el.closest("#sec-firmas")) return false;
           const padreProtegido = el.parentElement?.closest<HTMLElement>("[data-page-unit]");
           return !padreProtegido;
         });
@@ -60,7 +61,9 @@ export default function ReportPageGuides({
             // Si ya está exactamente al inicio seguro de una página, no agregamos espacio.
             if (Math.abs(offset - objetivo) <= tolerancia) continue;
 
-            const salto = PAGE_HEIGHT - offset + TOP_SAFE;
+            const salto = offset < TOP_SAFE
+              ? TOP_SAFE - offset
+              : PAGE_HEIGHT - offset + TOP_SAFE;
             seccion.style.marginTop = `${salto}px`;
             cambio = true;
           }
