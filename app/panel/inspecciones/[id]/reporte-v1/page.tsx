@@ -879,7 +879,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-firmas" n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
           <div data-page-unit className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">Alcance y consideraciones de la inspección</h3>
-            <div className="mt-3 space-y-2 text-[11px] leading-5 text-slate-700">
+            <div className="mt-3 space-y-3 text-sm leading-7 text-slate-700">
               <p>La inspección realizada por <strong>Certeza Habitacional</strong> consiste en una revisión técnica y visual de las condiciones observables y accesibles del inmueble al momento de la visita, conforme al alcance del servicio contratado y a los puntos incluidos en el presente REPORTE.</p>
               <p>Su propósito es identificar y documentar hallazgos, deficiencias, anomalías o condiciones relevantes que puedan ser detectadas mediante observación directa, pruebas funcionales y el uso de herramientas de inspección aplicables, sin efectuar trabajos destructivos, desmontajes, excavaciones, demoliciones ni intervenciones que puedan alterar o dañar el inmueble.</p>
               <p>Los resultados corresponden a las condiciones existentes y observables en la fecha y hora de la inspección. La inspección no garantiza la inexistencia de defectos ocultos, vicios no visibles, fallas intermitentes o condiciones que no puedan detectarse razonablemente mediante los procedimientos empleados.</p>
