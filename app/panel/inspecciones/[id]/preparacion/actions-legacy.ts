@@ -30,7 +30,67 @@ function volver(id:string,tipo:"ok"|"error",m:string):never{redirect(`/panel/ins
 async function usuarioActual(){const s=await auth();if(!s?.user?.id)redirect("/login");const u=await prisma.usuario.findUnique({where:{id:s.user.id},select:{id:true,rol:true,activo:true,inspector:{select:{id:true}}}});if(!u?.activo)redirect("/acceso");return u}
 async function actorPreparacion(){const u=await usuarioActual();if(u.rol!==RolUsuario.DIRECTOR&&u.rol!==RolUsuario.ADMINISTRADOR&&u.rol!==RolUsuario.GERENTE)redirect("/acceso");return u}
 async function tablas(){const r=await prisma.$queryRaw<Array<{d:string|null;g:string|null}>>`SELECT to_regclass('public."DocumentoProyectoInspeccion"')::text d,to_regclass('public."GuiaInspeccionItem"')::text g`;return Boolean(r[0]?.d&&r[0]?.g)}
-function extraerAreas(datos: Prisma.JsonValue | null): string[] {if (!datos || typeof datos !== "object" || Array.isArray(datos)) return [];const obj=datos as Prisma.JsonObject;const claves=["areas","areasIncluidas","areasContratadas","alcance","espacios"];const halladas:string[]=[];for(const clave of claves){const valor=obj[clave];if(Array.isArray(valor)){for(const item of valor){if(typeof item==="string"&&item.trim())halladas.push(item.trim());else if(item&&typeof item==="object"&&!Array.isArray(item)){const nombre=(item as Prisma.JsonObject).nombre??(item as Prisma.JsonObject).area??(item as Prisma.JsonObject).descripcion;if(typeof nombre==="string"&&nombre.trim())halladas.push(nombre.trim());}}}}return [...new Set(halladas)];}
+function extraerAreas(datos: Prisma.JsonValue | null): string[] {
+  if (!datos || typeof datos !== "object" || Array.isArray(datos)) return [];
+  const obj = datos as Prisma.JsonObject;
+  const claves = ["areas","areasIncluidas","areasContratadas","alcance","espacios"];
+  const halladas: string[] = [];
+
+  for (const clave of claves) {
+    const valor = obj[clave];
+    if (!Array.isArray(valor)) continue;
+    for (const item of valor) {
+      if (typeof item === "string" && item.trim()) halladas.push(item.trim());
+      else if (item && typeof item === "object" && !Array.isArray(item)) {
+        const detalle = item as Prisma.JsonObject;
+        const nombre = detalle.nombre ?? detalle.area ?? detalle.descripcion;
+        if (typeof nombre === "string" && nombre.trim()) halladas.push(nombre.trim());
+      }
+    }
+  }
+
+  const numero = (valor: Prisma.JsonValue | undefined) => {
+    const n = Number(String(valor ?? "").replace(",", ".").trim());
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+  const normalizar = (valor: string) =>
+    valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  const recamaras = Math.floor(numero(obj.recamaras));
+  if (recamaras > 0 && !halladas.some((area) => normalizar(area).includes("recamara"))) {
+    for (let i = 1; i <= recamaras; i += 1) halladas.push(`Recámara ${i}`);
+  }
+
+  const banosDeclarados = numero(obj.banos);
+  const banosCompletos = Math.floor(banosDeclarados);
+  const tieneMedioBano = banosDeclarados - banosCompletos >= 0.5;
+  if (banosDeclarados > 0 && !halladas.some((area) => /bano|baño/i.test(area))) {
+    for (let i = 1; i <= banosCompletos; i += 1) halladas.push(`Baño ${i}`);
+    if (tieneMedioBano) halladas.push("1/2 Baño");
+  }
+
+  const espaciosBooleanos: Array<[string,string]> = [
+    ["cocina","Cocina"],["sala","Sala"],["comedor","Comedor"],["estancia","Estancia"],
+    ["areaLavado","Área de lavado"],["lavadero","Lavadero"],["cochera","Cochera"],
+    ["patio","Patio"],["jardin","Jardín"],["terraza","Terraza"],["balcon","Balcón"],
+    ["sotano","Sótano"],["cuartoServicio","Cuarto de servicio"],["bodega","Bodega"],
+  ];
+  for (const [clave, etiqueta] of espaciosBooleanos) {
+    if (obj[clave] === true) halladas.push(etiqueta);
+  }
+
+  const otros = typeof obj.otrosEspacios === "string" ? obj.otrosEspacios.trim() : "";
+  if (otros) {
+    for (const area of otros.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean)) halladas.push(area);
+  }
+
+  const unicas = new Map<string,string>();
+  for (const area of halladas) {
+    const clave = normalizar(area).replace(/\s+/g, " ").trim();
+    if (clave && !unicas.has(clave)) unicas.set(clave, area);
+  }
+  return [...unicas.values()];
+}
 
 export async function generarGuiaBase(fd:FormData){const u=await actorPreparacion(),id=t(fd,"inspeccionId");if(!(await tablas()))volver(id,"error","La preparación técnica aún no está habilitada en esta base de datos.");const ins=await prisma.inspeccion.findUnique({where:{id},select:{id:true,estado:true,tipoInmueble:true,cotizacion:{select:{versiones:{orderBy:{version:"desc"},take:1,select:{datos:true}}}}}});if(!ins)volver(id,"error","La inspección no existe.");if(ins.estado!=="PROGRAMADA")volver(id,"error","La guía base debe definirse antes de iniciar la inspección.");const areasCotizacion=extraerAreas(ins.cotizacion?.versiones[0]?.datos??null);const existentes=await prisma.$queryRaw<Array<{n:number}>>`SELECT COUNT(*)::int n FROM "GuiaInspeccionItem" WHERE "inspeccionId"=${id} AND "origen" IN ('COTIZACION','ESTANDAR')`;if(Number(existentes[0]?.n??0)>0)volver(id,"ok","La guía base ya fue generada para esta inspección.");await prisma.$transaction(async tx=>{let orden=1000;for(const area of areasCotizacion){await tx.$executeRaw`INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","especificacion","orden","creadoPorId") VALUES (${randomUUID()},${id},'COTIZACION',${area},'Cobertura integral del área contratada','Revisar acabados, instalaciones visibles, operación, daños, humedad, seguridad y cualquier condición anómala aplicable.',${orden++},${u.id})`;}for(const [area,concepto,especificacion] of CRITERIOS_ESTANDAR){await tx.$executeRaw`INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","especificacion","orden","creadoPorId") VALUES (${randomUUID()},${id},'ESTANDAR',${area},${concepto},${especificacion},${orden++},${u.id})`;}if(areasCotizacion.length===0){await tx.$executeRaw`INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","especificacion","orden","creadoPorId") VALUES (${randomUUID()},${id},'ESTANDAR',${ins.tipoInmueble},'Recorrido completo del inmueble','Al no existir áreas estructuradas en la cotización, realizar recorrido completo y agregar manualmente cualquier área particular antes de campo.',${orden++},${u.id})`;}});await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"GuiaInspeccionItem",inspeccionId:id,usuarioId:u.id,descripcion:`${u.rol} generó la guía base con ${areasCotizacion.length} área(s) de cotización y criterios estándar.`});revalidatePath(`/panel/inspecciones/${id}/preparacion`);volver(id,"ok","Guía base generada con cobertura de cotización y criterios estándar.")}
 export async function subirProyecto(fd:FormData){const u=await actorPreparacion(),id=t(fd,"inspeccionId"),tipo=t(fd,"tipo"),archivo=fd.get("archivo");if(!(await tablas()))volver(id,"error","La preparación técnica requiere aplicar primero su migración en preproducción.");if(!TIPOS.has(tipo))volver(id,"error","Tipo de proyecto inválido.");if(!(archivo instanceof File)||archivo.size===0)volver(id,"error","Selecciona un PDF.");if(archivo.type!=="application/pdf")volver(id,"error","Solo se permiten archivos PDF.");if(archivo.size>25*1024*1024)volver(id,"error","El PDF no puede exceder 25 MB.");const ins=await prisma.inspeccion.findUnique({where:{id},select:{id:true,estado:true}});if(!ins)volver(id,"error","La inspección no existe.");if(ins.estado!=="PROGRAMADA")volver(id,"error","Los proyectos deben cargarse antes de iniciar la inspección.");const docId=randomUUID(),ruta=`${id}/proyectos/${tipo.toLowerCase()}-${docId}.pdf`,bucket=process.env.SUPABASE_PROYECTOS_BUCKET||"proyectos-inspeccion",supabase=obtenerSupabaseAdmin();const bytes=Buffer.from(await archivo.arrayBuffer());const {error}=await supabase.storage.from(bucket).upload(ruta,bytes,{contentType:"application/pdf",upsert:false});if(error)volver(id,"error",`No fue posible guardar el PDF: ${error.message}`);try{await prisma.$transaction(async tx=>{await tx.$executeRaw`INSERT INTO "DocumentoProyectoInspeccion" ("id","inspeccionId","tipo","nombreOriginal","bucket","ruta","mimeType","bytes","subidoPorId") VALUES (${docId},${id},${tipo},${archivo.name},${bucket},${ruta},'application/pdf',${archivo.size},${u.id})`;const existentes=await tx.$queryRaw<Array<{n:number}>>`SELECT COUNT(*)::int n FROM "GuiaInspeccionItem" WHERE "inspeccionId"=${id} AND "tipoProyecto"=${tipo}`;if(Number(existentes[0]?.n??0)===0){let orden=100;for(const concepto of BASE[tipo]??BASE.OTROS){await tx.$executeRaw`INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","tipoProyecto","area","concepto","orden","creadoPorId") VALUES (${randomUUID()},${id},'PROYECTO',${tipo},${tipo.replaceAll('_',' ')},${concepto},${orden++},${u.id})`;}}});}catch(e){await supabase.storage.from(bucket).remove([ruta]);throw e}await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"DocumentoProyectoInspeccion",entidadId:docId,inspeccionId:id,usuarioId:u.id,descripcion:`${u.rol} cargó proyecto ${tipo}: ${archivo.name}.`});revalidatePath(`/panel/inspecciones/${id}/preparacion`);volver(id,"ok","Proyecto cargado y agregado a la guía técnica.")}

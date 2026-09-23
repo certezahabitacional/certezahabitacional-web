@@ -604,6 +604,22 @@ export default function FirmasPage() {
         <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-6 text-sm leading-7 text-cyan-100">
           Las firmas quedan asociadas al expediente y pueden consultarse desde los perfiles autorizados. Mientras la inspección permanezca EN PROCESO, el Inspector asignado o Dirección pueden registrarlas dibujando en pantalla o insertando una imagen digital desde el dispositivo.
         </div>
+
+        {firmas.inspector && firmas.cliente && (
+          <section className="mt-6 rounded-3xl border border-violet-300/25 bg-violet-300/10 p-6">
+            <p className="text-xs font-black uppercase tracking-[.18em] text-violet-300">Siguiente etapa</p>
+            <h2 className="mt-2 text-xl font-black">Revisión y ajuste del PRE REPORTE</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Las dos firmas ya están registradas. Continúa con la revisión técnica final y corrige cualquier dato, evidencia, clasificación, prioridad o interpretación antes de solicitar la autorización de Dirección.
+            </p>
+            <Link
+              href={`/panel/inspecciones/${inspeccionId}/revision-final-inspector`}
+              className="mt-4 inline-block rounded-xl bg-violet-300 px-5 py-3 text-sm font-black text-slate-950"
+            >
+              REVISIÓN Y AJUSTE →
+            </Link>
+          </section>
+        )}
       </div>
     </main>
   );
