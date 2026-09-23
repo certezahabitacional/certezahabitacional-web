@@ -311,7 +311,45 @@ export async function enviarReporteDireccionV1(formData: FormData) {
     WHERE "inspeccionId"=${inspeccionId}
     LIMIT 1
   `;
-  if (!control?.preReporteGeneradoEn) volver(inspeccionId, "error", "Primero debes generar o regenerar el PRE REPORTE después de la última revisión del recorrido.");
+  if (!control?.preReporteGeneradoEn) {
+    const metricas = await obtenerMetricasV1(inspeccionId);
+    const [versionActual] = await prisma.$queryRaw<Array<{ version: number }>>`
+      SELECT COALESCE(MAX("version"),0)::int AS "version"
+      FROM "PreReporteInspeccion"
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+    const version = Number(versionActual?.version ?? 0) + 1;
+    const resumen = {
+      etapa: "LISTO_PARA_DIRECCION",
+      definidos: metricas.definidos,
+      noAplica: metricas.noAplica,
+      aplicables: metricas.aplicables,
+      revisados: metricas.revisados,
+      totalHallazgos: metricas.totalHallazgos,
+      prioridades: metricas.resumenPrioridades,
+      semaforo: metricas.semaforo,
+    };
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "preReporteGeneradoEn"=NOW(),
+            "calificacionPreliminar"=${metricas.calificacion},
+            "coberturaPorcentaje"=${metricas.cobertura},
+            "resumenEstadistico"=${JSON.stringify(resumen)}::jsonb,
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+      await tx.$executeRaw`
+        INSERT INTO "PreReporteInspeccion"
+          ("inspeccionId","version","generadoPorId","calificacionPreliminar","coberturaPorcentaje","resumen","leyenda")
+        VALUES (
+          ${inspeccionId},${version},${usuario.id},${metricas.calificacion},${metricas.cobertura},
+          ${JSON.stringify(resumen)}::jsonb,
+          'PRELIMINAR - REGENERADO AUTOMATICAMENTE ANTES DE SOLICITAR AUTORIZACION'
+        )
+      `;
+    });
+  }
 
   const reabiertaEn = control.reabiertaEn ? new Date(control.reabiertaEn) : null;
   const firmasVigentes = inspeccion.firmas.filter(

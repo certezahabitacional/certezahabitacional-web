@@ -600,7 +600,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
       .report-section h4{font-size:14px!important;line-height:1.35!important}
-      .report-section{align-content:start!important}
+      .report-section{align-content:start!important;position:relative}
+      .report-section>div.relative.z-10{display:block!important}
       .signature-pair{align-items:start!important}
       .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
@@ -642,7 +643,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
           <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PRE REPORTE · REVISIÓN EN SITIO</p>
-          {!controlReporte.preReporteGeneradoEn ? (
+          {!controlReporte.preReporteGeneradoEn && !firmasCompletasReporte ? (
             <>
               <h2 className="mt-2 text-xl font-black">Generar PRE REPORTE</h2>
               <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el PRE REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
@@ -664,9 +665,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
                 {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR PRE REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR PRE REPORTE</div>}
-                {esInspector ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button disabled={!preReportePosteriorAFirmas} className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-30">AUTORIZACIÓN DEL REPORTE</button></form> : <div className="grid gap-2"><div className="rounded-xl border-2 border-cyan-800 px-5 py-4 text-center text-sm font-black text-cyan-900">AUTORIZACIÓN DEL REPORTE · LA SOLICITA EL INSPECTOR</div><Link href={`/panel/inspecciones/${id}/revision`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">REVISIÓN DE DIRECCIÓN</Link></div>}
+                <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white">SOLICITAR AUTORIZACIÓN DEL REPORTE</button></form>
               </div>
-              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Regenera el PRE REPORTE después de las firmas y de la última revisión antes de enviarlo a Dirección.</p>}
+              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Al solicitar la autorización, el sistema generará automáticamente la versión vigente del PRE REPORTE si hace falta y la enviará a Dirección.</p>}
             </>
           )}
         </section>
