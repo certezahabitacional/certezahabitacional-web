@@ -797,14 +797,14 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 </div>
                 <div className="mt-5 space-y-3">
                   {agruparPuntos(conceptos).map((grupo,grupoIndex)=>(
-                    <div data-page-unit key={`${a.id}-grupo-${grupoIndex}`} className={`inspection-pair ${grupo.length===3?"three":""}`}>
+                    <div key={`${a.id}-grupo-${grupoIndex}`} className={`inspection-pair ${grupo.length===3?"three":""}`}>
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
                         const ev=evaluacionConcepto(g);
                         const fotos=fotosPorConcepto.get(g.id)??[];
                         const foto=fotos[0];
                         const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
-                        return <section key={g.id} className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
+                        return <section key={g.id} data-page-unit className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-[9px] font-black uppercase tracking-[.14em] text-cyan-700">Punto {numeroPunto.get(g.id)} · Partida {numeroPartida.get(a.id)}</p>
