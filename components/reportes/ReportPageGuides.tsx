@@ -5,7 +5,7 @@ import LogoCerteza from "@/components/branding/LogoCerteza";
 
 const PAGE_HEIGHT = 1056;
 const TOP_SAFE = 84;
-const BOTTOM_SAFE = 66;
+const BOTTOM_SAFE = 92;
 
 export default function ReportPageGuides({
   folio,
@@ -28,7 +28,7 @@ export default function ReportPageGuides({
       raf = requestAnimationFrame(() => {
         const todosLosCandidatos = Array.from(
           root.querySelectorAll<HTMLElement>(
-            '[data-page-unit], .report-figure, .colored-block, .page-row, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
+            '[data-page-unit], .report-figure, .colored-block, .page-row, tr, figure, .signature-pair, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
           )
         );
         const candidatos = todosLosCandidatos.filter((el) => {
