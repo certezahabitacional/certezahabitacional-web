@@ -612,11 +612,21 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   `;
 
   if (Number(estadoArea?.pendientes ?? 1) === 0) {
-    const resultadoArea = Number(estadoArea?.hallazgos ?? 0) > 0 ? "CON_HALLAZGOS" : "SIN_HALLAZGOS";
+    const hallazgosArea = Number(estadoArea?.hallazgos ?? 0);
+    const resultadoArea = hallazgosArea > 0 ? "CON_HALLAZGOS" : "SIN_HALLAZGOS";
+    const comentarioArea = hallazgosArea > 0
+      ? `Se registraron ${hallazgosArea} hallazgo(s) en ${item.areaNombre}. Los puntos aplicables fueron revisados y los hallazgos cuentan con la evidencia mínima requerida para su documentación.`
+      : `Se realizó la inspección de ${item.areaNombre} conforme al plan establecido. Todos los puntos aplicables quedaron resueltos y no se identificaron hallazgos que impidan el cierre de la partida.`;
     await prisma.$executeRaw`
       UPDATE "AreaInspeccion"
       SET "estado"='REVISADA',
           "resultado"=${resultadoArea},
+          "comentarioFinal"=COALESCE(NULLIF(BTRIM("comentarioFinal"),''),${comentarioArea}),
+          "textoSinHallazgo"=CASE
+            WHEN ${resultadoArea}='SIN_HALLAZGOS'
+            THEN COALESCE(NULLIF(BTRIM("textoSinHallazgo"),''),${comentarioArea})
+            ELSE "textoSinHallazgo"
+          END,
           "revisadaEn"=COALESCE("revisadaEn",NOW()),
           "cerradaEn"=COALESCE("cerradaEn",NOW()),
           "cerradaPorId"=COALESCE("cerradaPorId",${usuario.id}),
