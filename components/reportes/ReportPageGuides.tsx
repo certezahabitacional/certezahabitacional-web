@@ -15,6 +15,7 @@ export default function ReportPageGuides({
   final?: boolean;
 }) {
   const [paginas, setPaginas] = useState(1);
+  const [paginasConEncabezadoPropio, setPaginasConEncabezadoPropio] = useState<number[]>([]);
 
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-report-root]");
@@ -110,7 +111,14 @@ export default function ReportPageGuides({
         }
 
         const altoTotal = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
-        setPaginas(Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT)));
+        const totalPaginas = Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT));
+        const propios = Array.from(root.querySelectorAll<HTMLElement>(".report-brand-header"))
+          .map((el) => {
+            const top = el.getBoundingClientRect().top + window.scrollY - rootTop;
+            return Math.max(0, Math.floor(top / PAGE_HEIGHT)) + 1;
+          });
+        setPaginas(totalPaginas);
+        setPaginasConEncabezadoPropio(Array.from(new Set(propios)));
       });
     };
 
@@ -140,19 +148,19 @@ export default function ReportPageGuides({
 
         return (
           <div key={page}>
-            {page > 1 && (
+            {page > 1 && !paginasConEncabezadoPropio.includes(page) && (
               <div
-                className="absolute left-10 right-10 flex h-[62px] items-center justify-between border-b border-amber-500/40 bg-white/95 px-2"
+                className="absolute left-10 right-10 flex h-[54px] items-center justify-between border-b border-amber-500/40 bg-white/95 px-2"
                 style={{ top: top + 10 }}
               >
                 <div className="flex items-center gap-3">
-                  <LogoCerteza variant="gold" width={70} className="max-h-12" />
+                  <LogoCerteza variant="gold" width={58} className="max-h-10" />
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-700">Certeza Habitacional</p>
-                    <p className="text-[10px] font-bold text-slate-500">{final ? "Reporte oficial de inspección" : "Pre reporte de inspección"}</p>
+                    <p className="text-[9px] font-black uppercase tracking-[.18em] text-amber-700">Certeza Habitacional</p>
+                    <p className="text-[9px] font-bold text-slate-500">{final ? "Reporte liberado de inspección" : "Pre reporte de inspección"}</p>
                   </div>
                 </div>
-                <p className="text-[10px] font-black text-slate-600">{folio ?? ""}</p>
+                <p className="text-[9px] font-black text-slate-600">{folio ?? ""}</p>
               </div>
             )}
 
