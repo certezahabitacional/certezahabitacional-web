@@ -537,8 +537,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const fechaAutorizacion = autorizacionDireccion
     ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
     : null;
-  const tituloReporte = autorizado ? "Reporte Liberado de Inspección V1" : "Pre-Reporte de Inspección V1";
-  const estadoReporte = autorizado ? "REPORTE LIBERADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
+  const tituloReporte = "Reporte de Inspección";
+  const estadoReporte = autorizado ? "AUTORIZADO" : "PENDIENTE DE AUTORIZACIÓN";
 
   const cabeceras = await headers();
   const host = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host");
@@ -614,7 +614,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
-      .inspection-pair.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .inspection-pair.three{grid-template-columns:repeat(2,minmax(0,1fr))}
       .inspection-point-card{padding:12px!important}
       .inspection-point-card .point-photo{height:120px!important}
       .inspection-point-card .point-detail{font-size:11px!important;line-height:1.45!important}
@@ -647,7 +647,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
         footer{break-before:avoid;page-break-before:avoid}
       }`}</style>
-      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">{autorizado ? "REPORTE FINAL V1" : "PRE-REPORTE INTEGRAL V1"}</span></div>
+      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">REPORTE DE INSPECCIÓN</span></div>
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
@@ -703,9 +703,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
       <article data-report-root className="report-body relative mx-auto w-[816px] max-w-full bg-white shadow-xl print:w-auto print:max-w-none print:shadow-none">
         <ReportPageGuides folio={inspeccion.folio} final={autorizado} />
-        {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
+        
         <section className="cover-report-page relative bg-slate-950 p-5 text-white">
-          {!autorizado && <div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}
+          
           <div className="h-full border-[3px] border-amber-400/80 p-2">
             <div className="h-full border border-amber-200/30 px-7 py-6">
               <ReportBrandHeader title={autorizado?"REPORTE FINAL":"PRE-REPORTE"} folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
@@ -805,7 +805,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 </div>
                 <div className="mt-5 space-y-3">
                   {agruparPuntos(conceptos).map((grupo,grupoIndex)=>(
-                    <div key={`${a.id}-grupo-${grupoIndex}`} className={`inspection-pair ${grupo.length===3?"three":""}`}>
+                    <div key={`${a.id}-grupo-${grupoIndex}`} className="inspection-pair">
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
                         const ev=evaluacionConcepto(g);
