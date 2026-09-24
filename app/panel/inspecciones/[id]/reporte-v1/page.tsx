@@ -178,7 +178,7 @@ function agruparPuntos<T>(items: T[]) {
   let i = 0;
   while (i < items.length) {
     const restantes = items.length - i;
-    const tamano = restantes === 3 ? 3 : Math.min(2, restantes);
+    const tamano = Math.min(2, restantes);
     grupos.push(items.slice(i, i + tamano));
     i += tamano;
   }
@@ -537,8 +537,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const fechaAutorizacion = autorizacionDireccion
     ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
     : null;
-  const tituloReporte = autorizado ? "Reporte Liberado de Inspección V1" : "Pre-Reporte de Inspección V1";
-  const estadoReporte = autorizado ? "REPORTE LIBERADO" : "PRELIMINAR — PENDIENTE DE REVISIÓN Y AUTORIZACIÓN";
+  const tituloReporte = "Reporte de Inspección";
+  const estadoReporte = autorizado ? "AUTORIZADO" : "PENDIENTE DE AUTORIZACIÓN";
 
   const cabeceras = await headers();
   const host = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host");
@@ -600,22 +600,22 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
       .report-section h4{font-size:14px!important;line-height:1.35!important}
-      .report-section{align-content:start!important;position:relative}
+      .report-section{align-content:start!important;position:relative;padding-top:92px!important;padding-bottom:86px!important}
       .report-section>div.relative.z-10{display:block!important}
       .signature-pair{align-items:start!important}
       #sec-firmas{font-size:13px!important;line-height:1.5!important}
       #sec-firmas .signature-scope{padding:14px!important;margin-bottom:12px!important}
       #sec-firmas .signature-scope>div{margin-top:10px!important;font-size:13px!important;line-height:1.5!important}
-      #sec-firmas .signature-scope-columns{columns:2;column-gap:22px}
+      #sec-firmas .signature-scope-columns{columns:2;column-gap:22px;font-size:13px!important;line-height:1.5!important}
       #sec-firmas .signature-scope-columns p{break-inside:avoid;margin:0 0 8px}
       #sec-firmas .signature-card{padding:10px!important}
       #sec-firmas .signature-card>div:nth-of-type(1){height:92px!important}
       #sec-firmas .signature-card img{max-height:84px!important}
-      .signature-card{align-self:start!important}
+      #sec-firmas{min-height:1056px!important;max-height:1056px!important;overflow:hidden!important}\n      #sec-firmas .signature-pair{break-inside:avoid!important;page-break-inside:avoid!important}\n      .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
-      .inspection-pair.three{grid-template-columns:repeat(3,minmax(0,1fr))}
-      .inspection-point-card{padding:12px!important}
+      .inspection-pair.three{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .inspection-point-card{padding:12px!important;display:flex;flex-direction:column;min-height:250px!important}\n      .inspection-point-card figure{margin-top:auto!important}\n      .inspection-pair{align-items:stretch!important}
       .inspection-point-card .point-photo{height:120px!important}
       .inspection-point-card .point-detail{font-size:11px!important;line-height:1.45!important}
       @media (max-width:760px){.inspection-pair,.inspection-pair.three{grid-template-columns:1fr}}
@@ -647,21 +647,21 @@ export default async function ReporteV1Page({ params, searchParams }: {
         h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
         footer{break-before:avoid;page-break-before:avoid}
       }`}</style>
-      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">{autorizado ? "REPORTE FINAL V1" : "PRE-REPORTE INTEGRAL V1"}</span></div>
+      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">REPORTE DE INSPECCIÓN</span></div>
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PRE REPORTE · REVISIÓN EN SITIO</p>
+          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">REPORTE · REVISIÓN EN SITIO</p>
           {!controlReporte.preReporteGeneradoEn && !firmasCompletasReporte ? (
             <>
-              <h2 className="mt-2 text-xl font-black">Generar PRE REPORTE</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el PRE REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
-              {esInspector && <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">GENERAR PRE REPORTE</button></form>}
+              <h2 className="mt-2 text-xl font-black">Generar REPORTE</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
+              {esInspector && <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">GENERAR REPORTE</button></form>}
             </>
           ) : !firmasCompletasReporte ? (
             <>
               <h2 className="mt-2 text-xl font-black">Revisión con el cliente antes de firmas</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este PRE REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR · DESDE PARTIDA 1</Link>
                 <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">PASAR A FIRMAS</Link>
@@ -670,13 +670,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
           ) : (
             <>
               <h2 className="mt-2 text-xl font-black">Firmas registradas · revisión final antes de Dirección</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el PRE REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
-                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR PRE REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR PRE REPORTE</div>}
+                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR REPORTE</div>}
                 <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white">SOLICITAR AUTORIZACIÓN DEL REPORTE</button></form>
               </div>
-              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Al solicitar la autorización, el sistema generará automáticamente la versión vigente del PRE REPORTE si hace falta y la enviará a Dirección.</p>}
+              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Al solicitar la autorización, el sistema generará automáticamente la versión vigente del REPORTE si hace falta y la enviará a Dirección.</p>}
             </>
           )}
         </section>
@@ -684,9 +684,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {esDirector && inspeccion.estado === "REPORTE_PENDIENTE" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-violet-300/30 bg-violet-50 p-5">
           <p className="text-xs font-black uppercase tracking-[.18em] text-violet-800">Dirección · revisión y autorización</p>
-          <h2 className="mt-1 text-xl font-black text-slate-950">PRE REPORTE recibido para revisión</h2>
+          <h2 className="mt-1 text-xl font-black text-slate-950">REPORTE recibido para revisión</h2>
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            Dirección revisa aquí el PRE REPORTE y entra al control de autorización para aprobarlo o devolverlo al Inspector con observaciones.
+            Dirección revisa aquí el REPORTE y entra al control de autorización para aprobarlo o devolverlo al Inspector con observaciones.
           </p>
           <Link href={`/panel/inspecciones/${id}/revision`} className="mt-4 inline-block rounded-xl bg-violet-700 px-5 py-3 text-sm font-black text-white">
             IR A REVISIÓN Y AUTORIZACIÓN DE DIRECCIÓN
@@ -696,19 +696,19 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {esDirector && inspeccion.estado !== "REPORTE_PENDIENTE" && !autorizado && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-slate-300 bg-white p-4">
           <p className="text-sm font-bold text-slate-600">
-            Dirección podrá revisar y autorizar cuando el Inspector envíe el PRE REPORTE mediante “AUTORIZACIÓN DEL REPORTE”.
+            Dirección podrá revisar y autorizar cuando el Inspector envíe el REPORTE mediante “AUTORIZACIÓN DEL REPORTE”.
           </p>
         </section>
       )}
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
       <article data-report-root className="report-body relative mx-auto w-[816px] max-w-full bg-white shadow-xl print:w-auto print:max-w-none print:shadow-none">
         <ReportPageGuides folio={inspeccion.folio} final={autorizado} />
-        {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
+        
         <section className="cover-report-page relative bg-slate-950 p-5 text-white">
-          {!autorizado && <div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}
+          
           <div className="h-full border-[3px] border-amber-400/80 p-2">
             <div className="h-full border border-amber-200/30 px-7 py-6">
-              <ReportBrandHeader title={autorizado?"REPORTE FINAL":"PRE-REPORTE"} folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
+              <ReportBrandHeader title="REPORTE DE INSPECCIÓN" folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
               <div className={`mt-5 rounded-xl border px-5 py-3 text-center text-[10px] font-black uppercase tracking-[.2em] ${autorizado?"border-emerald-300/30 bg-emerald-300/10 text-emerald-200":"border-amber-300/30 bg-amber-300/10 text-amber-200"}`}>{estadoReporte}</div>
               {portada?<figure className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2"><img src={portada} alt="Fachada frontal de la vivienda" className="h-[285px] w-full object-contain"/><figcaption className="pt-2 text-center text-[10px] uppercase tracking-wider text-slate-400">Fachada frontal de la vivienda inspeccionada</figcaption></figure>:<div className="mt-6 grid h-[285px] place-items-center rounded-2xl border border-dashed border-white/20 text-sm text-slate-400">Fotografía frontal no disponible</div>}
               <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
@@ -805,7 +805,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 </div>
                 <div className="mt-5 space-y-3">
                   {agruparPuntos(conceptos).map((grupo,grupoIndex)=>(
-                    <div key={`${a.id}-grupo-${grupoIndex}`} className={`inspection-pair ${grupo.length===3?"three":""}`}>
+                    <div key={`${a.id}-grupo-${grupoIndex}`} className="inspection-pair">
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
                         const ev=evaluacionConcepto(g);
@@ -840,7 +840,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-slate-950 text-[10px] font-black uppercase tracking-wider text-white">
+                <tr className="bg-amber-400 text-[10px] font-black uppercase tracking-wider text-slate-950">
                   <th className="w-[30%] px-4 py-3 text-left">Partida</th><th className="px-2 py-3 text-center">Inspeccionados</th><th className="px-2 py-3 text-center">Hallazgos</th><th className="px-2 py-3 text-center">No aplica</th><th className="px-2 py-3 text-center">Calificación</th><th className="px-2 py-3 text-center">Nivel</th>
                 </tr>
               </thead>
@@ -921,16 +921,16 @@ export default async function ReporteV1Page({ params, searchParams }: {
           {!firmaInspector||!firmaCliente?<div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
         </Seccion>
 
-        <section id="sec-certificado" className="page-break section-flow relative px-10 py-10">{!autorizado&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10">
+        <section id="sec-certificado" className="page-break section-flow relative px-10 py-10"><div className="relative z-10">
           <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">12 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
-          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Partidas revisadas" value={String(totalPartidasReporte)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
+          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Partidas revisadas" value={String(totalPartidasReporte)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">El certificado se generará únicamente cuando Dirección autorice el reporte.</p></div>}
         </div></section>
       </article>
     </main>
   );
 }
 
-function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}>{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><div className="section-title-block border-b-2 border-slate-900 pb-5"><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-xl font-black">{titulo}</h2></div><div className="mt-7">{children}</div></div></section>}
+function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}><div className="relative z-10"><div className="section-title-block border-b-2 border-slate-900 pb-5"><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-xl font-black">{titulo}</h2></div><div className="mt-7">{children}</div></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
