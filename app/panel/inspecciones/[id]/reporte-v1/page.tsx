@@ -603,12 +603,14 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section{align-content:start!important;position:relative}
       .report-section>div.relative.z-10{display:block!important}
       .signature-pair{align-items:start!important}
-      #sec-firmas{font-size:12px!important;line-height:1.45!important}
+      #sec-firmas{font-size:13px!important;line-height:1.5!important}
       #sec-firmas .signature-scope{padding:14px!important;margin-bottom:12px!important}
-      #sec-firmas .signature-scope>div{margin-top:8px!important;gap:5px!important;font-size:12px!important;line-height:1.45!important}
+      #sec-firmas .signature-scope>div{margin-top:10px!important;font-size:13px!important;line-height:1.5!important}
+      #sec-firmas .signature-scope-columns{columns:2;column-gap:22px}
+      #sec-firmas .signature-scope-columns p{break-inside:avoid;margin:0 0 8px}
       #sec-firmas .signature-card{padding:10px!important}
-      #sec-firmas .signature-card>div:nth-of-type(1){height:96px!important}
-      #sec-firmas .signature-card img{max-height:88px!important}
+      #sec-firmas .signature-card>div:nth-of-type(1){height:92px!important}
+      #sec-firmas .signature-card img{max-height:84px!important}
       .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
@@ -699,7 +701,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </section>
       )}
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
-      <article data-report-root className="report-body relative mx-auto max-w-5xl bg-white shadow-xl print:max-w-none print:shadow-none">
+      <article data-report-root className="report-body relative mx-auto w-[816px] max-w-full bg-white shadow-xl print:w-auto print:max-w-none print:shadow-none">
         <ReportPageGuides folio={inspeccion.folio} final={autorizado} />
         {!autorizado && <div className="pre-report-watermark-print" aria-hidden="true"><span>PRE REPORTE</span></div>}
         <section className="cover-report-page relative bg-slate-950 p-5 text-white">
@@ -885,7 +887,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-firmas" n="11" titulo="Firmas" subtitulo="Constancia de revisión y conformidad de la visita">
           <div className="signature-scope mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">Alcance y consideraciones de la inspección</h3>
-            <div className="mt-3 space-y-3 text-sm leading-7 text-slate-700">
+            <div className="signature-scope-columns mt-3 text-sm leading-7 text-slate-700">
               <p>La inspección realizada por <strong>Certeza Habitacional</strong> consiste en una revisión técnica y visual de las condiciones observables y accesibles del inmueble al momento de la visita, conforme al alcance del servicio contratado y a los puntos incluidos en el presente REPORTE.</p>
               <p>Su propósito es identificar y documentar hallazgos, deficiencias, anomalías o condiciones relevantes que puedan ser detectadas mediante observación directa, pruebas funcionales y el uso de herramientas de inspección aplicables, sin efectuar trabajos destructivos, desmontajes, excavaciones, demoliciones ni intervenciones que puedan alterar o dañar el inmueble.</p>
               <p>Los resultados corresponden a las condiciones existentes y observables en la fecha y hora de la inspección. La inspección no garantiza la inexistencia de defectos ocultos, vicios no visibles, fallas intermitentes o condiciones que no puedan detectarse razonablemente mediante los procedimientos empleados.</p>
@@ -928,7 +930,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 }
 
-function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){const contacto=datosContactoDocumento();return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}>{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><ReportBrandHeader title={titulo} folio={folio} eyebrow={`${n} · ${subtitulo}`}/><div className="mt-7">{children}</div><footer className="mt-6 border-t border-amber-500/50 pt-3 text-[10px] text-slate-500"><div className="flex justify-between gap-6"><div><p className="font-black uppercase tracking-wider text-slate-800">{DATOS_DOCUMENTALES.empresa}</p><p className="mt-1">{DATOS_DOCUMENTALES.eslogan}</p>{contacto.slice(0,2).map(x=><p key={x} className="mt-1">{x}</p>)}</div><div className="text-right"><p className="font-black text-slate-700">{final ? "Reporte Liberado de Inspección" : "Pre-Reporte de Inspección"}</p><p className="mt-1">Folio {folio}</p></div></div></footer></div></section>}
+function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}>{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><div className="section-title-block border-b-2 border-slate-900 pb-5"><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-xl font-black">{titulo}</h2></div><div className="mt-7">{children}</div></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}

@@ -15,7 +15,6 @@ export default function ReportPageGuides({
   final?: boolean;
 }) {
   const [paginas, setPaginas] = useState(1);
-  const [paginasConEncabezadoPropio, setPaginasConEncabezadoPropio] = useState<number[]>([]);
 
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-report-root]");
@@ -115,13 +114,6 @@ export default function ReportPageGuides({
 
         const altoTotal = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
         const totalPaginas = Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT));
-        const propios = Array.from(root.querySelectorAll<HTMLElement>(".report-brand-header"))
-          .map((el) => {
-            const top = el.getBoundingClientRect().top + window.scrollY - rootTop;
-            return Math.max(0, Math.floor(top / PAGE_HEIGHT)) + 1;
-          });
-        setPaginas(totalPaginas);
-        setPaginasConEncabezadoPropio(Array.from(new Set(propios)));
       });
     };
 
@@ -151,7 +143,7 @@ export default function ReportPageGuides({
 
         return (
           <div key={page}>
-            {page > 1 && !paginasConEncabezadoPropio.includes(page) && (
+            {page > 1 && (
               <div
                 className="absolute left-10 right-10 flex h-[54px] items-center justify-between border-b border-amber-500/40 bg-white/95 px-2"
                 style={{ top: top + 10 }}
