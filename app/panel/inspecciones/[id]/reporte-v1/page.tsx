@@ -20,7 +20,7 @@ import {
 } from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
-import { confirmarPreReporteSitioV1 } from "../reporte/actions";
+import { confirmarPreReporteSitioV1 } from "../pre-reporte/actions";
 import { enviarReporteDireccionV1 } from "../cierre-v1/actions";
 
 async function signedUrl(path: string | null) {
