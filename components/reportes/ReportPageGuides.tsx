@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import LogoCerteza from "@/components/branding/LogoCerteza";
 
 const PAGE_HEIGHT = 1056;
-const TOP_SAFE = 92;
-const BOTTOM_SAFE = 86;
+const TOP_SAFE = 112;
+const BOTTOM_SAFE = 82;
 
 export default function ReportPageGuides({
   folio,
@@ -140,32 +140,32 @@ export default function ReportPageGuides({
       {Array.from({ length: paginas }, (_, index) => {
         const page = index + 1;
         const top = index * PAGE_HEIGHT;
-        const footerTop = page * PAGE_HEIGHT - 54;
+        const footerTop = page * PAGE_HEIGHT - 58;
 
         return (
           <div key={page}>
             {page > 1 && (
               <div
-                className="absolute left-10 right-10 flex h-[54px] items-center justify-between border-b border-amber-500/40 bg-white/95 px-2"
-                style={{ top: top + 10 }}
+                className="absolute left-0 right-0 flex h-[72px] items-center justify-between bg-slate-950 px-10 text-white"
+                style={{ top }}
               >
                 <div className="flex items-center gap-3">
-                  <LogoCerteza variant="gold" width={58} className="max-h-10" />
+                  <LogoCerteza variant="gold" width={70} className="max-h-12" />
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-[.18em] text-amber-700">Certeza Habitacional</p>
-                    <p className="text-[9px] font-bold text-slate-500">Reporte de inspección</p>
+                    <p className="text-[10px] font-black uppercase tracking-[.18em] text-amber-300">Certeza Habitacional</p>
+                    <p className="text-[10px] font-bold text-white">Reporte de inspección</p>
                   </div>
                 </div>
-                <p className="text-[9px] font-black text-slate-600">{folio ?? ""}</p>
+                <p className="text-[10px] font-black text-white">{folio ?? ""}</p>
               </div>
             )}
 
             <div
-              className="absolute left-10 right-10 flex items-center justify-between border-t border-amber-500/40 bg-white/95 px-2 pt-2"
+              className="absolute left-0 right-0 flex h-[58px] items-center justify-between bg-slate-950 px-10 text-white"
               style={{ top: footerTop }}
             >
-              <span className="text-[9px] font-black uppercase tracking-[.14em] text-slate-500">Certeza Habitacional</span>
-              <span className="text-[10px] font-black text-slate-600">Página {page} de {paginas}</span>
+              <span className="text-[9px] font-black uppercase tracking-[.14em] text-amber-300">Certeza Habitacional</span>
+              <span className="text-[10px] font-black text-white">Página {page} de {paginas}</span>
             </div>
           </div>
         );
