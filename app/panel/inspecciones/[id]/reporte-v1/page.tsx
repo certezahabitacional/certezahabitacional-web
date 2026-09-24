@@ -651,17 +651,17 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">PRE REPORTE · REVISIÓN EN SITIO</p>
+          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">REPORTE · REVISIÓN EN SITIO</p>
           {!controlReporte.preReporteGeneradoEn && !firmasCompletasReporte ? (
             <>
-              <h2 className="mt-2 text-xl font-black">Generar PRE REPORTE</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el PRE REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
-              {esInspector && <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">GENERAR PRE REPORTE</button></form>}
+              <h2 className="mt-2 text-xl font-black">Generar REPORTE</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
+              {esInspector && <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">GENERAR REPORTE</button></form>}
             </>
           ) : !firmasCompletasReporte ? (
             <>
               <h2 className="mt-2 text-xl font-black">Revisión con el cliente antes de firmas</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este PRE REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR · DESDE PARTIDA 1</Link>
                 <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">PASAR A FIRMAS</Link>
@@ -670,13 +670,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
           ) : (
             <>
               <h2 className="mt-2 text-xl font-black">Firmas registradas · revisión final antes de Dirección</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el PRE REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
-                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR PRE REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR PRE REPORTE</div>}
+                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR REPORTE</div>}
                 <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white">SOLICITAR AUTORIZACIÓN DEL REPORTE</button></form>
               </div>
-              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Al solicitar la autorización, el sistema generará automáticamente la versión vigente del PRE REPORTE si hace falta y la enviará a Dirección.</p>}
+              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Al solicitar la autorización, el sistema generará automáticamente la versión vigente del REPORTE si hace falta y la enviará a Dirección.</p>}
             </>
           )}
         </section>
@@ -684,9 +684,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {esDirector && inspeccion.estado === "REPORTE_PENDIENTE" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-violet-300/30 bg-violet-50 p-5">
           <p className="text-xs font-black uppercase tracking-[.18em] text-violet-800">Dirección · revisión y autorización</p>
-          <h2 className="mt-1 text-xl font-black text-slate-950">PRE REPORTE recibido para revisión</h2>
+          <h2 className="mt-1 text-xl font-black text-slate-950">REPORTE recibido para revisión</h2>
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            Dirección revisa aquí el PRE REPORTE y entra al control de autorización para aprobarlo o devolverlo al Inspector con observaciones.
+            Dirección revisa aquí el REPORTE y entra al control de autorización para aprobarlo o devolverlo al Inspector con observaciones.
           </p>
           <Link href={`/panel/inspecciones/${id}/revision`} className="mt-4 inline-block rounded-xl bg-violet-700 px-5 py-3 text-sm font-black text-white">
             IR A REVISIÓN Y AUTORIZACIÓN DE DIRECCIÓN
@@ -696,7 +696,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {esDirector && inspeccion.estado !== "REPORTE_PENDIENTE" && !autorizado && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-slate-300 bg-white p-4">
           <p className="text-sm font-bold text-slate-600">
-            Dirección podrá revisar y autorizar cuando el Inspector envíe el PRE REPORTE mediante “AUTORIZACIÓN DEL REPORTE”.
+            Dirección podrá revisar y autorizar cuando el Inspector envíe el REPORTE mediante “AUTORIZACIÓN DEL REPORTE”.
           </p>
         </section>
       )}
