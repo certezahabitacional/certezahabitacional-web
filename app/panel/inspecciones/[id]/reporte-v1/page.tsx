@@ -178,7 +178,7 @@ function agruparPuntos<T>(items: T[]) {
   let i = 0;
   while (i < items.length) {
     const restantes = items.length - i;
-    const tamano = restantes === 3 ? 3 : Math.min(2, restantes);
+    const tamano = Math.min(2, restantes);
     grupos.push(items.slice(i, i + tamano));
     i += tamano;
   }
@@ -600,18 +600,18 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
       .report-section h4{font-size:14px!important;line-height:1.35!important}
-      .report-section{align-content:start!important;position:relative}
+      .report-section{align-content:start!important;position:relative;padding-top:92px!important;padding-bottom:86px!important}
       .report-section>div.relative.z-10{display:block!important}
       .signature-pair{align-items:start!important}
       #sec-firmas{font-size:13px!important;line-height:1.5!important}
       #sec-firmas .signature-scope{padding:14px!important;margin-bottom:12px!important}
       #sec-firmas .signature-scope>div{margin-top:10px!important;font-size:13px!important;line-height:1.5!important}
-      #sec-firmas .signature-scope-columns{columns:2;column-gap:22px}
+      #sec-firmas .signature-scope-columns{columns:2;column-gap:22px;font-size:13px!important;line-height:1.5!important}
       #sec-firmas .signature-scope-columns p{break-inside:avoid;margin:0 0 8px}
       #sec-firmas .signature-card{padding:10px!important}
       #sec-firmas .signature-card>div:nth-of-type(1){height:92px!important}
       #sec-firmas .signature-card img{max-height:84px!important}
-      .signature-card{align-self:start!important}
+      #sec-firmas{min-height:1056px!important;max-height:1056px!important;overflow:hidden!important}\n      #sec-firmas .signature-pair{break-inside:avoid!important;page-break-inside:avoid!important}\n      .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
       .inspection-pair.three{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -708,7 +708,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           
           <div className="h-full border-[3px] border-amber-400/80 p-2">
             <div className="h-full border border-amber-200/30 px-7 py-6">
-              <ReportBrandHeader title={autorizado?"REPORTE FINAL":"PRE-REPORTE"} folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
+              <ReportBrandHeader title="REPORTE DE INSPECCIÓN" folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
               <div className={`mt-5 rounded-xl border px-5 py-3 text-center text-[10px] font-black uppercase tracking-[.2em] ${autorizado?"border-emerald-300/30 bg-emerald-300/10 text-emerald-200":"border-amber-300/30 bg-amber-300/10 text-amber-200"}`}>{estadoReporte}</div>
               {portada?<figure className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2"><img src={portada} alt="Fachada frontal de la vivienda" className="h-[285px] w-full object-contain"/><figcaption className="pt-2 text-center text-[10px] uppercase tracking-wider text-slate-400">Fachada frontal de la vivienda inspeccionada</figcaption></figure>:<div className="mt-6 grid h-[285px] place-items-center rounded-2xl border border-dashed border-white/20 text-sm text-slate-400">Fotografía frontal no disponible</div>}
               <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
@@ -921,16 +921,16 @@ export default async function ReporteV1Page({ params, searchParams }: {
           {!firmaInspector||!firmaCliente?<div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
         </Seccion>
 
-        <section id="sec-certificado" className="page-break section-flow relative px-10 py-10">{!autorizado&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10">
+        <section id="sec-certificado" className="page-break section-flow relative px-10 py-10"><div className="relative z-10">
           <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">12 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
-          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Partidas revisadas" value={String(totalPartidasReporte)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">Este reporte todavía es preliminar. El certificado se generará únicamente cuando Dirección autorice el reporte final.</p></div>}
+          {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Partidas revisadas" value={String(totalPartidasReporte)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">El certificado se generará únicamente cuando Dirección autorice el reporte.</p></div>}
         </div></section>
       </article>
     </main>
   );
 }
 
-function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}>{!final&&<div className="pre-report-watermark-screen" aria-hidden="true"><span>PRE REPORTE</span></div>}<div className="relative z-10"><div className="section-title-block border-b-2 border-slate-900 pb-5"><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-xl font-black">{titulo}</h2></div><div className="mt-7">{children}</div></div></section>}
+function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} className={`report-section page-break section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}><div className="relative z-10"><div className="section-title-block border-b-2 border-slate-900 pb-5"><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-xl font-black">{titulo}</h2></div><div className="mt-7">{children}</div></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
