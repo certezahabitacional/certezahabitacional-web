@@ -20,7 +20,7 @@ import {
 } from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
-import { confirmarPreReporteSitioV1 } from "../pre-reporte/actions";
+import { confirmarPreReporteSitioV1 } from "../reporte/actions";
 import { enviarReporteDireccionV1 } from "../cierre-v1/actions";
 
 async function signedUrl(path: string | null) {
@@ -615,7 +615,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
       .inspection-pair.three{grid-template-columns:repeat(2,minmax(0,1fr))}
-      .inspection-point-card{padding:12px!important}
+      .inspection-point-card{padding:12px!important;display:flex;flex-direction:column;min-height:250px!important}\n      .inspection-point-card figure{margin-top:auto!important}\n      .inspection-pair{align-items:stretch!important}
       .inspection-point-card .point-photo{height:120px!important}
       .inspection-point-card .point-detail{font-size:11px!important;line-height:1.45!important}
       @media (max-width:760px){.inspection-pair,.inspection-pair.three{grid-template-columns:1fr}}
@@ -840,7 +840,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-slate-950 text-[10px] font-black uppercase tracking-wider text-white">
+                <tr className="bg-amber-400 text-[10px] font-black uppercase tracking-wider text-slate-950">
                   <th className="w-[30%] px-4 py-3 text-left">Partida</th><th className="px-2 py-3 text-center">Inspeccionados</th><th className="px-2 py-3 text-center">Hallazgos</th><th className="px-2 py-3 text-center">No aplica</th><th className="px-2 py-3 text-center">Calificación</th><th className="px-2 py-3 text-center">Nivel</th>
                 </tr>
               </thead>
