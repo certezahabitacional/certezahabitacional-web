@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import LogoCerteza from "@/components/branding/LogoCerteza";
 
 const PAGE_HEIGHT = 1056;
-const TOP_SAFE = 84;
-const BOTTOM_SAFE = 92;
+const TOP_SAFE = 92;
+const BOTTOM_SAFE = 86;
 
 export default function ReportPageGuides({
   folio,
@@ -114,6 +114,7 @@ export default function ReportPageGuides({
 
         const altoTotal = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
         const totalPaginas = Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT));
+        setPaginas(totalPaginas);
       });
     };
 
@@ -152,7 +153,7 @@ export default function ReportPageGuides({
                   <LogoCerteza variant="gold" width={58} className="max-h-10" />
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-[.18em] text-amber-700">Certeza Habitacional</p>
-                    <p className="text-[9px] font-bold text-slate-500">{final ? "Reporte liberado de inspección" : "Pre reporte de inspección"}</p>
+                    <p className="text-[9px] font-bold text-slate-500">Reporte de inspección</p>
                   </div>
                 </div>
                 <p className="text-[9px] font-black text-slate-600">{folio ?? ""}</p>
