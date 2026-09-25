@@ -19,9 +19,17 @@ type RepeatHeader = {
 export default function ReportPageGuides({
   folio,
   final = false,
+  footerCode = "CH-R-001",
+  footerEmail = "contacto@certezahabitacional.com",
+  footerPhone = "656 287 12 18",
+  footerAddress = "Monte Apeninos 6436, Col. La Cuesta, Ciudad Juárez, Chihuahua",
 }: {
   folio?: string;
   final?: boolean;
+  footerCode?: string;
+  footerEmail?: string;
+  footerPhone?: string;
+  footerAddress?: string;
 }) {
   const [paginas, setPaginas] = useState(1);
   const [encabezadosRepetidos, setEncabezadosRepetidos] = useState<RepeatHeader[]>([]);
@@ -138,8 +146,9 @@ export default function ReportPageGuides({
         }
 
         const altoTotal = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
-        setPaginas(Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT)));
-        setEncabezadosRepetidos(repetidos);
+        const totalPaginas = Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT));
+        setPaginas(totalPaginas);
+        setEncabezadosRepetidos(repetidos.filter((item) => item.pagina < totalPaginas - 1));
       });
     };
 
@@ -167,9 +176,11 @@ export default function ReportPageGuides({
         const top = index * PAGE_HEIGHT;
         const footerTop = page * PAGE_HEIGHT - FOOTER_HEIGHT;
 
+        const esCertificado = page === paginas;
+
         return (
           <div key={page}>
-            {page > 1 && (
+            {!esCertificado && page > 1 && (
               <div
                 className="absolute left-0 right-0 flex items-center justify-between bg-slate-950 px-10 text-white"
                 style={{ top, height: HEADER_HEIGHT }}
@@ -187,7 +198,7 @@ export default function ReportPageGuides({
               </div>
             )}
 
-            {encabezadosRepetidos
+            {!esCertificado && encabezadosRepetidos
               .filter((item) => item.pagina === index)
               .map((item, repeatIndex) => (
                 <div
@@ -205,17 +216,22 @@ export default function ReportPageGuides({
                 </div>
               ))}
 
-            <div
-              className="absolute left-0 right-0 flex items-center justify-between border-t border-amber-400/70 bg-slate-950 px-10 text-white"
-              style={{ top: footerTop, height: FOOTER_HEIGHT }}
-            >
-              <span className="text-[9px] font-black uppercase tracking-[.10em] text-amber-300">
-                Certeza Habitacional
-              </span>
-              <span className="text-[9px] font-black text-white">
-                Página {page} de {paginas}
-              </span>
-            </div>
+            {!esCertificado && (
+              <div
+                className="absolute left-0 right-0 grid grid-cols-[auto_1fr_auto] items-center gap-4 border-t border-amber-400/70 bg-slate-950 px-5 text-white"
+                style={{ top: footerTop, height: FOOTER_HEIGHT }}
+              >
+                <span className="text-[8px] font-black uppercase tracking-[.08em] text-slate-200">
+                  {footerCode}
+                </span>
+                <span className="truncate text-center text-[8px] font-medium text-slate-200">
+                  {footerEmail} &nbsp; | &nbsp; {footerPhone} &nbsp; | &nbsp; {footerAddress}
+                </span>
+                <span className="text-[8px] font-black text-slate-200">
+                  Pág. {page} / {paginas}
+                </span>
+              </div>
+            )}
           </div>
         );
       })}
