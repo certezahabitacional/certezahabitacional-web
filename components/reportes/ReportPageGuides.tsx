@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import LogoCerteza from "@/components/branding/LogoCerteza";
 
 const PAGE_HEIGHT = 1056;
-const HEADER_HEIGHT = 72;
-const FOOTER_HEIGHT = 64;
-const TOP_SAFE = 84;
-const BOTTOM_SAFE = 76;
-const REPEAT_HEADER_HEIGHT = 42;
+const HEADER_HEIGHT = 48;
+const FOOTER_HEIGHT = 32;
+const TOP_SAFE = 56;
+const BOTTOM_SAFE = 40;
+const REPEAT_HEADER_HEIGHT = 36;
 
 type RepeatHeader = {
   pagina: number;
@@ -48,8 +48,9 @@ export default function ReportPageGuides({
               ".page-row",
               ".metric-card",
               ".summary-card",
-              ".report-section article",
-              "[data-repeat-header] > *",
+              "[data-repeat-header] > :not([data-table-header])",
+              ".section-content > p",
+              ".section-content > .grid",
               "tr",
               "figure",
             ].join(",")
@@ -71,6 +72,7 @@ export default function ReportPageGuides({
         // Una sola pasada en orden DOM. Cada ajuste anterior ya está incorporado
         // cuando se mide el siguiente elemento, evitando márgenes acumulativos.
         for (const nodo of nodos) {
+          if (nodo.matches("thead tr")) continue;
           if (nodo.closest("#sec-firmas") && !nodo.matches("[data-force-new-page]")) continue;
 
           const forzarPagina = nodo.hasAttribute("data-force-new-page");
@@ -173,15 +175,15 @@ export default function ReportPageGuides({
                 style={{ top, height: HEADER_HEIGHT }}
               >
                 <div className="flex items-center gap-3">
-                  <LogoCerteza variant="gold" width={86} className="max-h-14" />
+                  <LogoCerteza variant="gold" width={60} className="max-h-10" />
                   <div>
-                    <p className="text-[12px] font-black uppercase tracking-[.16em] text-amber-300">
+                    <p className="text-[10px] font-black uppercase tracking-[.14em] text-amber-300">
                       Certeza Habitacional
                     </p>
-                    <p className="text-[12px] font-bold text-white">Reporte de inspección</p>
+                    <p className="text-[10px] font-bold text-white">Reporte de inspección</p>
                   </div>
                 </div>
-                <p className="text-[12px] font-black text-white">{folio ?? ""}</p>
+                <p className="text-[10px] font-black text-white">{folio ?? ""}</p>
               </div>
             )}
 
@@ -204,13 +206,13 @@ export default function ReportPageGuides({
               ))}
 
             <div
-              className="absolute left-0 right-0 flex items-center justify-between border-t-2 border-amber-400/70 bg-slate-950 px-10 text-white"
+              className="absolute left-0 right-0 flex items-center justify-between border-t border-amber-400/70 bg-slate-950 px-10 text-white"
               style={{ top: footerTop, height: FOOTER_HEIGHT }}
             >
-              <span className="text-[11px] font-black uppercase tracking-[.12em] text-amber-300">
+              <span className="text-[9px] font-black uppercase tracking-[.10em] text-amber-300">
                 Certeza Habitacional
               </span>
-              <span className="text-[11px] font-black text-white">
+              <span className="text-[9px] font-black text-white">
                 Página {page} de {paginas}
               </span>
             </div>

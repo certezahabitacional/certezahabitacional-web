@@ -594,8 +594,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .pre-report-watermark-screen span{transform:rotate(-32deg);font-size:72px;font-weight:900;letter-spacing:.22em;color:rgba(148,163,184,.11);white-space:nowrap}
       .pre-report-watermark-print{display:none}
       .report-section{font-size:13px;line-height:1.5}
-      .single-report-page{min-height:259mm}
-      .cover-report-page{min-height:259mm}
+      .single-report-page{height:968px!important;min-height:968px!important;max-height:968px!important;overflow:hidden!important}
+      .cover-report-page{height:1056px!important;min-height:1056px!important;max-height:1056px!important;overflow:hidden!important;padding-bottom:40px!important}
       .report-section h1{font-size:22px!important;line-height:1.2!important}
       .report-section h2{font-size:18px!important;line-height:1.25!important}
       .report-section h3{font-size:16px!important;line-height:1.3!important}
@@ -756,8 +756,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-incluye" n="03" titulo="Qué incluye la inspección" subtitulo="Cobertura estándar incluida en el servicio">
           <p className="text-sm leading-7 text-slate-700">La inspección cubre las áreas declaradas por el cliente que existan en el inmueble y se encuentren accesibles y seguras al momento de la visita. La cobertura siguiente describe las actividades estándar de revisión; no depende del equipo instrumental seleccionado y no modifica el precio de la propuesta.</p>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-300">
-            <div className="grid grid-cols-[1fr_1.8fr] bg-amber-400 px-4 py-3 text-xs font-black text-slate-900"><span>Área / sistema</span><span>Actividades incluidas</span></div>
+          <div data-repeat-header="Área / sistema|Actividades incluidas" data-repeat-cols="1fr 1.8fr" className="mt-5 overflow-hidden rounded-2xl border border-slate-300">
+            <div data-table-header className="grid grid-cols-[1fr_1.8fr] bg-amber-400 px-4 py-3 text-xs font-black text-slate-900"><span>Área / sistema</span><span>Actividades incluidas</span></div>
             {ALCANCE_INSPECCION_COTIZACION.map(([area,actividad])=><div key={area} className="grid grid-cols-[1fr_1.8fr] border-t border-slate-200 text-xs leading-5"><div className="p-4 font-black">{area}</div><div className="p-4 text-slate-700">{actividad}</div></div>)}
           </div>
           <p className="mt-5 text-sm leading-7 text-slate-700">La inspección documentará también las áreas o componentes que no puedan revisarse por falta de acceso, condiciones inseguras, ausencia de servicios o restricciones existentes el día de la visita.</p>
@@ -765,8 +765,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-servicios" n="04" titulo="Servicios y verificaciones instrumentales incluidos" subtitulo="Equipos y pruebas incluidos en la propuesta">
           <p className="text-sm leading-7 text-slate-700">Los siguientes servicios instrumentales están incluidos en esta propuesta. Complementan la inspección estándar, no generan un cargo individual adicional y se aplicarán cuando correspondan a las condiciones del inmueble, exista acceso seguro y el equipo se encuentre operativo.</p>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-300">
-            <div className="grid grid-cols-[.35fr_1.1fr_2fr] bg-amber-400 px-4 py-3 text-xs font-black text-slate-900"><span>Incl.</span><span>Servicio / equipo</span><span>Aplicación durante la inspección</span></div>
+          <div data-repeat-header="Incl.|Servicio / equipo|Aplicación durante la inspección" data-repeat-cols=".35fr 1.1fr 2fr" className="mt-5 overflow-hidden rounded-2xl border border-slate-300">
+            <div data-table-header className="grid grid-cols-[.35fr_1.1fr_2fr] bg-amber-400 px-4 py-3 text-xs font-black text-slate-900"><span>Incl.</span><span>Servicio / equipo</span><span>Aplicación durante la inspección</span></div>
             {SERVICIOS_INSTRUMENTALES_COTIZACION.map(([servicio,aplicacion])=><div key={servicio} className="grid grid-cols-[.35fr_1.1fr_2fr] border-t border-slate-200 text-xs leading-5"><div className="p-4 text-center text-base font-black">✓</div><div className="p-4 font-black">{servicio}</div><div className="p-4 text-slate-700">{aplicacion}</div></div>)}
           </div>
         </Seccion>
@@ -837,9 +837,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </Seccion>
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-resumen-partida" n="06" titulo="Resumen por partida" subtitulo="Resultados, alcance efectivo y evaluación de cada partida">
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <div data-repeat-header="Partida|Inspeccionados|Hallazgos|No aplica|Calificación|Nivel" data-repeat-cols="30% 14% 14% 14% 14% 14%" className="overflow-hidden rounded-2xl border border-slate-200">
             <table className="w-full text-xs">
-              <thead>
+              <thead data-table-header>
                 <tr className="bg-amber-400 text-[10px] font-black uppercase tracking-wider text-slate-950">
                   <th className="w-[30%] px-4 py-3 text-left">Partida</th><th className="px-2 py-3 text-center">Inspeccionados</th><th className="px-2 py-3 text-center">Hallazgos</th><th className="px-2 py-3 text-center">No aplica</th><th className="px-2 py-3 text-center">Calificación</th><th className="px-2 py-3 text-center">Nivel</th>
                 </tr>
@@ -930,7 +930,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 }
 
-function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} data-force-new-page className={`report-section section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}><div className="relative z-10"><div data-page-unit className="section-title-block border-b-2 border-slate-900 pb-4"><p className="text-sm font-black uppercase tracking-[.16em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-2xl font-black leading-tight">{titulo}</h2></div><div className="section-content mt-5">{children}</div></div></section>}
+function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} data-force-new-page className={`report-section section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}><div className="relative z-10"><div data-page-unit className="section-title-block border-b-2 border-slate-900 pb-3"><p className="text-sm font-black uppercase tracking-[.16em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-2xl font-black leading-tight">{titulo}</h2></div><div className="section-content mt-4">{children}</div></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
