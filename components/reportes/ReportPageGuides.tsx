@@ -15,6 +15,11 @@ export default function ReportPageGuides({
   final?: boolean;
 }) {
   const [paginas, setPaginas] = useState(1);
+  const [encabezadosRepetidos, setEncabezadosRepetidos] = useState<Array<{
+    pagina: number;
+    columnas: string;
+    etiquetas: string[];
+  }>>([]);
 
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-report-root]");
@@ -27,7 +32,7 @@ export default function ReportPageGuides({
       raf = requestAnimationFrame(() => {
         const todosLosCandidatos = Array.from(
           root.querySelectorAll<HTMLElement>(
-            '[data-page-unit], .report-figure, .colored-block, .page-row, tr, figure, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
+            '[data-page-unit], .inspection-pair, .report-figure, .colored-block, .page-row, tr, figure'
           )
         );
         const candidatos = todosLosCandidatos.filter((el) => {
@@ -39,12 +44,29 @@ export default function ReportPageGuides({
         for (const el of todosLosCandidatos) el.style.marginTop = "";
         const encabezados = Array.from(root.querySelectorAll<HTMLElement>(".partida-header"));
         for (const el of encabezados) el.style.marginTop = "";
-        const secciones = Array.from(root.querySelectorAll<HTMLElement>(".page-break"));
+        const secciones = Array.from(root.querySelectorAll<HTMLElement>("[data-force-new-page]"));
         for (const el of secciones) el.style.marginTop = "";
 
         const rootTop = root.getBoundingClientRect().top + window.scrollY;
+        const tablasRepetibles = Array.from(root.querySelectorAll<HTMLElement>("[data-repeat-header]"));
+        for (const tabla of tablasRepetibles) {
+          const cabecera = tabla.firstElementChild as HTMLElement | null;
+          const primeraFila = cabecera?.nextElementSibling as HTMLElement | null;
+          if (!cabecera || !primeraFila) continue;
+          cabecera.style.marginTop = "";
+          const cr = cabecera.getBoundingClientRect();
+          const fr = primeraFila.getBoundingClientRect();
+          const top = cr.top + window.scrollY - rootTop;
+          const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
+          const offset = top - pagina * PAGE_HEIGHT;
+          const altoCombinado = fr.bottom - cr.top;
+          const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
+          if (offset + altoCombinado > finSeguro) {
+            cabecera.style.marginTop = `${PAGE_HEIGHT - offset + TOP_SAFE}px`;
+          }
+        }
 
-        for (let pasada = 0; pasada < 5; pasada += 1) {
+        for (let pasada = 0; pasada < 1; pasada += 1) {
           let cambio = false;
 
           for (const seccion of secciones) {
@@ -70,13 +92,13 @@ export default function ReportPageGuides({
             const er = encabezado.getBoundingClientRect();
             const sr = siguiente.getBoundingClientRect();
             const top = er.top + window.scrollY - rootTop;
-            const altoCombinado = (sr.bottom - er.top);
+            const altoEncabezadoYPrimeraFila = sr.bottom - er.top;
             const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
             const offset = top - pagina * PAGE_HEIGHT;
-            const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
-            if (altoCombinado <= PAGE_HEIGHT - TOP_SAFE - BOTTOM_SAFE && offset + altoCombinado > finSeguro) {
-              const salto = PAGE_HEIGHT - offset + TOP_SAFE;
-              encabezado.style.marginTop = `${salto}px`;
+            const disponible = PAGE_HEIGHT - BOTTOM_SAFE - offset;
+            const cabeEnPaginaNueva = altoEncabezadoYPrimeraFila <= PAGE_HEIGHT - TOP_SAFE - BOTTOM_SAFE;
+            if (cabeEnPaginaNueva && altoEncabezadoYPrimeraFila > disponible) {
+              encabezado.style.marginTop = `${PAGE_HEIGHT - offset + TOP_SAFE}px`;
               cambio = true;
             }
           }
@@ -89,10 +111,18 @@ export default function ReportPageGuides({
             const top = rect.top + window.scrollY - rootTop;
             const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
             const offset = top - pagina * PAGE_HEIGHT;
+            const tablaRepetible = el.closest<HTMLElement>("[data-repeat-header]");
+            let topSeguro = TOP_SAFE;
+            if (tablaRepetible) {
+              const tr = tablaRepetible.getBoundingClientRect();
+              const inicioTabla = tr.top + window.scrollY - rootTop;
+              const paginaInicioTabla = Math.max(0, Math.floor(inicioTabla / PAGE_HEIGHT));
+              if (pagina > paginaInicioTabla) topSeguro = TOP_SAFE + 44;
+            }
 
-            if (pagina > 0 && offset < TOP_SAFE) {
+            if (pagina > 0 && offset < topSeguro) {
               const actual = Number.parseFloat(el.style.marginTop || "0") || 0;
-              el.style.marginTop = `${actual + (TOP_SAFE - offset)}px`;
+              el.style.marginTop = `${actual + (topSeguro - offset)}px`;
               cambio = true;
               continue;
             }
@@ -100,7 +130,7 @@ export default function ReportPageGuides({
             const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
             if (offset + alto > finSeguro) {
               const actual = Number.parseFloat(el.style.marginTop || "0") || 0;
-              const salto = PAGE_HEIGHT - offset + TOP_SAFE;
+              const salto = PAGE_HEIGHT - offset + topSeguro;
               el.style.marginTop = `${actual + salto}px`;
               cambio = true;
             }
@@ -109,9 +139,24 @@ export default function ReportPageGuides({
           if (!cambio) break;
         }
 
+        const repetidos: Array<{ pagina: number; columnas: string; etiquetas: string[] }> = [];
+        for (const tabla of tablasRepetibles) {
+          const rect = tabla.getBoundingClientRect();
+          const top = rect.top + window.scrollY - rootTop;
+          const bottom = rect.bottom + window.scrollY - rootTop;
+          const paginaInicio = Math.max(0, Math.floor(top / PAGE_HEIGHT));
+          const paginaFin = Math.max(paginaInicio, Math.floor((bottom - 1) / PAGE_HEIGHT));
+          const etiquetas = String(tabla.dataset.repeatHeader ?? "").split("|").filter(Boolean);
+          const columnas = String(tabla.dataset.repeatCols ?? "1fr 1fr");
+          for (let pagina = paginaInicio + 1; pagina <= paginaFin; pagina += 1) {
+            repetidos.push({ pagina, columnas, etiquetas });
+          }
+        }
+
         const altoTotal = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
         const totalPaginas = Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT));
         setPaginas(totalPaginas);
+        setEncabezadosRepetidos(repetidos);
       });
     };
 
@@ -133,11 +178,11 @@ export default function ReportPageGuides({
   }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-30 print:hidden" aria-hidden="true">
+    <div className="pointer-events-none absolute inset-0 z-50 print:hidden" aria-hidden="true">
       {Array.from({ length: paginas }, (_, index) => {
         const page = index + 1;
         const top = index * PAGE_HEIGHT;
-        const footerTop = page * PAGE_HEIGHT - 58;
+        const footerTop = page * PAGE_HEIGHT - 64;
 
         return (
           <div key={page}>
@@ -157,8 +202,20 @@ export default function ReportPageGuides({
               </div>
             )}
 
+            {encabezadosRepetidos
+              .filter((item) => item.pagina === index)
+              .map((item, repeatIndex) => (
+                <div
+                  key={`repeat-${page}-${repeatIndex}`}
+                  className="absolute left-10 right-10 grid min-h-[40px] items-center rounded-t-xl bg-amber-400 px-4 py-2 text-xs font-black text-slate-950"
+                  style={{ top: top + 72, gridTemplateColumns: item.columnas }}
+                >
+                  {item.etiquetas.map((etiqueta) => <span key={etiqueta}>{etiqueta}</span>)}
+                </div>
+              ))}
+
             <div
-              className="absolute left-0 right-0 flex h-[58px] items-center justify-between bg-slate-950 px-10 text-white"
+              className="absolute left-0 right-0 flex h-[64px] items-center justify-between bg-slate-950 px-10 text-white"
               style={{ top: footerTop }}
             >
               <span className="text-[11px] font-black uppercase tracking-[.12em] text-amber-300">Certeza Habitacional</span>
