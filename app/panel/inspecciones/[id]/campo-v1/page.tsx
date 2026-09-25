@@ -339,7 +339,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                   ))}
                 </div>
 
-                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (
+                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
                   <>
                     <div className="mt-6 rounded-2xl border border-rose-300/20 bg-rose-300/5 p-4">
                       <p className="font-black text-rose-200">DESHABILITAR PARTIDA COMPLETA</p>
