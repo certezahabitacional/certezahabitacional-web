@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { PUNTOS_CRITICOS_V1 } from "@/lib/puntos-criticos-v1";
 import { prisma } from "@/lib/prisma";
+import { agruparPuntosMaestrosV1, estimarMinutosPlanV1, type PerfilInspeccionV1 } from "@/lib/plan-inspeccion-depurado-v1";
 
 type Snapshot = Record<string, unknown>;
 
@@ -19,6 +20,7 @@ type PartidaPlan = {
 
 type ConceptoPlan = {
   areaId: string;
+  codigo: string;
   concepto: string;
   especificacion: string | null;
   grupo: string | null;
@@ -109,10 +111,14 @@ function nombrePartidaInferida(codigo: string, indice: number, codigos: string[]
 
 export default async function PlanInspeccionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ perfil?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
+  const perfil: PerfilInspeccionV1 = query.perfil === "USADA" ? "USADA" : "NUEVA";
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -155,7 +161,7 @@ export default async function PlanInspeccionPage({
       ORDER BY a."orden",a."nombre"
     `,
     prisma.$queryRaw<ConceptoPlan[]>`
-      SELECT g."areaId"::text AS "areaId",g."concepto",g."especificacion",
+      SELECT g."areaId"::text AS "areaId",COALESCE(p."codigo",g."concepto") AS "codigo",g."concepto",g."especificacion",
              p."grupo",g."herramientaSugerida" AS "herramienta",g."orden"
       FROM "GuiaInspeccionItem" g
       LEFT JOIN "BibliotecaPuntoCerteza" p ON p."id"=g."bibliotecaPuntoId"
@@ -215,13 +221,14 @@ export default async function PlanInspeccionPage({
 
   const plantillasBiblioteca = await prisma.$queryRaw<Array<{
     codigoArea: string;
+    codigo: string;
     concepto: string;
     especificacion: string | null;
     grupo: string | null;
     herramienta: string | null;
     orden: number;
   }>>`
-    SELECT b."codigo" AS "codigoArea",p."nombre" AS "concepto",p."descripcion" AS "especificacion",
+    SELECT b."codigo" AS "codigoArea",p."codigo",p."nombre" AS "concepto",p."descripcion" AS "especificacion",
            p."grupo",p."herramientaSugerida" AS "herramienta",ap."orden"
     FROM "BibliotecaAreaCerteza" b
     JOIN "BibliotecaAreaPuntoCerteza" ap ON ap."areaBibliotecaId"=b."id"
@@ -235,10 +242,32 @@ export default async function PlanInspeccionPage({
   }
 
   const totalConceptosAreas = partidas.reduce((s, p) => s + Number(p.conceptos), 0);
+  const puntosMaestrosPorPartida = new Map<string, ReturnType<typeof agruparPuntosMaestrosV1>>();
+  let totalPuntosMaestros = 0;
+  for (const partida of partidas) {
+    const codigoPlantilla = partida.codigo === "FACHADA_FRONTAL" || partida.codigo === "FACHADA_PRINCIPAL"
+      ? "FACHADA_PRINCIPAL"
+      : partida.codigo.startsWith("FACHADA_")
+        ? "FACHADA_LATERAL"
+        : partida.codigo === "RECAMARA_PRINCIPAL"
+          ? "RECAMARA_PRINCIPAL"
+          : partida.codigo.startsWith("RECAMARA")
+            ? "RECAMARA"
+            : partida.codigo.startsWith("BANO") && partida.codigo !== "MEDIO_BANO"
+              ? "BANO_COMPLETO"
+              : partida.codigo;
+    const reales = conceptosPorArea.get(partida.id) ?? [];
+    const previstos = plantillaPorCodigo.get(codigoPlantilla) ?? [];
+    const base = reales.length > 0 ? reales : previstos.map((x) => ({ areaId: partida.id, codigo: x.codigo, concepto: x.concepto, especificacion: x.especificacion, grupo: x.grupo, herramienta: x.herramienta, orden: x.orden }));
+    const maestros = agruparPuntosMaestrosV1(base, perfil);
+    puntosMaestrosPorPartida.set(partida.id, maestros);
+    totalPuntosMaestros += maestros.filter((m) => m.seleccionado).length;
+  }
   const totalCriticos = criticosActuales.length > 0
     ? criticosActuales.length
     : PUNTOS_CRITICOS_V1.reduce((s, p) => s + p.plantilla.length, 0);
   const totalCriterios = totalConceptosAreas + totalCriticos;
+  const tiempoEstimado = estimarMinutosPlanV1(totalPuntosMaestros, totalCriticos);
   const regreso = inspeccion.estado === EstadoInspeccion.PROGRAMADA
     ? `/panel/inspecciones/${id}/revision-inicial`
     : `/panel/inspecciones/${id}/flujo`;
@@ -249,16 +278,15 @@ export default async function PlanInspeccionPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={regreso} className="text-sm font-black text-cyan-300">← Regresar</Link>
           <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-slate-300">
-            PLAN DE INSPECCIÓN · SOLO CONSULTA
+            PLANEAR INSPECCIÓN
           </span>
         </div>
 
         <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
           <p className="text-xs font-black uppercase tracking-[.22em] text-cyan-300">Preparación previa del Inspector</p>
           <h1 className="mt-2 text-3xl font-black">Qué voy a inspeccionar antes de llegar al inmueble</h1>
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
-            Esta vista existe para que estudies el alcance antes de iniciar físicamente la visita: lee cada partida, entiende cada concepto y planea la evidencia que necesitarás. La intención es reducir omisiones y evitar usar la misma evidencia para dos hallazgos distintos por una interpretación incorrecta.
-          </p>
+          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">El sistema depura conceptos repetitivos en puntos maestros y prioriza el alcance según el tipo de servicio. El orden mostrado sigue siendo la ruta recomendada, pero durante la inspección podrás entrar a cualquier partida o concepto en cualquier momento.</p>
+          <div className="mt-5 flex flex-wrap gap-2"><Link href={`/panel/inspecciones/${id}/plan-inspeccion?perfil=NUEVA`} className={`rounded-full px-4 py-2 text-xs font-black ${perfil==="NUEVA"?"bg-cyan-300 text-slate-950":"border border-white/10 text-slate-300"}`}>VIVIENDA NUEVA / ENTREGA</Link><Link href={`/panel/inspecciones/${id}/plan-inspeccion?perfil=USADA`} className={`rounded-full px-4 py-2 text-xs font-black ${perfil==="USADA"?"bg-amber-300 text-slate-950":"border border-white/10 text-slate-300"}`}>VIVIENDA USADA / COMPRA</Link></div>
           {!hayPlanMaterializado && (
             <p className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-sm font-bold text-amber-200">
               PLAN PRELIMINAR: todavía no existe una guía materializada completa para esta V1. Las partidas y cantidades se estiman con la cotización y la Biblioteca Certeza; pueden ajustarse al confirmar proyecto, áreas y condiciones reales del inmueble.
@@ -268,10 +296,12 @@ export default async function PlanInspeccionPage({
 
         <section className="mt-5 grid gap-3 sm:grid-cols-4">
           <Resumen titulo="Partidas / áreas" valor={String(partidas.length)} />
-          <Resumen titulo="Conceptos de áreas" valor={String(totalConceptosAreas)} />
+          <Resumen titulo="Conceptos originales" valor={String(totalConceptosAreas)} />
           <Resumen titulo="Conceptos de partidas 2–8" valor={String(totalCriticos)} />
-          <Resumen titulo="Total de criterios previstos" valor={String(totalCriterios)} />
+          <Resumen titulo="Puntos maestros propuestos" valor={String(totalPuntosMaestros)} />
         </section>
+
+        <section className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-5"><p className="text-xs font-black uppercase tracking-wider text-emerald-300">Perfil activo</p><p className="mt-2 text-2xl font-black">{perfil === "NUEVA" ? "Vivienda nueva / entrega" : "Vivienda usada / compra"}</p><p className="mt-2 text-sm text-slate-300">El perfil cambia prioridades y selección sugerida sin eliminar los subcriterios técnicos de respaldo.</p></div><div className="rounded-3xl border border-violet-300/20 bg-violet-300/5 p-5"><p className="text-xs font-black uppercase tracking-wider text-violet-300">Tiempo estimado de campo</p><p className="mt-2 text-3xl font-black">{Math.floor(tiempoEstimado/60)} h {tiempoEstimado%60} min</p><p className="mt-2 text-sm text-slate-300">Estimación operativa basada en puntos maestros seleccionados y puntos críticos; el objetivo es mantenerse dentro de 2–3 horas cuando el alcance lo permita.</p></div></section>
 
         <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5">
           <h2 className="text-xl font-black text-amber-200">Regla para evitar duplicidad de evidencias</h2>
@@ -344,12 +374,14 @@ export default async function PlanInspeccionPage({
               const previstos = plantillaPorCodigo.get(codigoPlantilla) ?? [];
               const conceptos = reales.length > 0 ? reales : previstos.map((x) => ({
                 areaId: partida.id,
+                codigo: x.codigo,
                 concepto: x.concepto,
                 especificacion: x.especificacion,
                 grupo: x.grupo,
                 herramienta: x.herramienta,
                 orden: x.orden,
               }));
+              const maestros = puntosMaestrosPorPartida.get(partida.id) ?? [];
 
               return (
                 <details key={partida.id} className="rounded-2xl border border-white/10 bg-slate-900 p-4">
@@ -358,14 +390,15 @@ export default async function PlanInspeccionPage({
                     <span className="ml-2 text-xs font-black text-emerald-300">{conceptos.length} conceptos</span>
                   </summary>
                   <div className="mt-4 grid gap-2">
-                    {conceptos.map((concepto, i) => (
-                      <article key={`${partida.id}-${i}-${concepto.concepto}`} className="rounded-xl bg-slate-950 p-3">
+                    {maestros.map((maestro, i) => (
+                      <article key={`${partida.id}-${maestro.codigo}`} className={`rounded-xl border p-3 ${maestro.seleccionado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-950"}`}>
                         <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="text-sm font-black">{i + 1}. {concepto.concepto}</p>
-                          {concepto.grupo && <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-black text-slate-400">{concepto.grupo}</span>}
+                          <p className="text-sm font-black">{i + 1}. {maestro.nombre}</p>
+                          <span className={`rounded-full px-2 py-1 text-[10px] font-black ${maestro.prioridad==="OBLIGATORIO"?"bg-rose-300/15 text-rose-200":maestro.prioridad==="RECOMENDADO"?"bg-cyan-300/15 text-cyan-200":"bg-white/5 text-slate-400"}`}>{maestro.prioridad}</span>
                         </div>
-                        {concepto.especificacion && <p className="mt-1 text-xs leading-5 text-slate-400">{concepto.especificacion}</p>}
-                        {concepto.herramienta && <p className="mt-1 text-[11px] font-bold text-amber-300">Herramienta sugerida: {concepto.herramienta}</p>}
+                        <p className="mt-1 text-xs leading-5 text-slate-400">{maestro.descripcion}</p>
+                        <p className="mt-2 text-[11px] font-bold text-amber-300">{maestro.seleccionado ? "INCLUIDO EN PROPUESTA" : "CONDICIONAL / NO PRESELECCIONADO"} · {maestro.subcriterios.length} subcriterio(s)</p>
+                        <details className="mt-2"><summary className="cursor-pointer text-[11px] font-black text-slate-300">Ver subcriterios técnicos</summary><div className="mt-2 space-y-1">{maestro.subcriterios.map((sub)=><p key={sub.codigo} className="text-[11px] text-slate-500">• {sub.concepto}</p>)}</div></details>
                       </article>
                     ))}
                     {conceptos.length === 0 && <p className="text-sm text-slate-500">La Biblioteca Certeza todavía no tiene conceptos precargados para esta partida.</p>}
@@ -382,7 +415,7 @@ export default async function PlanInspeccionPage({
             {inspeccion.folio} · {inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? inspeccion.inmueble?.direccion ?? inspeccion.direccion}
           </p>
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            Esta pantalla es de consulta y preparación. No permite cerrar conceptos, registrar hallazgos ni modificar la inspección.
+            Esta versión ya muestra la depuración propuesta por perfil. El siguiente paso del flujo será confirmar qué puntos maestros quedan incluidos para que ese alcance se convierta en el total oficial de la inspección.
           </p>
         </section>
       </div>
