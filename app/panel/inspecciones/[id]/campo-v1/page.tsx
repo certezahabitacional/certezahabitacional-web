@@ -334,7 +334,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                       punto={punto}
                       numeroConcepto={2 + totalConceptosCriticos + areas.slice(0, Math.max(indiceAreaActiva,0)).reduce((s,a)=>s+Number(a.puntos),0) + puntos.findIndex((x)=>x.id===punto.id) + 1}
                       puedeCapturar={puedeCapturar}
-                      areaActiva={areaSeleccionada.id === areaActivaId}
+                      areaActiva={true}
                     />
                   ))}
                 </div>
