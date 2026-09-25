@@ -48,7 +48,6 @@ export default function ReportPageGuides({
               ".page-row",
               ".metric-card",
               ".summary-card",
-              ".report-section article",
               "[data-repeat-header] > *",
               "tr",
               "figure",
