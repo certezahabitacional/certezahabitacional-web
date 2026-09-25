@@ -294,6 +294,18 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   }
   if (Number(pendientes[0]?.total ?? 0) > 0) volver(inspeccionId, "error", "Hay solicitudes de corrección pendientes. No se puede iniciar la inspección todavía.");
 
+  if (inspeccion.numeroInspeccion === 1) {
+    const [plan] = await prisma.$queryRaw<Array<{ estado: string }>>`
+      SELECT "estado"
+      FROM "PlanInspeccionV1"
+      WHERE "inspeccionId"=${inspeccionId}
+      LIMIT 1
+    `;
+    if (plan?.estado !== "CONFIRMADO") {
+      redirect("/panel/inspecciones/" + inspeccionId + "/plan-inspeccion?error=" + encodeURIComponent("Antes de iniciar debes confirmar PLANEAR INSPECCIÓN y definir el alcance oficial."));
+    }
+  }
+
   if (!inspeccion.cotizacionId) volver(inspeccionId, "error", "La inspección no tiene cotización asociada.");
   const liberacion = await validarLiberacionCampoDesdeCaja(inspeccion.cotizacionId);
   if (!liberacion.ok) volver(inspeccionId, "error", liberacion.error);
