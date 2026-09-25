@@ -119,10 +119,6 @@ export default async function CampoV1Page({ params, searchParams }: {
     FROM "ProtocoloInspeccionPaso"
     WHERE "inspeccionId"=${id} AND "obligatorio"=true
   `;
-  if (Number(critical?.total ?? 0) < 7 || Number(critical?.bloqueantes ?? 0) > 0) {
-    redirect(`/panel/inspecciones/${id}/puntos-criticos`);
-  }
-
   const areas = await prisma.$queryRaw<Area[]>`
     SELECT a."id"::text,a."codigo",a."nombre",a."estado",a."resultado",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") AS "fotos",
@@ -137,8 +133,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   `;
 
   const areaActiva = areas.find((a) => a.estado !== "REVISADA") ?? null;
-  // El Inspector puede consultar cualquiera de las partidas 9 en adelante.
-  // La captura permanece habilitada únicamente en la partida activa para conservar la secuencia.
+  // El Inspector puede entrar, capturar y regresar a cualquier partida en cualquier momento.
   const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areaActiva ?? areas[0];
   const puntos = areaSeleccionada ? await prisma.$queryRaw<PuntoArea[]>`
     SELECT
@@ -212,7 +207,6 @@ export default async function CampoV1Page({ params, searchParams }: {
     (esDirector &&
       (inspeccion.estado === EstadoInspeccion.EN_PROCESO ||
        inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE));
-  const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
