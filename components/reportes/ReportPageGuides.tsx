@@ -136,6 +136,25 @@ export default function ReportPageGuides({
             }
           }
 
+          // Los ajustes atómicos anteriores pueden desplazar hacia abajo temas posteriores.
+          // Re-alineamos cada tema principal al área útil superior de su página,
+          // en orden DOM, para que ninguno quede a media hoja.
+          for (const seccion of secciones) {
+            const rect = seccion.getBoundingClientRect();
+            const top = rect.top + window.scrollY - rootTop;
+            const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
+            const offset = top - pagina * PAGE_HEIGHT;
+            const objetivo = TOP_SAFE;
+            if (Math.abs(offset - objetivo) <= 3) continue;
+
+            const actual = Number.parseFloat(seccion.style.marginTop || "0") || 0;
+            if (offset < objetivo) {
+              seccion.style.marginTop = `${Math.max(0, actual + (objetivo - offset))}px`;
+            } else {
+              seccion.style.marginTop = `${Math.max(0, actual + (PAGE_HEIGHT - offset + objetivo))}px`;
+            }
+          }
+
           if (!cambio) break;
         }
 
