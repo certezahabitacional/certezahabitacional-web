@@ -212,25 +212,7 @@ export default async function PuntosCriticosPage({
     pendientesNoPruebaRows.map((fila) => [fila.codigo, Number(fila.pendientes)]),
   );
 
-  const puedeEntrarPunto = (codigo: CodigoPuntoCriticoV1) => {
-    const indice = PUNTOS_CRITICOS_V1.findIndex((item) => item.codigo === codigo);
-    for (const anterior of PUNTOS_CRITICOS_V1.slice(0, indice)) {
-      const pasoAnterior = pasos.find((item) => item.clave === `PC_${anterior.codigo}`);
-      if (!pasoAnterior) return false;
-      if (pasoAnterior.estado === "COMPLETADO" || pasoAnterior.estado === "NO_APLICA") continue;
-      const datosAnterior = datosPaso(pasoAnterior.datos);
-      if (
-        pasoAnterior.estado === "EN_PROCESO" &&
-        datosAnterior.pruebaProlongada &&
-        Boolean(pasoAnterior.lecturaInicial) &&
-        Number(pendientesNoPrueba.get(anterior.codigo) ?? 0) === 0
-      ) {
-        continue;
-      }
-      return false;
-    }
-    return true;
-  };
+  const puedeEntrarPunto = (_codigo: CodigoPuntoCriticoV1) => true;
 
   const herramientasCotizadas = obtenerHerramientasCotizadasDesdeCotizacion(
     inspeccion.cotizacion?.observacionesInternas,
@@ -277,7 +259,7 @@ export default async function PuntosCriticosPage({
   if (!paso) redirect(`/panel/inspecciones/${id}/puntos-criticos?punto=HIDRAULICA`);
 
   const datos = datosPaso(paso.datos);
-  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO && puntoEnSecuencia;
+  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
 
   const items = datos.configurado && datos.aplica
     ? await prisma.$queryRaw<Item[]>`
@@ -402,7 +384,7 @@ export default async function PuntosCriticosPage({
                 <span className="block text-[10px] text-slate-500">{index + 2}/{totalRecorrido}</span>
                 <span className="mt-1 block">{item.etiqueta}</span>
                 <span className="mt-2 block text-[10px]">
-                  {capturable ? estado.replaceAll("_", " ") : "PENDIENTE · CONSULTA"}
+                  {estado.replaceAll("_", " ")}
                 </span>
               </>
             );

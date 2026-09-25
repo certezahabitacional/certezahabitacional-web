@@ -13,6 +13,7 @@ import {
   type CodigoHerramienta,
 } from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
+import { agruparPuntosMaestrosV1, type PerfilInspeccionV1 } from "@/lib/plan-inspeccion-depurado-v1";
 
 const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
 
@@ -142,28 +143,17 @@ async function exigirResponsableV1(inspeccionId: string) {
 }
 
 async function exigirAreaActivaV1(inspeccionId: string, areaId: string) {
-  const areas = await prisma.$queryRaw<Array<{ id: string; nombre: string; estado: string }>>`
+  const [area] = await prisma.$queryRaw<Array<{ id: string; nombre: string; estado: string }>>`
     SELECT "id"::text,"nombre","estado"
     FROM "AreaInspeccion"
-    WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
-    ORDER BY "orden","nombre"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "id"=${areaId}::uuid
+      AND "tipo" <> 'PUNTO_CRITICO'
+      AND COALESCE("excluirReporte",false)=false
+    LIMIT 1
   `;
-  const indiceSolicitado = areas.findIndex((area) => area.id === areaId);
-  if (indiceSolicitado < 0) volver(inspeccionId, "error", "El punto de área no pertenece a esta inspección.");
-
-  const indiceActivo = areas.findIndex((area) => area.estado !== "REVISADA");
-  if (indiceActivo < 0) volver(inspeccionId, "error", "Todos los puntos de área ya están cerrados al 100%.");
-
-  const activa = areas[indiceActivo];
-  if (activa.id !== areaId) {
-    volver(
-      inspeccionId,
-      "error",
-      `Debes concluir al 100% el Punto ${9 + indiceActivo} · ${activa.nombre} antes de avanzar.`,
-      activa.id,
-    );
-  }
-  return { area: activa, numero: 9 + indiceActivo, totalRecorrido: 8 + areas.length };
+  if (!area) volver(inspeccionId, "error", "El punto de área no pertenece al alcance activo de esta inspección.");
+  return { area, numero: 0, totalRecorrido: 0 };
 }
 
 async function siguienteAreaPendienteV1(inspeccionId: string) {
@@ -183,7 +173,23 @@ export async function inicializarPlanAreasV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
-  const equipoCotizado = await herramientasCotizadas(inspeccionId);
+
+  const [plan] = await prisma.$queryRaw<Array<{ perfil: string; estado: string; seleccion: unknown }>>`
+    SELECT "perfil","estado","seleccion"
+    FROM "PlanInspeccionV1"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+  if (!plan || plan.estado !== "CONFIRMADO") {
+    volver(inspeccionId, "error", "Antes de preparar el recorrido debes confirmar PLANEAR INSPECCIÓN.");
+  }
+
+  const perfil: PerfilInspeccionV1 = plan.perfil === "USADA" ? "USADA" : "NUEVA";
+  const seleccion = plan.seleccion && typeof plan.seleccion === "object" && !Array.isArray(plan.seleccion)
+    ? plan.seleccion as { partidas?: Array<{ clave: string; codigo: string; nombre: string; activa: boolean; puntos: string[] }> }
+    : {};
+  const partidasPlan = seleccion.partidas ?? [];
+  const planPorClave = new Map(partidasPlan.map((p) => [p.clave, p]));
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
@@ -193,13 +199,49 @@ export async function inicializarPlanAreasV1(formData: FormData) {
       WHERE a."inspeccionId"=${inspeccionId} AND a."bibliotecaAreaId" IS NULL
         AND (b."codigo"=a."codigo" OR b."codigo"=regexp_replace(upper(unaccent(a."nombre")), '[^A-Z0-9]+', '_', 'g'))
     `;
+
     const areas = await tx.$queryRaw<Array<{ id: string; codigo: string; nombre: string; bibliotecaAreaId: string | null }>>`
       SELECT "id"::text,"codigo","nombre","bibliotecaAreaId"::text
       FROM "AreaInspeccion"
       WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
-      ORDER BY "orden"
+      ORDER BY "orden","nombre"
     `;
-    for (const area of areas) {
+
+    for (const [index, area] of areas.entries()) {
+      const clave = String(index) + ":" + area.codigo + ":" + area.nombre;
+      const partidaPlan = planPorClave.get(clave);
+
+      if (partidaPlan && !partidaPlan.activa) {
+        await tx.$executeRaw`
+          DELETE FROM "GuiaInspeccionItem"
+          WHERE "inspeccionId"=${inspeccionId}
+            AND "areaId"=${area.id}::uuid
+            AND "estadoV3"='PENDIENTE'
+        `;
+        await tx.$executeRaw`
+          UPDATE "AreaInspeccion"
+          SET "excluirReporte"=true,
+              "estado"='REVISADA',
+              "resultado"='NO_APLICA',
+              "comentarioFinal"='Partida excluida durante PLANEAR INSPECCIÓN antes de iniciar la visita.',
+              "revisadaEn"=NOW(),
+              "actualizadoEn"=NOW()
+          WHERE "id"=${area.id}::uuid AND "inspeccionId"=${inspeccionId}
+        `;
+        continue;
+      }
+
+      await tx.$executeRaw`
+        UPDATE "AreaInspeccion"
+        SET "excluirReporte"=false,
+            "estado"=CASE WHEN "resultado"='NO_APLICA' AND "comentarioFinal" LIKE 'Partida excluida durante PLANEAR INSPECCIÓN%' THEN 'PENDIENTE' ELSE "estado" END,
+            "resultado"=CASE WHEN "comentarioFinal" LIKE 'Partida excluida durante PLANEAR INSPECCIÓN%' THEN NULL ELSE "resultado" END,
+            "comentarioFinal"=CASE WHEN "comentarioFinal" LIKE 'Partida excluida durante PLANEAR INSPECCIÓN%' THEN NULL ELSE "comentarioFinal" END,
+            "revisadaEn"=CASE WHEN "comentarioFinal" LIKE 'Partida excluida durante PLANEAR INSPECCIÓN%' THEN NULL ELSE "revisadaEn" END,
+            "actualizadoEn"=NOW()
+        WHERE "id"=${area.id}::uuid AND "inspeccionId"=${inspeccionId}
+      `;
+
       let bibliotecaAreaId = area.bibliotecaAreaId;
       if (!bibliotecaAreaId) {
         const codigoBiblioteca = codigoBibliotecaPorArea(area.codigo, area.nombre);
@@ -219,52 +261,85 @@ export async function inicializarPlanAreasV1(formData: FormData) {
         }
       }
 
-      const puntos = bibliotecaAreaId
-        ? await tx.$queryRaw<Array<{ puntoId:string; nombre:string; descripcion:string|null; orden:number; obligatorio:boolean; requiereMedicion:boolean; requiereComparacionProyecto:boolean; herramientaSugerida:string|null }>>`
-            SELECT p."id"::text "puntoId",p."nombre",p."descripcion",ap."orden",ap."obligatorio",p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida"
-            FROM "BibliotecaAreaPuntoCerteza" ap JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId"
-            WHERE ap."areaBibliotecaId"=${bibliotecaAreaId}::uuid AND p."activa"=true ORDER BY ap."orden"
+      const puntosBiblioteca = bibliotecaAreaId
+        ? await tx.$queryRaw<Array<{
+            codigo: string; nombre: string; descripcion: string | null; grupo: string | null;
+            orden: number; requiereMedicion: boolean; requiereComparacionProyecto: boolean;
+            herramientaSugerida: string | null;
+          }>>`
+            SELECT p."codigo",p."nombre",p."descripcion",p."grupo",ap."orden",
+                   p."requiereMedicion",p."requiereComparacionProyecto",p."herramientaSugerida"
+            FROM "BibliotecaAreaPuntoCerteza" ap
+            JOIN "BibliotecaPuntoCerteza" p ON p."id"=ap."puntoBibliotecaId"
+            WHERE ap."areaBibliotecaId"=${bibliotecaAreaId}::uuid AND p."activa"=true
+            ORDER BY ap."orden",p."nombre"
           `
         : [];
-      for (const p of puntos) {
-        await tx.$executeRaw`
-          INSERT INTO "GuiaInspeccionItem" ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio","completado","creadoPorId","areaId","bibliotecaPuntoId","estadoV3","origenV3","requiereMedicion","requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
-          SELECT ${randomUUID()},${inspeccionId},'BIBLIOTECA_CERTEZA',${area.nombre},${p.nombre},${p.descripcion},${p.orden},${p.obligatorio},false,${usuario.id},${area.id}::uuid,${p.puntoId}::uuid,'PENDIENTE','BIBLIOTECA',${p.requiereMedicion},${p.requiereComparacionProyecto},${p.herramientaSugerida},NOW(),NOW()
-          WHERE NOT EXISTS (SELECT 1 FROM "GuiaInspeccionItem" g WHERE g."inspeccionId"=${inspeccionId} AND g."areaId"=${area.id}::uuid AND g."bibliotecaPuntoId"=${p.puntoId}::uuid)
-        `;
-      }
 
-      let ordenEquipo = 500;
-      for (const codigoHerramienta of equipoCotizado) {
-        if (!herramientaAplicaArea(codigoHerramienta, area.codigo, area.nombre)) continue;
-        const herramienta = HERRAMIENTAS_INSPECCION.find((item) => item.codigo === codigoHerramienta);
-        if (!herramienta) continue;
-        const requiereMedicion = herramienta.campos.some((campo) =>
-          /(lectura|presion|medicion|voltaje|dimension)/i.test(campo.clave),
-        );
+      const maestros = agruparPuntosMaestrosV1(
+        puntosBiblioteca.map((p) => ({
+          codigo: p.codigo,
+          concepto: p.nombre,
+          especificacion: p.descripcion,
+          grupo: p.grupo,
+          herramienta: p.herramientaSugerida,
+          orden: p.orden,
+        })),
+        perfil,
+      );
+      const seleccionados = new Set(partidaPlan?.puntos ?? maestros.filter((m) => m.seleccionado).map((m) => m.codigo));
+
+      await tx.$executeRaw`
+        DELETE FROM "GuiaInspeccionItem"
+        WHERE "inspeccionId"=${inspeccionId}
+          AND "areaId"=${area.id}::uuid
+          AND "estadoV3"='PENDIENTE'
+          AND "origen" IN ('BIBLIOTECA_CERTEZA','PLAN_DEPURADO_V1','EQUIPO_COTIZADO')
+      `;
+
+      for (const maestro of maestros.filter((m) => seleccionados.has(m.codigo))) {
+        const orden = Math.min(...maestro.subcriterios.map((p) => p.orden));
+        const herramientas = Array.from(new Set(maestro.subcriterios.map((p) => p.herramienta).filter((x): x is string => Boolean(x))));
+        const requiereMedicion = maestro.subcriterios.some((p) => puntosBiblioteca.find((b) => b.codigo === p.codigo)?.requiereMedicion);
+        const requiereComparacionProyecto = maestro.subcriterios.some((p) => puntosBiblioteca.find((b) => b.codigo === p.codigo)?.requiereComparacionProyecto);
+        const subcriterios = maestro.subcriterios.map((p) => p.concepto).join(" · ");
+        const especificacion = maestro.descripcion + (subcriterios ? " Subcriterios técnicos: " + subcriterios + "." : "");
+
         await tx.$executeRaw`
           INSERT INTO "GuiaInspeccionItem"
             ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio",
              "completado","creadoPorId","areaId","estadoV3","origenV3","requiereMedicion",
              "requiereComparacionProyecto","herramientaSugerida","creadoEn","actualizadoEn")
-          SELECT
-            ${randomUUID()},${inspeccionId},'EQUIPO_COTIZADO',${area.nombre},
-            ${`Uso de ${herramienta.nombre}`},${herramienta.aplicacionCotizacion},
-            ${ordenEquipo},true,false,${usuario.id},${area.id}::uuid,'PENDIENTE','COTIZACION_P4',
-            ${requiereMedicion},false,${herramienta.nombre},NOW(),NOW()
-          WHERE NOT EXISTS (
-            SELECT 1 FROM "GuiaInspeccionItem" g
-            WHERE g."inspeccionId"=${inspeccionId} AND g."areaId"=${area.id}::uuid
-              AND g."origen"='EQUIPO_COTIZADO' AND g."herramientaSugerida"=${herramienta.nombre}
-          )
+          VALUES
+            (${randomUUID()},${inspeccionId},'PLAN_DEPURADO_V1',${area.nombre},${maestro.nombre},
+             ${especificacion},${orden},${maestro.prioridad === "OBLIGATORIO"},false,${usuario.id},
+             ${area.id}::uuid,'PENDIENTE','PLAN_PREVIO',${requiereMedicion},${requiereComparacionProyecto},
+             ${herramientas.join(" / ") || null},NOW(),NOW())
         `;
-        ordenEquipo += 10;
       }
     }
   });
-  await registrarAuditoria({ tipo: TipoEvento.CREAR, entidad: "GuiaInspeccionItem", inspeccionId, usuarioId: usuario.id, descripcion: `${responsable} inicializó el plan V1 desde la Biblioteca Certeza e incorporó ${equipoCotizado.length} herramienta(s)/prueba(s) del punto 4 de la cotización donde aplican.` });
-  revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
-  volver(inspeccionId, "ok", "Plan técnico V1 preparado con los puntos mínimos aplicables.");
+
+  const [resumen] = await prisma.$queryRaw<Array<{ partidas: number; puntos: number }>>`
+    SELECT
+      COUNT(*) FILTER (WHERE COALESCE(a."excluirReporte",false)=false)::int AS "partidas",
+      COALESCE(SUM((
+        SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
+        WHERE g."areaId"=a."id" AND g."estadoV3"='PENDIENTE'
+      )) FILTER (WHERE COALESCE(a."excluirReporte",false)=false),0)::int AS "puntos"
+    FROM "AreaInspeccion" a
+    WHERE a."inspeccionId"=${inspeccionId} AND a."tipo"<>'PUNTO_CRITICO'
+  `;
+
+  await registrarAuditoria({
+    tipo: TipoEvento.CREAR,
+    entidad: "GuiaInspeccionItem",
+    inspeccionId,
+    usuarioId: usuario.id,
+    descripcion: responsable + " materializó el plan depurado V1 confirmado: " + Number(resumen?.partidas ?? 0) + " partida(s) activas y " + Number(resumen?.puntos ?? 0) + " punto(s) maestro(s) de inspección.",
+  });
+  revalidatePath("/panel/inspecciones/" + inspeccionId + "/campo-v1");
+  volver(inspeccionId, "ok", "Plan técnico preparado con el alcance confirmado: " + Number(resumen?.partidas ?? 0) + " partidas y " + Number(resumen?.puntos ?? 0) + " puntos maestros.");
 }
 
 export async function marcarPuntoNoAplicaV1(formData: FormData) {

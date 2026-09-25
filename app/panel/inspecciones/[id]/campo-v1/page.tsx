@@ -119,10 +119,6 @@ export default async function CampoV1Page({ params, searchParams }: {
     FROM "ProtocoloInspeccionPaso"
     WHERE "inspeccionId"=${id} AND "obligatorio"=true
   `;
-  if (Number(critical?.total ?? 0) < 7 || Number(critical?.bloqueantes ?? 0) > 0) {
-    redirect(`/panel/inspecciones/${id}/puntos-criticos`);
-  }
-
   const areas = await prisma.$queryRaw<Area[]>`
     SELECT a."id"::text,a."codigo",a."nombre",a."estado",a."resultado",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") AS "fotos",
@@ -137,8 +133,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   `;
 
   const areaActiva = areas.find((a) => a.estado !== "REVISADA") ?? null;
-  // El Inspector puede consultar cualquiera de las partidas 9 en adelante.
-  // La captura permanece habilitada únicamente en la partida activa para conservar la secuencia.
+  // El Inspector puede entrar, capturar y regresar a cualquier partida en cualquier momento.
   const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areaActiva ?? areas[0];
   const puntos = areaSeleccionada ? await prisma.$queryRaw<PuntoArea[]>`
     SELECT
@@ -212,7 +207,6 @@ export default async function CampoV1Page({ params, searchParams }: {
     (esDirector &&
       (inspeccion.estado === EstadoInspeccion.EN_PROCESO ||
        inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE));
-  const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
@@ -340,12 +334,12 @@ export default async function CampoV1Page({ params, searchParams }: {
                       punto={punto}
                       numeroConcepto={2 + totalConceptosCriticos + areas.slice(0, Math.max(indiceAreaActiva,0)).reduce((s,a)=>s+Number(a.puntos),0) + puntos.findIndex((x)=>x.id===punto.id) + 1}
                       puedeCapturar={puedeCapturar}
-                      areaActiva={areaSeleccionada.id === areaActivaId}
+                      areaActiva={true}
                     />
                   ))}
                 </div>
 
-                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (
+                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
                   <>
                     <div className="mt-6 rounded-2xl border border-rose-300/20 bg-rose-300/5 p-4">
                       <p className="font-black text-rose-200">DESHABILITAR PARTIDA COMPLETA</p>
@@ -392,7 +386,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                   </>
                 )}
 
-                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (
+                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
                   <div className="mt-4 flex flex-wrap gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-4">
                     <Link href={`/panel/inspecciones/${id}/areas`} className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">Tomar / agregar fotografías</Link>
                     <Link href={`/panel/inspecciones/${id}/captura?area=${encodeURIComponent(areaSeleccionada.nombre)}`} className="rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Registrar hallazgo</Link>

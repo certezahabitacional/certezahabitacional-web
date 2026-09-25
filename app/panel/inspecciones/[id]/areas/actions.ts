@@ -140,21 +140,17 @@ async function exigirResponsableV1(inspeccionId: string) {
 }
 
 async function exigirAreaActivaV1(inspeccionId: string, areaId: string) {
-  const areas = await prisma.$queryRaw<Array<{ id: string; nombre: string; estado: string }>>`
-    SELECT "id"::text,"nombre","estado"
+  const [area] = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"::text
     FROM "AreaInspeccion"
-    WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
-    ORDER BY "orden","nombre"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "id"=${areaId}::uuid
+      AND "tipo" <> 'PUNTO_CRITICO'
+    LIMIT 1
   `;
-  const indiceSolicitado = areas.findIndex((area) => area.id === areaId);
-  if (indiceSolicitado < 0) volver(inspeccionId, "error", "El punto de área no pertenece a esta inspección.");
-  const indiceActivo = areas.findIndex((area) => area.estado !== "REVISADA");
-  if (indiceActivo < 0) volver(inspeccionId, "error", "Todos los puntos de área ya están cerrados al 100%.");
-  const activa = areas[indiceActivo];
-  if (activa.id !== areaId) {
-    volver(inspeccionId, "error", `Debes concluir al 100% el Punto ${9 + indiceActivo} · ${activa.nombre} antes de avanzar.`);
-  }
+  if (!area) volver(inspeccionId, "error", "El punto de área no pertenece a esta inspección.");
 }
+
 
 export async function confirmarProyectoV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
