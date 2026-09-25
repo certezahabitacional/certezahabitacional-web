@@ -603,15 +603,15 @@ export default async function ReporteV1Page({ params, searchParams }: {
       .report-section{align-content:start!important;position:relative;padding-top:24px!important;padding-bottom:26px!important}
       .report-section>div.relative.z-10{display:block!important}
       .signature-pair{align-items:start!important}
-      #sec-firmas{font-size:13px!important;line-height:1.5!important}
-      #sec-firmas .signature-scope{padding:14px!important;margin-bottom:12px!important}
-      #sec-firmas .signature-scope>div{margin-top:10px!important;font-size:13px!important;line-height:1.5!important}
-      #sec-firmas .signature-scope-columns{columns:2;column-gap:22px;font-size:13px!important;line-height:1.5!important}
-      #sec-firmas .signature-scope-columns p{break-inside:avoid;margin:0 0 8px}
-      #sec-firmas .signature-card{padding:10px!important}
-      #sec-firmas .signature-card>div:nth-of-type(1){height:92px!important}
-      #sec-firmas .signature-card img{max-height:84px!important}
-      #sec-firmas{min-height:1056px!important;max-height:1056px!important;overflow:hidden!important}\n      #sec-firmas .signature-pair{break-inside:avoid!important;page-break-inside:avoid!important}\n      .signature-card{align-self:start!important}
+      #sec-firmas{font-size:11.5px!important;line-height:1.35!important}
+      #sec-firmas .signature-scope{padding:10px!important;margin-bottom:8px!important}
+      #sec-firmas .signature-scope>div{margin-top:7px!important;font-size:11.5px!important;line-height:1.35!important}
+      #sec-firmas .signature-scope-columns{columns:2;column-gap:18px;font-size:11.5px!important;line-height:1.35!important}
+      #sec-firmas .signature-scope-columns p{break-inside:avoid;margin:0 0 5px}
+      #sec-firmas .signature-card{padding:8px!important}
+      #sec-firmas .signature-card>div:nth-of-type(1){height:72px!important}
+      #sec-firmas .signature-card img{max-height:66px!important}
+      #sec-firmas{height:908px!important;min-height:908px!important;max-height:908px!important;overflow:hidden!important;padding-top:18px!important;padding-bottom:18px!important}\n      #sec-firmas .section-title-block{padding-bottom:10px!important}\n      #sec-firmas .section-content{margin-top:10px!important}\n      #sec-firmas .signature-pair{break-inside:avoid!important;page-break-inside:avoid!important;gap:10px!important}\n      .signature-card{align-self:start!important}
       .signature-card>div:nth-of-type(1){align-content:center!important}
       .inspection-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;break-inside:avoid;page-break-inside:avoid}
       .inspection-pair.three{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -918,7 +918,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
               </div>
             </article>
           </div>
-          {!firmaInspector||!firmaCliente?<div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
+          {!firmaInspector||!firmaCliente?<div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
         </Seccion>
 
         <section id="sec-certificado" data-force-new-page className="report-section section-flow relative px-10 py-10"><div className="relative z-10">
@@ -930,7 +930,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   );
 }
 
-function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} className={`report-section section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}><div className="relative z-10"><div className="section-title-block border-b-2 border-slate-900 pb-4"><p className="text-sm font-black uppercase tracking-[.16em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-2xl font-black leading-tight">{titulo}</h2></div><div className="mt-5">{children}</div></div></section>}
+function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} data-force-new-page className={`report-section section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}><div className="relative z-10"><div data-page-unit className="section-title-block border-b-2 border-slate-900 pb-4"><p className="text-sm font-black uppercase tracking-[.16em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-2xl font-black leading-tight">{titulo}</h2></div><div className="section-content mt-5">{children}</div></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
 function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}
