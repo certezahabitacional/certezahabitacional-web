@@ -22,15 +22,15 @@ export default function ReportBrandHeader({
       )}
     >
       <div className="flex items-center gap-5">
-        <LogoCerteza variant="gold" width={170} className="max-h-24" />
+        <LogoCerteza variant="gold" width={195} className="max-h-28" />
         <div>
-          <p className={dark ? "text-xs font-black uppercase tracking-[0.25em] text-amber-300" : "text-xs font-black uppercase tracking-[0.25em] text-amber-700"}>
+          <p className={dark ? "text-sm font-black uppercase tracking-[0.22em] text-amber-300" : "text-xs font-black uppercase tracking-[0.25em] text-amber-700"}>
             Certeza Habitacional
           </p>
-          <p className={dark ? "mt-1 text-sm text-slate-300" : "mt-1 text-sm text-slate-600"}>
+          <p className={dark ? "mt-1 text-base text-slate-300" : "mt-1 text-base text-slate-600"}>
             {eyebrow}
           </p>
-          <h1 className={dark ? "mt-3 text-3xl font-black text-white" : "mt-3 text-3xl font-black text-slate-950"}>
+          <h1 className={dark ? "mt-3 text-4xl font-black leading-tight text-white" : "mt-3 text-4xl font-black leading-tight text-slate-950"}>
             {title}
           </h1>
         </div>
@@ -38,10 +38,10 @@ export default function ReportBrandHeader({
 
       {folio && (
         <div className={dark ? "rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-right" : "rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-right"}>
-          <p className={dark ? "text-xs uppercase tracking-widest text-slate-400" : "text-xs uppercase tracking-widest text-slate-500"}>
+          <p className={dark ? "text-sm uppercase tracking-widest text-slate-400" : "text-xs uppercase tracking-widest text-slate-500"}>
             Folio
           </p>
-          <p className={dark ? "mt-1 font-black text-amber-300" : "mt-1 font-black text-slate-950"}>{folio}</p>
+          <p className={dark ? "mt-1 text-lg font-black text-amber-300" : "mt-1 text-lg font-black text-slate-950"}>{folio}</p>
         </div>
       )}
     </header>
