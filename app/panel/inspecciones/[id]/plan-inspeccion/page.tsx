@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { PUNTOS_CRITICOS_V1 } from "@/lib/puntos-criticos-v1";
 import { prisma } from "@/lib/prisma";
 import { agruparPuntosMaestrosV1, estimarMinutosPlanV1, type PerfilInspeccionV1 } from "@/lib/plan-inspeccion-depurado-v1";
+import { guardarPlanInspeccionV1, reabrirPlanInspeccionV1 } from "./actions";
 
 type Snapshot = Record<string, unknown>;
 
@@ -114,11 +115,11 @@ export default async function PlanInspeccionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ perfil?: string }>;
+  searchParams: Promise<{ perfil?: string; ok?: string; error?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const perfil: PerfilInspeccionV1 = query.perfil === "USADA" ? "USADA" : "NUEVA";
+  const perfilSolicitado: PerfilInspeccionV1 = query.perfil === "USADA" ? "USADA" : "NUEVA";
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -151,6 +152,32 @@ export default async function PlanInspeccionPage({
     inspeccion.inspector?.usuarioId === usuario.id;
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!inspectorAsignado && !consulta) redirect("/acceso");
+
+  const [planGuardado] = await prisma.$queryRaw<Array<{
+    perfil: string;
+    estado: string;
+    seleccion: unknown;
+    estimadoMinutos: number | null;
+    confirmadoEn: Date | null;
+  }>>`
+    SELECT "perfil","estado","seleccion","estimadoMinutos","confirmadoEn"
+    FROM "PlanInspeccionV1"
+    WHERE "inspeccionId"=${id}
+    LIMIT 1
+  `;
+
+  const perfil: PerfilInspeccionV1 = query.perfil
+    ? perfilSolicitado
+    : planGuardado?.perfil === "USADA"
+      ? "USADA"
+      : "NUEVA";
+
+  const seleccionGuardada = planGuardado?.seleccion && typeof planGuardado.seleccion === "object" && !Array.isArray(planGuardado.seleccion)
+    ? (planGuardado.seleccion as { partidas?: Array<{ clave: string; activa: boolean; puntos: string[] }> })
+    : {};
+  const guardadoPorClave = new Map((seleccionGuardada.partidas ?? []).map((p) => [p.clave, p]));
+  const planConfirmado = planGuardado?.estado === "CONFIRMADO";
+  const puedeEditarPlan = inspectorAsignado && inspeccion.estado === EstadoInspeccion.PROGRAMADA && !planConfirmado;
 
   const [partidasActuales, conceptosActuales, criticosActuales, biblioteca] = await Promise.all([
     prisma.$queryRaw<PartidaPlan[]>`
@@ -243,8 +270,11 @@ export default async function PlanInspeccionPage({
 
   const totalConceptosAreas = partidas.reduce((s, p) => s + Number(p.conceptos), 0);
   const puntosMaestrosPorPartida = new Map<string, ReturnType<typeof agruparPuntosMaestrosV1>>();
+  const clavesPartida = new Map<string, string>();
   let totalPuntosMaestros = 0;
-  for (const partida of partidas) {
+  for (const [partidaIndex, partida] of partidas.entries()) {
+    const clavePartida = String(partidaIndex) + ":" + partida.codigo + ":" + partida.nombre;
+    clavesPartida.set(partida.id, clavePartida);
     const codigoPlantilla = partida.codigo === "FACHADA_FRONTAL" || partida.codigo === "FACHADA_PRINCIPAL"
       ? "FACHADA_PRINCIPAL"
       : partida.codigo.startsWith("FACHADA_")
@@ -259,9 +289,16 @@ export default async function PlanInspeccionPage({
     const reales = conceptosPorArea.get(partida.id) ?? [];
     const previstos = plantillaPorCodigo.get(codigoPlantilla) ?? [];
     const base = reales.length > 0 ? reales : previstos.map((x) => ({ areaId: partida.id, codigo: x.codigo, concepto: x.concepto, especificacion: x.especificacion, grupo: x.grupo, herramienta: x.herramienta, orden: x.orden }));
-    const maestros = agruparPuntosMaestrosV1(base, perfil);
+    const maestrosBase = agruparPuntosMaestrosV1(base, perfil);
+    const guardada = guardadoPorClave.get(clavePartida);
+    const maestros = maestrosBase.map((m) => ({
+      ...m,
+      seleccionado: guardada ? guardada.puntos.includes(m.codigo) : m.seleccionado,
+    }));
     puntosMaestrosPorPartida.set(partida.id, maestros);
-    totalPuntosMaestros += maestros.filter((m) => m.seleccionado).length;
+    if (guardada ? guardada.activa : true) {
+      totalPuntosMaestros += maestros.filter((m) => m.seleccionado).length;
+    }
   }
   const totalCriticos = criticosActuales.length > 0
     ? criticosActuales.length
@@ -277,10 +314,16 @@ export default async function PlanInspeccionPage({
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={regreso} className="text-sm font-black text-cyan-300">← Regresar</Link>
-          <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-slate-300">
-            PLANEAR INSPECCIÓN
+          <span className={"rounded-full border px-4 py-2 text-xs font-black " + (planConfirmado ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200" : "border-white/10 text-slate-300")}>
+            {planConfirmado ? "PLAN CONFIRMADO" : "PLANEAR INSPECCIÓN"}
           </span>
         </div>
+
+        {(query.ok || query.error) && (
+          <div className={"mt-5 rounded-2xl p-4 text-sm font-bold " + (query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300")}>
+            {query.error ?? query.ok}
+          </div>
+        )}
 
         <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
           <p className="text-xs font-black uppercase tracking-[.22em] text-cyan-300">Preparación previa del Inspector</p>
@@ -351,7 +394,17 @@ export default async function PlanInspeccionPage({
           </div>
         </section>
 
-        <section className="mt-8">
+        <form action={guardarPlanInspeccionV1} className="mt-8">
+          <input type="hidden" name="inspeccionId" value={id} />
+          <input type="hidden" name="perfil" value={perfil} />
+          <input type="hidden" name="estimadoMinutos" value={tiempoEstimado} />
+          <input type="hidden" name="partidasMeta" value={JSON.stringify(partidas.map((partida, index) => ({
+            clave: String(index) + ":" + partida.codigo + ":" + partida.nombre,
+            codigo: partida.codigo,
+            nombre: partida.nombre,
+          })))} />
+
+          <section>
           <p className="text-xs font-black uppercase tracking-[.2em] text-emerald-300">Partidas del inmueble</p>
           <h2 className="mt-2 text-2xl font-black">Relación completa de partidas y conceptos</h2>
           <p className="mt-2 text-sm text-slate-400">Abre cada partida para estudiar sus conceptos antes de la visita.</p>
@@ -382,18 +435,44 @@ export default async function PlanInspeccionPage({
                 orden: x.orden,
               }));
               const maestros = puntosMaestrosPorPartida.get(partida.id) ?? [];
+              const clavePartida = clavesPartida.get(partida.id) ?? String(index) + ":" + partida.codigo + ":" + partida.nombre;
+              const guardada = guardadoPorClave.get(clavePartida);
+              const partidaActiva = guardada ? guardada.activa : true;
 
               return (
-                <details key={partida.id} className="rounded-2xl border border-white/10 bg-slate-900 p-4">
+                <details key={partida.id} className={"rounded-2xl border p-4 " + (partidaActiva ? "border-white/10 bg-slate-900" : "border-slate-800 bg-slate-950/60")}>
                   <summary className="cursor-pointer">
                     <span className="font-black">Partida {index + 9} · {partida.nombre}</span>
-                    <span className="ml-2 text-xs font-black text-emerald-300">{conceptos.length} conceptos</span>
+                    <span className="ml-2 text-xs font-black text-emerald-300">{conceptos.length} conceptos originales</span>
                   </summary>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-slate-950 p-3">
+                    <label className="flex items-center gap-2 text-sm font-black">
+                      <input
+                        type="checkbox"
+                        name={"partida::" + clavePartida}
+                        defaultChecked={partidaActiva}
+                        disabled={!puedeEditarPlan}
+                        className="h-4 w-4"
+                      />
+                      INCLUIR PARTIDA EN LA INSPECCIÓN
+                    </label>
+                    {!puedeEditarPlan && partidaActiva && <input type="hidden" name={"partida::" + clavePartida} value="1" />}
+                  </div>
                   <div className="mt-4 grid gap-2">
                     {maestros.map((maestro, i) => (
                       <article key={`${partida.id}-${maestro.codigo}`} className={`rounded-xl border p-3 ${maestro.seleccionado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-950"}`}>
                         <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="text-sm font-black">{i + 1}. {maestro.nombre}</p>
+                          <label className="flex items-start gap-2 text-sm font-black">
+                            <input
+                              type="checkbox"
+                              name={"punto::" + clavePartida + "::" + maestro.codigo}
+                              defaultChecked={maestro.seleccionado || maestro.prioridad === "OBLIGATORIO"}
+                              disabled={!puedeEditarPlan || maestro.prioridad === "OBLIGATORIO"}
+                              className="mt-0.5 h-4 w-4"
+                            />
+                            <span>{i + 1}. {maestro.nombre}</span>
+                          </label>
+                          {maestro.prioridad === "OBLIGATORIO" && <input type="hidden" name={"punto::" + clavePartida + "::" + maestro.codigo} value="1" />}
                           <span className={`rounded-full px-2 py-1 text-[10px] font-black ${maestro.prioridad==="OBLIGATORIO"?"bg-rose-300/15 text-rose-200":maestro.prioridad==="RECOMENDADO"?"bg-cyan-300/15 text-cyan-200":"bg-white/5 text-slate-400"}`}>{maestro.prioridad}</span>
                         </div>
                         <p className="mt-1 text-xs leading-5 text-slate-400">{maestro.descripcion}</p>
@@ -408,6 +487,38 @@ export default async function PlanInspeccionPage({
             })}
           </div>
         </section>
+
+          <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-5">
+            <h2 className="text-xl font-black">Confirmación del alcance</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              El plan confirmado define las partidas y puntos maestros que integrarán el alcance oficial de esta inspección. Los subcriterios permanecen como respaldo técnico y se despliegan cuando exista una condición que requiera profundización.
+            </p>
+            {puedeEditarPlan ? (
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button name="intencion" value="GUARDAR" className="rounded-xl border border-white/15 px-5 py-3 text-sm font-black">
+                  GUARDAR BORRADOR
+                </button>
+                <button name="intencion" value="CONFIRMAR" className="rounded-xl bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950">
+                  CONFIRMAR PLAN DE INSPECCIÓN
+                </button>
+              </div>
+            ) : planConfirmado ? (
+              <p className="mt-4 text-sm font-black text-emerald-300">Plan confirmado · {planGuardado?.confirmadoEn ? planGuardado.confirmadoEn.toLocaleString("es-MX") : "listo para iniciar"}</p>
+            ) : (
+              <p className="mt-4 text-sm font-black text-slate-400">Vista de consulta.</p>
+            )}
+          </section>
+        </form>
+
+        {planConfirmado && inspectorAsignado && inspeccion.estado === EstadoInspeccion.PROGRAMADA && (
+          <form action={reabrirPlanInspeccionV1} className="mt-4">
+            <input type="hidden" name="inspeccionId" value={id} />
+            <input type="hidden" name="perfil" value={perfil} />
+            <button className="rounded-xl border border-amber-300/30 px-5 py-3 text-sm font-black text-amber-200">
+              REABRIR PLAN PARA AJUSTAR
+            </button>
+          </form>
+        )}
 
         <section className="mt-8 rounded-3xl border border-white/10 bg-slate-900 p-5">
           <h2 className="text-xl font-black">Datos de referencia</h2>
