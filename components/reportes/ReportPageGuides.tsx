@@ -32,7 +32,7 @@ export default function ReportPageGuides({
       raf = requestAnimationFrame(() => {
         const todosLosCandidatos = Array.from(
           root.querySelectorAll<HTMLElement>(
-            '[data-page-unit], .report-figure, .colored-block, .page-row, tr, figure, .report-section > div > p, .report-section h1, .report-section h2, .report-section h3, .report-section h4'
+            '[data-page-unit], .inspection-pair, .report-figure, .colored-block, .page-row, tr, figure'
           )
         );
         const candidatos = todosLosCandidatos.filter((el) => {
@@ -44,7 +44,7 @@ export default function ReportPageGuides({
         for (const el of todosLosCandidatos) el.style.marginTop = "";
         const encabezados = Array.from(root.querySelectorAll<HTMLElement>(".partida-header"));
         for (const el of encabezados) el.style.marginTop = "";
-        const secciones = Array.from(root.querySelectorAll<HTMLElement>(".page-break"));
+        const secciones = Array.from(root.querySelectorAll<HTMLElement>("[data-force-new-page]"));
         for (const el of secciones) el.style.marginTop = "";
 
         const rootTop = root.getBoundingClientRect().top + window.scrollY;
@@ -66,7 +66,7 @@ export default function ReportPageGuides({
           }
         }
 
-        for (let pasada = 0; pasada < 5; pasada += 1) {
+        for (let pasada = 0; pasada < 1; pasada += 1) {
           let cambio = false;
 
           for (const seccion of secciones) {
@@ -92,13 +92,13 @@ export default function ReportPageGuides({
             const er = encabezado.getBoundingClientRect();
             const sr = siguiente.getBoundingClientRect();
             const top = er.top + window.scrollY - rootTop;
-            const altoCombinado = (sr.bottom - er.top);
+            const altoEncabezadoYPrimeraFila = sr.bottom - er.top;
             const pagina = Math.max(0, Math.floor(top / PAGE_HEIGHT));
             const offset = top - pagina * PAGE_HEIGHT;
-            const finSeguro = PAGE_HEIGHT - BOTTOM_SAFE;
-            if (altoCombinado <= PAGE_HEIGHT - TOP_SAFE - BOTTOM_SAFE && offset + altoCombinado > finSeguro) {
-              const salto = PAGE_HEIGHT - offset + TOP_SAFE;
-              encabezado.style.marginTop = `${salto}px`;
+            const disponible = PAGE_HEIGHT - BOTTOM_SAFE - offset;
+            const cabeEnPaginaNueva = altoEncabezadoYPrimeraFila <= PAGE_HEIGHT - TOP_SAFE - BOTTOM_SAFE;
+            if (cabeEnPaginaNueva && altoEncabezadoYPrimeraFila > disponible) {
+              encabezado.style.marginTop = `${PAGE_HEIGHT - offset + TOP_SAFE}px`;
               cambio = true;
             }
           }
@@ -178,11 +178,11 @@ export default function ReportPageGuides({
   }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-30 print:hidden" aria-hidden="true">
+    <div className="pointer-events-none absolute inset-0 z-50 print:hidden" aria-hidden="true">
       {Array.from({ length: paginas }, (_, index) => {
         const page = index + 1;
         const top = index * PAGE_HEIGHT;
-        const footerTop = page * PAGE_HEIGHT - 58;
+        const footerTop = page * PAGE_HEIGHT - 64;
 
         return (
           <div key={page}>
@@ -215,7 +215,7 @@ export default function ReportPageGuides({
               ))}
 
             <div
-              className="absolute left-0 right-0 flex h-[58px] items-center justify-between bg-slate-950 px-10 text-white"
+              className="absolute left-0 right-0 flex h-[64px] items-center justify-between bg-slate-950 px-10 text-white"
               style={{ top: footerTop }}
             >
               <span className="text-[11px] font-black uppercase tracking-[.12em] text-amber-300">Certeza Habitacional</span>
