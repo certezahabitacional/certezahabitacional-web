@@ -386,7 +386,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                   </>
                 )}
 
-                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && areaSeleccionada.id === areaActivaId && (
+                {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
                   <div className="mt-4 flex flex-wrap gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-4">
                     <Link href={`/panel/inspecciones/${id}/areas`} className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">Tomar / agregar fotografías</Link>
                     <Link href={`/panel/inspecciones/${id}/captura?area=${encodeURIComponent(areaSeleccionada.nombre)}`} className="rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Registrar hallazgo</Link>
