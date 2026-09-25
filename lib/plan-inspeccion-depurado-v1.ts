@@ -179,3 +179,9 @@ export function estimarMinutosPlanV1(totalPuntosMaestros: number, totalCriticos:
   const minutosCriticos = totalCriticos * 2.2;
   return Math.round(base + minutosMaestros + minutosCriticos);
 }
+
+
+export function codigoMaestroParaPuntoV1(codigo: string) {
+  const regla = REGLAS_MAESTRAS.find((item) => item.codigos.includes(codigo));
+  return regla?.codigo ?? codigo;
+}
