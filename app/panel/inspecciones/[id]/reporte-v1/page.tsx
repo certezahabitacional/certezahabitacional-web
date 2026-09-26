@@ -702,7 +702,14 @@ export default async function ReporteV1Page({ params, searchParams }: {
       )}
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
       <article data-report-root className="report-body relative mx-auto w-[816px] max-w-full bg-white shadow-xl print:w-auto print:max-w-none print:shadow-none">
-        <ReportPageGuides folio={inspeccion.folio} final={autorizado} />
+        <ReportPageGuides
+          folio={inspeccion.folio}
+          final={autorizado}
+          footerCode="CH-R-001"
+          footerEmail={contactoZona.email}
+          footerPhone={contactoZona.telefono}
+          footerAddress="Monte Apeninos 6436, Col. La Cuesta, Ciudad Juárez, Chihuahua"
+        />
         
         <section className="cover-report-page relative bg-slate-950 p-5 text-white">
           
@@ -921,7 +928,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           {!firmaInspector||!firmaCliente?<div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900">Registro de firmas incompleto. La visita no debe cerrarse mientras falte alguna de las firmas requeridas.</div>:<div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-900">Firmas del Inspector y Cliente registradas en el expediente.</div>}
         </Seccion>
 
-        <section id="sec-certificado" data-force-new-page className="report-section section-flow relative px-10 py-10"><div className="relative z-10">
+        <section id="sec-certificado" data-force-new-page data-no-page-chrome className="certificate-page section-flow relative min-h-[1056px] px-10 py-10"><div className="relative z-10">
           <div className="mb-4 text-xs font-black uppercase tracking-[.2em] text-cyan-700">12 · Certificado Certeza Habitacional</div><ReportBrandHeader title="Certificado Certeza Habitacional" folio={autorizado && inspeccion.certificado ? inspeccion.certificado.folio : inspeccion.folio} eyebrow="Resultado final autorizado" />
           {autorizado && inspeccion.certificado ? <div className="mt-10 rounded-[2rem] border-8 border-slate-950 p-8"><div className="border-2 border-amber-500 p-8 text-center"><h2 className="text-3xl font-black">Certificado Certeza Habitacional</h2><div className="mt-8 grid gap-8 md:grid-cols-[1fr_190px]"><div className="text-left"><Fila label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/><Fila label="Inspección" value={inspeccion.folio}/><Fila label="Fecha de inspección" value={fecha}/>{autorizacionDireccion&&fechaAutorizacion&&<Fila label="Autorizado por Dirección" value={`${autorizacionDireccion.nombre} · ${fechaAutorizacion}`}/>}<Fila label="Cobertura" value={`${coberturaTexto}%`}/><Fila label="Calificación Técnica Certeza" value={`${Number(inspeccion.certificado.ish).toFixed(2)}/100`}/><Fila label="Nivel de evaluación" value={nivelEvaluacion}/><Fila label="Partidas revisadas" value={String(totalPartidasReporte)}/><Fila label="Puntos revisados" value={String(metricas.revisados)}/><Fila label="Hallazgos P1–P5" value={`P1 ${metricas.resumenPrioridades.P1} · P2 ${metricas.resumenPrioridades.P2} · P3 ${metricas.resumenPrioridades.P3} · P4 ${metricas.resumenPrioridades.P4} · P5 ${metricas.resumenPrioridades.P5}`}/><Fila label="Partidas sin hallazgos" value={String(partidasSinHallazgos)}/></div>{qr&&<div className="text-center"><img src={qr} alt="QR de validación" className="mx-auto h-44 w-44"/><p className="mt-2 text-xs font-black">Validar certificado y consultar información autorizada</p></div>}</div><p className="mt-8 text-sm leading-7 text-slate-600">{inspeccion.certificado.dictamen}</p></div></div>:<div className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-8 text-amber-900"><p className="font-black">Certificado pendiente de autorización</p><p className="mt-2 text-sm leading-6">El certificado se generará únicamente cuando Dirección autorice el reporte.</p></div>}
         </div></section>
