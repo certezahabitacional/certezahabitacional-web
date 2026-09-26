@@ -33,6 +33,7 @@ export default function ReportPageGuides({
 }) {
   const [paginas, setPaginas] = useState(1);
   const [encabezadosRepetidos, setEncabezadosRepetidos] = useState<RepeatHeader[]>([]);
+  const [paginasSinCromo, setPaginasSinCromo] = useState<number[]>([0]);
 
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-report-root]");
@@ -81,9 +82,11 @@ export default function ReportPageGuides({
         // cuando se mide el siguiente elemento, evitando márgenes acumulativos.
         for (const nodo of nodos) {
           if (nodo.matches("thead tr")) continue;
+          if (nodo.closest("[data-no-page-chrome]") && !nodo.hasAttribute("data-force-new-page")) continue;
           if (nodo.closest("#sec-firmas") && !nodo.matches("[data-force-new-page]")) continue;
 
           const forzarPagina = nodo.hasAttribute("data-force-new-page");
+          const sinCromo = nodo.hasAttribute("data-no-page-chrome");
           if (!forzarPagina && esAtomicoAnidado(nodo)) continue;
 
           const rect = nodo.getBoundingClientRect();
@@ -95,10 +98,11 @@ export default function ReportPageGuides({
           const offset = top - pagina * PAGE_HEIGHT;
 
           if (forzarPagina) {
-            if (Math.abs(offset - TOP_SAFE) <= 3) continue;
-            const salto = offset < TOP_SAFE
-              ? TOP_SAFE - offset
-              : PAGE_HEIGHT - offset + TOP_SAFE;
+            const objetivo = sinCromo ? 0 : TOP_SAFE;
+            if (Math.abs(offset - objetivo) <= 3) continue;
+            const salto = offset <= objetivo
+              ? objetivo - offset
+              : PAGE_HEIGHT - offset + objetivo;
             nodo.style.marginTop = `${Math.max(0, salto)}px`;
             continue;
           }
@@ -147,8 +151,20 @@ export default function ReportPageGuides({
 
         const altoTotal = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
         const totalPaginas = Math.max(1, Math.ceil(altoTotal / PAGE_HEIGHT));
+
+        const sinCromo = new Set<number>([0]);
+        for (const bloque of Array.from(root.querySelectorAll<HTMLElement>("[data-no-page-chrome]"))) {
+          const rect = bloque.getBoundingClientRect();
+          const inicio = rect.top + window.scrollY - rootTop;
+          const fin = rect.bottom + window.scrollY - rootTop;
+          const paginaInicio = Math.max(0, Math.floor(inicio / PAGE_HEIGHT));
+          const paginaFin = Math.max(paginaInicio, Math.floor(Math.max(inicio, fin - 1) / PAGE_HEIGHT));
+          for (let pagina = paginaInicio; pagina <= paginaFin; pagina += 1) sinCromo.add(pagina);
+        }
+
         setPaginas(totalPaginas);
-        setEncabezadosRepetidos(repetidos.filter((item) => item.pagina < totalPaginas - 1));
+        setPaginasSinCromo(Array.from(sinCromo));
+        setEncabezadosRepetidos(repetidos.filter((item) => !sinCromo.has(item.pagina)));
       });
     };
 
@@ -176,11 +192,11 @@ export default function ReportPageGuides({
         const top = index * PAGE_HEIGHT;
         const footerTop = page * PAGE_HEIGHT - FOOTER_HEIGHT;
 
-        const esCertificado = page === paginas;
+        const sinCromo = paginasSinCromo.includes(index);
 
         return (
           <div key={page}>
-            {!esCertificado && page > 1 && (
+            {!sinCromo && page > 1 && (
               <div
                 className="absolute left-0 right-0 flex items-center justify-between bg-slate-950 px-10 text-white"
                 style={{ top, height: HEADER_HEIGHT }}
@@ -198,7 +214,7 @@ export default function ReportPageGuides({
               </div>
             )}
 
-            {!esCertificado && encabezadosRepetidos
+            {!sinCromo && encabezadosRepetidos
               .filter((item) => item.pagina === index)
               .map((item, repeatIndex) => (
                 <div
@@ -216,7 +232,7 @@ export default function ReportPageGuides({
                 </div>
               ))}
 
-            {!esCertificado && (
+            {!sinCromo && (
               <div
                 className="absolute left-0 right-0 grid grid-cols-[auto_1fr_auto] items-center gap-4 border-t border-amber-400/70 bg-slate-950 px-5 text-white"
                 style={{ top: footerTop, height: FOOTER_HEIGHT }}
