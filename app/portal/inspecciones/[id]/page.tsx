@@ -5,6 +5,7 @@ import { obtenerClienteActual } from "@/lib/cliente-actual";
 import { ordenarYFiltrarFotografias, obtenerSeleccionEvidenciaReporte } from "@/lib/evidencia-reporte";
 import { prisma } from "@/lib/prisma";
 import { inspeccionLiberadaParaCliente } from "@/lib/portal-inspecciones";
+import ReportShareActions from "@/components/reportes/ReportShareActions";
 
 function formatearFechaHora(fecha: Date, zonaHoraria: string) { return new Intl.DateTimeFormat("es-MX", { day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:zonaHoraria }).format(fecha); }
 function obtenerSupabase(){const url=process.env.SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)return null;return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})}
@@ -32,7 +33,7 @@ export default async function PortalInspeccionDetallePage({params}:{params:Promi
  <aside><section className="rounded-3xl border border-emerald-300/20 bg-slate-900 p-7"><h2 className="text-xl font-black text-emerald-300">Reporte y Certificado Liberados</h2>
  {inspeccion.certificado&&<div className="mt-5 grid gap-3">
    <a href={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}/pdf`} target="_blank" rel="noreferrer" className="rounded-xl bg-cyan-300 px-4 py-3 text-center text-sm font-black text-slate-950">VER / IMPRIMIR REPORTE LIBERADO</a>
-   <a href={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}/pdf?download=1`} className="rounded-xl border border-cyan-300/30 px-4 py-3 text-center text-sm font-black text-cyan-300">DESCARGAR REPORTE</a>
+   <ReportShareActions pdfUrl={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}/pdf`} folio={inspeccion.folio} />
    <a href={`/certificados/verificar/${inspeccion.certificado.codigoValidacion}`} target="_blank" rel="noreferrer" className="rounded-xl bg-emerald-300 px-4 py-3 text-center text-sm font-black text-slate-950">VER / IMPRIMIR CERTIFICADO LIBERADO</a>
    <a href={`/certificados/verificar/${inspeccion.certificado.codigoValidacion}/pdf?download=1`} className="rounded-xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-300">DESCARGAR CERTIFICADO</a>
  </div>}<h2 className="mt-7 text-xl font-black text-emerald-300">Certificado vigente</h2><p className="mt-5 text-xs uppercase text-slate-500">Folio</p><p className="mt-2 font-black text-cyan-300">{inspeccion.certificado?.folio}</p><p className="mt-5 text-xs uppercase text-slate-500">Código de validación</p><p className="mt-2 break-all font-black text-cyan-300">{inspeccion.certificado?.codigoValidacion}</p><p className="mt-5 text-sm text-slate-400">Este expediente solo es visible porque concluyó el flujo de cierre, aprobación y certificación.</p></section></aside></section></main>
