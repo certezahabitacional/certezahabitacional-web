@@ -118,6 +118,7 @@ export async function obtenerMetricasV1(inspeccionId: string) {
       COUNT(*) FILTER (WHERE "estadoV3" IN ('REVISADO','CON_HALLAZGO'))::int AS "revisados"
     FROM "GuiaInspeccionItem"
     WHERE "inspeccionId" = ${inspeccionId}
+      AND "areaId" IS NOT NULL
       AND COALESCE("area",'') NOT LIKE '__PUNTO_CRITICO__:%'
   `;
 
@@ -139,6 +140,7 @@ export async function obtenerMetricasV1(inspeccionId: string) {
       ON h."guiaItemId" = g."id"
      AND h."inspeccionId" = g."inspeccionId"
     WHERE g."inspeccionId" = ${inspeccionId}
+      AND g."areaId" IS NOT NULL
       AND COALESCE(g."area",'') NOT LIKE '__PUNTO_CRITICO__:%'
       AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')
       AND g."concepto" NOT ILIKE '%fotografía del manómetro al iniciar%'
