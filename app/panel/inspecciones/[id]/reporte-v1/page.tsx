@@ -11,6 +11,7 @@ import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1
 import IndicePaginasReporte from "@/components/reportes/IndicePaginasReporte";
 import ReportPageGuides from "@/components/reportes/ReportPageGuides";
 import FiltroHallazgosReporte from "@/components/reportes/FiltroHallazgosReporte";
+import ReportExportActions from "@/components/reportes/ReportExportActions";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { evaluarPromedioV1, referenciaPrioridadV1 } from "@/lib/evaluacion-reporte-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
@@ -701,6 +702,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </section>
       )}
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
+      {autorizado && <ReportExportActions folio={inspeccion.folio} />}
       <article data-report-root className="report-body relative mx-auto w-[816px] max-w-full bg-white shadow-xl print:w-auto print:max-w-none print:shadow-none">
         <ReportPageGuides
           folio={inspeccion.folio}
@@ -711,7 +713,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           footerAddress="Monte Apeninos 6436, Col. La Cuesta, Ciudad Juárez, Chihuahua"
         />
         
-        <section className="cover-report-page relative bg-slate-950 p-5 text-white">
+        <section data-no-page-chrome className="cover-report-page relative bg-slate-950 p-5 text-white">
           
           <div className="h-full border-[3px] border-amber-400/80 p-2">
             <div className="h-full border border-amber-200/30 px-7 py-6">
@@ -738,7 +740,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                   </div>
                 </div>
                 <div className="justify-self-end text-center">
-                  <img src={qrInstitucional} alt="QR de información institucional Certeza Habitacional" className="mx-auto h-28 w-28 rounded bg-white p-1"/>
+                  <img src={qrInstitucional} alt="QR de información institucional Certeza Habitacional" className="mx-auto h-24 w-24 rounded bg-white p-1"/>
                   <p className="mt-1 max-w-[145px] text-[9px] font-black uppercase tracking-wide text-slate-400">Información de Certeza Habitacional</p>
                 </div>
               </div>
