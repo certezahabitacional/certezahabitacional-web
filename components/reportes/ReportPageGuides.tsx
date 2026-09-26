@@ -232,7 +232,7 @@ export default function ReportPageGuides({
                 </div>
               ))}
 
-            {!sinCromo && (
+            {!sinCromo && page > 1 && (
               <div
                 className="absolute left-0 right-0 grid grid-cols-[auto_1fr_auto] items-center gap-4 border-t border-amber-400/70 bg-slate-950 px-5 text-white"
                 style={{ top: footerTop, height: FOOTER_HEIGHT }}
