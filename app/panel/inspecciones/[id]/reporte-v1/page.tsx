@@ -703,7 +703,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </section>
       )}
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
-      {autorizado && <ReportExportActions folio={inspeccion.folio} />}
+      {autorizado && inspeccion.certificado?.codigoValidacion && (
+        <ReportExportActions
+          folio={inspeccion.folio}
+          pdfUrl={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}/pdf`}
+        />
+      )}
       {esDirector && autorizado && inspeccion.certificado?.vigente && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-rose-300/30 bg-rose-50 p-5">
           <p className="text-xs font-black uppercase tracking-[.18em] text-rose-800">Dirección · control excepcional</p>
@@ -743,20 +748,20 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 <Dato label="Inspector" value={inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}/>
                 <Dato label="Cotización de origen" value={inspeccion.cotizacion?.folio ?? "Sin folio"}/>
               </div>
-              <div className="mt-5 grid items-end gap-4 border-t border-amber-300/30 pt-4 sm:grid-cols-[1fr_145px]">
+              <div className="mt-3 grid items-start gap-4 border-t border-amber-300/30 pt-3 sm:grid-cols-[1fr_132px]">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Método Certeza</p>
                   <p className="mt-1 text-xs text-slate-400">Experiencia técnica + metodología + tecnología + criterio profesional</p>
-                  <div className="mt-3 text-[10px] leading-5 text-slate-400">
+                  <div className="mt-2 text-[10px] leading-4 text-slate-400">
                     <p className="font-black text-white">{contactoZona.empresa}</p>
                     <p>{contactoZona.email}</p>
                     <p>{contactoZona.telefono}</p>
                     <p>{contactoZona.web.replace(/^https?:\/\//,"")}</p>
                   </div>
                 </div>
-                <div className="justify-self-end text-center">
-                  <img src={qrInstitucional} alt="QR de información institucional Certeza Habitacional" className="mx-auto h-24 w-24 rounded bg-white p-1"/>
-                  <p className="mt-1 max-w-[145px] text-[9px] font-black uppercase tracking-wide text-slate-400">Información de Certeza Habitacional</p>
+                <div className="justify-self-end self-start text-center">
+                  <img src={qrInstitucional} alt="QR de información institucional Certeza Habitacional" className="mx-auto h-20 w-20 rounded bg-white p-1"/>
+                  <p className="mt-1 max-w-[132px] text-[8px] font-black uppercase tracking-wide text-slate-400">Información de Certeza Habitacional</p>
                 </div>
               </div>
             </div>
