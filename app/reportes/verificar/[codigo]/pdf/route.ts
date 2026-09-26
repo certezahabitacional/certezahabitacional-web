@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { readFile } from "fs/promises";
+import { join } from "path";
+import QRCode from "qrcode";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from "pdf-lib";
 
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { prisma } from "@/lib/prisma";
@@ -100,6 +103,11 @@ export async function GET(
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  let logo: PDFImage | null = null;
+  try {
+    const logoBytes = await readFile(join(process.cwd(), "public", "branding", "logo-gold.png"));
+    logo = await pdf.embedPng(logoBytes);
+  } catch {}
 
   let page!: PDFPage;
   let y = 0;
@@ -148,7 +156,13 @@ export async function GET(
   page.drawRectangle({ x: 22, y: 22, width: PAGE_W - 44, height: PAGE_H - 44, borderWidth: 3, borderColor: rgb(0.12,0.16,0.22) });
   page.drawRectangle({ x: 29, y: 29, width: PAGE_W - 58, height: PAGE_H - 58, borderWidth: 1, borderColor: rgb(0.82,0.65,0.25) });
   y = PAGE_H - 90;
-  page.drawText("CERTEZA HABITACIONAL", { x: M, y, size: 25, font: bold, color: rgb(0.08,0.12,0.2) });
+  if (logo) {
+    const escala = 74 / logo.width;
+    page.drawImage(logo, { x: M, y: y - 4, width: 74, height: logo.height * escala });
+    page.drawText("CERTEZA HABITACIONAL", { x: M + 88, y: y + 14, size: 23, font: bold, color: rgb(0.08,0.12,0.2) });
+  } else {
+    page.drawText("CERTEZA HABITACIONAL", { x: M, y, size: 25, font: bold, color: rgb(0.08,0.12,0.2) });
+  }
   y -= 38;
   page.drawText("REPORTE OFICIAL DE INSPECCION", { x: M, y, size: 18, font: bold, color: rgb(0.82,0.52,0.08) });
   y -= 34;
@@ -231,17 +245,79 @@ export async function GET(
   line("www.certezahabitacional.com", { bold: true });
   line("Este reporte oficial debe interpretarse conforme al alcance contratado, las partidas accesibles y las condiciones existentes al momento de la inspección.", { size: 9 });
 
+  // Última hoja: certificado, sin encabezado ni pie del reporte.
+  page = pdf.addPage([PAGE_W, PAGE_H]);
+  page.drawRectangle({ x: 24, y: 24, width: PAGE_W - 48, height: PAGE_H - 48, borderWidth: 4, borderColor: rgb(0.03,0.06,0.14) });
+  page.drawRectangle({ x: 34, y: 34, width: PAGE_W - 68, height: PAGE_H - 68, borderWidth: 1.5, borderColor: rgb(0.86,0.58,0.08) });
+
+  if (logo) {
+    const escala = 92 / logo.width;
+    page.drawImage(logo, { x: 54, y: 654, width: 92, height: logo.height * escala });
+  }
+  page.drawText("CERTIFICADO CERTEZA HABITACIONAL", { x: 164, y: 706, size: 19, font: bold, color: rgb(0.03,0.06,0.14) });
+  page.drawText("Resultado final autorizado", { x: 164, y: 684, size: 10, font: regular, color: rgb(0.35,0.40,0.47) });
+
+  let cy = 620;
+  const certLine = (label: string, value: string) => {
+    page.drawText(label, { x: 58, y: cy, size: 8, font: bold, color: rgb(0.45,0.49,0.56) });
+    page.drawText(value, { x: 220, y: cy, size: 11, font: bold, color: rgb(0.05,0.08,0.14), maxWidth: 300 });
+    cy -= 34;
+  };
+  certLine("CERTIFICADO", certificado.folio);
+  certLine("INSPECCIÓN", inspeccion.folio);
+  certLine("CLIENTE", inspeccion.cliente.nombre);
+  certLine("INMUEBLE", inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble);
+  certLine("CALIFICACIÓN TÉCNICA CERTEZA", `${Number(certificado.ish).toFixed(2)} / 100`);
+  if (metricas) certLine("COBERTURA", `${metricas.cobertura.toFixed(2)}%`);
+  if (inspeccion.revisiones[0]) certLine("AUTORIZADO POR DIRECCIÓN", inspeccion.revisiones[0].usuario.nombre);
+
+  const qrPng = await QRCode.toBuffer(
+    `${request.nextUrl.origin}/certificados/verificar/${certificado.codigoValidacion}`,
+    { width: 220, margin: 1, errorCorrectionLevel: "M", type: "png" },
+  );
+  const qrImage = await pdf.embedPng(qrPng);
+  page.drawImage(qrImage, { x: 390, y: 438, width: 130, height: 130 });
+  page.drawText("Validar certificado", { x: 402, y: 422, size: 8, font: bold, color: rgb(0.05,0.08,0.14) });
+
+  page.drawText("DICTAMEN", { x: 58, y: 360, size: 9, font: bold, color: rgb(0.45,0.49,0.56) });
+  const certRows = wrap(certificado.dictamen, regular, 9, 496).slice(0, 12);
+  let certTextY = 342;
+  for (const row of certRows) {
+    page.drawText(row, { x: 58, y: certTextY, size: 9, font: regular, color: rgb(0.18,0.22,0.28) });
+    certTextY -= 13;
+  }
+  page.drawText(`Código de validación: ${certificado.codigoValidacion}`, { x: 58, y: 72, size: 8, font: bold, color: rgb(0.05,0.08,0.14) });
+
   const paginas = pdf.getPages();
   paginas.forEach((pagina, indice) => {
-    const etiqueta = `Página ${indice + 1} de ${paginas.length}`;
-    const ancho = regular.widthOfTextAtSize(etiqueta, 8);
-    pagina.drawText(etiqueta, {
-      x: (PAGE_W - ancho) / 2,
-      y: 18,
-      size: 8,
-      font: regular,
-      color: rgb(0.39, 0.45, 0.55),
+    const esPortada = indice === 0;
+    const esCertificado = indice === paginas.length - 1;
+    if (esPortada || esCertificado) return;
+
+    pagina.drawRectangle({
+      x: 0,
+      y: PAGE_H - 34,
+      width: PAGE_W,
+      height: 34,
+      color: rgb(0.02,0.04,0.10),
     });
+    if (logo) {
+      const escala = 28 / logo.width;
+      pagina.drawImage(logo, { x: 34, y: PAGE_H - 31, width: 28, height: logo.height * escala });
+    }
+    pagina.drawText("CERTEZA HABITACIONAL", { x: 70, y: PAGE_H - 21, size: 8, font: bold, color: rgb(0.95,0.75,0.18) });
+    pagina.drawText(inspeccion.folio, { x: PAGE_W - 130, y: PAGE_H - 21, size: 8, font: bold, color: rgb(1,1,1) });
+
+    pagina.drawRectangle({
+      x: 0,
+      y: 0,
+      width: PAGE_W,
+      height: 24,
+      color: rgb(0.02,0.04,0.10),
+    });
+    const etiqueta = `Pág. ${indice + 1} / ${paginas.length}`;
+    pagina.drawText("CH-R-001", { x: 34, y: 8, size: 7, font: bold, color: rgb(0.95,0.95,0.95) });
+    pagina.drawText(etiqueta, { x: PAGE_W - 92, y: 8, size: 7, font: bold, color: rgb(0.95,0.95,0.95) });
   });
 
   const bytes = await pdf.save();
