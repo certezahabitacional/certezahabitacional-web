@@ -23,6 +23,7 @@ import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { confirmarPreReporteSitioV1 } from "../pre-reporte/actions";
 import { enviarReporteDireccionV1 } from "../cierre-v1/actions";
+import { revocarCertificadoV1 } from "./actions";
 
 async function signedUrl(path: string | null) {
   if (!path) return null;
@@ -703,6 +704,20 @@ export default async function ReporteV1Page({ params, searchParams }: {
       )}
       <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
       {autorizado && <ReportExportActions folio={inspeccion.folio} />}
+      {esDirector && autorizado && inspeccion.certificado?.vigente && (
+        <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-rose-300/30 bg-rose-50 p-5">
+          <p className="text-xs font-black uppercase tracking-[.18em] text-rose-800">Dirección · control excepcional</p>
+          <h2 className="mt-1 text-xl font-black text-slate-950">Revocar certificado</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            Utiliza esta opción únicamente cuando sea indispensable corregir el REPORTE o reabrir técnicamente la inspección. La revocación invalida el certificado vigente, devuelve el expediente a revisión de Dirección y queda registrada en auditoría.
+          </p>
+          <form action={revocarCertificadoV1} className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+            <input type="hidden" name="inspeccionId" value={id}/>
+            <textarea name="motivo" required minLength={10} placeholder="Motivo obligatorio de la revocación" className="min-h-24 rounded-xl border border-rose-300 bg-white p-3 text-sm text-slate-950"/>
+            <button className="rounded-xl bg-rose-700 px-5 py-3 text-sm font-black text-white">REVOCAR CERTIFICADO</button>
+          </form>
+        </section>
+      )}
       <article data-report-root className="report-body relative mx-auto w-[816px] max-w-full bg-white shadow-xl print:w-auto print:max-w-none print:shadow-none">
         <ReportPageGuides
           folio={inspeccion.folio}
