@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import ReportShareActions from "@/components/reportes/ReportShareActions";
 
 type ControlPublicoV1 = { coberturaPorcentaje: number | null };
 
@@ -213,12 +214,10 @@ export default async function VerificarCertificadoPage({
               >
                 VER REPORTE OFICIAL
               </a>
-              <a
-                href={`/reportes/verificar/${certificado.codigoValidacion}/pdf?download=1`}
-                className="rounded-2xl border border-cyan-300/30 px-5 py-4 text-center font-black text-cyan-300"
-              >
-                DESCARGAR PDF
-              </a>
+              <ReportShareActions
+                pdfUrl={`/reportes/verificar/${certificado.codigoValidacion}/pdf`}
+                folio={inspeccion.folio}
+              />
             </div>
           )}
 
