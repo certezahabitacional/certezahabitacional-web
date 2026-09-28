@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { RolUsuario } from "@prisma/client";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import QRCode from "qrcode";
 
-import { auth } from "@/auth";
 import ReportBrandHeader from "@/components/branding/ReportBrandHeader";
 import { DATOS_DOCUMENTALES, contactoDocumentoPorZona, datosContactoDocumento } from "@/lib/datos-documentales";
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
@@ -21,9 +19,6 @@ import {
 } from "@/lib/herramientas-inspeccion";
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
-import { confirmarPreReporteSitioV1 } from "../pre-reporte/actions";
-import { enviarReporteDireccionV1 } from "../cierre-v1/actions";
-import { revocarCertificadoV1 } from "./actions";
 
 async function signedUrl(path: string | null) {
   if (!path) return null;
@@ -216,18 +211,20 @@ function referenciasNormativas(ciudad: string) {
   return referencias;
 }
 
-export default async function ReporteV1Page({ params, searchParams }: {
-  params: Promise<{ id:string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+export default async function ReporteV1Publico({ params }: {
+  params: Promise<{ codigo:string }>;
 }) {
-  const { id } = await params;
-  const query = await searchParams;
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const usuario = await prisma.usuario.findUnique({ where:{id:session.user.id}, select:{rol:true,activo:true,inspector:{select:{id:true}}} });
-  if (!usuario?.activo) redirect("/acceso");
-
+  const { codigo } = await params;
+  const acceso = await prisma.certificado.findUnique({
+    where: { codigoValidacion: codigo },
+    select: {
+      vigente: true,
+      inspeccionId: true,
+      inspeccion: { select: { estado: true, numeroInspeccion: true } },
+    },
+  });
+  if (!acceso?.vigente || acceso.inspeccion.estado !== "FINALIZADA" || acceso.inspeccion.numeroInspeccion !== 1) notFound();
+  const id = acceso.inspeccionId;
   const inspeccion = await prisma.inspeccion.findUnique({
     where:{id},
     include:{
@@ -246,12 +243,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       certificado:true,
     },
   });
-  if (!inspeccion) notFound();
-  if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/reporte`);
-  const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const esDirector = usuario.rol === RolUsuario.DIRECTOR;
-  const puedeOperarPreReporte = esInspector || esDirector;
-  if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
+  if (!inspeccion || inspeccion.numeroInspeccion !== 1 || !inspeccion.certificado?.vigente || inspeccion.estado !== "FINALIZADA") notFound();
 
   const areas = await prisma.$queryRaw<Area[]>`
     SELECT a."id"::text,a."orden",a."codigo",a."tipo",a."nombre",a."resultado",a."comentarioFinal",
@@ -590,7 +582,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   ];
 
   return (
-    <main className="min-h-screen bg-slate-200 px-3 py-6 text-slate-950 print:bg-white print:p-0">
+    <main className="min-h-screen bg-slate-200 px-0 py-0 text-slate-950 print:bg-white print:p-0">
       <style>{`@page{size:Letter;margin:10mm;@bottom-center{content:"Página " counter(page) " de " counter(pages);font-size:8pt;color:#64748b}}
       .pre-report-watermark-screen{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;z-index:0}
       .pre-report-watermark-screen span{transform:rotate(-32deg);font-size:72px;font-weight:900;letter-spacing:.22em;color:rgba(148,163,184,.11);white-space:nowrap}
@@ -649,80 +641,6 @@ export default async function ReporteV1Page({ params, searchParams }: {
         h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
         footer{break-before:avoid;page-break-before:avoid}
       }`}</style>
-      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">REPORTE DE INSPECCIÓN</span></div>
-      {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
-      {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
-        <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-          <p className="text-xs font-black uppercase tracking-wider text-cyan-800">REPORTE · REVISIÓN EN SITIO</p>
-          {!controlReporte.preReporteGeneradoEn && !firmasCompletasReporte ? (
-            <>
-              <h2 className="mt-2 text-xl font-black">Generar REPORTE</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">El recorrido técnico ya concluyó. Genera el REPORTE y revísalo con el cliente antes de retirarse del inmueble.</p>
-              {esInspector && <form action={confirmarPreReporteSitioV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="w-full rounded-xl bg-cyan-800 px-5 py-3 font-black text-white">GENERAR REPORTE</button></form>}
-            </>
-          ) : !firmasCompletasReporte ? (
-            <>
-              <h2 className="mt-2 text-xl font-black">Revisión con el cliente antes de firmas</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR · DESDE PARTIDA 1</Link>
-                <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">PASAR A FIRMAS</Link>
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 className="mt-2 text-xl font-black">Firmas registradas · revisión final antes de Dirección</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
-              <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
-                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR REPORTE</div>}
-                <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white">SOLICITAR AUTORIZACIÓN DEL REPORTE</button></form>
-              </div>
-              {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Al solicitar la autorización, el sistema generará automáticamente la versión vigente del REPORTE si hace falta y la enviará a Dirección.</p>}
-            </>
-          )}
-        </section>
-      )}
-      {esDirector && inspeccion.estado === "REPORTE_PENDIENTE" && (
-        <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-violet-300/30 bg-violet-50 p-5">
-          <p className="text-xs font-black uppercase tracking-[.18em] text-violet-800">Dirección · revisión y autorización</p>
-          <h2 className="mt-1 text-xl font-black text-slate-950">REPORTE recibido para revisión</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-700">
-            Dirección revisa aquí el REPORTE y entra al control de autorización para aprobarlo o devolverlo al Inspector con observaciones.
-          </p>
-          <Link href={`/panel/inspecciones/${id}/revision`} className="mt-4 inline-block rounded-xl bg-violet-700 px-5 py-3 text-sm font-black text-white">
-            IR A REVISIÓN Y AUTORIZACIÓN DE DIRECCIÓN
-          </Link>
-        </section>
-      )}
-      {esDirector && inspeccion.estado !== "REPORTE_PENDIENTE" && !autorizado && (
-        <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-slate-300 bg-white p-4">
-          <p className="text-sm font-bold text-slate-600">
-            Dirección podrá revisar y autorizar cuando el Inspector envíe el REPORTE mediante “AUTORIZACIÓN DEL REPORTE”.
-          </p>
-        </section>
-      )}
-      <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
-      {autorizado && inspeccion.certificado?.codigoValidacion && (
-        <ReportExportActions
-          folio={inspeccion.folio}
-          pdfUrl={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}/pdf`}
-        />
-      )}
-      {esDirector && autorizado && inspeccion.certificado?.vigente && (
-        <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-rose-300/30 bg-rose-50 p-5">
-          <p className="text-xs font-black uppercase tracking-[.18em] text-rose-800">Dirección · control excepcional</p>
-          <h2 className="mt-1 text-xl font-black text-slate-950">Revocar certificado</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-700">
-            Utiliza esta opción únicamente cuando sea indispensable corregir el REPORTE o reabrir técnicamente la inspección. La revocación invalida el certificado vigente, devuelve el expediente a revisión de Dirección y queda registrada en auditoría.
-          </p>
-          <form action={revocarCertificadoV1} className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-            <input type="hidden" name="inspeccionId" value={id}/>
-            <textarea name="motivo" required minLength={10} placeholder="Motivo obligatorio de la revocación" className="min-h-24 rounded-xl border border-rose-300 bg-white p-3 text-sm text-slate-950"/>
-            <button className="rounded-xl bg-rose-700 px-5 py-3 text-sm font-black text-white">REVOCAR CERTIFICADO</button>
-          </form>
-        </section>
-      )}
       <article data-report-root className="report-body relative mx-auto w-[816px] max-w-full bg-white shadow-xl print:w-auto print:max-w-none print:shadow-none">
         <ReportPageGuides
           folio={inspeccion.folio}
