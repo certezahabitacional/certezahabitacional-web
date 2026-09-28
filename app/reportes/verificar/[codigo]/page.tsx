@@ -20,9 +20,12 @@ import {
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 
-async function signedUrl(path: string | null) {
+async function signedUrl(path: string | null, codigo?: string, inspeccionId?: string) {
   if (!path) return null;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (codigo && inspeccionId && path.startsWith(`${inspeccionId}/`)) {
+    return `/reportes/verificar/${encodeURIComponent(codigo)}/imagen?path=${encodeURIComponent(path)}`;
+  }
   const sb = obtenerSupabaseAdmin();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 60 * 60);
@@ -321,7 +324,7 @@ export default async function ReporteV1Publico({ params }: {
     JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
     WHERE a."inspeccionId"=${id} AND fa."seleccionadaReporte"=true ORDER BY a."orden",fa."orden",fa."creadoEn"
   `;
-  const fotosFirmadas = await Promise.all(fotosArea.map(async f => ({...f,urlFirmada:await signedUrl(f.url)})));
+  const fotosFirmadas = await Promise.all(fotosArea.map(async f => ({...f,urlFirmada:await signedUrl(f.url, codigo, id)})));
   const fotosPorArea = new Map<string, typeof fotosFirmadas>();
   const fotosPorConcepto = new Map<string, typeof fotosFirmadas>();
   for (const f of fotosFirmadas) {
@@ -358,7 +361,7 @@ export default async function ReporteV1Publico({ params }: {
     ultimaVersionPreReporte?.generadoEn &&
     (!ultimaFirmaEn || new Date(ultimaVersionPreReporte.generadoEn) >= ultimaFirmaEn)
   );
-  const portada = await signedUrl(fachada?.url ?? null);
+  const portada = await signedUrl(fachada?.url ?? null, codigo, id);
 
   const evidenciasBase = await prisma.$queryRaw<EvidenciaCompleta[]>`
     SELECT
@@ -383,14 +386,14 @@ export default async function ReporteV1Publico({ params }: {
     ORDER BY COALESCE(a."orden",999999),COALESCE(g."orden",999999),COALESCE(fa."orden",999999),f."creadaEn"
   `;
   const evidencias = await Promise.all(
-    evidenciasBase.map(async (e) => ({...e,urlFirmada:await signedUrl(e.url)})),
+    evidenciasBase.map(async (e) => ({...e,urlFirmada:await signedUrl(e.url, codigo, id)})),
   );
 
   const hallazgosConEvidencia = await Promise.all(
     inspeccion.hallazgos.map(async (h) => ({
       ...h,
       fotografiasFirmadas: await Promise.all(
-        h.fotografias.map(async (foto) => ({...foto,urlFirmada:await signedUrl(foto.url)})),
+        h.fotografias.map(async (foto) => ({...foto,urlFirmada:await signedUrl(foto.url, codigo, id)})),
       ),
     })),
   );
