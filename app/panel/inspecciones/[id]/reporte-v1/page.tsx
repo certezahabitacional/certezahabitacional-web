@@ -707,6 +707,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <ReportExportActions
           folio={inspeccion.folio}
           pdfUrl={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}/pdf`}
+          printUrl={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}?print=1`}
         />
       )}
       {esDirector && autorizado && inspeccion.certificado?.vigente && (

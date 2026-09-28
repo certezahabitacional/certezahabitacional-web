@@ -8,6 +8,7 @@ import { DATOS_DOCUMENTALES, contactoDocumentoPorZona, datosContactoDocumento } 
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import IndicePaginasReporte from "@/components/reportes/IndicePaginasReporte";
 import ReportPageGuides from "@/components/reportes/ReportPageGuides";
+import AutoPrintReport from "@/components/reportes/AutoPrintReport";
 import FiltroHallazgosReporte from "@/components/reportes/FiltroHallazgosReporte";
 import ReportExportActions from "@/components/reportes/ReportExportActions";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
@@ -20,9 +21,12 @@ import {
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 
-async function signedUrl(path: string | null) {
+async function signedUrl(path: string | null, codigo?: string, inspeccionId?: string) {
   if (!path) return null;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (codigo && inspeccionId && path.startsWith(`${inspeccionId}/`)) {
+    return `/reportes/verificar/${encodeURIComponent(codigo)}/imagen?path=${encodeURIComponent(path)}`;
+  }
   const sb = obtenerSupabaseAdmin();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 60 * 60);
@@ -211,10 +215,13 @@ function referenciasNormativas(ciudad: string) {
   return referencias;
 }
 
-export default async function ReporteV1Publico({ params }: {
+export default async function ReporteV1Publico({ params, searchParams }: {
   params: Promise<{ codigo:string }>;
+  searchParams: Promise<{ print?: string }>;
 }) {
   const { codigo } = await params;
+  const query = await searchParams;
+  const imprimirAutomaticamente = query.print === "1";
   const acceso = await prisma.certificado.findUnique({
     where: { codigoValidacion: codigo },
     select: {
@@ -321,7 +328,7 @@ export default async function ReporteV1Publico({ params }: {
     JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
     WHERE a."inspeccionId"=${id} AND fa."seleccionadaReporte"=true ORDER BY a."orden",fa."orden",fa."creadoEn"
   `;
-  const fotosFirmadas = await Promise.all(fotosArea.map(async f => ({...f,urlFirmada:await signedUrl(f.url)})));
+  const fotosFirmadas = await Promise.all(fotosArea.map(async f => ({...f,urlFirmada:await signedUrl(f.url, codigo, id)})));
   const fotosPorArea = new Map<string, typeof fotosFirmadas>();
   const fotosPorConcepto = new Map<string, typeof fotosFirmadas>();
   for (const f of fotosFirmadas) {
@@ -358,7 +365,7 @@ export default async function ReporteV1Publico({ params }: {
     ultimaVersionPreReporte?.generadoEn &&
     (!ultimaFirmaEn || new Date(ultimaVersionPreReporte.generadoEn) >= ultimaFirmaEn)
   );
-  const portada = await signedUrl(fachada?.url ?? null);
+  const portada = await signedUrl(fachada?.url ?? null, codigo, id);
 
   const evidenciasBase = await prisma.$queryRaw<EvidenciaCompleta[]>`
     SELECT
@@ -383,14 +390,14 @@ export default async function ReporteV1Publico({ params }: {
     ORDER BY COALESCE(a."orden",999999),COALESCE(g."orden",999999),COALESCE(fa."orden",999999),f."creadaEn"
   `;
   const evidencias = await Promise.all(
-    evidenciasBase.map(async (e) => ({...e,urlFirmada:await signedUrl(e.url)})),
+    evidenciasBase.map(async (e) => ({...e,urlFirmada:await signedUrl(e.url, codigo, id)})),
   );
 
   const hallazgosConEvidencia = await Promise.all(
     inspeccion.hallazgos.map(async (h) => ({
       ...h,
       fotografiasFirmadas: await Promise.all(
-        h.fotografias.map(async (foto) => ({...foto,urlFirmada:await signedUrl(foto.url)})),
+        h.fotografias.map(async (foto) => ({...foto,urlFirmada:await signedUrl(foto.url, codigo, id)})),
       ),
     })),
   );
@@ -583,6 +590,7 @@ export default async function ReporteV1Publico({ params }: {
 
   return (
     <main className="min-h-screen bg-slate-200 px-0 py-0 text-slate-950 print:bg-white print:p-0">
+      {imprimirAutomaticamente && <AutoPrintReport />}
       <style>{`@page{size:Letter;margin:10mm;@bottom-center{content:"Página " counter(page) " de " counter(pages);font-size:8pt;color:#64748b}}
       .pre-report-watermark-screen{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;z-index:0}
       .pre-report-watermark-screen span{transform:rotate(-32deg);font-size:72px;font-weight:900;letter-spacing:.22em;color:rgba(148,163,184,.11);white-space:nowrap}
