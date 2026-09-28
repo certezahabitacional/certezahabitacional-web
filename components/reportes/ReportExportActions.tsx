@@ -10,7 +10,26 @@ export default function ReportExportActions({
   printUrl: string;
 }) {
   const imprimir = () => {
-    window.open(printUrl, "_blank", "noopener,noreferrer");
+    const ventana = window.open(printUrl, "_blank");
+    if (!ventana) return;
+
+    let impreso = false;
+    const lanzarImpresion = () => {
+      if (impreso || ventana.closed) return;
+      impreso = true;
+      try {
+        ventana.focus();
+        ventana.print();
+      } catch {
+        impreso = false;
+      }
+    };
+
+    ventana.addEventListener("load", () => {
+      window.setTimeout(lanzarImpresion, 900);
+    }, { once: true });
+
+    window.setTimeout(lanzarImpresion, 3500);
   };
 
   const descargar = () => {
