@@ -4,7 +4,7 @@ import { EstadoCotizacion, Prisma } from "@prisma/client";
 
 import { obtenerClienteActual } from "@/lib/cliente-actual";
 import { prisma } from "@/lib/prisma";
-import { aceptarCotizacionCliente, rechazarCotizacionCliente } from "../actions";
+import { aceptarCotizacionCliente } from "../actions";
 
 type Props = { params: Promise<{ id: string }> };
 type Obj = Record<string, unknown>;
@@ -18,7 +18,7 @@ export default async function CotizacionClientePage({ params }: Props) {
   const clienteActual = await obtenerClienteActual(); const { id } = await params;
   const cotizacion = await prisma.cotizacion.findFirst({ where: { id, clienteId: clienteActual.id, zonaId: clienteActual.zonaId }, include: { cliente:true, inmueble: true, paquete: true, versiones: { orderBy: { version: "desc" }, take: 1, select: { version: true, datos:true, total:true } } } });
   if (!cotizacion) notFound();
-  const estadosConsultables: EstadoCotizacion[] = [EstadoCotizacion.ENVIADA, EstadoCotizacion.ACEPTADA, EstadoCotizacion.RECHAZADA];
+  const estadosConsultables: EstadoCotizacion[] = [EstadoCotizacion.ENVIADA, EstadoCotizacion.ACEPTADA, EstadoCotizacion.AUTORIZADA];
   const puedeConsultar = estadosConsultables.includes(cotizacion.estado); if (!puedeConsultar) notFound();
   const version = cotizacion.versiones[0];
   if (!version || version.version !== cotizacion.versionActual) notFound();
@@ -45,10 +45,10 @@ export default async function CotizacionClientePage({ params }: Props) {
     {cotizacion.notas && <section className="mt-8 rounded-3xl border border-white/10 p-6"><h2 className="font-black">Notas de la cotización</h2><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{cotizacion.notas}</p></section>}
     {cotizacion.estado===EstadoCotizacion.ENVIADA && <section className="mt-8 rounded-3xl border border-cyan-400/30 bg-cyan-400/5 p-6"><p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-300">Acción requerida · V{versionVisible}</p><h2 className="mt-2 text-2xl font-black">Revisa y responde esta versión</h2><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Los datos mostrados provienen de la versión documental V{versionVisible}. Verifica cliente, inmueble, superficie, precio y vigencia antes de responder.</p>
       <div className="mt-7 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5"><p className="font-black text-emerald-300">Aceptar V{versionVisible}</p><form action={aceptarCotizacionCliente} className="mt-5"><input type="hidden" name="id" value={cotizacion.id}/><input type="hidden" name="version" value={versionVisible}/><label className="flex max-w-3xl items-start gap-3 text-sm text-slate-300"><input type="checkbox" name="aceptaTerminos" value="si" required className="mt-1 h-4 w-4"/><span>Confirmo que revisé la versión V{versionVisible}, sus datos y su importe, y deseo continuar con el servicio de Certeza Habitacional.</span></label><button type="submit" className="mt-5 rounded-full bg-emerald-300 px-6 py-3 text-sm font-black text-slate-950">Aceptar V{versionVisible}</button></form></div>
-      <div className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-400/5 p-5"><p className="font-black text-rose-300">Rechazar V{versionVisible}</p><form action={rechazarCotizacionCliente} className="mt-5"><input type="hidden" name="id" value={cotizacion.id}/><input type="hidden" name="version" value={versionVisible}/><textarea name="motivo" rows={4} placeholder="Motivo del rechazo (opcional)" className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white"/><button type="submit" className="mt-4 rounded-full bg-rose-300 px-6 py-3 text-sm font-black text-slate-950">Rechazar V{versionVisible}</button></form></div>
+</div>
     </section>}
     {cotizacion.estado===EstadoCotizacion.ACEPTADA && <section className="mt-8 rounded-3xl border border-emerald-400/30 bg-emerald-400/5 p-6"><p className="text-xs font-black uppercase tracking-[0.25em] text-emerald-300">V{versionVisible} aceptada</p><h2 className="mt-2 text-2xl font-black">Gracias por tu aceptación</h2><p className="mt-3 text-sm leading-6 text-slate-400">Tu aceptación quedó vinculada a esta versión. Certeza Habitacional continuará con la autorización interna antes de seguir con el proceso operativo.</p></section>}
-    {cotizacion.estado===EstadoCotizacion.RECHAZADA && <section className="mt-8 rounded-3xl border border-rose-400/30 bg-rose-400/5 p-6"><p className="text-xs font-black uppercase tracking-[0.25em] text-rose-300">V{versionVisible} rechazada</p><h2 className="mt-2 text-2xl font-black">Esta propuesta fue rechazada</h2>{cotizacion.motivoRechazo&&<div className="mt-5 rounded-2xl bg-slate-950 p-5"><p className="text-xs font-black uppercase tracking-widest text-slate-500">Motivo</p><p className="mt-2 text-sm leading-6 text-slate-300">{cotizacion.motivoRechazo}</p></div>}</section>}
+    {cotizacion.estado===EstadoCotizacion.AUTORIZADA && <section className="mt-8 rounded-3xl border border-cyan-400/30 bg-cyan-400/5 p-6"><p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-300">Cotización autorizada</p><h2 className="mt-2 text-2xl font-black">Documento liberado para consulta</h2><p className="mt-3 text-sm leading-6 text-slate-400">Esta cotización ya fue aceptada por ti y autorizada por Certeza Habitacional. Permanece disponible únicamente para consulta.</p></section>}
     </div></section></div></main>;
 }
 function Dato({titulo,valor}:{titulo:string;valor:string}){return <div className="rounded-2xl bg-slate-950 p-5"><p className="text-xs font-black uppercase tracking-[0.15em] text-slate-500">{titulo}</p><p className="mt-2 font-bold text-slate-100">{valor}</p></div>}
