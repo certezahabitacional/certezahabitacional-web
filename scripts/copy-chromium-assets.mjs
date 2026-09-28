@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = join(root, "node_modules", "@sparticuz", "chromium", "bin");
-const target = join(root, "public", "chromium");
+const target = join(root, "lib", "chromium");
 
 await mkdir(target, { recursive: true });
 await cp(source, target, { recursive: true, force: true });
 
-console.log("Chromium runtime assets copied to public/chromium");
+console.log("Chromium runtime assets copied to lib/chromium");

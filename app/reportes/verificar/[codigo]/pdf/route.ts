@@ -49,7 +49,7 @@ export async function GET(
       },
       executablePath: await chromium.executablePath(
         process.env.VERCEL
-          ? `${process.cwd()}/public/chromium`
+          ? `${process.cwd()}/lib/chromium`
           : undefined,
       ),
       headless: true,
@@ -108,7 +108,12 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Error generando PDF exacto del reporte:", error);
+    console.error("Error generando PDF exacto del reporte:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      cwd: process.cwd(),
+      vercel: process.env.VERCEL,
+    });
     return NextResponse.json(
       { error: "No fue posible generar el PDF oficial en este momento." },
       { status: 500 },

@@ -8,7 +8,8 @@ const nextConfig = {
 
   outputFileTracingIncludes: {
     "/reportes/verificar/[codigo]/pdf": [
-      "./node_modules/@sparticuz/chromium/bin/**",
+      "./lib/chromium/**",
+      "./node_modules/@sparticuz/chromium/**",
     ],
     "/api/solicitudes-cotizacion": [
       "./lib/plantilla-cotizacion-ch-f-002.part0.b64",
