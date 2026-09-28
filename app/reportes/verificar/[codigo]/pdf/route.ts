@@ -47,7 +47,11 @@ export async function GET(
         height: 1056,
         deviceScaleFactor: 1,
       },
-      executablePath: await chromium.executablePath(),
+      executablePath: await chromium.executablePath(
+        process.env.VERCEL
+          ? `${process.cwd()}/public/chromium`
+          : undefined,
+      ),
       headless: true,
     });
 
