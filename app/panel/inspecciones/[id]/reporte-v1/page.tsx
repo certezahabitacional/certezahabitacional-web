@@ -552,7 +552,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
   let qr:string|null=null;
   if (autorizado && inspeccion.certificado) {
-    qr = await QRCode.toDataURL(`${base}/certificados/verificar/${inspeccion.certificado.codigoValidacion}`,{width:240,margin:1,errorCorrectionLevel:"M"});
+    qr = await QRCode.toDataURL(`${base}/reportes/verificar/${inspeccion.certificado.codigoValidacion}`,{width:240,margin:1,errorCorrectionLevel:"M"});
   }
 
   const hallazgosFiltrables = hallazgosConEvidencia
