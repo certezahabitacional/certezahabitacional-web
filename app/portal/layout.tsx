@@ -27,6 +27,13 @@ export default async function PortalLayout({
       </Link>
 
       <Link
+        href="/portal/cotizaciones"
+        className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300"
+      >
+        Cotizaciones
+      </Link>
+
+      <Link
         href="/portal/inspecciones"
         className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300"
       >
