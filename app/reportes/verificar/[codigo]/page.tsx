@@ -8,6 +8,7 @@ import { DATOS_DOCUMENTALES, contactoDocumentoPorZona, datosContactoDocumento } 
 import TecnologiaInspeccionV1 from "@/components/reportes/TecnologiaInspeccionV1";
 import IndicePaginasReporte from "@/components/reportes/IndicePaginasReporte";
 import ReportPageGuides from "@/components/reportes/ReportPageGuides";
+import AutoPrintReport from "@/components/reportes/AutoPrintReport";
 import FiltroHallazgosReporte from "@/components/reportes/FiltroHallazgosReporte";
 import ReportExportActions from "@/components/reportes/ReportExportActions";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
@@ -214,10 +215,13 @@ function referenciasNormativas(ciudad: string) {
   return referencias;
 }
 
-export default async function ReporteV1Publico({ params }: {
+export default async function ReporteV1Publico({ params, searchParams }: {
   params: Promise<{ codigo:string }>;
+  searchParams: Promise<{ print?: string }>;
 }) {
   const { codigo } = await params;
+  const query = await searchParams;
+  const imprimirAutomaticamente = query.print === "1";
   const acceso = await prisma.certificado.findUnique({
     where: { codigoValidacion: codigo },
     select: {
@@ -586,6 +590,7 @@ export default async function ReporteV1Publico({ params }: {
 
   return (
     <main className="min-h-screen bg-slate-200 px-0 py-0 text-slate-950 print:bg-white print:p-0">
+      {imprimirAutomaticamente && <AutoPrintReport />}
       <style>{`@page{size:Letter;margin:10mm;@bottom-center{content:"Página " counter(page) " de " counter(pages);font-size:8pt;color:#64748b}}
       .pre-report-watermark-screen{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;z-index:0}
       .pre-report-watermark-screen span{transform:rotate(-32deg);font-size:72px;font-weight:900;letter-spacing:.22em;color:rgba(148,163,184,.11);white-space:nowrap}
