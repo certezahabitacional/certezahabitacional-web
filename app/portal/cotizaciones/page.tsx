@@ -35,7 +35,7 @@ export default async function CotizacionesPortalPage() {
         in: [
           EstadoCotizacion.ENVIADA,
           EstadoCotizacion.ACEPTADA,
-          EstadoCotizacion.RECHAZADA,
+          EstadoCotizacion.AUTORIZADA,
         ],
       },
     },
@@ -68,8 +68,8 @@ export default async function CotizacionesPortalPage() {
     (cotizacion) => cotizacion.estado === EstadoCotizacion.ACEPTADA,
   ).length;
 
-  const rechazadas = cotizaciones.filter(
-    (cotizacion) => cotizacion.estado === EstadoCotizacion.RECHAZADA,
+  const autorizadas = cotizaciones.filter(
+    (cotizacion) => cotizacion.estado === EstadoCotizacion.AUTORIZADA,
   ).length;
 
   return (
@@ -91,7 +91,7 @@ export default async function CotizacionesPortalPage() {
           <Metrica titulo="Total" valor={cotizaciones.length} />
           <Metrica titulo="Por responder" valor={pendientes} />
           <Metrica titulo="Aceptadas" valor={aceptadas} />
-          <Metrica titulo="Rechazadas" valor={rechazadas} />
+          <Metrica titulo="Autorizadas" valor={autorizadas} />
         </section>
 
         {pendientes > 0 && (
@@ -139,7 +139,7 @@ export default async function CotizacionesPortalPage() {
                       <p className="mt-1 text-2xl font-black text-cyan-300">{dinero(cotizacion.total)}</p>
                       {cotizacion.estado === EstadoCotizacion.ENVIADA && <p className="mt-3 text-sm font-black text-amber-300">Revisar y responder →</p>}
                       {cotizacion.estado === EstadoCotizacion.ACEPTADA && <p className="mt-3 text-sm font-black text-emerald-300">Ver cotización →</p>}
-                      {cotizacion.estado === EstadoCotizacion.RECHAZADA && <p className="mt-3 text-sm font-black text-rose-300">Ver detalle →</p>}
+                      {cotizacion.estado === EstadoCotizacion.AUTORIZADA && <p className="mt-3 text-sm font-black text-cyan-300">Ver cotización autorizada →</p>}
                     </div>
                   </div>
                 </Link>
@@ -160,6 +160,6 @@ function EstadoBadge({ estado }: { estado: EstadoCotizacion }) {
   let estilos = "bg-slate-400/10 text-slate-300";
   if (estado === EstadoCotizacion.ENVIADA) estilos = "bg-amber-300/10 text-amber-300";
   if (estado === EstadoCotizacion.ACEPTADA) estilos = "bg-emerald-300/10 text-emerald-300";
-  if (estado === EstadoCotizacion.RECHAZADA) estilos = "bg-rose-300/10 text-rose-300";
+  if (estado === EstadoCotizacion.AUTORIZADA) estilos = "bg-cyan-300/10 text-cyan-300";
   return <span className={`rounded-full px-3 py-1 text-xs font-black ${estilos}`}>{estado.replaceAll("_", " ")}</span>;
 }

@@ -684,10 +684,14 @@ export default async function ExpedientePage({
                 </Link>
               ) : null}
               <Link
-                href={`/panel/inspecciones/${inspeccion.id}/reporte`}
+                href={
+                  inspeccion.numeroInspeccion === 1
+                    ? `/panel/inspecciones/${inspeccion.id}/reporte-v1`
+                    : `/panel/inspecciones/${inspeccion.id}/reporte`
+                }
                 className="rounded-full border border-white/15 px-5 py-3 font-black hover:bg-white/5"
               >
-                Ver reporte
+                {expedienteFinalizado ? "Ver reporte autorizado" : "Ver reporte"}
               </Link>
               {inspeccion.liberacionBloqueada ? (
                 <span className="cursor-not-allowed rounded-full border border-rose-400/30 bg-rose-400/10 px-5 py-3 font-black text-rose-300">
