@@ -711,11 +711,11 @@ export default async function ReporteV1Publico({ params }: {
         <section data-no-page-chrome className="cover-report-page relative bg-slate-950 p-5 text-white">
           
           <div className="h-full border-[3px] border-amber-400/80 p-2">
-            <div className="h-full border border-amber-200/30 px-7 py-6">
+            <div className="h-full overflow-hidden border border-amber-200/30 px-6 py-5">
               <ReportBrandHeader title="REPORTE DE INSPECCIÓN" folio={inspeccion.folio} eyebrow="Certeza Habitacional · Inspección profesional de vivienda" dark />
-              <div className={`mt-5 rounded-xl border px-5 py-3 text-center text-[10px] font-black uppercase tracking-[.2em] ${autorizado?"border-emerald-300/30 bg-emerald-300/10 text-emerald-200":"border-amber-300/30 bg-amber-300/10 text-amber-200"}`}>{estadoReporte}</div>
-              {portada?<figure className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2"><img src={portada} alt="Fachada frontal de la vivienda" className="h-[285px] w-full object-contain"/><figcaption className="pt-2 text-center text-[10px] uppercase tracking-wider text-slate-400">Fachada frontal de la vivienda inspeccionada</figcaption></figure>:<div className="mt-6 grid h-[285px] place-items-center rounded-2xl border border-dashed border-white/20 text-sm text-slate-400">Fotografía frontal no disponible</div>}
-              <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
+              <div className={`mt-3 rounded-xl border px-4 py-2 text-center text-[10px] font-black uppercase tracking-[.18em] ${autorizado?"border-emerald-300/30 bg-emerald-300/10 text-emerald-200":"border-amber-300/30 bg-amber-300/10 text-amber-200"}`}>{estadoReporte}</div>
+              {portada?<figure className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2"><img src={portada} alt="Fachada frontal de la vivienda" className="h-[245px] w-full object-contain"/><figcaption className="pt-2 text-center text-[10px] uppercase tracking-wider text-slate-400">Fachada frontal de la vivienda inspeccionada</figcaption></figure>:<div className="mt-4 grid h-[245px] place-items-center rounded-2xl border border-dashed border-white/20 text-sm text-slate-400">Fotografía frontal no disponible</div>}
+              <div className="mt-4 grid gap-x-5 gap-y-2 rounded-2xl border border-white/10 bg-white/5 p-4 sm:grid-cols-2">
                 <Dato label="Cliente" value={inspeccion.cliente.nombre}/>
                 <Dato label="Inmueble" value={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble}/>
                 <Dato label="Dirección" value={`${inspeccion.direccion}, ${inspeccion.ciudad}`}/>
@@ -723,11 +723,11 @@ export default async function ReporteV1Publico({ params }: {
                 <Dato label="Inspector" value={inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}/>
                 <Dato label="Cotización de origen" value={inspeccion.cotizacion?.folio ?? "Sin folio"}/>
               </div>
-              <div className="mt-3 grid items-start gap-4 border-t border-amber-300/30 pt-3 sm:grid-cols-[1fr_132px]">
+              <div className="mt-3 grid items-start gap-3 border-t border-amber-300/30 pt-3 sm:grid-cols-[1fr_110px]">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Método Certeza</p>
                   <p className="mt-1 text-xs text-slate-400">Experiencia técnica + metodología + tecnología + criterio profesional</p>
-                  <div className="mt-2 text-[10px] leading-4 text-slate-400">
+                  <div className="mt-1 text-[9px] leading-3.5 text-slate-400">
                     <p className="font-black text-white">{contactoZona.empresa}</p>
                     <p>{contactoZona.email}</p>
                     <p>{contactoZona.telefono}</p>
@@ -735,8 +735,8 @@ export default async function ReporteV1Publico({ params }: {
                   </div>
                 </div>
                 <div className="justify-self-end self-start text-center">
-                  <img src={qrInstitucional} alt="QR de información institucional Certeza Habitacional" className="mx-auto h-20 w-20 rounded bg-white p-1"/>
-                  <p className="mt-1 max-w-[132px] text-[8px] font-black uppercase tracking-wide text-slate-400">Información de Certeza Habitacional</p>
+                  <img src={qrInstitucional} alt="QR de información institucional Certeza Habitacional" className="mx-auto h-16 w-16 rounded bg-white p-1"/>
+                  <p className="mt-1 max-w-[110px] text-[7px] font-black uppercase tracking-wide text-slate-400">Información de Certeza Habitacional</p>
                 </div>
               </div>
             </div>
