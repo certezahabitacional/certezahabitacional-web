@@ -9,52 +9,24 @@ export default function ReportExportActions({
   pdfUrl: string;
   printUrl: string;
 }) {
-  const imprimir = () => {
-    const ventana = window.open(printUrl, "_blank");
-    if (!ventana) return;
-
-    let impreso = false;
-    const lanzarImpresion = () => {
-      if (impreso || ventana.closed) return;
-      impreso = true;
-      try {
-        ventana.focus();
-        ventana.print();
-      } catch {
-        impreso = false;
-      }
-    };
-
-    ventana.addEventListener("load", () => {
-      window.setTimeout(lanzarImpresion, 900);
-    }, { once: true });
-
-    window.setTimeout(lanzarImpresion, 3500);
-  };
-
-  const descargar = () => {
-    const href = pdfUrl.includes("?") ? `${pdfUrl}&download=1` : `${pdfUrl}?download=1`;
-    window.location.assign(href);
-  };
+  const hrefPdf = pdfUrl.includes("?") ? `${pdfUrl}&download=1` : `${pdfUrl}?download=1`;
 
   return (
     <div className="no-print mx-auto mb-4 flex w-full max-w-5xl flex-wrap items-center justify-end gap-3">
-      <button
-        type="button"
-        onClick={imprimir}
+      <a
+        href={printUrl}
         className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"
       >
         IMPRIMIR REPORTE
-      </button>
-      <button
-        type="button"
-        onClick={descargar}
+      </a>
+      <a
+        href={hrefPdf}
         className="rounded-xl border-2 border-slate-950 px-5 py-3 text-sm font-black text-slate-950"
       >
         DESCARGAR PDF
-      </button>
+      </a>
       <span className="text-xs font-bold text-slate-500">
-        {folio} · imprimir abre la vista limpia; descargar baja el PDF oficial
+        {folio} · acciones directas, sin scripts intermedios
       </span>
     </div>
   );
