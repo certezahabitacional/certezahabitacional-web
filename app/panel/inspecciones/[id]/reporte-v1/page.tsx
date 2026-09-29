@@ -49,7 +49,7 @@ type Area = {
   hallazgos:number;
 };
 type Proceso = { orden:number; nombre:string; estado:string; lecturaInicial:number|null; lecturaFinal:number|null; unidad:string|null; comentario:string|null };
-type FotoArea = { areaId:string; guiaItemId:string|null; url:string; descripcion:string|null };
+type FotoArea = { fotografiaId:string; areaId:string; guiaItemId:string|null; url:string; descripcion:string|null };
 type ConceptoReporte = {
   id:string;
   areaId:string;
@@ -324,7 +324,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+2]));
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
-    SELECT fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
+    SELECT f."id"::text "fotografiaId",fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
     FROM "FotografiaArea" fa JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
     JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
     WHERE a."inspeccionId"=${id} AND fa."seleccionadaReporte"=true ORDER BY a."orden",fa."orden",fa."creadoEn"
@@ -429,7 +429,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
   const evaluacionConcepto = (concepto: ConceptoReporte) => {
     const obs = observacionConcepto(concepto.observacion);
-    const hallazgo = inspeccion.hallazgos.find((h) => h.guiaItemId === concepto.id);
+    const hallazgo = hallazgosConEvidencia.find((h) => h.guiaItemId === concepto.id);
     const capturada = Number(obs.calificacionFinal ?? obs.evaluacionFinal);
     const calificacion = Number.isFinite(capturada) && capturada >= 0 && capturada <= 100
       ? capturada
@@ -470,7 +470,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
     const proceso = area ? procesoPorNombre.get(area.nombre.toUpperCase()) : undefined;
     const conceptos = area ? conceptosHermeticidad.filter((g)=>g.areaId===area.id) : [];
     const final = conceptos.find((g)=>/lectura final de presión/i.test(g.concepto));
-    const hallazgo = final ? inspeccion.hallazgos.find((h)=>h.guiaItemId===final.id) : undefined;
+    const hallazgo = final ? hallazgosConEvidencia.find((h)=>h.guiaItemId===final.id) : undefined;
     const inspeccionada = Boolean(proceso && proceso.estado==="COMPLETADO");
     const obsFinal = final ? observacionConcepto(final.observacion) : {};
     const capturada = Number(obsFinal.calificacionFinal ?? obsFinal.evaluacionFinal);
@@ -810,7 +810,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
               </div>
               <div data-page-unit className="inspection-pair mt-5">
                 {pruebasHermeticidad.filter((p)=>p.inspeccionada).map((p,index)=>{
-                  const fotos=(p.area ? (fotosPorArea.get(p.area.id)??[]) : []).filter((foto)=>p.conceptos.some((g)=>g.id===foto.guiaItemId));
+                  const fotosArea=(p.area ? (fotosPorArea.get(p.area.id)??[]) : [])
+                    .filter((foto)=>p.conceptos.some((g)=>g.id===foto.guiaItemId))
+                    .map((foto)=>({id:`area-${foto.fotografiaId}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
+                  const fotosHallazgo=(p.hallazgo?.fotografiasFirmadas??[])
+                    .map((foto)=>({id:`hallazgo-${foto.id}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
+                  const fotos=[...fotosHallazgo,...fotosArea]
+                    .filter((foto,index,lista)=>Boolean(foto.urlFirmada)&&lista.findIndex((item)=>item.urlFirmada===foto.urlFirmada)===index);
                   const foto=fotos[0];
                   return <section key={p.codigo} className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
                     <div className="flex items-start justify-between gap-2"><div><p className="text-[9px] font-black uppercase tracking-[.14em] text-cyan-700">Punto {index+1} · Partida 1</p><h4 className="mt-1 text-sm font-black">{p.etiqueta}</h4></div><span className="shrink-0 rounded-full bg-slate-950 px-2 py-1 text-[9px] font-black text-white">{p.calificacion.toFixed(0)} · {p.nivel}</span></div>
@@ -839,7 +845,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
                         const ev=evaluacionConcepto(g);
-                        const fotos=fotosPorConcepto.get(g.id)??[];
+                        const fotosConcepto=(fotosPorConcepto.get(g.id)??[])
+                          .map((foto)=>({id:`concepto-${foto.fotografiaId}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
+                        const fotosHallazgo=(ev.hallazgo?.fotografiasFirmadas??[])
+                          .map((foto)=>({id:`hallazgo-${foto.id}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
+                        const fotos=[...fotosHallazgo,...fotosConcepto]
+                          .filter((foto,index,lista)=>Boolean(foto.urlFirmada)&&lista.findIndex((item)=>item.urlFirmada===foto.urlFirmada)===index);
                         const foto=fotos[0];
                         const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
                         return <section key={g.id} data-page-unit className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
@@ -962,5 +973,5 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
 function Seccion({id,n,titulo,subtitulo,folio,final,paginaUnica=false,children}:{id?:string;n:string;titulo:string;subtitulo:string;folio:string;final:boolean;paginaUnica?:boolean;children:React.ReactNode}){return <section id={id} data-force-new-page className={`report-section section-flow relative px-10 py-8 ${paginaUnica ? "single-report-page" : ""}`}><div className="relative z-10"><div data-page-unit className="section-title-block border-b-2 border-slate-900 pb-3"><p className="text-sm font-black uppercase tracking-[.16em] text-cyan-700">{n} · {subtitulo}</p><h2 className="mt-2 text-2xl font-black leading-tight">{titulo}</h2></div><div className="section-content mt-4">{children}</div></div></section>}
 function Dato({label,value}:{label:string;value:string}){return <div><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
-function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card rounded-2xl bg-slate-100 p-3 text-center"><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p></div>}
+function Metrica({label,value}:{label:string;value:string}){return <div className="metric-card min-w-0 rounded-2xl bg-slate-100 p-3 text-center"><p className="break-words text-[20px] font-black leading-none tabular-nums">{value}</p><p className="mt-2 text-[9px] font-black uppercase leading-tight tracking-[.08em] text-slate-500">{label}</p></div>}
 function Fila({label,value}:{label:string;value:string}){return <div className="flex justify-between gap-6 border-b border-slate-100 py-2"><span className="text-slate-500">{label}</span><strong className="text-right">{value}</strong></div>}

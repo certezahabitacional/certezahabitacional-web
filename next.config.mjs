@@ -7,10 +7,6 @@ const nextConfig = {
   allowedDevOrigins: ["192.168.1.4"],
 
   outputFileTracingIncludes: {
-    "/reportes/verificar/[codigo]/pdf": [
-      "./lib/chromium/**",
-      "./node_modules/@sparticuz/chromium/**",
-    ],
     "/api/solicitudes-cotizacion": [
       "./lib/plantilla-cotizacion-ch-f-002.part0.b64",
       "./lib/plantilla-cotizacion-ch-f-002.part1.b64",
