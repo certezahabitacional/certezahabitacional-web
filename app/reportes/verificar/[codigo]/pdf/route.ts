@@ -49,10 +49,10 @@ export async function GET(
       },
       executablePath: await chromium.executablePath(
         process.env.VERCEL
-          ? `${process.cwd()}/lib/chromium`
+          ? "https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar"
           : undefined,
       ),
-      headless: true,
+      headless: "shell",
     });
 
     const page = await browser.newPage();
