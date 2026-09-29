@@ -49,7 +49,7 @@ type Area = {
   hallazgos:number;
 };
 type Proceso = { orden:number; nombre:string; estado:string; lecturaInicial:number|null; lecturaFinal:number|null; unidad:string|null; comentario:string|null };
-type FotoArea = { areaId:string; guiaItemId:string|null; url:string; descripcion:string|null };
+type FotoArea = { fotografiaId:string; areaId:string; guiaItemId:string|null; url:string; descripcion:string|null };
 type ConceptoReporte = {
   id:string;
   areaId:string;
@@ -324,7 +324,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+2]));
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
-    SELECT fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
+    SELECT f."id"::text "fotografiaId",fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
     FROM "FotografiaArea" fa JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
     JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
     WHERE a."inspeccionId"=${id} AND fa."seleccionadaReporte"=true ORDER BY a."orden",fa."orden",fa."creadoEn"
