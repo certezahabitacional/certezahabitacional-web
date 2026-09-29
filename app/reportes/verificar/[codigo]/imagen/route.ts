@@ -35,11 +35,31 @@ export async function GET(
     return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
   }
 
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const sb = obtenerSupabaseAdmin();
-  const { data, error } = await sb.storage.from(bucket).download(path);
+  const buckets = Array.from(new Set([
+    "evidencias",
+    process.env.SUPABASE_STORAGE_BUCKET,
+  ].filter((value): value is string => Boolean(value))));
 
-  if (error || !data) {
+  let data: Blob | null = null;
+  let ultimoError: unknown = null;
+
+  for (const bucket of buckets) {
+    const resultado = await sb.storage.from(bucket).download(path);
+    if (!resultado.error && resultado.data) {
+      data = resultado.data;
+      break;
+    }
+    ultimoError = resultado.error;
+  }
+
+  if (!data) {
+    console.error("No fue posible servir evidencia publica", {
+      codigo,
+      path,
+      buckets,
+      error: ultimoError,
+    });
     return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
   }
 
