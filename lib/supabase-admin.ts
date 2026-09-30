@@ -168,7 +168,10 @@ function clienteStoragePorGateway() {
 }
 
 export function obtenerSupabaseAdmin() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url =
+    process.env.SUPABASE_URL ??
+    process.env.NEXT_PUBLIC_SUPABASE_URL ??
+    "https://mpzkrdcpvmopqypwgqlj.supabase.co";
   const key = claveSecretaSupabase();
 
   if (url && key) {
