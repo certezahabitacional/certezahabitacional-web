@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,30 +35,36 @@ export async function GET(
     return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
   }
 
-  const sb = obtenerSupabaseAdmin();
-  const buckets = Array.from(new Set([
-    "evidencias",
-    process.env.SUPABASE_STORAGE_BUCKET,
-  ].filter((value): value is string => Boolean(value))));
+  const secret =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_SECRET_KEY;
 
-  let data: Blob | null = null;
-  let ultimoError: unknown = null;
-
-  for (const bucket of buckets) {
-    const resultado = await sb.storage.from(bucket).download(path);
-    if (!resultado.error && resultado.data) {
-      data = resultado.data;
-      break;
-    }
-    ultimoError = resultado.error;
+  if (!secret) {
+    console.error("Falta SUPABASE_SECRET_KEY para evidencia publica");
+    return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
   }
 
-  if (!data) {
-    console.error("No fue posible servir evidencia publica", {
+  const sb = createClient(
+    "https://mpzkrdcpvmopqypwgqlj.supabase.co",
+    secret,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    },
+  );
+
+  const { data, error } = await sb.storage.from("evidencias").download(path);
+
+  if (error || !data) {
+    console.error("No fue posible servir evidencia publica desde proyecto esperado", {
       codigo,
       path,
-      buckets,
-      error: ultimoError,
+      proyecto: "mpzkrdcpvmopqypwgqlj",
+      bucket: "evidencias",
+      error,
     });
     return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
   }
