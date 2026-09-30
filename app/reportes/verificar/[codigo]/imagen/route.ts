@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@supabase/supabase-js";
+import { urlFirmadaStorage } from "@/lib/storage-gateway";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +22,13 @@ export async function GET(
     select: {
       vigente: true,
       inspeccionId: true,
-      inspeccion: { select: { estado: true, numeroInspeccion: true } },
+      inspeccion: {
+        select: {
+          estado: true,
+          numeroInspeccion: true,
+          inspector: { select: { usuarioId: true } },
+        },
+      },
     },
   });
 
@@ -35,46 +41,60 @@ export async function GET(
     return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
   }
 
-  const secret =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SECRET_KEY;
-
-  if (!secret) {
-    console.error("Falta SUPABASE_SECRET_KEY para evidencia publica");
-    return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
-  }
-
-  const sb = createClient(
-    "https://mpzkrdcpvmopqypwgqlj.supabase.co",
-    secret,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    },
-  );
-
-  const { data, error } = await sb.storage.from("evidencias").download(path);
-
-  if (error || !data) {
-    console.error("No fue posible servir evidencia publica desde proyecto esperado", {
+  const usuarioId = certificado.inspeccion.inspector?.usuarioId;
+  if (!usuarioId) {
+    console.error("No existe usuario técnico para firmar evidencia pública", {
       codigo,
       path,
-      proyecto: "mpzkrdcpvmopqypwgqlj",
-      bucket: "evidencias",
-      error,
+      inspeccionId: certificado.inspeccionId,
     });
     return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
   }
 
-  const bytes = Buffer.from(await data.arrayBuffer());
-  const tipo = data.type || (
-    path.toLowerCase().endsWith(".png") ? "image/png" :
-    path.toLowerCase().endsWith(".webp") ? "image/webp" :
-    "image/jpeg"
-  );
+  let signedUrl: string | null = null;
+
+  try {
+    signedUrl = await urlFirmadaStorage(
+      {
+        usuarioId,
+        inspeccionId: certificado.inspeccionId,
+        bucket: "evidencias",
+        ruta: path,
+      },
+      60 * 5,
+    );
+  } catch (error) {
+    console.error("No fue posible firmar evidencia pública por gateway", {
+      codigo,
+      path,
+      inspeccionId: certificado.inspeccionId,
+      error,
+    });
+  }
+
+  if (!signedUrl) {
+    return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
+  }
+
+  const respuesta = await fetch(signedUrl, { cache: "no-store" });
+
+  if (!respuesta.ok) {
+    console.error("Storage rechazó evidencia pública firmada", {
+      codigo,
+      path,
+      status: respuesta.status,
+    });
+    return NextResponse.json({ error: "Imagen no disponible." }, { status: 404 });
+  }
+
+  const bytes = Buffer.from(await respuesta.arrayBuffer());
+  const tipo =
+    respuesta.headers.get("content-type") ||
+    (path.toLowerCase().endsWith(".png")
+      ? "image/png"
+      : path.toLowerCase().endsWith(".webp")
+        ? "image/webp"
+        : "image/jpeg");
 
   return new NextResponse(bytes, {
     status: 200,
