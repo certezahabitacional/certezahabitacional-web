@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import BotonGenerarIa from "../puntos-criticos/BotonGenerarIa";
 import OfflineNoAplicaForm from "@/components/offline/OfflineNoAplicaForm";
+import OfflineManualConceptResult from "@/components/offline/OfflineManualConceptResult";
 import CapturaConceptoArea from "./CapturaConceptoArea";
 import GaleriaConceptoArea from "./GaleriaConceptoArea";
 import { marcarPuntoNoAplicaV1 } from "./actions";
@@ -222,6 +223,20 @@ export default async function ConceptoAreaCard({
               <input type="hidden" name="itemId" value={punto.id}/>
               <BotonGenerarIa />
             </form>
+          )}
+
+          {editable && (
+            <OfflineManualConceptResult
+              inspeccionId={inspeccionId}
+              areaId={areaId}
+              itemId={punto.id}
+              requiereMedicion={punto.requiereMedicion}
+              requiereComparacionProyecto={punto.requiereComparacionProyecto}
+              origenV3={punto.origenV3}
+              valorMedidoInicial={punto.valorMedido}
+              valorProyectoInicial={punto.valorProyecto}
+              unidadInicial={punto.unidadMedida}
+            />
           )}
 
           {editable && evidenciaCompleta && (obs.descripcionIa || obs.descripcionFinal) && (
