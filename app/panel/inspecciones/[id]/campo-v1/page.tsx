@@ -45,20 +45,21 @@ export default async function CampoV1Page({ params, searchParams }: {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: session.user.id },
-    select: { rol: true, activo: true, inspector: { select: { id: true } } },
-  });
+  const [usuario, inspeccion] = await Promise.all([
+    prisma.usuario.findUnique({
+      where: { id: session.user.id },
+      select: { rol: true, activo: true, inspector: { select: { id: true } } },
+    }),
+    prisma.inspeccion.findUnique({
+      where: { id },
+      select: {
+        id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true,
+        cliente: { select: { nombre: true } },
+        inmueble: { select: { alias: true, direccion: true } },
+      },
+    }),
+  ]);
   if (!usuario?.activo) redirect("/acceso");
-
-  const inspeccion = await prisma.inspeccion.findUnique({
-    where: { id },
-    select: {
-      id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true,
-      cliente: { select: { nombre: true } },
-      inmueble: { select: { alias: true, direccion: true } },
-    },
-  });
   if (!inspeccion) notFound();
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/flujo`);
 
@@ -67,70 +68,101 @@ export default async function CampoV1Page({ params, searchParams }: {
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const [critical] = await prisma.$queryRaw<Array<{ total: number; bloqueantes: number }>>`
-    SELECT
-      COUNT(*)::int AS "total",
-      COUNT(*) FILTER (
-        WHERE p."estado" NOT IN ('COMPLETADO','NO_APLICA')
-          AND NOT (
-            p."clave" IN ('PC_HIDRAULICA','PC_GAS')
-            AND p."lecturaInicial" IS NOT NULL
-            AND p."lecturaFinal" IS NULL
-            AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
-            AND NOT EXISTS (
-              SELECT 1
-              FROM "GuiaInspeccionItem" g
-              WHERE g."inspeccionId"=p."inspeccionId"
-                AND g."area"=concat('__PUNTO_CRITICO__:',replace(p."clave",'PC_',''))
-                AND g."estadoV3"='PENDIENTE'
-                AND g."concepto" NOT ILIKE '%manómetro%'
-                AND g."concepto" NOT ILIKE '%lectura final%'
+  const [
+    criticalRows,
+    pasosCriticos,
+    controlRows,
+    protocoloRows,
+    areas,
+    puntosNavegacion,
+    conceptosCriticos,
+  ] = await Promise.all([
+    prisma.$queryRaw<Array<{ total: number; bloqueantes: number }>>`
+      SELECT
+        COUNT(*)::int AS "total",
+        COUNT(*) FILTER (
+          WHERE p."estado" NOT IN ('COMPLETADO','NO_APLICA')
+            AND NOT (
+              p."clave" IN ('PC_HIDRAULICA','PC_GAS')
+              AND p."lecturaInicial" IS NOT NULL
+              AND p."lecturaFinal" IS NULL
+              AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
+              AND NOT EXISTS (
+                SELECT 1
+                FROM "GuiaInspeccionItem" g
+                WHERE g."inspeccionId"=p."inspeccionId"
+                  AND g."area"=concat('__PUNTO_CRITICO__:',replace(p."clave",'PC_',''))
+                  AND g."estadoV3"='PENDIENTE'
+                  AND g."concepto" NOT ILIKE '%manómetro%'
+                  AND g."concepto" NOT ILIKE '%lectura final%'
+              )
             )
-          )
-      )::int AS "bloqueantes"
-    FROM "ProtocoloInspeccionPaso" p
-    WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
-  `;
+        )::int AS "bloqueantes"
+      FROM "ProtocoloInspeccionPaso" p
+      WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
+    `,
+    prisma.$queryRaw<Array<{
+      clave: string;
+      estado: string;
+      lecturaInicial: string | null;
+      lecturaFinal: string | null;
+      datos: unknown;
+    }>>`
+      SELECT "clave","estado","lecturaInicial","lecturaFinal","datos"
+      FROM "ProtocoloInspeccionPaso"
+      WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
+      ORDER BY "orden"
+    `,
+    prisma.$queryRaw<Array<{
+      inspeccionTecnicaConcluidaEn: Date | null;
+      preReporteGeneradoEn: Date | null;
+    }>>`
+      SELECT "inspeccionTecnicaConcluidaEn","preReporteGeneradoEn"
+      FROM "InspeccionControlV2"
+      WHERE "inspeccionId"=${id}
+      LIMIT 1
+    `,
+    prisma.$queryRaw<Array<{ total:number; completos:number }>>`
+      SELECT COUNT(*)::int AS "total",
+             COUNT(*) FILTER (WHERE "estado" IN ('COMPLETADO','NO_APLICA'))::int AS "completos"
+      FROM "ProtocoloInspeccionPaso"
+      WHERE "inspeccionId"=${id} AND "obligatorio"=true
+    `,
+    prisma.$queryRaw<Area[]>`
+      SELECT a."id"::text,a."codigo",a."nombre",a."estado",a."resultado",
+        (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") AS "fotos",
+        (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id" AND fa."seleccionadaReporte"=true) AS "seleccionadas",
+        (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") AS "hallazgos",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") AS "puntos",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') AS "pendientes",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') AS "noAplica"
+      FROM "AreaInspeccion" a
+      WHERE a."inspeccionId"=${id} AND a."tipo" <> 'PUNTO_CRITICO'
+      ORDER BY a."orden",a."nombre"
+    `,
+    prisma.$queryRaw<Array<{
+      id:string; areaId:string|null; area:string; concepto:string; estadoV3:string; orden:number|null;
+    }>>`
+      SELECT g."id"::text AS "id",g."areaId"::text AS "areaId",g."area",g."concepto",g."estadoV3",g."orden"
+      FROM "GuiaInspeccionItem" g
+      WHERE g."inspeccionId"=${id}
+        AND g."concepto" NOT ILIKE '%manómetro%'
+        AND g."concepto" NOT ILIKE '%lectura final%'
+      ORDER BY COALESCE(g."orden",999999),g."concepto"
+    `,
+    prisma.$queryRaw<Array<{ total: number }>>`
+      SELECT COUNT(*)::int AS "total"
+      FROM "GuiaInspeccionItem"
+      WHERE "inspeccionId"=${id}
+        AND "area" LIKE '__PUNTO_CRITICO__:%'
+        AND "concepto" NOT ILIKE '%manómetro%'
+        AND "concepto" NOT ILIKE '%lectura final%'
+    `,
+  ]);
 
-  const pasosCriticos = await prisma.$queryRaw<Array<{
-    clave: string;
-    estado: string;
-    lecturaInicial: string | null;
-    lecturaFinal: string | null;
-    datos: unknown;
-  }>>`
-    SELECT "clave","estado","lecturaInicial","lecturaFinal","datos"
-    FROM "ProtocoloInspeccionPaso"
-    WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
-    ORDER BY "orden"
-  `;
-  const [controlV1] = await prisma.$queryRaw<Array<{
-    inspeccionTecnicaConcluidaEn: Date | null;
-    preReporteGeneradoEn: Date | null;
-  }>>`
-    SELECT "inspeccionTecnicaConcluidaEn","preReporteGeneradoEn"
-    FROM "InspeccionControlV2"
-    WHERE "inspeccionId"=${id}
-    LIMIT 1
-  `;
-  const [protocoloEstado] = await prisma.$queryRaw<Array<{ total:number; completos:number }>>`
-    SELECT COUNT(*)::int AS "total",
-           COUNT(*) FILTER (WHERE "estado" IN ('COMPLETADO','NO_APLICA'))::int AS "completos"
-    FROM "ProtocoloInspeccionPaso"
-    WHERE "inspeccionId"=${id} AND "obligatorio"=true
-  `;
-  const areas = await prisma.$queryRaw<Area[]>`
-    SELECT a."id"::text,a."codigo",a."nombre",a."estado",a."resultado",
-      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") AS "fotos",
-      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id" AND fa."seleccionadaReporte"=true) AS "seleccionadas",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") AS "hallazgos",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") AS "puntos",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') AS "pendientes",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') AS "noAplica"
-    FROM "AreaInspeccion" a
-    WHERE a."inspeccionId"=${id} AND a."tipo" <> 'PUNTO_CRITICO'
-    ORDER BY a."orden",a."nombre"
-  `;
+  const [critical] = criticalRows;
+  const [controlV1] = controlRows;
+  const [protocoloEstado] = protocoloRows;
 
   const areaActiva = areas.find((a) => a.estado !== "REVISADA") ?? null;
   // El Inspector puede entrar, capturar y regresar a cualquier partida en cualquier momento.
@@ -147,16 +179,6 @@ export default async function CampoV1Page({ params, searchParams }: {
     ORDER BY g."orden",g."concepto"
   ` : [];
 
-  const puntosNavegacion = await prisma.$queryRaw<Array<{
-    id:string; areaId:string|null; area:string; concepto:string; estadoV3:string; orden:number|null;
-  }>>`
-    SELECT g."id"::text AS "id",g."areaId"::text AS "areaId",g."area",g."concepto",g."estadoV3",g."orden"
-    FROM "GuiaInspeccionItem" g
-    WHERE g."inspeccionId"=${id}
-      AND g."concepto" NOT ILIKE '%manómetro%'
-      AND g."concepto" NOT ILIKE '%lectura final%'
-    ORDER BY COALESCE(g."orden",999999),g."concepto"
-  `;
   const puntosFisicosPorArea = new Map<string, typeof puntosNavegacion>();
   const puntosCriticosPorCodigo = new Map<string, typeof puntosNavegacion>();
   for (const p of puntosNavegacion) {
