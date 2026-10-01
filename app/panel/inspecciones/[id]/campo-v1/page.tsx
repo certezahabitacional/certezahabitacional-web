@@ -190,14 +190,6 @@ export default async function CampoV1Page({ params, searchParams }: {
     }
   }
 
-  const conceptosCriticos = await prisma.$queryRaw<Array<{ total: number }>>`
-    SELECT COUNT(*)::int AS "total"
-    FROM "GuiaInspeccionItem"
-    WHERE "inspeccionId"=${id}
-      AND "area" LIKE '__PUNTO_CRITICO__:%'
-      AND "concepto" NOT ILIKE '%manómetro%'
-      AND "concepto" NOT ILIKE '%lectura final%'
-  `;
   const totalConceptosCriticos = Number(conceptosCriticos[0]?.total ?? 0);
 
   const totalPuntos = areas.reduce((s, a) => s + Number(a.puntos), 0);
