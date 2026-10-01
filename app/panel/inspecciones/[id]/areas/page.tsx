@@ -62,24 +62,25 @@ export default async function AreasPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: session.user.id },
-    select: { rol: true, activo: true, inspector: { select: { id: true } } },
-  });
+  const [usuario, inspeccion] = await Promise.all([
+    prisma.usuario.findUnique({
+      where: { id: session.user.id },
+      select: { rol: true, activo: true, inspector: { select: { id: true } } },
+    }),
+    prisma.inspeccion.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        folio: true,
+        numeroInspeccion: true,
+        estado: true,
+        inspectorId: true,
+        cliente: { select: { nombre: true } },
+        inmueble: { select: { alias: true } },
+      },
+    }),
+  ]);
   if (!usuario?.activo) redirect("/acceso");
-
-  const inspeccion = await prisma.inspeccion.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      folio: true,
-      numeroInspeccion: true,
-      estado: true,
-      inspectorId: true,
-      cliente: { select: { nombre: true } },
-      inmueble: { select: { alias: true } },
-    },
-  });
   if (!inspeccion) notFound();
   if (inspeccion.numeroInspeccion > 1) redirect(`/panel/inspecciones/${id}/captura`);
 

@@ -225,27 +225,31 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const usuario = await prisma.usuario.findUnique({ where:{id:session.user.id}, select:{rol:true,activo:true,inspector:{select:{id:true}}} });
+  const [usuario, inspeccion] = await Promise.all([
+    prisma.usuario.findUnique({
+      where:{id:session.user.id},
+      select:{rol:true,activo:true,inspector:{select:{id:true}}},
+    }),
+    prisma.inspeccion.findUnique({
+      where:{id},
+      include:{
+        cliente:true,
+        inmueble:true,
+        inspector:{include:{usuario:true}},
+        zona:{select:{codigo:true,ciudad:true,nombre:true}},
+        cotizacion:{select:{
+          folio:true,observacionesInternas:true,notas:true,total:true,subtotal:true,precioBase:true,
+          metrosAdicionales:true,cargoMetrosAdicionales:true,cargosExtra:true,descuento:true,
+          paquete:{select:{nombre:true,descripcion:true}},
+          versiones:{orderBy:{version:"desc"},take:1,select:{version:true,datos:true,total:true}},
+        }},
+        hallazgos:{orderBy:[{prioridad:"asc"},{creadoEn:"asc"}],include:{fotografias:true}},
+        firmas:{orderBy:{firmadaEn:"desc"}},
+        certificado:true,
+      },
+    }),
+  ]);
   if (!usuario?.activo) redirect("/acceso");
-
-  const inspeccion = await prisma.inspeccion.findUnique({
-    where:{id},
-    include:{
-      cliente:true,
-      inmueble:true,
-      inspector:{include:{usuario:true}},
-      zona:{select:{codigo:true,ciudad:true,nombre:true}},
-      cotizacion:{select:{
-        folio:true,observacionesInternas:true,notas:true,total:true,subtotal:true,precioBase:true,
-        metrosAdicionales:true,cargoMetrosAdicionales:true,cargosExtra:true,descuento:true,
-        paquete:{select:{nombre:true,descripcion:true}},
-        versiones:{orderBy:{version:"desc"},take:1,select:{version:true,datos:true,total:true}},
-      }},
-      hallazgos:{orderBy:[{prioridad:"asc"},{creadoEn:"asc"}],include:{fotografias:true}},
-      firmas:{orderBy:{firmadaEn:"desc"}},
-      certificado:true,
-    },
-  });
   if (!inspeccion) notFound();
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/reporte`);
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
@@ -253,36 +257,43 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const puedeOperarPreReporte = esInspector || esDirector;
   if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
 
-  const areas = await prisma.$queryRaw<Area[]>`
-    SELECT a."id"::text,a."orden",a."codigo",a."tipo",a."nombre",a."resultado",a."comentarioFinal",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')) "revisados",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') "noAplica",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
-    FROM "AreaInspeccion" a
-    WHERE a."inspeccionId"=${id}
-      AND (a."obligatoria"=true OR a."tipo"='PUNTO_CRITICO')
-    ORDER BY a."orden",a."nombre"
-  `;
-
-  const conceptosReporte = await prisma.$queryRaw<ConceptoReporte[]>`
-    SELECT
-      g."id"::text AS "id",
-      g."areaId"::text AS "areaId",
-      g."concepto",
-      g."especificacion",
-      g."observacion",
-      g."estadoV3",
-      g."motivoNoAplica",
-      g."valorMedido",
-      g."valorProyecto",
-      g."unidadMedida",
-      g."orden"
-    FROM "GuiaInspeccionItem" g
-    WHERE g."inspeccionId"=${id}
-    ORDER BY g."areaId", COALESCE(g."orden",999999), g."concepto"
-  `;
+  const [areas, conceptosReporte, procesos] = await Promise.all([
+    prisma.$queryRaw<Area[]>`
+      SELECT a."id"::text,a."orden",a."codigo",a."tipo",a."nombre",a."resultado",a."comentarioFinal",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "definidos",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" <> 'NO_APLICA') "aplicables",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')) "revisados",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') "noAplica",
+        (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
+      FROM "AreaInspeccion" a
+      WHERE a."inspeccionId"=${id}
+        AND (a."obligatoria"=true OR a."tipo"='PUNTO_CRITICO')
+      ORDER BY a."orden",a."nombre"
+    `,
+    prisma.$queryRaw<ConceptoReporte[]>`
+      SELECT
+        g."id"::text AS "id",
+        g."areaId"::text AS "areaId",
+        g."concepto",
+        g."especificacion",
+        g."observacion",
+        g."estadoV3",
+        g."motivoNoAplica",
+        g."valorMedido",
+        g."valorProyecto",
+        g."unidadMedida",
+        g."orden"
+      FROM "GuiaInspeccionItem" g
+      WHERE g."inspeccionId"=${id}
+      ORDER BY g."areaId", COALESCE(g."orden",999999), g."concepto"
+    `,
+    prisma.$queryRaw<Proceso[]>`
+      SELECT "orden","nombre","estado","lecturaInicial","lecturaFinal","unidad","comentario"
+      FROM "ProtocoloInspeccionPaso"
+      WHERE "inspeccionId"=${id}
+      ORDER BY "orden"
+    `,
+  ]);
   const esConceptoHermeticidad = (areaCodigo: string, concepto: ConceptoReporte) =>
     ["PC_HIDRAULICA","PC_GAS"].includes(areaCodigo)
     && /fotografía del manómetro al iniciar|lectura final de presión/i.test(concepto.concepto);
@@ -302,10 +313,6 @@ export default async function ReporteV1Page({ params, searchParams }: {
     conceptosPorArea.set(concepto.areaId,[...(conceptosPorArea.get(concepto.areaId)??[]),concepto]);
   }
 
-  const procesos = await prisma.$queryRaw<Proceso[]>`
-    SELECT "orden","nombre","estado","lecturaInicial","lecturaFinal","unidad","comentario"
-    FROM "ProtocoloInspeccionPaso" WHERE "inspeccionId"=${id} ORDER BY "orden"
-  `;
   const procesoPorNombre = new Map(procesos.map((p)=>[p.nombre.toUpperCase(),p]));
   const ordenCritico: Record<string,number> = {
     PC_HIDRAULICA: 2,
