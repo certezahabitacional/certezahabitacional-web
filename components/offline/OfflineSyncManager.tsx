@@ -55,6 +55,12 @@ type ResultCriticalPayload = {
   unidadMedida: string;
 };
 
+type SignaturesPayload = {
+  inspectionId: string;
+  inspector: string;
+  cliente: string;
+};
+
 export default function OfflineSyncManager() {
   const syncingRef = useRef(false);
 
@@ -171,6 +177,28 @@ export default function OfflineSyncManager() {
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {
               throw new Error(result?.error || "No fue posible sincronizar el resultado.");
+            }
+
+            await removeQueueItem(item.id);
+            continue;
+          }
+
+          if (item.operation === "SIGNATURES_V1") {
+            const payload = item.payload as SignaturesPayload;
+            const response = await fetch("/api/offline/v1/sync-signatures", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientMutationId: item.clientMutationId,
+                operation: item.operation,
+                payload,
+              }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar las firmas.");
             }
 
             await removeQueueItem(item.id);
