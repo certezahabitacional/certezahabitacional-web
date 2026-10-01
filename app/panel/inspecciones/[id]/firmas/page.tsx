@@ -10,6 +10,8 @@ import {
   useState,
 } from "react";
 
+import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
+
 type Inspeccion = {
   id: string;
   folio: string;
@@ -386,11 +388,35 @@ export default function FirmasPage() {
         if (activo) {
           setInspeccion(datosInspeccion);
           setFirmas(datosFirmas);
+          localStorage.setItem(
+            `certeza:firmas:${inspeccionId}`,
+            JSON.stringify({
+              inspeccion: datosInspeccion,
+              firmas: datosFirmas,
+              guardadoEn: new Date().toISOString(),
+            }),
+          );
         }
       } catch {
         if (activo) {
-          setInspeccion(null);
-          setMensaje("No fue posible cargar el expediente.");
+          try {
+            const guardado = localStorage.getItem(`certeza:firmas:${inspeccionId}`);
+            if (guardado) {
+              const local = JSON.parse(guardado) as {
+                inspeccion: Inspeccion;
+                firmas: Firmas;
+              };
+              setInspeccion(local.inspeccion);
+              setFirmas({ ...local.firmas, puedeModificar: true });
+              setMensaje("MODO SIN CONEXIÓN · Las firmas se guardarán en este dispositivo y se sincronizarán al recuperar Internet.");
+            } else {
+              setInspeccion(null);
+              setMensaje("Esta pantalla no fue preparada previamente para trabajo sin conexión.");
+            }
+          } catch {
+            setInspeccion(null);
+            setMensaje("No fue posible recuperar el expediente guardado en este dispositivo.");
+          }
         }
       } finally {
         if (activo) setCargando(false);
@@ -418,6 +444,37 @@ export default function FirmasPage() {
     setMensaje("");
 
     try {
+      if (!navigator.onLine) {
+        await enqueueOfflineOperation({
+          inspectionId: inspeccionId,
+          operation: "SIGNATURES_V1",
+          payload: {
+            inspectionId: inspeccionId,
+            inspector: firmas.inspector,
+            cliente: firmas.cliente,
+          },
+        });
+
+        const firmasLocales: Firmas = {
+          ...firmas,
+          fechaInspector: new Date().toISOString(),
+          fechaCliente: new Date().toISOString(),
+          puedeModificar: false,
+          motivoSoloLectura: "Firmas guardadas localmente y pendientes de sincronización.",
+        };
+        setFirmas(firmasLocales);
+        localStorage.setItem(
+          `certeza:firmas:${inspeccionId}`,
+          JSON.stringify({
+            inspeccion,
+            firmas: firmasLocales,
+            guardadoEn: new Date().toISOString(),
+          }),
+        );
+        setMensaje("MODO SIN CONEXIÓN · Firmas guardadas localmente. Se sincronizarán automáticamente.");
+        return;
+      }
+
       const respuesta = await fetch(
         `/api/inspecciones/${inspeccionId}/firmas`,
         {
@@ -465,7 +522,20 @@ export default function FirmasPage() {
         "Firmas guardadas correctamente en el expediente.",
       );
     } catch {
-      setMensaje("No fue posible guardar las firmas.");
+      try {
+        await enqueueOfflineOperation({
+          inspectionId: inspeccionId,
+          operation: "SIGNATURES_V1",
+          payload: {
+            inspectionId: inspeccionId,
+            inspector: firmas.inspector,
+            cliente: firmas.cliente,
+          },
+        });
+        setMensaje("Conexión interrumpida · Firmas guardadas localmente y pendientes de sincronización.");
+      } catch {
+        setMensaje("No fue posible guardar las firmas.");
+      }
     } finally {
       setGuardando(false);
     }
