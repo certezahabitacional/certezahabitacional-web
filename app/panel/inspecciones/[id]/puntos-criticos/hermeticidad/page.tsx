@@ -9,6 +9,7 @@ import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import CapturaCamara from "../CapturaCamara";
 import CargaGaleriaConPreview from "../CargaGaleriaConPreview";
 import BotonGenerarIa from "../BotonGenerarIa";
+import OfflineHermeticityStartForm from "@/components/offline/OfflineHermeticityStartForm";
 import {
   cerrarPruebaProlongadaV1,
   continuarPreReporteDesdeHermeticidadV1,
@@ -419,25 +420,12 @@ export default async function HermeticidadPage({
                         )}
 
                         {fotoInicial && (
-                          <form action={registrarInicioPruebaProlongadaV1} className="mt-4 max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-4">
-                            <input type="hidden" name="inspeccionId" value={id} />
-                            <input type="hidden" name="codigo" value={codigo} />
-                            <input type="hidden" name="itemId" value={inicial.id} />
-                            <input type="hidden" name="retorno" value="HERMETICIDAD_INICIO" />
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <label className="text-xs font-bold text-slate-400">
-                                Lectura inicial
-                                <input name="lecturaInicial" required className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
-                              </label>
-                              <label className="text-xs font-bold text-slate-400">
-                                Unidad
-                                <input name="unidad" required placeholder="psi, kPa, bar..." className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-white" />
-                              </label>
-                            </div>
-                            <button className="mt-3 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-slate-950">
-                              REGISTRAR LECTURA INICIAL
-                            </button>
-                          </form>
+                          <OfflineHermeticityStartForm
+                            inspeccionId={id}
+                            codigo={codigo}
+                            itemId={inicial.id}
+                            serverAction={registrarInicioPruebaProlongadaV1}
+                          />
                         )}
 
                         {!fotoInicial && puedeCapturar && (
