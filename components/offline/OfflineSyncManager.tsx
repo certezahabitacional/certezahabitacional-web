@@ -61,6 +61,14 @@ type SignaturesPayload = {
   cliente: string;
 };
 
+type HermeticityStartPayload = {
+  inspectionId: string;
+  codigo: string;
+  itemId: string;
+  lecturaInicial: string;
+  unidad: string;
+};
+
 export default function OfflineSyncManager() {
   const syncingRef = useRef(false);
 
@@ -177,6 +185,28 @@ export default function OfflineSyncManager() {
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {
               throw new Error(result?.error || "No fue posible sincronizar el resultado.");
+            }
+
+            await removeQueueItem(item.id);
+            continue;
+          }
+
+          if (item.operation === "HERMETICITY_START_V1") {
+            const payload = item.payload as HermeticityStartPayload;
+            const response = await fetch("/api/offline/v1/sync-hermeticity-start", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientMutationId: item.clientMutationId,
+                operation: item.operation,
+                payload,
+              }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar la lectura inicial de hermeticidad.");
             }
 
             await removeQueueItem(item.id);
