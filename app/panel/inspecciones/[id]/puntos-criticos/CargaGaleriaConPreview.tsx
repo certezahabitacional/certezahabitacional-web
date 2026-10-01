@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { saveOfflineFile } from "@/lib/offline/files";
+import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
 
 type Props = {
   inspeccionId: string;
@@ -25,6 +27,8 @@ export default function CargaGaleriaConPreview({
   const [archivo, setArchivo] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [enviando, startTransition] = useTransition();
+  const [aviso, setAviso] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     return () => {
@@ -40,18 +44,47 @@ export default function CargaGaleriaConPreview({
 
   const guardar = () => {
     if (!archivo) return;
-    const formData = new FormData();
-    formData.set("inspeccionId", inspeccionId);
-    formData.set("codigo", codigo);
-    formData.set("itemId", itemId);
-    formData.set("archivo", archivo);
-    formData.set("origenEvidencia", "GALERIA");
-    if (retorno) formData.set("retorno", retorno);
-
+    setError("");
+    setAviso("");
     sessionStorage.setItem("ch:puntos-criticos:foco", itemId);
 
     startTransition(async () => {
-      await subirFoto(formData);
+      try {
+        if (!navigator.onLine) {
+          const fileKey = crypto.randomUUID();
+          await saveOfflineFile({
+            key: fileKey,
+            blob: archivo,
+            name: archivo.name || `critico-galeria-${Date.now()}.jpg`,
+            type: archivo.type || "image/jpeg",
+          });
+          await enqueueOfflineOperation({
+            inspectionId: inspeccionId,
+            operation: "PHOTO_CRITICAL_CONCEPT_V1",
+            payload: {
+              fileKey,
+              inspectionId: inspeccionId,
+              codigo,
+              itemId,
+              origin: "GALERIA",
+            },
+          });
+          setAviso("Fotografía crítica guardada en este dispositivo. Se sincronizará al recuperar Internet.");
+          seleccionar(null);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.set("inspeccionId", inspeccionId);
+        formData.set("codigo", codigo);
+        formData.set("itemId", itemId);
+        formData.set("archivo", archivo);
+        formData.set("origenEvidencia", "GALERIA");
+        if (retorno) formData.set("retorno", retorno);
+        await subirFoto(formData);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No fue posible guardar la fotografía.");
+      }
     });
   };
 
@@ -97,11 +130,14 @@ export default function CargaGaleriaConPreview({
           className="sr-only"
           onChange={(event) => seleccionar(event.target.files?.[0] ?? null)}
         />
+        {aviso && <p className="mt-3 rounded-lg bg-cyan-300/10 p-3 text-xs font-bold text-cyan-100">{aviso}</p>}
+        {error && <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">{error}</p>}
       </div>
     );
   }
 
   return (
+    <div>
     <label className="block cursor-pointer rounded-xl border border-dashed border-violet-300/40 px-4 py-5 text-center font-black text-violet-200">
       <span className="block text-2xl">🖼️</span>
       <span className="mt-1 block">ELEGIR DE GALERÍA</span>
@@ -116,5 +152,8 @@ export default function CargaGaleriaConPreview({
         onChange={(event) => seleccionar(event.target.files?.[0] ?? null)}
       />
     </label>
+    {aviso && <p className="mt-3 rounded-lg bg-cyan-300/10 p-3 text-xs font-bold text-cyan-100">{aviso}</p>}
+    {error && <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">{error}</p>}
+    </div>
   );
 }
