@@ -236,7 +236,7 @@ export async function POST(request: Request) {
       select: { id: true },
     });
 
-    if ([ClasificacionHallazgo.O, ClasificacionHallazgo.NC, ClasificacionHallazgo.CR].includes(clasificacion)) {
+    if (clasificacion !== ClasificacionHallazgo.C) {
       const hallazgo = existente
         ? await tx.hallazgo.update({
             where: { id: existente.id },
