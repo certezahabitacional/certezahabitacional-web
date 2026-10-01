@@ -17,10 +17,42 @@ type PhotoPayload = {
   origin: "CAMARA" | "GALERIA";
 };
 
+type CriticalPhotoPayload = {
+  fileKey: string;
+  inspectionId: string;
+  codigo: string;
+  itemId: string;
+  origin: "CAMARA" | "GALERIA";
+};
+
 type NoAplicaPayload = {
   inspectionId: string;
   itemId: string;
   motivo: string;
+};
+
+type ResultAreaPayload = {
+  inspectionId: string;
+  areaId: string;
+  itemId: string;
+  descripcionFinal: string;
+  clasificacion: string;
+  prioridad: string;
+  valorMedido: string;
+  valorProyecto: string;
+  unidadMedida: string;
+};
+
+type ResultCriticalPayload = {
+  inspectionId: string;
+  codigo: string;
+  itemId: string;
+  descripcionFinal: string;
+  clasificacion: string;
+  prioridad: string;
+  valorMedido: string;
+  valorProyecto: string;
+  unidadMedida: string;
 };
 
 export default function OfflineSyncManager() {
@@ -43,6 +75,35 @@ export default function OfflineSyncManager() {
         });
 
         try {
+          if (item.operation === "PHOTO_CRITICAL_CONCEPT_V1") {
+            const payload = item.payload as CriticalPhotoPayload;
+            const file = await getOfflineFile(payload.fileKey);
+            if (!file) throw new Error("La fotografía local ya no está disponible.");
+
+            const form = new FormData();
+            form.set("clientMutationId", item.clientMutationId);
+            form.set("inspectionId", payload.inspectionId);
+            form.set("codigo", payload.codigo);
+            form.set("itemId", payload.itemId);
+            form.set("origin", payload.origin);
+            form.set("file", new File([file.blob], file.name, { type: file.type }));
+
+            const response = await fetch("/api/offline/v1/sync-critical-photo", {
+              method: "POST",
+              body: form,
+              credentials: "include",
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar la fotografía crítica.");
+            }
+
+            await deleteOfflineFile(payload.fileKey);
+            await removeQueueItem(item.id);
+            continue;
+          }
+
           if (item.operation === "PHOTO_CONCEPT_V1") {
             const payload = item.payload as PhotoPayload;
             const file = await getOfflineFile(payload.fileKey);
@@ -68,6 +129,50 @@ export default function OfflineSyncManager() {
             }
 
             await deleteOfflineFile(payload.fileKey);
+            await removeQueueItem(item.id);
+            continue;
+          }
+
+          if (item.operation === "RESULT_CRITICAL_CONCEPT_V1") {
+            const payload = item.payload as ResultCriticalPayload;
+            const response = await fetch("/api/offline/v1/sync-critical-result", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientMutationId: item.clientMutationId,
+                operation: item.operation,
+                payload,
+              }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar el resultado crítico.");
+            }
+
+            await removeQueueItem(item.id);
+            continue;
+          }
+
+          if (item.operation === "RESULT_AREA_CONCEPT_V1") {
+            const payload = item.payload as ResultAreaPayload;
+            const response = await fetch("/api/offline/v1/sync-result", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientMutationId: item.clientMutationId,
+                operation: item.operation,
+                payload,
+              }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar el resultado.");
+            }
+
             await removeQueueItem(item.id);
             continue;
           }
