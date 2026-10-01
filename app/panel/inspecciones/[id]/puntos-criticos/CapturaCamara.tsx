@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { saveOfflineFile } from "@/lib/offline/files";
+import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
 
 type Props = {
   inspeccionId: string;
@@ -28,6 +30,7 @@ export default function CapturaCamara({
   const [captura, setCaptura] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [enviando, startTransition] = useTransition();
+  const [aviso, setAviso] = useState("");
 
   const detenerCamara = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -113,18 +116,49 @@ export default function CapturaCamara({
 
   const guardar = () => {
     if (!captura) return;
-    const formData = new FormData();
-    formData.set("inspeccionId", inspeccionId);
-    formData.set("codigo", codigo);
-    formData.set("itemId", itemId);
-    formData.set("archivo", captura);
-    formData.set("origenEvidencia", "CAMARA");
-    if (retorno) formData.set("retorno", retorno);
-
+    setError("");
+    setAviso("");
     sessionStorage.setItem("ch:puntos-criticos:foco", itemId);
 
     startTransition(async () => {
-      await subirFoto(formData);
+      try {
+        if (!navigator.onLine) {
+          const fileKey = crypto.randomUUID();
+          await saveOfflineFile({
+            key: fileKey,
+            blob: captura,
+            name: captura.name || `critico-${Date.now()}.jpg`,
+            type: captura.type || "image/jpeg",
+          });
+          await enqueueOfflineOperation({
+            inspectionId: inspeccionId,
+            operation: "PHOTO_CRITICAL_CONCEPT_V1",
+            payload: {
+              fileKey,
+              inspectionId: inspeccionId,
+              codigo,
+              itemId,
+              origin: "CAMARA",
+            },
+          });
+          setAviso("Fotografía crítica guardada en este dispositivo. Se sincronizará al recuperar Internet.");
+          setCaptura(null);
+          if (preview) URL.revokeObjectURL(preview);
+          setPreview("");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.set("inspeccionId", inspeccionId);
+        formData.set("codigo", codigo);
+        formData.set("itemId", itemId);
+        formData.set("archivo", captura);
+        formData.set("origenEvidencia", "CAMARA");
+        if (retorno) formData.set("retorno", retorno);
+        await subirFoto(formData);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No fue posible guardar la fotografía.");
+      }
     });
   };
 
@@ -206,6 +240,11 @@ export default function CapturaCamara({
         </div>
       )}
 
+      {aviso && (
+        <p className="mt-3 rounded-lg bg-cyan-300/10 p-3 text-xs font-bold text-cyan-100">
+          {aviso}
+        </p>
+      )}
       {error && (
         <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">
           {error}
