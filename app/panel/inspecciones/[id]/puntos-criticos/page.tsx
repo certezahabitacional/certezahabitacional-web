@@ -19,6 +19,7 @@ import CapturaCamara from "./CapturaCamara";
 import CargaGaleriaConPreview from "./CargaGaleriaConPreview";
 import BotonGenerarIa from "./BotonGenerarIa";
 import RestaurarFocoConcepto from "./RestaurarFocoConcepto";
+import OfflineManualCriticalResult from "@/components/offline/OfflineManualCriticalResult";
 import {
   agregarConceptoManualPuntoCriticoV1,
   marcarConceptoNoAplicaV1,
@@ -639,6 +640,20 @@ export default async function PuntosCriticosPage({
                           <input type="hidden" name="itemId" value={item.id} />
                           <BotonGenerarIa />
                         </form>
+                      )}
+
+                      {!cerrado && puedeCapturar && (
+                        <OfflineManualCriticalResult
+                          inspeccionId={id}
+                          codigo={codigoSolicitado}
+                          itemId={item.id}
+                          requiereMedicion={item.requiereMedicion}
+                          requiereComparacionProyecto={item.requiereComparacionProyecto}
+                          origenV3={datos.fuente === "PROYECTO" ? "PROYECTO" : "PLANTILLA"}
+                          valorMedidoInicial={item.valorMedido}
+                          valorProyectoInicial={item.valorProyecto}
+                          unidadInicial={item.unidadMedida}
+                        />
                       )}
 
                       {!cerrado && puedeCapturar && evidenciaCompleta && (
