@@ -29,7 +29,8 @@ self.addEventListener("activate", (event) => {
           cacheNames
             .filter(
               (cacheName) =>
-                cacheName !== CACHE_NAME,
+                cacheName !== CACHE_NAME &&
+                cacheName !== INSPECTION_CACHE,
             )
             .map((cacheName) =>
               caches.delete(cacheName),
