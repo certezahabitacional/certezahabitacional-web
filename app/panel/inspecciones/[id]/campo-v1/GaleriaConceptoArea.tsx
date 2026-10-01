@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { normalizarImagenCliente } from "./normalizarImagenCliente";
+import { saveOfflineFile } from "@/lib/offline/files";
+import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
 
 type Props = {
   inspeccionId: string;
@@ -16,6 +18,7 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
   const [preview, setPreview] = useState("");
   const [enviando, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
@@ -29,9 +32,34 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
   const guardar = () => {
     if (!archivo) return;
     setError("");
+    setAviso("");
     startTransition(async () => {
       try {
         const normalizado = await normalizarImagenCliente(archivo, { maxDimension: 1920, maxBytes: 2_200_000 });
+        if (!navigator.onLine) {
+          const fileKey = crypto.randomUUID();
+          await saveOfflineFile({
+            key: fileKey,
+            blob: normalizado,
+            name: normalizado.name || `galeria-${Date.now()}.jpg`,
+            type: normalizado.type || "image/jpeg",
+          });
+          await enqueueOfflineOperation({
+            inspectionId: inspeccionId,
+            operation: "PHOTO_CONCEPT_V1",
+            payload: {
+              fileKey,
+              inspectionId: inspeccionId,
+              areaId,
+              itemId,
+              origin: "GALERIA",
+            },
+          });
+          setAviso("Fotografía guardada en este dispositivo. Se sincronizará automáticamente al recuperar Internet.");
+          seleccionar(null);
+          return;
+        }
+
         const formData = new FormData();
         formData.set("inspeccionId", inspeccionId);
         formData.set("areaId", areaId);
@@ -59,17 +87,22 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
           </button>
         </div>
         <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={(e) => seleccionar(e.target.files?.[0] ?? null)} />
+        {aviso && <p className="mt-3 rounded-lg bg-cyan-300/10 p-3 text-xs font-bold text-cyan-100">{aviso}</p>}
         {error && <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">{error}</p>}
       </div>
     );
   }
 
   return (
+    <div>
     <label className="block cursor-pointer rounded-xl border border-dashed border-violet-300/40 px-4 py-5 text-center font-black text-violet-200">
       <span className="block text-2xl">🖼️</span>
       <span className="mt-1 block">ELEGIR DE GALERÍA</span>
       <span className="mt-1 block text-[10px] text-slate-500">Agregar 1 fotografía · máximo 4 por concepto</span>
       <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={(e) => seleccionar(e.target.files?.[0] ?? null)} />
     </label>
+    {aviso && <p className="mt-3 rounded-lg bg-cyan-300/10 p-3 text-xs font-bold text-cyan-100">{aviso}</p>}
+    {error && <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">{error}</p>}
+    </div>
   );
 }
