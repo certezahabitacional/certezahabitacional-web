@@ -69,6 +69,24 @@ export default function OfflineStatus() {
       handleOffline,
     );
 
+    const handleOfflineLink = (event: MouseEvent) => {
+      if (navigator.onLine) return;
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (
+        url.origin === window.location.origin &&
+        url.pathname.startsWith("/panel/inspecciones/")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.assign(url.href);
+      }
+    };
+
+    document.addEventListener("click", handleOfflineLink, true);
+
     window.addEventListener(
       OFFLINE_QUEUE_CHANGED,
       handleQueueChanged,
@@ -84,6 +102,8 @@ export default function OfflineStatus() {
         "offline",
         handleOffline,
       );
+
+      document.removeEventListener("click", handleOfflineLink, true);
 
       window.removeEventListener(
         OFFLINE_QUEUE_CHANGED,
@@ -116,7 +136,7 @@ export default function OfflineStatus() {
           <p className="font-black">
             {online
               ? "Conexión recuperada"
-              : "Sin conexión"}
+              : "MODO SIN CONEXIÓN"}
           </p>
 
           <p className="mt-0.5 text-xs text-slate-300">
@@ -130,7 +150,7 @@ export default function OfflineStatus() {
                     ? ""
                     : "s"
                 } de sincronizar.`
-              : "La captura offline se habilitará en la siguiente fase."}
+              : "Modo sin conexión activo. La inspección descargada puede seguir consultándose."}
           </p>
         </div>
       </div>
