@@ -15,6 +15,7 @@ import {
 } from "./actions";
 import { concluirInspeccionTecnicaV1 } from "../cierre-v1/actions";
 import ConceptoAreaCard, { type PuntoArea } from "./ConceptoAreaCard";
+import OfflineInspectionDownload from "@/components/offline/OfflineInspectionDownload";
 
 type Area = {
   id: string;
@@ -242,6 +243,15 @@ export default async function CampoV1Page({ params, searchParams }: {
         </div>
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
+
+        {puedeCapturar && (
+          <div className="mt-5">
+            <OfflineInspectionDownload
+              inspeccionId={id}
+              areaIds={areas.map((area) => area.id)}
+            />
+          </div>
+        )}
 
         <section className="mt-6 flex flex-wrap items-center gap-3">
           <details className="relative">

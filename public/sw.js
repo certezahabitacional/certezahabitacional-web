@@ -1,4 +1,5 @@
-const CACHE_NAME = "certeza-habitacional-v1";
+const CACHE_NAME = "certeza-habitacional-v2";
+const INSPECTION_CACHE = "certeza-inspecciones-v2";
 
 const OFFLINE_URL = "/offline.html";
 
@@ -28,7 +29,8 @@ self.addEventListener("activate", (event) => {
           cacheNames
             .filter(
               (cacheName) =>
-                cacheName !== CACHE_NAME,
+                cacheName !== CACHE_NAME &&
+                cacheName !== INSPECTION_CACHE,
             )
             .map((cacheName) =>
               caches.delete(cacheName),
@@ -54,15 +56,27 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(async () => {
-        const cache =
-          await caches.open(CACHE_NAME);
+      (async () => {
+        const inspectionCache = await caches.open(INSPECTION_CACHE);
+        try {
+          const response = await fetch(request);
+          if (
+            response &&
+            response.status === 200 &&
+            url.pathname.startsWith("/panel/inspecciones/")
+          ) {
+            await inspectionCache.put(request, response.clone());
+          }
+          return response;
+        } catch {
+          const cachedInspection =
+            await inspectionCache.match(request, { ignoreVary: true });
+          if (cachedInspection) return cachedInspection;
 
-        return (
-          (await cache.match(OFFLINE_URL)) ||
-          Response.error()
-        );
-      }),
+          const appCache = await caches.open(CACHE_NAME);
+          return (await appCache.match(OFFLINE_URL)) || Response.error();
+        }
+      })(),
     );
 
     return;

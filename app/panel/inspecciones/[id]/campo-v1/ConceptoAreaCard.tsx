@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import BotonGenerarIa from "../puntos-criticos/BotonGenerarIa";
+import OfflineNoAplicaForm from "@/components/offline/OfflineNoAplicaForm";
 import CapturaConceptoArea from "./CapturaConceptoArea";
 import GaleriaConceptoArea from "./GaleriaConceptoArea";
 import { marcarPuntoNoAplicaV1 } from "./actions";
@@ -180,21 +181,11 @@ export default async function ConceptoAreaCard({
 
         <div className="space-y-3">
           {editable && (
-            <form action={marcarPuntoNoAplicaV1} className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
-              <input type="hidden" name="inspeccionId" value={inspeccionId}/>
-              <input type="hidden" name="itemId" value={punto.id}/>
-              <p className="text-xs font-black uppercase text-amber-200">Opción por concepto</p>
-              <input
-                name="motivo"
-                required
-                minLength={3}
-                placeholder="Motivo por el que este concepto no aplica"
-                className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"
-              />
-              <button className="mt-2 w-full rounded-xl border border-amber-300/40 px-3 py-2 text-sm font-black text-amber-200">
-                MARCAR NO APLICA
-              </button>
-            </form>
+            <OfflineNoAplicaForm
+              inspeccionId={inspeccionId}
+              itemId={punto.id}
+              serverAction={marcarPuntoNoAplicaV1}
+            />
           )}
 
           {editable && fotos.length < 4 && (
