@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { normalizarImagenCliente } from "./normalizarImagenCliente";
+import { saveOfflineFile } from "@/lib/offline/files";
+import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
 
 type Props = {
   inspeccionId: string;
@@ -27,6 +29,7 @@ export default function CapturaConceptoArea({
   const [captura, setCaptura] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [enviando, startTransition] = useTransition();
+  const [aviso, setAviso] = useState("");
 
   const detener = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -99,9 +102,36 @@ export default function CapturaConceptoArea({
   const guardar = () => {
     if (!captura) return;
     setError("");
+    setAviso("");
     startTransition(async () => {
       try {
         const archivo = await normalizarImagenCliente(captura, { maxDimension: 1920, maxBytes: 2_200_000 });
+        if (!navigator.onLine) {
+          const fileKey = crypto.randomUUID();
+          await saveOfflineFile({
+            key: fileKey,
+            blob: archivo,
+            name: archivo.name || `captura-${Date.now()}.jpg`,
+            type: archivo.type || "image/jpeg",
+          });
+          await enqueueOfflineOperation({
+            inspectionId: inspeccionId,
+            operation: "PHOTO_CONCEPT_V1",
+            payload: {
+              fileKey,
+              inspectionId: inspeccionId,
+              areaId,
+              itemId,
+              origin: "CAMARA",
+            },
+          });
+          setAviso("Fotografía guardada en este dispositivo. Se sincronizará automáticamente al recuperar Internet.");
+          setCaptura(null);
+          if (preview) URL.revokeObjectURL(preview);
+          setPreview("");
+          return;
+        }
+
         const formData = new FormData();
         formData.set("inspeccionId", inspeccionId);
         formData.set("areaId", areaId);
@@ -147,6 +177,7 @@ export default function CapturaConceptoArea({
           </div>
         </div>
       )}
+      {aviso && <p className="mt-3 rounded-lg bg-cyan-300/10 p-3 text-xs font-bold text-cyan-100">{aviso}</p>}
       {error && <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">{error}</p>}
     </div>
   );
