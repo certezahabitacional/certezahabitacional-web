@@ -35,6 +35,18 @@ type ResultAreaPayload = {
   unidadMedida: string;
 };
 
+type ResultCriticalPayload = {
+  inspectionId: string;
+  codigo: string;
+  itemId: string;
+  descripcionFinal: string;
+  clasificacion: string;
+  prioridad: string;
+  valorMedido: string;
+  valorProyecto: string;
+  unidadMedida: string;
+};
+
 export default function OfflineSyncManager() {
   const syncingRef = useRef(false);
 
@@ -80,6 +92,28 @@ export default function OfflineSyncManager() {
             }
 
             await deleteOfflineFile(payload.fileKey);
+            await removeQueueItem(item.id);
+            continue;
+          }
+
+          if (item.operation === "RESULT_CRITICAL_CONCEPT_V1") {
+            const payload = item.payload as ResultCriticalPayload;
+            const response = await fetch("/api/offline/v1/sync-critical-result", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientMutationId: item.clientMutationId,
+                operation: item.operation,
+                payload,
+              }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar el resultado crítico.");
+            }
+
             await removeQueueItem(item.id);
             continue;
           }
