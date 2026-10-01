@@ -490,8 +490,7 @@ export async function POST(request: Request) {
       const remitente =
         process.env.COTIZACIONES_FROM_EMAIL ||
         "Certeza Habitacional <cotizaciones@certezahabitacional.com>";
-      const adminEmail =
-        process.env.ADMIN_COTIZACIONES_EMAIL || "contacto@certezahabitacional.com";
+      const adminEmail = "contacto@certezahabitacional.com";
 
       try {
         const tareasCorreo: Array<Promise<unknown>> = [];
