@@ -27,6 +27,10 @@ export default function OfflineInspectionDownload({
     return [
       `${base}/flujo`,
       `${base}/areas`,
+      `${base}/puntos-criticos/hermeticidad?fase=inicio`,
+      `${base}/puntos-criticos/hermeticidad?fase=cierre`,
+      `${base}/firmas`,
+      `${base}/cierre-v1`,
       ...CRITICOS.map((codigo) => `${base}/puntos-criticos?punto=${codigo}`),
       ...areaIds.map((areaId) => `${base}/campo-v1?area=${encodeURIComponent(areaId)}`),
     ];
