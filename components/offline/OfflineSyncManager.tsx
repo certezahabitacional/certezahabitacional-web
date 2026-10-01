@@ -17,6 +17,14 @@ type PhotoPayload = {
   origin: "CAMARA" | "GALERIA";
 };
 
+type CriticalPhotoPayload = {
+  fileKey: string;
+  inspectionId: string;
+  codigo: string;
+  itemId: string;
+  origin: "CAMARA" | "GALERIA";
+};
+
 type NoAplicaPayload = {
   inspectionId: string;
   itemId: string;
@@ -67,6 +75,35 @@ export default function OfflineSyncManager() {
         });
 
         try {
+          if (item.operation === "PHOTO_CRITICAL_CONCEPT_V1") {
+            const payload = item.payload as CriticalPhotoPayload;
+            const file = await getOfflineFile(payload.fileKey);
+            if (!file) throw new Error("La fotografía local ya no está disponible.");
+
+            const form = new FormData();
+            form.set("clientMutationId", item.clientMutationId);
+            form.set("inspectionId", payload.inspectionId);
+            form.set("codigo", payload.codigo);
+            form.set("itemId", payload.itemId);
+            form.set("origin", payload.origin);
+            form.set("file", new File([file.blob], file.name, { type: file.type }));
+
+            const response = await fetch("/api/offline/v1/sync-critical-photo", {
+              method: "POST",
+              body: form,
+              credentials: "include",
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar la fotografía crítica.");
+            }
+
+            await deleteOfflineFile(payload.fileKey);
+            await removeQueueItem(item.id);
+            continue;
+          }
+
           if (item.operation === "PHOTO_CONCEPT_V1") {
             const payload = item.payload as PhotoPayload;
             const file = await getOfflineFile(payload.fileKey);
