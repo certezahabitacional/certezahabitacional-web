@@ -2,7 +2,7 @@ export const ZONAS_SERVICIO = {
   CIUDAD_JUAREZ: {
     nombre: "Ciudad Juarez",
     ciudadEstado: "Ciudad Juarez, Chihuahua",
-    correoCotizacion: "anabelsapiensa@gmail.com",
+    correoCotizacion: "ngandara@cjp.lat",
     emailContacto: "contacto@certezahabitacional.com",
     telefono: "656 287 12 18",
     whatsapp: "526562871218",
@@ -11,7 +11,7 @@ export const ZONAS_SERVICIO = {
   GUADALAJARA: {
     nombre: "Guadalajara",
     ciudadEstado: "Guadalajara, Jalisco",
-    correoCotizacion: "anabelsapiensa@gmail.com",
+    correoCotizacion: "ngandara@cjp.lat",
     emailContacto: "contacto@certezahabitacional.com",
     telefono: null,
     whatsapp: null,
@@ -20,7 +20,7 @@ export const ZONAS_SERVICIO = {
   HERMOSILLO: {
     nombre: "Hermosillo",
     ciudadEstado: "Hermosillo, Sonora",
-    correoCotizacion: "anabelsapiensa@gmail.com",
+    correoCotizacion: "ngandara@cjp.lat",
     emailContacto: "contacto@certezahabitacional.com",
     telefono: null,
     whatsapp: null,
@@ -29,7 +29,7 @@ export const ZONAS_SERVICIO = {
   TIJUANA: {
     nombre: "Tijuana",
     ciudadEstado: "Tijuana, Baja California",
-    correoCotizacion: "luzecycastro017@gmail.com",
+    correoCotizacion: "ngandara@cjp.lat",
     emailContacto: "contacto@certezahabitacional.com",
     telefono: "664 759 9923",
     whatsapp: "526647599923",
