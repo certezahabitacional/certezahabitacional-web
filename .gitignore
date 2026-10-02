@@ -49,3 +49,10 @@ next-env.d.ts
 /android/local.properties
 /android/app/build/
 /android/build/
+
+# capacitor ios
+/ios/App/Pods/
+/ios/App/DerivedData/
+/ios/App/build/
+/ios/App/App.xcworkspace/xcuserdata/
+/ios/App/App.xcodeproj/xcuserdata/
