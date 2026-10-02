@@ -467,7 +467,12 @@ export default function FirmasPage() {
           `certeza:firmas:${inspeccionId}`,
           JSON.stringify({
             inspeccion,
-            firmas: firmasLocales,
+            firmas: {
+              ...firmasLocales,
+              inspector: "",
+              cliente: "",
+            },
+            firmasLocalesPendientes: true,
             guardadoEn: new Date().toISOString(),
           }),
         );
@@ -522,18 +527,22 @@ export default function FirmasPage() {
         "Firmas guardadas correctamente en el expediente.",
       );
     } catch {
-      try {
-        await enqueueOfflineOperation({
-          inspectionId: inspeccionId,
-          operation: "SIGNATURES_V1",
-          payload: {
+      if (!navigator.onLine) {
+        try {
+          await enqueueOfflineOperation({
             inspectionId: inspeccionId,
-            inspector: firmas.inspector,
-            cliente: firmas.cliente,
-          },
-        });
-        setMensaje("Conexión interrumpida · Firmas guardadas localmente y pendientes de sincronización.");
-      } catch {
+            operation: "SIGNATURES_V1",
+            payload: {
+              inspectionId: inspeccionId,
+              inspector: firmas.inspector,
+              cliente: firmas.cliente,
+            },
+          });
+          setMensaje("Conexión interrumpida · Firmas guardadas localmente y pendientes de sincronización.");
+        } catch {
+          setMensaje("No fue posible guardar las firmas.");
+        }
+      } else {
         setMensaje("No fue posible guardar las firmas.");
       }
     } finally {
