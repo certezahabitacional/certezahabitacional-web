@@ -11,7 +11,9 @@
     "app:sync": "npx cap sync android",
     "app:open:android": "npx cap open android",
     "app:add:android": "npx cap add android",
-    "app:doctor": "npx cap doctor"
+    "app:doctor": "npx cap doctor",
+    "app:build:android:debug": "cd android && ./gradlew assembleDebug",
+    "app:build:android:bundle": "cd android && ./gradlew bundleRelease"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
@@ -31,7 +33,8 @@
     "zod": "^4.4.3",
     "@capacitor/core": "8.5.2",
     "@capacitor/camera": "8.2.4",
-    "@capacitor/network": "8.0.1"
+    "@capacitor/network": "8.0.1",
+    "@capacitor/filesystem": "8.1.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
