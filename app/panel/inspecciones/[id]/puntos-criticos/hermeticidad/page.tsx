@@ -10,6 +10,7 @@ import CapturaCamara from "../CapturaCamara";
 import CargaGaleriaConPreview from "../CargaGaleriaConPreview";
 import BotonGenerarIa from "../BotonGenerarIa";
 import OfflineHermeticityStartForm from "@/components/offline/OfflineHermeticityStartForm";
+import OfflineHermeticityFinalForm from "@/components/offline/OfflineHermeticityFinalForm";
 import {
   cerrarPruebaProlongadaV1,
   continuarPreReporteDesdeHermeticidadV1,
@@ -540,46 +541,17 @@ export default async function HermeticidadPage({
                               )}
                             </form>
 
-                            <form action={cerrarPruebaProlongadaV1} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-4">
-                              <input type="hidden" name="inspeccionId" value={id} />
-                              <input type="hidden" name="codigo" value={codigo} />
-                              <input type="hidden" name="retorno" value="HERMETICIDAD_CIERRE" />
-                              <p className="text-xs font-black uppercase text-emerald-200">Cierre técnico · interpretación final del Inspector</p>
-                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <input name="lecturaFinal" required defaultValue={obs.lecturaFinalPropuesta ?? ""} placeholder="Lectura final" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2" />
-                                <input name="unidad" required defaultValue={obs.unidadFinalPropuesta ?? paso.unidad ?? ""} placeholder="Unidad" className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2" />
-                              </div>
-                              <label className="mt-3 block text-xs font-black uppercase tracking-wider text-emerald-200">
-                                Interpretación final del Inspector
-                                <textarea name="descripcionFinal" required defaultValue={obs.descripcionFinal ?? obs.descripcionIa ?? ""} placeholder="La interpretación IA aparecerá aquí automáticamente para que el Inspector la confirme o ajuste." className="mt-2 min-h-32 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm font-normal normal-case tracking-normal text-white" />
-                              </label>
-                              <p className="mt-2 text-xs leading-5 text-slate-400">
-                                La IA sirve como propuesta técnica. Este campo es la interpretación final que quedará en el reporte; puede conservarse tal cual o ajustarse por el Inspector.
-                              </p>
-                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <select name="clasificacion" defaultValue={obs.clasificacionFinal ?? obs.clasificacionSugerida ?? "C"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
-                                  <option value="C">C · Conforme</option>
-                                  <option value="O">O · Observación</option>
-                                  <option value="NC">NC · No conformidad</option>
-                                  <option value="CR">CR · Crítico</option>
-                                </select>
-                                <select name="prioridad" defaultValue={obs.prioridadFinal ?? obs.prioridadEvaluadaIa ?? "SH"} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2">
-                                  <option value="SH">SH · Sin hallazgo · 100/100</option>
-                                  <option value="P1">P1</option>
-                                  <option value="P2">P2</option>
-                                  <option value="P3">P3</option>
-                                  <option value="P4">P4</option>
-                                  <option value="P5">P5</option>
-                                </select>
-                              </div>
-                              <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
-                                <p className="text-xs font-black uppercase text-cyan-200">Calificación automática por IA</p>
-                                <p className="mt-2 text-xs leading-5 text-cyan-50">El Inspector selecciona SH cuando la prueba resulta Conforme y sin hallazgo. SH = 100. Si existe hallazgo, selecciona P1–P5 y la IA define la calificación exacta dentro de ese rango.</p>
-                              </div>
-                              <button disabled={!obs.descripcionIa} className="mt-3 w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">
-                                {obs.descripcionIa ? "REGISTRAR LECTURA FINAL Y CERRAR PRUEBA" : "GENERA PRIMERO LA INTERPRETACIÓN IA"}
-                              </button>
-                            </form>
+                            <OfflineHermeticityFinalForm
+                              inspeccionId={id}
+                              codigo={codigo}
+                              serverAction={cerrarPruebaProlongadaV1}
+                              iaDisponible={Boolean(obs.descripcionIa)}
+                              lecturaFinalDefault={obs.lecturaFinalPropuesta ?? ""}
+                              unidadDefault={obs.unidadFinalPropuesta ?? paso.unidad ?? ""}
+                              descripcionDefault={obs.descripcionFinal ?? obs.descripcionIa ?? ""}
+                              clasificacionDefault={obs.clasificacionFinal ?? obs.clasificacionSugerida ?? "C"}
+                              prioridadDefault={obs.prioridadFinal ?? obs.prioridadEvaluadaIa ?? "SH"}
+                            />
                           </div>
                         )}
                       </>
