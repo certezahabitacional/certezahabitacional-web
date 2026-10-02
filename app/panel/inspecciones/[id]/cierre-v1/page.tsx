@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import {
   concluirInspeccionTecnicaV1,
 } from "./actions";
+import OfflineFieldCloseButton from "@/components/offline/OfflineFieldCloseButton";
 
 type Estado = {
   inspeccionTecnicaConcluidaEn: Date | null;
@@ -245,6 +246,10 @@ export default async function CierreV1Page({ params, searchParams }: {
               <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-300 px-4 py-3 text-center text-sm font-black text-slate-950">PASAR A FIRMAS</Link>
             </div>
           </section>
+        )}
+
+        {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && !campoTerminado && (
+          <OfflineFieldCloseButton inspeccionId={id} />
         )}
 
         {inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && firmasListas && (
