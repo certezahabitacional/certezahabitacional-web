@@ -52,44 +52,44 @@ export async function GET(
   const [control] = await prisma.$queryRaw<Array<{
     proyectoConfirmado: boolean;
     areasConfirmadas: boolean;
-  }>>\`
+  }>>`
     SELECT "proyectoConfirmado","areasConfirmadas"
     FROM "InspeccionControlV2"
-    WHERE "inspeccionId"=\${id}
+    WHERE "inspeccionId"=${id}
     LIMIT 1
-  \`;
+  `;
 
   const pasos = await prisma.$queryRaw<Array<{
     clave: string;
     datos: unknown;
-  }>>\`
+  }>>`
     SELECT "clave","datos"
     FROM "ProtocoloInspeccionPaso"
-    WHERE "inspeccionId"=\${id}
+    WHERE "inspeccionId"=${id}
       AND "tipo"='PUNTO_CRITICO'
     ORDER BY "orden"
-  \`;
+  `;
 
-  const [areas] = await prisma.$queryRaw<Array<{ total: number; sinGuia: number }>>\`
+  const [areas] = await prisma.$queryRaw<Array<{ total: number; sinGuia: number }>>`
     SELECT
       COUNT(*)::int AS "total",
       COUNT(*) FILTER (
         WHERE NOT EXISTS (
           SELECT 1
           FROM "GuiaInspeccionItem" g
-          WHERE g."inspeccionId"=\${id}
+          WHERE g."inspeccionId"=${id}
             AND g."areaId"=a."id"
         )
       )::int AS "sinGuia"
     FROM "AreaInspeccion" a
-    WHERE a."inspeccionId"=\${id}
+    WHERE a."inspeccionId"=${id}
       AND a."tipo" <> 'PUNTO_CRITICO'
-  \`;
+  `;
 
   const faltantesCriticos: string[] = [];
 
   for (const punto of PUNTOS_CRITICOS_V1) {
-    const paso = pasos.find((p) => p.clave === \`PC_\${punto.codigo}\`);
+    const paso = pasos.find((p) => p.clave === `PC_${punto.codigo}`);
     const datos =
       paso?.datos && typeof paso.datos === "object" && !Array.isArray(paso.datos)
         ? paso.datos as Record<string, unknown>
@@ -100,22 +100,22 @@ export async function GET(
     const noAplica = datos.aplica === false;
 
     if (!configurado) {
-      faltantesCriticos.push(\`\${punto.etiqueta}: falta definir alcance/fuente\`);
+      faltantesCriticos.push(`${punto.etiqueta}: falta definir alcance/fuente`);
       continue;
     }
 
     if (aplica) {
-      const [conteo] = await prisma.$queryRaw<Array<{ total: number }>>\`
+      const [conteo] = await prisma.$queryRaw<Array<{ total: number }>>`
         SELECT COUNT(*)::int AS "total"
         FROM "GuiaInspeccionItem"
-        WHERE "inspeccionId"=\${id}
-          AND "area"=\${\`__PUNTO_CRITICO__:\${punto.codigo}\`}
-      \`;
+        WHERE "inspeccionId"=${id}
+          AND "area"=${`__PUNTO_CRITICO__:${punto.codigo}`}
+      `;
       if (Number(conteo?.total ?? 0) === 0) {
-        faltantesCriticos.push(\`\${punto.etiqueta}: falta generar plantilla técnica\`);
+        faltantesCriticos.push(`${punto.etiqueta}: falta generar plantilla técnica`);
       }
     } else if (!noAplica) {
-      faltantesCriticos.push(\`\${punto.etiqueta}: configuración incompleta\`);
+      faltantesCriticos.push(`${punto.etiqueta}: configuración incompleta`);
     }
   }
 
@@ -124,7 +124,7 @@ export async function GET(
   if (!control?.areasConfirmadas) bloqueos.push("Falta confirmar las áreas del inmueble.");
   if (Number(areas?.total ?? 0) === 0) bloqueos.push("No hay áreas físicas preparadas.");
   if (Number(areas?.sinGuia ?? 0) > 0) {
-    bloqueos.push(\`\${areas?.sinGuia} área(s) todavía no tienen guía de inspección preparada.\`);
+    bloqueos.push(`${areas?.sinGuia} área(s) todavía no tienen guía de inspección preparada.`);
   }
   bloqueos.push(...faltantesCriticos);
 
