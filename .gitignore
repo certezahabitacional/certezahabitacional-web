@@ -43,3 +43,9 @@ next-env.d.ts
 .vercel
 .env*
 .env
+
+# capacitor
+/android/.gradle/
+/android/local.properties
+/android/app/build/
+/android/build/
