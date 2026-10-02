@@ -7,7 +7,11 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "app:sync": "npx cap sync android",
+    "app:open:android": "npx cap open android",
+    "app:add:android": "npx cap add android",
+    "app:doctor": "npx cap doctor"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
@@ -24,7 +28,10 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.27.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/camera": "8.2.4",
+    "@capacitor/network": "8.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -36,7 +43,9 @@
     "eslint-config-next": "16.2.12",
     "prisma": "^6.16.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/cli": "8.5.2"
   },
   "allowScripts": {
     "@prisma/client@6.16.2": true,
