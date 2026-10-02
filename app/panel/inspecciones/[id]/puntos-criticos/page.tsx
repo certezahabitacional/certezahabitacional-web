@@ -20,6 +20,7 @@ import CargaGaleriaConPreview from "./CargaGaleriaConPreview";
 import BotonGenerarIa from "./BotonGenerarIa";
 import RestaurarFocoConcepto from "./RestaurarFocoConcepto";
 import OfflineManualCriticalResult from "@/components/offline/OfflineManualCriticalResult";
+import OfflineCriticalNoAplicaForm from "@/components/offline/OfflineCriticalNoAplicaForm";
 import {
   agregarConceptoManualPuntoCriticoV1,
   marcarConceptoNoAplicaV1,
@@ -585,18 +586,12 @@ export default async function PuntosCriticosPage({
 
                     <div className="space-y-3">
                       {!cerrado && puedeCapturar && (
-                        <form action={marcarConceptoNoAplicaV1} className="rounded-2xl border border-slate-600/40 bg-slate-950 p-4">
-                          <input type="hidden" name="inspeccionId" value={id} />
-                          <input type="hidden" name="codigo" value={codigoSolicitado} />
-                          <input type="hidden" name="itemId" value={item.id} />
-                          <p className="text-xs font-black uppercase tracking-wider text-amber-200">Opción por concepto</p>
-                          <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                            Al marcarlo NO APLICA se cerrará sin pedir fotografía, IA, comentario, medición ni prioridad.
-                          </p>
-                          <button className="mt-3 w-full rounded-xl border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-sm font-black text-amber-200">
-                            MARCAR NO APLICA
-                          </button>
-                        </form>
+                        <OfflineCriticalNoAplicaForm
+                          inspeccionId={id}
+                          codigo={codigoSolicitado}
+                          itemId={item.id}
+                          serverAction={marcarConceptoNoAplicaV1}
+                        />
                       )}
 
                       {!cerrado && puedeCapturar && !evidenciaCompleta && (
