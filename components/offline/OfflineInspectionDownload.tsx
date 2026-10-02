@@ -93,6 +93,21 @@ export default function OfflineInspectionDownload({
     setDetalle("Verificando que la inspección esté completamente preparada…");
 
     try {
+      setDetalle("Preparando automáticamente los 7 Puntos Críticos…");
+      const prepare = await fetch(`/api/offline/v1/prepare-critical-points/${inspeccionId}`, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+      const preparado = await prepare.json().catch(() => ({})) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!prepare.ok || !preparado.ok) {
+        throw new Error(preparado.error || "No fue posible preparar los Puntos Críticos para trabajo sin conexión.");
+      }
+
+      setDetalle("Verificando preparación integral de la inspección…");
       const readiness = await fetch(`/api/offline/v1/readiness/${inspeccionId}`, {
         credentials: "include",
         cache: "no-store",
@@ -154,7 +169,7 @@ export default function OfflineInspectionDownload({
     <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
       <p className="text-xs font-black uppercase tracking-wider text-cyan-200">Trabajo sin conexión</p>
       <p className="mt-2 text-sm leading-6 text-slate-300">
-        Descarga las pantallas de esta inspección antes de salir. Las fotografías y cambios compatibles se guardarán en este dispositivo y se sincronizarán al recuperar Internet.
+        Antes de salir, este botón prepara automáticamente los 7 Puntos Críticos, valida las áreas y descarga las pantallas necesarias. Las fotografías y cambios compatibles se guardarán en este dispositivo y se sincronizarán al recuperar Internet.
       </p>
       <button
         type="button"
