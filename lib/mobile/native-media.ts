@@ -6,19 +6,27 @@ export function esAppNativa() {
   return Capacitor.isNativePlatform();
 }
 
-export async function capturarFotoNativa() {
+async function obtenerImagenNativa(source: CameraSource) {
   if (!esAppNativa()) return null;
 
   const foto = await Camera.getPhoto({
     quality: 90,
     allowEditing: false,
     resultType: CameraResultType.DataUrl,
-    source: CameraSource.Camera,
+    source,
     saveToGallery: false,
     correctOrientation: true,
   });
 
   return foto.dataUrl ?? null;
+}
+
+export function capturarFotoNativa() {
+  return obtenerImagenNativa(CameraSource.Camera);
+}
+
+export function elegirFotoNativa() {
+  return obtenerImagenNativa(CameraSource.Photos);
 }
 
 export async function guardarEvidenciaTemporal(
