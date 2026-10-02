@@ -17,7 +17,8 @@
     "app:sync:ios": "npx cap sync ios",
     "app:add:ios": "npx cap add ios",
     "app:open:ios": "npx cap open ios",
-    "app:build:ios:sim": "cd ios/App && xcodebuild -workspace App.xcworkspace -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build"
+    "app:build:ios:sim": "cd ios/App && xcodebuild -project App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build",
+    "app:build:ios:archive:unsigned": "cd ios/App && xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos -archivePath build/CertezaHabitacional.xcarchive CODE_SIGNING_ALLOWED=NO MARKETING_VERSION=1.0.0 CURRENT_PROJECT_VERSION=1 archive"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
