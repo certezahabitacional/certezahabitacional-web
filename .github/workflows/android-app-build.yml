@@ -3,13 +3,6 @@ name: Android App Build
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - "capacitor.config.ts"
-      - "mobile-shell/**"
-      - "components/mobile/**"
-      - "lib/mobile/**"
-      - "package.json"
-      - ".github/workflows/android-app-build.yml"
 
 jobs:
   android-debug:
