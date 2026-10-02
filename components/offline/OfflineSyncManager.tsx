@@ -69,6 +69,20 @@ type HermeticityStartPayload = {
   unidad: string;
 };
 
+type HermeticityFinalDraftPayload = {
+  inspectionId: string;
+  codigo: string;
+  lecturaFinal: string;
+  unidad: string;
+  descripcionFinal: string;
+  clasificacion: string;
+  prioridad: string;
+};
+
+type FieldClosePayload = {
+  inspectionId: string;
+};
+
 export default function OfflineSyncManager() {
   const syncingRef = useRef(false);
 
@@ -207,6 +221,50 @@ export default function OfflineSyncManager() {
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {
               throw new Error(result?.error || "No fue posible sincronizar la lectura inicial de hermeticidad.");
+            }
+
+            await removeQueueItem(item.id);
+            continue;
+          }
+
+          if (item.operation === "HERMETICITY_FINAL_DRAFT_V1") {
+            const payload = item.payload as HermeticityFinalDraftPayload;
+            const response = await fetch("/api/offline/v1/sync-hermeticity-final-draft", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientMutationId: item.clientMutationId,
+                operation: item.operation,
+                payload,
+              }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar la lectura final de hermeticidad.");
+            }
+
+            await removeQueueItem(item.id);
+            continue;
+          }
+
+          if (item.operation === "FIELD_CLOSE_REQUEST_V1") {
+            const payload = item.payload as FieldClosePayload;
+            const response = await fetch("/api/offline/v1/sync-field-close", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientMutationId: item.clientMutationId,
+                operation: item.operation,
+                payload,
+              }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(result?.error || "No fue posible sincronizar el cierre de campo.");
             }
 
             await removeQueueItem(item.id);
