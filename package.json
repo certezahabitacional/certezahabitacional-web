@@ -13,7 +13,11 @@
     "app:add:android": "npx cap add android",
     "app:doctor": "npx cap doctor",
     "app:build:android:debug": "cd android && ./gradlew assembleDebug",
-    "app:build:android:bundle": "cd android && ./gradlew bundleRelease"
+    "app:build:android:bundle": "cd android && ./gradlew bundleRelease",
+    "app:sync:ios": "npx cap sync ios",
+    "app:add:ios": "npx cap add ios",
+    "app:open:ios": "npx cap open ios",
+    "app:build:ios:sim": "cd ios/App && xcodebuild -workspace App.xcworkspace -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
@@ -48,7 +52,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "@capacitor/android": "8.5.2",
-    "@capacitor/cli": "8.5.2"
+    "@capacitor/cli": "8.5.2",
+    "@capacitor/ios": "8.5.2"
   },
   "allowScripts": {
     "@prisma/client@6.16.2": true,

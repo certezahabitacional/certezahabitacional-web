@@ -1,0 +1,50 @@
+name: iOS App Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "capacitor.config.ts"
+      - "mobile-shell/**"
+      - "components/mobile/**"
+      - "lib/mobile/**"
+      - "package.json"
+      - ".github/workflows/ios-app-build.yml"
+
+jobs:
+  ios-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate iOS project
+        run: |
+          rm -rf ios
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build iOS Simulator
+        run: |
+          cd ios/App
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
