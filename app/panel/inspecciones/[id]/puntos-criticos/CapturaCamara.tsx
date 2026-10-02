@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { saveOfflineFile } from "@/lib/offline/files";
 import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
+import { capturarFotoNativa, esAppNativa } from "@/lib/mobile/native-media";
 
 type Props = {
   inspeccionId: string;
@@ -46,6 +47,17 @@ export default function CapturaCamara({
     };
   }, [preview]);
 
+  const prepararDataUrl = async (dataUrl: string) => {
+    const respuesta = await fetch(dataUrl);
+    const blob = await respuesta.blob();
+    const file = new File([blob], `captura-${Date.now()}.jpg`, {
+      type: blob.type || "image/jpeg",
+    });
+    setCaptura(file);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(URL.createObjectURL(blob));
+  };
+
   const abrirCamara = async () => {
     setError("");
     setCaptura(null);
@@ -54,12 +66,18 @@ export default function CapturaCamara({
       setPreview("");
     }
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError("Este navegador no permite acceso directo a la cámara. Usa la opción Elegir de galería.");
-      return;
-    }
-
     try {
+      if (esAppNativa()) {
+        const dataUrl = await capturarFotoNativa();
+        if (dataUrl) await prepararDataUrl(dataUrl);
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Este navegador no permite acceso directo a la cámara. Usa la opción Elegir de galería.");
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } },
         audio: false,
@@ -73,7 +91,11 @@ export default function CapturaCamara({
         }
       });
     } catch {
-      setError("No fue posible abrir la cámara. Revisa el permiso de cámara del navegador y vuelve a intentar.");
+      setError(
+        esAppNativa()
+          ? "No fue posible abrir la cámara de la aplicación. Revisa el permiso de cámara y vuelve a intentar."
+          : "No fue posible abrir la cámara. Revisa el permiso de cámara del navegador y vuelve a intentar.",
+      );
     }
   };
 
@@ -173,7 +195,7 @@ export default function CapturaCamara({
           <span className="block text-3xl">📷</span>
           <span className="mt-1 block">ABRIR CÁMARA</span>
           <span className="mt-1 block text-[10px] font-bold text-slate-500">
-            Foto {numeroFoto}/{totalFotos} · cámara en vivo
+            Foto {numeroFoto}/{totalFotos} · {esAppNativa() ? "cámara de la APP" : "cámara en vivo"}
           </span>
         </button>
       )}
