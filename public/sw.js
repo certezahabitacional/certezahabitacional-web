@@ -58,6 +58,16 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         const inspectionCache = await caches.open(INSPECTION_CACHE);
+        const normalizada = new URL(request.url);
+        normalizada.searchParams.delete("ok");
+        normalizada.searchParams.delete("error");
+        normalizada.searchParams.delete("foco");
+        normalizada.hash = "";
+        const cacheKey = new Request(normalizada.toString(), {
+          method: "GET",
+          credentials: "include",
+        });
+
         try {
           const response = await fetch(request);
           if (
@@ -65,12 +75,13 @@ self.addEventListener("fetch", (event) => {
             response.status === 200 &&
             url.pathname.startsWith("/panel/inspecciones/")
           ) {
-            await inspectionCache.put(request, response.clone());
+            await inspectionCache.put(cacheKey, response.clone());
           }
           return response;
         } catch {
           const cachedInspection =
-            await inspectionCache.match(request, { ignoreVary: true });
+            (await inspectionCache.match(cacheKey, { ignoreVary: true })) ||
+            (await inspectionCache.match(request, { ignoreVary: true }));
           if (cachedInspection) return cachedInspection;
 
           const appCache = await caches.open(CACHE_NAME);
