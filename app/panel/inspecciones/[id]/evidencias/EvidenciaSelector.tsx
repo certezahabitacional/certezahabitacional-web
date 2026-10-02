@@ -1,12 +1,33 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { capturarFotoNativa, elegirFotoNativa, esAppNativa } from "@/lib/mobile/native-media";
 
 export default function EvidenciaSelector() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [archivoNombre, setArchivoNombre] = useState("");
 
-  function abrirCamara() {
+  async function cargarDataUrlEnInput(dataUrl: string, nombre: string) {
+    const input = inputRef.current;
+    if (!input) return;
+
+    const respuesta = await fetch(dataUrl);
+    const blob = await respuesta.blob();
+    const archivo = new File([blob], nombre, { type: blob.type || "image/jpeg" });
+    const transferencia = new DataTransfer();
+    transferencia.items.add(archivo);
+    input.files = transferencia.files;
+    setArchivoNombre(archivo.name);
+  }
+
+  async function abrirCamara() {
+    if (esAppNativa()) {
+      const dataUrl = await capturarFotoNativa();
+      if (dataUrl) {
+        await cargarDataUrlEnInput(dataUrl, `evidencia-${Date.now()}.jpg`);
+      }
+      return;
+    }
     const input = inputRef.current;
 
     if (!input) {
@@ -19,7 +40,14 @@ export default function EvidenciaSelector() {
     input.click();
   }
 
-  function abrirGaleria() {
+  async function abrirGaleria() {
+    if (esAppNativa()) {
+      const dataUrl = await elegirFotoNativa();
+      if (dataUrl) {
+        await cargarDataUrlEnInput(dataUrl, `evidencia-galeria-${Date.now()}.jpg`);
+      }
+      return;
+    }
     const input = inputRef.current;
 
     if (!input) {
@@ -44,7 +72,7 @@ export default function EvidenciaSelector() {
       <div className="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
-          onClick={abrirCamara}
+          onClick={() => void abrirCamara()}
           className="rounded-2xl border border-cyan-400 bg-cyan-400/10 px-5 py-4 text-left transition hover:bg-cyan-400/15"
         >
           <span className="block text-lg font-black">
@@ -58,7 +86,7 @@ export default function EvidenciaSelector() {
 
         <button
           type="button"
-          onClick={abrirGaleria}
+          onClick={() => void abrirGaleria()}
           className="rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-left transition hover:border-cyan-300/40"
         >
           <span className="block text-lg font-black">
@@ -97,8 +125,9 @@ export default function EvidenciaSelector() {
       </div>
 
       <p className="mt-2 text-xs text-slate-500">
-        En iPhone y Android, “Tomar fotografía” solicita la cámara trasera.
-        El comportamiento exacto puede variar según el navegador.
+        {esAppNativa()
+          ? "En la APP se utiliza la cámara o galería nativas del dispositivo."
+          : "En navegador, “Tomar fotografía” solicita la cámara trasera; el comportamiento puede variar según el navegador."}
       </p>
     </div>
   );

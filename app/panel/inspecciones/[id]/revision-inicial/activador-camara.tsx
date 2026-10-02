@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { capturarFotoNativa, esAppNativa } from "@/lib/mobile/native-media";
 
 export function ActivadorCamaraRevision({ activo }: { activo: boolean }) {
   const [abierta, setAbierta] = useState(false);
@@ -21,6 +22,26 @@ export function ActivadorCamaraRevision({ activo }: { activo: boolean }) {
   async function abrirCamara() {
     if (!activo) return;
     setError("");
+
+    if (esAppNativa()) {
+      try {
+        const dataUrl = await capturarFotoNativa();
+        const input = inputCamara();
+        if (!dataUrl || !input) return;
+
+        const respuesta = await fetch(dataUrl);
+        const blob = await respuesta.blob();
+        const archivo = new File([blob], `fachada-${Date.now()}.jpg`, { type: blob.type || "image/jpeg" });
+        const transferencia = new DataTransfer();
+        transferencia.items.add(archivo);
+        input.files = transferencia.files;
+        input.form?.requestSubmit();
+      } catch {
+        setError("No fue posible abrir la cámara de la aplicación. Revisa el permiso de cámara.");
+        setAbierta(true);
+      }
+      return;
+    }
 
     if (!navigator.mediaDevices?.getUserMedia) {
       inputCamara()?.click();

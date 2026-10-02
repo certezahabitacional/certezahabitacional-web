@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { urlFirmadaStorage } from "@/lib/storage-gateway";
 import { subirFotoExistenteComoFachada } from "./archivo-actions";
 import { importarFotoFachadaDesdeBase } from "./fuentes-actions";
+import SelectorFachadaExistente from "./SelectorFachadaExistente";
 
 type FotoHistorica = {
   fotografiaId: string;
@@ -58,20 +59,7 @@ export async function FuentesAlternasFachada({
         </p>
       </div>
 
-      <form action={subirFotoExistenteComoFachada} className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
-        <input type="hidden" name="inspeccionId" value={inspeccionId} />
-        <label className="block text-sm font-black text-cyan-200">Galería o archivos del dispositivo</label>
-        <input
-          name="archivo"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          required
-          className="mt-3 block w-full text-xs text-slate-300"
-        />
-        <button className="mt-3 rounded-xl bg-cyan-300 px-4 py-2 text-xs font-black text-slate-950">
-          USAR ESTA FOTO COMO DEFINITIVA
-        </button>
-      </form>
+      <SelectorFachadaExistente inspeccionId={inspeccionId} action={subirFotoExistenteComoFachada} />
 
       <div className="mt-5">
         <div className="flex flex-wrap items-end justify-between gap-2">
