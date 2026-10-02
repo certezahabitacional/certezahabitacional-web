@@ -35,6 +35,15 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
+      - name: Configure iOS permissions and metadata
+        run: |
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Delete :NSCameraUsageDescription" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string Certeza Habitacional utiliza la cámara para documentar evidencias de la inspección." "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :NSPhotoLibraryUsageDescription" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string Certeza Habitacional utiliza la fototeca para seleccionar evidencias de la inspección." "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Certeza Habitacional" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Certeza Habitacional" "$PLIST"
+
       - name: Show Xcode version
         run: xcodebuild -version
 
@@ -48,3 +57,24 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Build unsigned Release archive
+        run: |
+          cd ios/App
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath build/CertezaHabitacional.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION=1.0.0 \
+            CURRENT_PROJECT_VERSION=1 \
+            archive
+
+      - name: Upload unsigned iOS archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: certeza-habitacional-ios-unsigned-archive
+          path: ios/App/build/CertezaHabitacional.xcarchive
+          if-no-files-found: error
