@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { saveOfflineFile } from "@/lib/offline/files";
 import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
+import { elegirFotoNativa, esAppNativa } from "@/lib/mobile/native-media";
 
 type Props = {
   inspeccionId: string;
@@ -40,6 +41,28 @@ export default function CargaGaleriaConPreview({
     if (preview) URL.revokeObjectURL(preview);
     setArchivo(file);
     setPreview(file ? URL.createObjectURL(file) : "");
+  };
+
+  const abrirGaleria = async () => {
+    setError("");
+
+    if (!esAppNativa()) {
+      inputRef.current?.click();
+      return;
+    }
+
+    try {
+      const dataUrl = await elegirFotoNativa();
+      if (!dataUrl) return;
+      const respuesta = await fetch(dataUrl);
+      const blob = await respuesta.blob();
+      const file = new File([blob], `galeria-${Date.now()}.jpg`, {
+        type: blob.type || "image/jpeg",
+      });
+      seleccionar(file);
+    } catch {
+      setError("No fue posible abrir la galería de la aplicación. Revisa los permisos e intenta nuevamente.");
+    }
   };
 
   const guardar = () => {
@@ -116,7 +139,7 @@ export default function CargaGaleriaConPreview({
             disabled={enviando}
             onClick={() => {
               seleccionar(null);
-              inputRef.current?.click();
+              void abrirGaleria();
             }}
             className="rounded-xl border border-white/15 px-3 py-3 text-sm font-black text-slate-300 disabled:opacity-50"
           >
@@ -138,20 +161,24 @@ export default function CargaGaleriaConPreview({
 
   return (
     <div>
-    <label className="block cursor-pointer rounded-xl border border-dashed border-violet-300/40 px-4 py-5 text-center font-black text-violet-200">
+    <button
+      type="button"
+      onClick={() => void abrirGaleria()}
+      className="block w-full cursor-pointer rounded-xl border border-dashed border-violet-300/40 px-4 py-5 text-center font-black text-violet-200"
+    >
       <span className="block text-2xl">🖼️</span>
       <span className="mt-1 block">ELEGIR DE GALERÍA</span>
       <span className="mt-1 block text-[10px] font-bold text-slate-500">
         Foto {numeroFoto}/{totalFotos} · se mostrará completa antes de guardar
       </span>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="sr-only"
-        onChange={(event) => seleccionar(event.target.files?.[0] ?? null)}
-      />
-    </label>
+    </button>
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/*"
+      className="sr-only"
+      onChange={(event) => seleccionar(event.target.files?.[0] ?? null)}
+    />
     {aviso && <p className="mt-3 rounded-lg bg-cyan-300/10 p-3 text-xs font-bold text-cyan-100">{aviso}</p>}
     {error && <p className="mt-3 rounded-lg bg-rose-400/10 p-3 text-xs font-bold text-rose-300">{error}</p>}
     </div>
