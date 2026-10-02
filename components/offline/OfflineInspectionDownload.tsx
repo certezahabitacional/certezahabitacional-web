@@ -90,9 +90,30 @@ export default function OfflineInspectionDownload({
     }
 
     setEstado("downloading");
-    setDetalle(`Preparando 0/${urls.length} pantallas…`);
+    setDetalle("Verificando que la inspección esté completamente preparada…");
 
     try {
+      const readiness = await fetch(`/api/offline/v1/readiness/${inspeccionId}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const estadoPrevio = await readiness.json().catch(() => ({})) as {
+        ok?: boolean;
+        bloqueos?: string[];
+        error?: string;
+      };
+
+      if (!readiness.ok || !estadoPrevio.ok) {
+        const bloqueos = Array.isArray(estadoPrevio.bloqueos) ? estadoPrevio.bloqueos : [];
+        throw new Error(
+          estadoPrevio.error ||
+          (bloqueos.length
+            ? `Antes de descargar para trabajo sin conexión completa: ${bloqueos.join(" · ")}`
+            : "La inspección todavía no está lista para trabajo sin conexión."),
+        );
+      }
+
+      setDetalle(`Preparando 0/${urls.length} pantallas…`);
       const cache = await caches.open("certeza-inspecciones-v2");
       let ok = 0;
 
