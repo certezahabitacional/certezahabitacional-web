@@ -21,6 +21,12 @@ export default function OfflineStatus() {
   const [ready, setReady] =
     useState(false);
 
+  const [syncing, setSyncing] =
+    useState(false);
+
+  const [justSynced, setJustSynced] =
+    useState(false);
+
   const refreshPending =
     useCallback(async () => {
       try {
@@ -59,6 +65,21 @@ export default function OfflineStatus() {
       void refreshPending();
     };
 
+    const handleSyncState = (event: Event) => {
+      const detail = (event as CustomEvent<{ estado?: string }>).detail;
+      if (detail?.estado === "syncing") {
+        setSyncing(true);
+        setJustSynced(false);
+        return;
+      }
+
+      setSyncing(false);
+      void refreshPending().then(() => {
+        setJustSynced(true);
+        window.setTimeout(() => setJustSynced(false), 3500);
+      });
+    };
+
     window.addEventListener(
       "online",
       handleOnline,
@@ -92,6 +113,11 @@ export default function OfflineStatus() {
       handleQueueChanged,
     );
 
+    window.addEventListener(
+      "certeza:offline-sync-state",
+      handleSyncState,
+    );
+
     return () => {
       window.removeEventListener(
         "online",
@@ -109,6 +135,11 @@ export default function OfflineStatus() {
         OFFLINE_QUEUE_CHANGED,
         handleQueueChanged,
       );
+
+      window.removeEventListener(
+        "certeza:offline-sync-state",
+        handleSyncState,
+      );
     };
   }, [refreshPending]);
 
@@ -116,7 +147,7 @@ export default function OfflineStatus() {
     return null;
   }
 
-  if (online && pending === 0) {
+  if (online && pending === 0 && !syncing && !justSynced) {
     return null;
   }
 
@@ -134,13 +165,21 @@ export default function OfflineStatus() {
 
         <div>
           <p className="font-black">
-            {online
-              ? "Conexión recuperada"
-              : "MODO SIN CONEXIÓN"}
+            {syncing
+              ? "SINCRONIZANDO"
+              : online && pending === 0 && justSynced
+                ? "TODO SINCRONIZADO ✓"
+                : online
+                  ? "Conexión recuperada"
+                  : "MODO SIN CONEXIÓN"}
           </p>
 
           <p className="mt-0.5 text-xs text-slate-300">
-            {pending > 0
+            {syncing
+              ? `Subiendo ${pending} cambio${pending === 1 ? "" : "s"} pendiente${pending === 1 ? "" : "s"}.`
+              : online && pending === 0 && justSynced
+                ? "No quedan fotografías ni movimientos pendientes en este dispositivo."
+                : pending > 0
               ? `${pending} cambio${
                   pending === 1
                     ? ""

@@ -83,6 +83,12 @@ type FieldClosePayload = {
   inspectionId: string;
 };
 
+const OFFLINE_SYNC_STATE = "certeza:offline-sync-state";
+
+function emitirEstado(estado: "syncing" | "idle") {
+  window.dispatchEvent(new CustomEvent(OFFLINE_SYNC_STATE, { detail: { estado } }));
+}
+
 export default function OfflineSyncManager() {
   const syncingRef = useRef(false);
 
@@ -90,6 +96,7 @@ export default function OfflineSyncManager() {
     if (!navigator.onLine || syncingRef.current) return;
 
     syncingRef.current = true;
+    emitirEstado("syncing");
     try {
       const items = await listQueueItems();
 
@@ -328,6 +335,7 @@ export default function OfflineSyncManager() {
       }
     } finally {
       syncingRef.current = false;
+      emitirEstado("idle");
     }
   }, []);
 

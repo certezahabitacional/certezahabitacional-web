@@ -36,6 +36,46 @@ export default function OfflineInspectionDownload({
     ];
   }, [inspeccionId, areaIds]);
 
+  const cachearRecursosPantalla = async (response: Response) => {
+    const tipo = response.headers.get("content-type") ?? "";
+    if (!tipo.includes("text/html")) return;
+
+    const html = await response.clone().text();
+    const documento = new DOMParser().parseFromString(html, "text/html");
+    const recursos = new Set<string>();
+
+    for (const elemento of documento.querySelectorAll("script[src],link[href]")) {
+      const valor =
+        elemento instanceof HTMLScriptElement
+          ? elemento.src
+          : elemento instanceof HTMLLinkElement
+            ? elemento.href
+            : "";
+      if (!valor) continue;
+
+      const recurso = new URL(valor, window.location.origin);
+      if (recurso.origin !== window.location.origin) continue;
+      if (
+        recurso.pathname.startsWith("/_next/static/") ||
+        recurso.pathname.startsWith("/branding/")
+      ) {
+        recursos.add(recurso.href);
+      }
+    }
+
+    if (recursos.size === 0) return;
+
+    const appCache = await caches.open("certeza-habitacional-v2");
+    await Promise.all(
+      [...recursos].map(async (url) => {
+        const existente = await appCache.match(url);
+        if (existente) return;
+        const asset = await fetch(url, { credentials: "include", cache: "no-store" });
+        if (asset.ok) await appCache.put(url, asset.clone());
+      }),
+    );
+  };
+
   const descargar = async () => {
     if (!navigator.onLine) {
       setEstado("error");
@@ -50,9 +90,30 @@ export default function OfflineInspectionDownload({
     }
 
     setEstado("downloading");
-    setDetalle(`Preparando 0/${urls.length} pantallas…`);
+    setDetalle("Verificando que la inspección esté completamente preparada…");
 
     try {
+      const readiness = await fetch(`/api/offline/v1/readiness/${inspeccionId}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const estadoPrevio = await readiness.json().catch(() => ({})) as {
+        ok?: boolean;
+        bloqueos?: string[];
+        error?: string;
+      };
+
+      if (!readiness.ok || !estadoPrevio.ok) {
+        const bloqueos = Array.isArray(estadoPrevio.bloqueos) ? estadoPrevio.bloqueos : [];
+        throw new Error(
+          estadoPrevio.error ||
+          (bloqueos.length
+            ? `Antes de descargar para trabajo sin conexión completa: ${bloqueos.join(" · ")}`
+            : "La inspección todavía no está lista para trabajo sin conexión."),
+        );
+      }
+
+      setDetalle(`Preparando 0/${urls.length} pantallas…`);
       const cache = await caches.open("certeza-inspecciones-v2");
       let ok = 0;
 
@@ -68,6 +129,7 @@ export default function OfflineInspectionDownload({
         }
 
         await cache.put(url, response.clone());
+        await cachearRecursosPantalla(response);
         ok += 1;
         setDetalle(`Preparando ${ok}/${urls.length} pantallas…`);
       }
@@ -81,7 +143,7 @@ export default function OfflineInspectionDownload({
       );
 
       setEstado("ready");
-      setDetalle("Inspección preparada. Ya puedes continuar aunque se pierda Internet.");
+      setDetalle("Inspección preparada con pantallas y recursos. Ya puedes continuar aunque se pierda Internet.");
     } catch (error) {
       setEstado("error");
       setDetalle(error instanceof Error ? error.message : "No fue posible preparar la inspección.");
