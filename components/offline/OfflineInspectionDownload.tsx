@@ -128,6 +128,36 @@ export default function OfflineInspectionDownload({
         );
       }
 
+      setDetalle("Guardando expediente y firmas para uso sin conexión…");
+      const [respuestaInspeccion, respuestaFirmas] = await Promise.all([
+        fetch(`/api/inspecciones/${inspeccionId}`, {
+          credentials: "include",
+          cache: "no-store",
+        }),
+        fetch(`/api/inspecciones/${inspeccionId}/firmas`, {
+          credentials: "include",
+          cache: "no-store",
+        }),
+      ]);
+
+      if (!respuestaInspeccion.ok || !respuestaFirmas.ok) {
+        throw new Error("No fue posible preparar los datos de firmas para uso sin conexión.");
+      }
+
+      const [datosInspeccion, datosFirmas] = await Promise.all([
+        respuestaInspeccion.json(),
+        respuestaFirmas.json(),
+      ]);
+
+      localStorage.setItem(
+        `certeza:firmas:${inspeccionId}`,
+        JSON.stringify({
+          inspeccion: datosInspeccion,
+          firmas: datosFirmas,
+          guardadoEn: new Date().toISOString(),
+        }),
+      );
+
       setDetalle(`Preparando 0/${urls.length} pantallas…`);
       const cache = await caches.open("certeza-inspecciones-v2");
       let ok = 0;
