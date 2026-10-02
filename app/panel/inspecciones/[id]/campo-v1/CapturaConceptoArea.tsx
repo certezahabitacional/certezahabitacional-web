@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { normalizarImagenCliente } from "./normalizarImagenCliente";
 import { saveOfflineFile } from "@/lib/offline/files";
 import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
+import { capturarFotoNativa, esAppNativa } from "@/lib/mobile/native-media";
 
 type Props = {
   inspeccionId: string;
@@ -45,6 +46,17 @@ export default function CapturaConceptoArea({
     };
   }, [preview]);
 
+  const prepararDataUrl = async (dataUrl: string) => {
+    const respuesta = await fetch(dataUrl);
+    const blob = await respuesta.blob();
+    const file = new File([blob], `captura-${Date.now()}.jpg`, {
+      type: blob.type || "image/jpeg",
+    });
+    setCaptura(file);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(URL.createObjectURL(blob));
+  };
+
   const abrir = async () => {
     setError("");
     setCaptura(null);
@@ -52,11 +64,18 @@ export default function CapturaConceptoArea({
       URL.revokeObjectURL(preview);
       setPreview("");
     }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError("Este navegador no permite acceso directo a la cámara. Usa la opción de galería.");
-      return;
-    }
     try {
+      if (esAppNativa()) {
+        const dataUrl = await capturarFotoNativa();
+        if (dataUrl) await prepararDataUrl(dataUrl);
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("Este navegador no permite acceso directo a la cámara. Usa la opción de galería.");
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } },
         audio: false,
@@ -70,7 +89,11 @@ export default function CapturaConceptoArea({
         }
       });
     } catch {
-      setError("No fue posible abrir la cámara. Revisa el permiso del navegador.");
+      setError(
+        esAppNativa()
+          ? "No fue posible abrir la cámara de la aplicación. Revisa el permiso de cámara."
+          : "No fue posible abrir la cámara. Revisa el permiso del navegador.",
+      );
     }
   };
 
@@ -151,7 +174,9 @@ export default function CapturaConceptoArea({
         <button type="button" onClick={abrir} className="w-full rounded-xl border border-dashed border-cyan-300/50 px-4 py-5 text-center font-black text-cyan-200">
           <span className="block text-3xl">📷</span>
           <span className="mt-1 block">ABRIR CÁMARA</span>
-          <span className="mt-1 block text-[10px] text-slate-500">Foto {numeroFoto}/{totalFotos}</span>
+          <span className="mt-1 block text-[10px] text-slate-500">
+            Foto {numeroFoto}/{totalFotos} · {esAppNativa() ? "cámara de la APP" : "cámara en vivo"}
+          </span>
         </button>
       )}
       {abierta && (
