@@ -11,6 +11,7 @@ import CargaGaleriaConPreview from "../CargaGaleriaConPreview";
 import BotonGenerarIa from "../BotonGenerarIa";
 import OfflineHermeticityStartForm from "@/components/offline/OfflineHermeticityStartForm";
 import OfflineHermeticityFinalForm from "@/components/offline/OfflineHermeticityFinalForm";
+import OfflineInspectionDownload from "@/components/offline/OfflineInspectionDownload";
 import {
   cerrarPruebaProlongadaV1,
   continuarPreReporteDesdeHermeticidadV1,
@@ -325,6 +326,15 @@ export default async function HermeticidadPage({
             ? "Primero se documenta Hidráulica y enseguida Gas. Después comienza el recorrido normal de Puntos Críticos."
             : "Compara las lecturas inicial y final de Hidráulica y Gas. Estas pruebas deben quedar cerradas antes del cierre final de la inspección."}
         </p>
+
+        {puedeCapturar && (
+          <div className="mt-5">
+            <OfflineInspectionDownload
+              inspeccionId={id}
+              areaIds={areasNavegacion.map((area) => area.id)}
+            />
+          </div>
+        )}
 
         {(query.ok || query.error) && (
           <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>
