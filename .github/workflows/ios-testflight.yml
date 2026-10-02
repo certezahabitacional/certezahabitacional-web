@@ -54,6 +54,9 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
+      - name: Generate branded iOS assets
+        run: npm run app:assets:ios
+
       - name: Configure iOS permissions and metadata
         shell: bash
         run: |

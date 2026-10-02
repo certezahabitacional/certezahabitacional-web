@@ -18,7 +18,9 @@
     "app:add:ios": "npx cap add ios",
     "app:open:ios": "npx cap open ios",
     "app:build:ios:sim": "cd ios/App && xcodebuild -project App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build",
-    "app:build:ios:archive:unsigned": "cd ios/App && xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos -archivePath build/CertezaHabitacional.xcarchive CODE_SIGNING_ALLOWED=NO MARKETING_VERSION=1.0.0 CURRENT_PROJECT_VERSION=1 archive"
+    "app:build:ios:archive:unsigned": "cd ios/App && xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos -archivePath build/CertezaHabitacional.xcarchive CODE_SIGNING_ALLOWED=NO MARKETING_VERSION=1.0.0 CURRENT_PROJECT_VERSION=1 archive",
+    "app:assets:ios": "mkdir -p .mobile-assets && cp public/branding/logo-badge.png .mobile-assets/logo.png && npx capacitor-assets generate --ios --assetPath .mobile-assets --iconBackgroundColor '#0f172a' --iconBackgroundColorDark '#0f172a' --splashBackgroundColor '#0f172a' --splashBackgroundColorDark '#0f172a'",
+    "app:assets:android": "mkdir -p .mobile-assets && cp public/branding/logo-badge.png .mobile-assets/logo.png && npx capacitor-assets generate --android --assetPath .mobile-assets --iconBackgroundColor '#0f172a' --iconBackgroundColorDark '#0f172a' --splashBackgroundColor '#0f172a' --splashBackgroundColorDark '#0f172a'"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
@@ -54,7 +56,8 @@
     "typescript": "^5",
     "@capacitor/android": "8.5.2",
     "@capacitor/cli": "8.5.2",
-    "@capacitor/ios": "8.5.2"
+    "@capacitor/ios": "8.5.2",
+    "@capacitor/assets": "3.0.5"
   },
   "allowScripts": {
     "@prisma/client@6.16.2": true,
