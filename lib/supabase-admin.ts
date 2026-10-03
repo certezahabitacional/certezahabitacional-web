@@ -7,20 +7,18 @@ import {
   urlFirmadaStorage,
 } from "@/lib/storage-gateway";
 
+function esJwtCompacto(valor: string | undefined | null) {
+  if (!valor) return false;
+  return valor.split(".").length === 3;
+}
+
 function claveSecretaSupabase() {
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) return process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (process.env.SUPABASE_SECRET_KEY) return process.env.SUPABASE_SECRET_KEY;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (esJwtCompacto(serviceRole)) return serviceRole;
 
-  const grupo = process.env.SUPABASE_SECRET_KEYS;
-  if (grupo) {
-    try {
-      const claves = JSON.parse(grupo) as Record<string, string>;
-      if (claves.default) return claves.default;
-    } catch {
-      // No se exponen valores secretos en mensajes ni logs.
-    }
-  }
-
+  // Las nuevas claves secretas de Supabase (por ejemplo sb_secret_...)
+  // no se envían como Bearer JWT a Storage desde este cliente.
+  // Si no existe una service_role JWT válida, se usa la pasarela segura.
   return null;
 }
 
