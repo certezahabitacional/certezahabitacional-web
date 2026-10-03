@@ -130,6 +130,58 @@ enum TipoEvento {
   DESBLOQUEAR_LIBERACION
 }
 
+
+enum EstadoProyectoGeneradores {
+  NUEVO
+  RECEPCION_DOCUMENTAL
+  EN_ANALISIS
+  CATALOGO_EN_REVISION
+  EN_CUANTIFICACION
+  EN_REVISION_TECNICA
+  LISTO_ENTREGA
+  CERRADO
+  INFORMACION_INCOMPLETA
+  SUSPENDIDO
+  EN_ESPERA_CLIENTE
+  PROYECTO_MODIFICADO
+}
+
+enum OrigenConceptoGeneradores {
+  CLIENTE
+  CERTEZA_TECNICA
+  PROYECTO
+  MODIFICACION
+}
+
+enum EstadoConceptoGeneradores {
+  PROPUESTO_PENDIENTE_APROBACION
+  APROBADO_PARA_CUANTIFICACION
+  EN_CUANTIFICACION
+  REQUIERE_REVISION
+  REVISADO
+  APROBADO
+  CERRADO
+  INFORMACION_INSUFICIENTE
+  CAMBIO_PROYECTO
+}
+
+enum EstadoGeneradorObra {
+  BORRADOR
+  EN_REVISION
+  OBSERVADO
+  APROBADO
+  AUTORIZADO
+  CERRADO
+}
+
+enum EstadoSolicitudInformacion {
+  BORRADOR
+  PENDIENTE
+  RESPONDIDA
+  CERRADA
+  CANCELADA
+}
+
 model PlantillaInspeccion {
   id String @id @default(cuid())
   nombre String
@@ -202,6 +254,11 @@ model Usuario {
   observacionesAgenda ObservacionAgenda[] @relation("ObservacionAgendaRegistradaPor")
   revisionesInspeccion RevisionInspeccion[] @relation("RevisionUsuario")
   bloqueosLiberacion Inspeccion[] @relation("InspeccionBloqueadaPor")
+  proyectosGeneradoresCreados ProyectoGeneradores[] @relation("ProyectoGeneradoresCreadoPor")
+  proyectosGeneradoresResponsable ProyectoGeneradores[] @relation("ProyectoGeneradoresResponsable")
+  generadoresElaborados GeneradorObra[] @relation("GeneradorElaboradoPor")
+  generadoresRevisados GeneradorObra[] @relation("GeneradorRevisadoPor")
+  generadoresAutorizados GeneradorObra[] @relation("GeneradorAutorizadoPor")
   reasignacionesSolicitadas ReasignacionInspector[] @relation("ReasignacionSolicitadaPor")
   reasignacionesResueltas ReasignacionInspector[] @relation("ReasignacionResueltaPor")
   @@index([bloqueadoHasta])
@@ -629,4 +686,252 @@ model CotizacionVersion {
   @@unique([cotizacionId, version])
   @@index([cotizacionId])
   @@index([creadaEn])
+}
+
+
+model ProyectoGeneradores {
+  id String @id @default(cuid())
+  codigo String @unique
+  nombre String
+  clienteNombre String
+  ubicacion String?
+  tipoEdificacion String?
+  superficieM2 Decimal? @db.Decimal(14, 2)
+  niveles Int?
+  alcance String?
+  estado EstadoProyectoGeneradores @default(NUEVO)
+  fechaInicio DateTime @default(now())
+  fechaObjetivo DateTime?
+  observaciones String?
+  creadoPorId String
+  creadoPor Usuario @relation("ProyectoGeneradoresCreadoPor", fields: [creadoPorId], references: [id], onDelete: Restrict)
+  responsableId String?
+  responsable Usuario? @relation("ProyectoGeneradoresResponsable", fields: [responsableId], references: [id], onDelete: SetNull)
+  documentos DocumentoProyectoGeneradores[]
+  conceptos ConceptoGeneradores[]
+  elementos ElementoConstructivoGeneradores[]
+  generadores GeneradorObra[]
+  solicitudes SolicitudInformacionGeneradores[]
+  inconsistencias InconsistenciaProyectoGeneradores[]
+  cambios CambioProyectoGeneradores[]
+  reportes ReporteProyectoGeneradores[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([estado])
+  @@index([creadoPorId])
+  @@index([responsableId])
+  @@index([fechaObjetivo])
+}
+
+model DocumentoProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  nombreArchivo String
+  rutaArchivo String?
+  tipoDocumento String
+  especialidad String?
+  clave String?
+  titulo String?
+  revision String?
+  fechaDocumento DateTime?
+  fechaRecepcion DateTime @default(now())
+  vigente Boolean @default(true)
+  observaciones String?
+  elementos ElementoConstructivoGeneradores[]
+  detallesGenerador DetalleGeneradorObra[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([proyectoId])
+  @@index([clave])
+  @@index([vigente])
+}
+
+model ConceptoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  clave String?
+  partida String?
+  descripcion String
+  unidad String
+  origen OrigenConceptoGeneradores
+  estado EstadoConceptoGeneradores @default(PROPUESTO_PENDIENTE_APROBACION)
+  observaciones String?
+  elementos ElementoConstructivoGeneradores[]
+  generadores GeneradorObra[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([proyectoId])
+  @@index([estado])
+  @@index([partida])
+}
+
+model ElementoConstructivoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  documentoId String?
+  documento DocumentoProyectoGeneradores? @relation(fields: [documentoId], references: [id], onDelete: SetNull)
+  conceptoId String?
+  concepto ConceptoGeneradores? @relation(fields: [conceptoId], references: [id], onDelete: SetNull)
+  clave String?
+  tipo String
+  nivel String?
+  eje String?
+  tramo String?
+  descripcion String?
+  datosGeometricos Json?
+  confianza Decimal? @db.Decimal(5, 2)
+  requiereRevision Boolean @default(true)
+  mediciones MedicionElementoGeneradores[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([proyectoId])
+  @@index([documentoId])
+  @@index([conceptoId])
+  @@index([tipo])
+}
+
+model MedicionElementoGeneradores {
+  id String @id @default(cuid())
+  elementoId String
+  elemento ElementoConstructivoGeneradores @relation(fields: [elementoId], references: [id], onDelete: Cascade)
+  magnitud String
+  unidad String
+  formula String?
+  datos Json?
+  valor Decimal @db.Decimal(18, 6)
+  creadoEn DateTime @default(now())
+
+  @@index([elementoId])
+  @@index([magnitud])
+}
+
+model GeneradorObra {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  conceptoId String
+  concepto ConceptoGeneradores @relation(fields: [conceptoId], references: [id], onDelete: Restrict)
+  folio String
+  estado EstadoGeneradorObra @default(BORRADOR)
+  total Decimal @default(0) @db.Decimal(18, 6)
+  elaboradoPorId String
+  elaboradoPor Usuario @relation("GeneradorElaboradoPor", fields: [elaboradoPorId], references: [id], onDelete: Restrict)
+  revisadoPorId String?
+  revisadoPor Usuario? @relation("GeneradorRevisadoPor", fields: [revisadoPorId], references: [id], onDelete: SetNull)
+  revisadoEn DateTime?
+  autorizadoPorId String?
+  autorizadoPor Usuario? @relation("GeneradorAutorizadoPor", fields: [autorizadoPorId], references: [id], onDelete: SetNull)
+  autorizadoEn DateTime?
+  observaciones String?
+  detalles DetalleGeneradorObra[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, folio])
+  @@index([proyectoId])
+  @@index([conceptoId])
+  @@index([estado])
+}
+
+model DetalleGeneradorObra {
+  id String @id @default(cuid())
+  generadorId String
+  generador GeneradorObra @relation(fields: [generadorId], references: [id], onDelete: Cascade)
+  documentoId String?
+  documento DocumentoProyectoGeneradores? @relation(fields: [documentoId], references: [id], onDelete: SetNull)
+  eje String?
+  tramo String?
+  elemento String?
+  largo Decimal? @db.Decimal(18, 6)
+  ancho Decimal? @db.Decimal(18, 6)
+  alto Decimal? @db.Decimal(18, 6)
+  piezas Decimal? @db.Decimal(18, 6)
+  factor Decimal? @db.Decimal(18, 6)
+  subtotal Decimal @db.Decimal(18, 6)
+  comentarios String?
+  creadoEn DateTime @default(now())
+
+  @@index([generadorId])
+  @@index([documentoId])
+}
+
+model SolicitudInformacionGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  folio String
+  documentoReferencia String?
+  ubicacionReferencia String?
+  elementoReferencia String?
+  situacion String
+  informacionRequerida String
+  respuesta String?
+  estado EstadoSolicitudInformacion @default(BORRADOR)
+  fechaRespuesta DateTime?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, folio])
+  @@index([proyectoId])
+  @@index([estado])
+}
+
+model InconsistenciaProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  tipo String?
+  descripcion String
+  referenciaA String?
+  referenciaB String?
+  severidad String?
+  resuelta Boolean @default(false)
+  resolucion String?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([proyectoId])
+  @@index([resuelta])
+}
+
+model CambioProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  conceptoId String?
+  descripcion String
+  valorAnterior Decimal? @db.Decimal(18, 6)
+  valorNuevo Decimal? @db.Decimal(18, 6)
+  unidad String?
+  documentoAnterior String?
+  documentoNuevo String?
+  motivo String?
+  creadoEn DateTime @default(now())
+
+  @@index([proyectoId])
+  @@index([conceptoId])
+}
+
+model ReporteProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  tipo String
+  version Int @default(1)
+  rutaArchivo String?
+  estado String @default("BORRADOR")
+  datos Json?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, tipo, version])
+  @@index([proyectoId])
+  @@index([tipo])
 }
