@@ -106,6 +106,7 @@ export default function CargaGaleriaConPreview({
         if (retorno) formData.set("retorno", retorno);
         await subirFoto(formData);
       } catch (e) {
+        if (e instanceof Error && e.message === "NEXT_REDIRECT") throw e;
         setError(e instanceof Error ? e.message : "No fue posible guardar la fotografía.");
       }
     });
