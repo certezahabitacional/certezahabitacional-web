@@ -20,19 +20,19 @@ export default function PanelMenu({ opciones }: { opciones: OpcionNavegacionPane
   if (visibles.length === 0) return null;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 px-4 py-2 backdrop-blur sm:py-3">
-      <div className="mx-auto max-w-7xl">
+    <nav className="certeza-panel-menu sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 px-4 py-2 backdrop-blur sm:py-3">
+      <div className="certeza-panel-menu-inner mx-auto max-w-7xl">
         <button
           type="button"
           onClick={() => setAbierto((v) => !v)}
-          className="flex min-h-11 w-full items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 px-4 py-2 text-left text-sm font-black uppercase tracking-wide text-slate-100 sm:hidden"
+          className="certeza-panel-menu-toggle flex min-h-11 w-full items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 px-4 py-2 text-left text-sm font-black uppercase tracking-wide text-slate-100 sm:hidden"
           aria-expanded={abierto}
         >
           <span>Menú</span>
           <span aria-hidden="true">{abierto ? "✕" : "☰"}</span>
         </button>
 
-        <div className={`${abierto ? "grid" : "hidden"} mt-2 grid-cols-2 gap-2 sm:mt-0 sm:flex sm:flex-wrap sm:gap-2`}>
+        <div data-open={abierto ? "true" : "false"} className={`certeza-panel-menu-links ${abierto ? "grid" : "hidden"} mt-2 grid-cols-2 gap-2 sm:mt-0 sm:flex sm:flex-wrap sm:gap-2`}>
           {visibles.map((opcion) => (
             <Link
               key={opcion.modulo}

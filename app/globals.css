@@ -94,3 +94,146 @@ textarea {
     color: rgb(100 116 139);
   }
 }
+
+
+/* Experiencia de campo simplificada: únicamente dentro de la APP nativa. */
+.certeza-native-only {
+  display: none;
+}
+
+html[data-certeza-runtime] .certeza-platform-header {
+  position: sticky;
+  top: 0;
+  z-index: 70;
+  border-bottom-color: rgb(255 255 255 / 0.06);
+  background: rgb(2 6 23 / 0.98);
+  box-shadow: none;
+}
+
+html[data-certeza-runtime] .certeza-platform-header-inner {
+  padding: 0.65rem 0.9rem;
+  gap: 0.5rem;
+}
+
+html[data-certeza-runtime] .certeza-platform-brand {
+  gap: 0.65rem;
+}
+
+html[data-certeza-runtime] .certeza-platform-logo {
+  width: 104px;
+  max-height: 42px;
+}
+
+html[data-certeza-runtime] .certeza-platform-context {
+  padding-left: 0.65rem;
+}
+
+html[data-certeza-runtime] .certeza-platform-kicker,
+html[data-certeza-runtime] .certeza-platform-subtitle {
+  display: none;
+}
+
+html[data-certeza-runtime] .certeza-platform-title {
+  font-size: 0.95rem;
+  line-height: 1.15rem;
+}
+
+html[data-certeza-runtime] .certeza-platform-actions {
+  display: none;
+}
+
+html[data-certeza-runtime] .certeza-panel-menu {
+  top: 63px;
+  padding: 0.45rem 0.75rem;
+  border-bottom-color: rgb(255 255 255 / 0.06);
+}
+
+html[data-certeza-runtime] .certeza-panel-menu-toggle {
+  min-height: 42px;
+  border-radius: 0.9rem;
+  border-color: rgb(255 255 255 / 0.08);
+  background: rgb(15 23 42 / 0.92);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+html[data-certeza-runtime] .certeza-panel-menu-links[data-open="true"] {
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  padding-bottom: 0.35rem;
+}
+
+html[data-certeza-runtime] .certeza-panel-menu-links a {
+  justify-content: flex-start;
+  min-height: 42px;
+  border-radius: 0.9rem;
+  border-color: rgb(255 255 255 / 0.07);
+  background: rgb(15 23 42 / 0.72);
+  padding-inline: 0.9rem;
+  text-align: left;
+  font-size: 0.72rem;
+}
+
+html[data-certeza-runtime] .certeza-inspector-route {
+  padding: 0.7rem 0.9rem;
+  border-bottom-color: rgb(255 255 255 / 0.06);
+  background: rgb(3 7 18);
+}
+
+html[data-certeza-runtime] .certeza-route-label,
+html[data-certeza-runtime] .certeza-inspector-route-list {
+  display: none;
+}
+
+html[data-certeza-runtime] .certeza-native-only {
+  display: block;
+}
+
+html[data-certeza-runtime] main {
+  padding-left: 0.9rem !important;
+  padding-right: 0.9rem !important;
+}
+
+html[data-certeza-runtime] main > div {
+  max-width: 760px;
+}
+
+html[data-certeza-runtime] main h1 {
+  font-size: 1.55rem !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.02em;
+}
+
+html[data-certeza-runtime] main section,
+html[data-certeza-runtime] main form,
+html[data-certeza-runtime] main details {
+  scroll-margin-top: 150px;
+}
+
+html[data-certeza-runtime] .expediente-metodo-certeza .rounded-3xl {
+  border-radius: 1.15rem;
+}
+
+html[data-certeza-runtime] .expediente-metodo-certeza .rounded-2xl {
+  border-radius: 0.9rem;
+}
+
+html[data-certeza-runtime] .expediente-metodo-certeza button,
+html[data-certeza-runtime] .expediente-metodo-certeza a {
+  touch-action: manipulation;
+}
+
+@media (max-width: 639px) {
+  html[data-certeza-runtime] body {
+    background: #020617;
+  }
+
+  html[data-certeza-runtime] main {
+    padding-top: 0.9rem !important;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  html[data-certeza-runtime] .certeza-platform-header-inner {
+    padding-top: calc(0.65rem + env(safe-area-inset-top));
+  }
+}

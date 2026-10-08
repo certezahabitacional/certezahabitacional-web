@@ -85,19 +85,19 @@ export default async function InspeccionLayout({ children, params }: { children:
   return <>
     <RevisionCanonicaNotice inspeccionId={id} visible={!esV1 && puedeVerRevision} />
     {esInspectorV1 && (
-      <div className="print:hidden border-b border-white/10 bg-slate-950 px-4 py-3 text-white">
+      <div className="certeza-inspector-route print:hidden border-b border-white/10 bg-slate-950 px-4 py-3 text-white">
         <div className="mx-auto max-w-7xl">
-          <p className="text-[10px] font-black uppercase tracking-[.2em] text-cyan-300">Ruta del Inspector · 6 pasos</p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+          <p className="certeza-route-label text-[10px] font-black uppercase tracking-[.2em] text-cyan-300">Ruta del Inspector · 6 pasos</p>\n          <div className="certeza-native-only">\n            <div className="flex items-center justify-between gap-3">\n              <div>\n                <p className="text-[10px] font-black uppercase tracking-[.16em] text-slate-500">Inspección guiada</p>\n                <p className="mt-1 text-sm font-black text-white">Paso {pasoInspectorV1} de 6 · {pasosInspector[pasoInspectorV1 - 1]?.titulo}</p>\n              </div>\n              <span className="rounded-full bg-cyan-300/10 px-3 py-2 text-xs font-black text-cyan-200">{Math.round((pasoInspectorV1 / 6) * 100)}%</span>\n            </div>\n            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">\n              <div className="h-full rounded-full bg-cyan-300" style={{ width: `${(pasoInspectorV1 / 6) * 100}%` }} />\n            </div>\n          </div>
+          <div className="certeza-inspector-route-list mt-2 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {pasosInspector.map((paso) => {
               const actual = paso.n === pasoInspectorV1;
               const disponible = paso.n <= pasoInspectorV1 || (paso.n === 4 && Boolean(controlV1?.inspeccionTecnicaConcluidaEn));
               return disponible ? (
-                <Link key={paso.n} href={paso.href} className={`rounded-xl border px-3 py-2 text-xs font-black ${actual ? "border-cyan-300/60 bg-cyan-300/10 text-cyan-200" : "border-white/10 bg-slate-900 text-slate-300"}`}>
+                <Link key={paso.n} href={paso.href} data-state={actual ? "current" : "available"} className={`certeza-inspector-route-step rounded-xl border px-3 py-2 text-xs font-black ${actual ? "border-cyan-300/60 bg-cyan-300/10 text-cyan-200" : "border-white/10 bg-slate-900 text-slate-300"}`}>
                   <span className="block text-[10px] text-slate-500">PASO {paso.n}</span>{paso.titulo}
                 </Link>
               ) : (
-                <div key={paso.n} className="rounded-xl border border-white/5 bg-slate-950 px-3 py-2 text-xs font-black text-slate-700">
+                <div key={paso.n} data-state="locked" className="certeza-inspector-route-step rounded-xl border border-white/5 bg-slate-950 px-3 py-2 text-xs font-black text-slate-700">
                   <span className="block text-[10px]">PASO {paso.n}</span>{paso.titulo}
                 </div>
               );
