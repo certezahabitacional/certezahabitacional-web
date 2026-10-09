@@ -993,3 +993,345 @@ html[data-certeza-runtime] .expediente-metodo-certeza a {
   .ct-cta .ct-button { width: 100%; min-width: 0; }
   .ct-footer-inner { min-height: 90px; flex-direction: column; align-items: flex-start; justify-content: center; }
 }
+
+
+/* Ajustes finales según referencia visual autorizada de Certeza Técnica */
+.ct-brand-authorized img {
+  width: 245px;
+  height: 66px;
+  object-fit: contain;
+  object-position: left center;
+  border-radius: 0;
+}
+
+.ct-nav a.is-active {
+  color: #8c6519;
+  position: relative;
+}
+.ct-nav a.is-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  height: 2px;
+  background: var(--ct-gold);
+}
+
+.ct-hero {
+  min-height: 640px;
+}
+.ct-hero-overlay {
+  background:
+    linear-gradient(90deg, rgba(4,17,32,.98) 0%, rgba(5,28,54,.93) 38%, rgba(6,31,58,.62) 67%, rgba(6,22,39,.28) 100%);
+}
+.ct-hero-content {
+  position: relative;
+  z-index: 2;
+  padding-top: 74px;
+}
+.ct-hero h1 {
+  max-width: 610px;
+  font-size: clamp(58px, 6vw, 92px);
+}
+.ct-hero h1 em {
+  margin-top: 2px;
+}
+.ct-hero h2 {
+  max-width: 620px;
+  margin: 14px 0 0;
+  font: 700 clamp(26px, 2.4vw, 38px)/1.08 Georgia, "Times New Roman", serif;
+  color: #fff;
+}
+.ct-hero-content > p {
+  max-width: 620px;
+  margin-top: 22px;
+}
+.ct-hero-logo-mark {
+  position: absolute;
+  z-index: 2;
+  right: max(5vw, 54px);
+  top: 140px;
+  width: 160px;
+  height: 160px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(5,18,34,.76);
+  border: 1px solid rgba(243,207,114,.45);
+  box-shadow: 0 18px 50px rgba(0,0,0,.28);
+}
+.ct-hero-logo-mark img {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.ct-hero-benefits {
+  max-width: 820px;
+}
+.ct-hero-benefits > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ct-hero-benefits b {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(243,207,114,.7);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+}
+.ct-hero-benefits span {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.ct-section-head-centered {
+  display: block;
+  text-align: center;
+  margin-bottom: 34px;
+}
+.ct-section-head-centered > div {
+  max-width: 980px;
+  margin: 0 auto;
+}
+.ct-section-head-centered .ct-section-kicker {
+  justify-content: center;
+}
+.ct-section-head-centered h2 {
+  margin-top: 12px;
+}
+.ct-section-subtitle {
+  margin: 12px auto 0;
+  max-width: 760px;
+  color: var(--ct-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.ct-service-grid-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ct-service-grid-four .ct-service-card {
+  min-height: 485px;
+  padding: 26px 24px 24px;
+}
+.ct-service-grid-four .ct-service-card h3 {
+  font-size: 24px;
+}
+.ct-service-grid-four .ct-service-card > p {
+  font-size: 13px;
+}
+.ct-service-badge {
+  width: 58px;
+  height: 58px;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg,#d59e2c,#f4d579);
+  border: 1px solid rgba(255,255,255,.65);
+  box-shadow: 0 8px 18px rgba(15,23,42,.1);
+}
+.ct-service-badge img {
+  width: 47px;
+  height: 47px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.ct-value {
+  padding: 74px 0;
+  color: white;
+  background:
+    linear-gradient(rgba(5,25,47,.94), rgba(5,25,47,.96)),
+    url("/branding/nosotros-hero-aprobado.png") center/cover;
+}
+.ct-value-grid {
+  display: grid;
+  grid-template-columns: .95fr 1.45fr;
+  gap: 58px;
+  align-items: center;
+}
+.ct-value-copy h2 {
+  margin: 16px 0 0;
+  font: 700 clamp(38px, 4vw, 56px)/1.05 Georgia, "Times New Roman", serif;
+}
+.ct-value-copy h2 em {
+  color: var(--ct-gold-light);
+  font-style: normal;
+}
+.ct-value-copy > p {
+  margin: 20px 0 0;
+  max-width: 470px;
+  color: rgba(255,255,255,.76);
+  line-height: 1.7;
+}
+.ct-value-items {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 0;
+  border-left: 1px solid rgba(243,207,114,.45);
+}
+.ct-value-item {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 14px;
+  padding: 20px 26px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.ct-value-item > span {
+  font-size: 34px;
+  color: var(--ct-gold-light);
+}
+.ct-value-item h3 {
+  margin: 0;
+  font: 700 18px/1.15 Georgia, serif;
+}
+.ct-value-item p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(255,255,255,.68);
+}
+
+.ct-method-light {
+  color: var(--ct-ink);
+  background: #fff;
+}
+.ct-method-light .ct-section-head h2 {
+  color: var(--ct-navy);
+}
+.ct-method-light .ct-section-head > p {
+  color: var(--ct-muted);
+}
+.ct-steps-light {
+  position: relative;
+}
+.ct-steps-light::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 22px;
+  height: 2px;
+  background: linear-gradient(90deg,#d7a42f,#efe3c6,#d7a42f);
+}
+.ct-step-light {
+  position: relative;
+  min-height: 190px;
+  border: 1px solid rgba(7,26,49,.09);
+  background: #f8fafc;
+  color: var(--ct-ink);
+}
+.ct-step-light > span {
+  position: relative;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  margin: -50px auto 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ct-navy);
+  color: white;
+  font-size: 16px;
+}
+.ct-step-light h3 {
+  text-align: center;
+  color: var(--ct-navy);
+}
+.ct-step-light p {
+  text-align: center;
+  color: #5c6a7b;
+}
+
+.ct-cta-dark {
+  color: white;
+  background:
+    linear-gradient(90deg, rgba(4,22,41,.98), rgba(5,31,57,.9)),
+    url("/branding/nosotros-hero-aprobado.png") center/cover;
+}
+.ct-cta-dark h2 {
+  color: white;
+}
+.ct-cta-dark p {
+  color: rgba(255,255,255,.74);
+}
+.ct-contact-actions {
+  display: grid;
+  gap: 18px;
+  justify-items: end;
+}
+.ct-contact-actions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  color: rgba(255,255,255,.8);
+}
+.ct-contact-actions li::before {
+  content: "✓";
+  margin-right: 8px;
+  color: var(--ct-gold-light);
+  font-weight: 900;
+}
+
+@media (max-width: 1100px) {
+  .ct-service-grid-four {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+  .ct-hero-logo-mark {
+    right: 26px;
+    width: 130px;
+    height: 130px;
+  }
+  .ct-hero-logo-mark img {
+    width: 112px;
+    height: 112px;
+  }
+}
+
+@media (max-width: 760px) {
+  .ct-brand-authorized img {
+    width: 170px;
+    height: 50px;
+  }
+  .ct-hero-logo-mark {
+    display: none;
+  }
+  .ct-hero h1 {
+    font-size: 52px !important;
+  }
+  .ct-hero h2 {
+    font-size: 27px;
+  }
+  .ct-service-grid-four,
+  .ct-value-grid,
+  .ct-value-items {
+    grid-template-columns: 1fr;
+  }
+  .ct-value-items {
+    border-left: 0;
+    border-top: 1px solid rgba(243,207,114,.35);
+  }
+  .ct-steps-light::before {
+    display: none;
+  }
+  .ct-step-light > span {
+    margin: 0 0 18px;
+  }
+  .ct-contact-actions {
+    justify-items: stretch;
+  }
+}
