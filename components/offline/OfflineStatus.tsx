@@ -24,9 +24,6 @@ export default function OfflineStatus() {
   const [syncing, setSyncing] =
     useState(false);
 
-  const [justSynced, setJustSynced] =
-    useState(false);
-
   const refreshPending =
     useCallback(async () => {
       try {
@@ -69,15 +66,11 @@ export default function OfflineStatus() {
       const detail = (event as CustomEvent<{ estado?: string }>).detail;
       if (detail?.estado === "syncing") {
         setSyncing(true);
-        setJustSynced(false);
         return;
       }
 
       setSyncing(false);
-      void refreshPending().then(() => {
-        setJustSynced(true);
-        window.setTimeout(() => setJustSynced(false), 3500);
-      });
+      void refreshPending();
     };
 
     window.addEventListener(
@@ -147,7 +140,7 @@ export default function OfflineStatus() {
     return null;
   }
 
-  if (online && pending === 0 && !syncing && !justSynced) {
+  if (online && pending === 0 && !syncing) {
     return null;
   }
 
@@ -167,19 +160,15 @@ export default function OfflineStatus() {
           <p className="font-black">
             {syncing
               ? "SINCRONIZANDO"
-              : online && pending === 0 && justSynced
-                ? "TODO SINCRONIZADO ✓"
-                : online
-                  ? "Conexión recuperada"
-                  : "MODO SIN CONEXIÓN"}
+              : online
+                ? "Conexión recuperada"
+                : "MODO SIN CONEXIÓN"}
           </p>
 
           <p className="mt-0.5 text-xs text-slate-300">
             {syncing
               ? `Subiendo ${pending} cambio${pending === 1 ? "" : "s"} pendiente${pending === 1 ? "" : "s"}.`
-              : online && pending === 0 && justSynced
-                ? "No quedan fotografías ni movimientos pendientes en este dispositivo."
-                : pending > 0
+              : pending > 0
               ? `${pending} cambio${
                   pending === 1
                     ? ""
