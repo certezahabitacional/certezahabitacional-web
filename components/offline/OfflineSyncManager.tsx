@@ -95,13 +95,17 @@ export default function OfflineSyncManager() {
   const sync = useCallback(async () => {
     if (!navigator.onLine || syncingRef.current) return;
 
+    const items = await listQueueItems();
+    const pendingItems = items.filter((item) =>
+      ["PENDING", "ERROR"].includes(item.status),
+    );
+
+    if (pendingItems.length === 0) return;
+
     syncingRef.current = true;
     emitirEstado("syncing");
     try {
-      const items = await listQueueItems();
-
-      for (const item of items) {
-        if (!["PENDING", "ERROR"].includes(item.status)) continue;
+      for (const item of pendingItems) {
 
         await updateQueueItem(item.id, {
           status: "SYNCING",
