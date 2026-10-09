@@ -498,3 +498,65 @@ html[data-certeza-runtime] .expediente-metodo-certeza a {
   .tecnica-placeholder-card { padding: 34px 22px; }
   .tecnica-placeholder-card h1 { font-size: 34px !important; }
 }
+
+/* Portada autorizada Grupo Certeza */
+.grupo-approved-root {
+  min-height: 100vh;
+  padding: 0 !important;
+  background: #ffffff;
+  overflow-x: hidden;
+}
+
+.grupo-approved-stage {
+  position: relative;
+  width: 100%;
+  margin: 0;
+}
+
+.grupo-approved-image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.grupo-approved-hotspots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gc-hotspot {
+  position: absolute;
+  display: block;
+  pointer-events: auto;
+  border-radius: 10px;
+}
+
+.gc-hotspot:focus-visible {
+  outline: 3px solid #e9b13e;
+  outline-offset: 2px;
+}
+
+.gc-home { left: 43.6%; top: 1.6%; width: 4.8%; height: 5.2%; }
+.gc-tech-nav { left: 48.9%; top: 1.6%; width: 8.4%; height: 5.2%; }
+.gc-home-nav { left: 57.5%; top: 1.6%; width: 10.5%; height: 5.2%; }
+.gc-about { left: 68.8%; top: 1.6%; width: 6.2%; height: 5.2%; }
+.gc-contact { left: 75.2%; top: 1.6%; width: 6.4%; height: 5.2%; }
+.gc-login { left: 85.3%; top: 1.2%; width: 10.8%; height: 5.8%; }
+
+.gc-tech-card { left: 3.1%; top: 26.4%; width: 46.2%; height: 53.9%; }
+.gc-home-card { left: 50.8%; top: 26.4%; width: 46.2%; height: 53.9%; }
+
+@media (max-width: 760px) {
+  .grupo-approved-root {
+    min-height: auto;
+  }
+
+  .grupo-approved-stage {
+    min-width: 760px;
+  }
+
+  .grupo-approved-root {
+    overflow-x: auto;
+  }
+}
