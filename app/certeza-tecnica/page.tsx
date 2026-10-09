@@ -13,7 +13,7 @@ export default function CertezaTecnicaPage() {
     <main className="tecnica-placeholder">
       <section className="tecnica-placeholder-card">
         <Image
-          src="/branding/logo-certeza-tecnica.webp"
+          src="/branding/logo-certeza-tecnica.png"
           alt="Certeza Técnica"
           width={170}
           height={170}

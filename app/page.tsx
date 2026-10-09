@@ -66,7 +66,7 @@ export default function GrupoCertezaHome() {
                   </p>
                 </div>
                 <Image
-                  src="/branding/logo-certeza-tecnica.webp"
+                  src="/branding/logo-certeza-tecnica.png"
                   alt="Certeza Técnica"
                   width={128}
                   height={128}
