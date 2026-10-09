@@ -126,17 +126,22 @@ export default function Home() {
 
         <header className="home-header">
           <div className="home-header-inner">
-            <Link href="/" aria-label="Inicio Certeza Habitacional" className="home-brand">
-              <Image
-                src="/branding/logo-autorizado.png"
-                alt="Certeza Habitacional"
-                width={260}
-                height={210}
-                priority
-                loading="eager"
-                style={{ width: "210px", height: "auto" }}
-              />
-            </Link>
+            <div className="home-brand-column">
+              <Link href="/certeza-habitacional" aria-label="Inicio Certeza Habitacional" className="home-brand">
+                <Image
+                  src="/branding/logo-autorizado.png"
+                  alt="Certeza Habitacional"
+                  width={260}
+                  height={210}
+                  priority
+                  loading="eager"
+                  style={{ width: "210px", height: "auto" }}
+                />
+              </Link>
+              <Link href="/" className="home-group-back" aria-label="Volver a Grupo Certeza">
+                ← GRUPO CERTEZA
+              </Link>
+            </div>
 
             <nav className="home-nav">
               {menu.map((item) => (
@@ -541,7 +546,27 @@ export default function Home() {
           align-items: center;
         }
 
+        .home-brand-column {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+
         .home-brand { display: inline-flex; align-items: center; }
+
+        .home-group-back {
+          display: inline-flex;
+          align-items: center;
+          min-height: 28px;
+          color: var(--gold2);
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+        }
+
+        .home-group-back:hover { color: white; }
 
         .home-nav {
           display: flex;
@@ -1337,7 +1362,16 @@ export default function Home() {
             padding: 14px 0 20px;
           }
 
+          .home-brand-column {
+            align-items: center;
+          }
+
           .home-brand { justify-content: center; }
+
+          .home-group-back {
+            justify-content: center;
+            font-size: 10px;
+          }
 
           .home-header-actions {
             width: 100%;
