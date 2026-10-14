@@ -220,15 +220,6 @@ export default async function PuntosCriticosPage({
     inspeccion.cotizacion?.observacionesInternas,
   );
 
-  const faltanLecturasIniciales = pasos.some((pasoActual) => {
-    const d = datosPaso(pasoActual.datos);
-    return Boolean(d.pruebaProlongada) && !d.pruebaProlongadaNoAplica && !pasoActual.lecturaInicial;
-  });
-
-  if (pasos.length > 0 && faltanLecturasIniciales && !query.punto) {
-    redirect(`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`);
-  }
-
   if (pasos.length === 0) {
     return (
       <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
@@ -241,7 +232,7 @@ export default async function PuntosCriticosPage({
           </p>
           <h1 className="mt-2 text-4xl font-black">PRUEBAS DE HERMETICIDAD</h1>
           <p className="mt-3 max-w-3xl text-slate-300">
-            El recorrido inicia con las dos pruebas de hermeticidad: Hidráulica y Gas. Después continúan los siete Puntos Críticos.
+            Las pruebas de hermeticidad y los siete puntos críticos forman parte del mismo recorrido. El orden es sugerido: puedes iniciar por el punto que corresponda a la operación en campo.
           </p>
           <form action={iniciarPuntosCriticosV1} className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
             <input type="hidden" name="inspeccionId" value={id} />
@@ -349,7 +340,7 @@ export default async function PuntosCriticosPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
           <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">
-            Consultar plan de {totalRecorrido} partidas
+            Planeación opcional · {totalRecorrido} partidas
           </Link>
         </div>
 
