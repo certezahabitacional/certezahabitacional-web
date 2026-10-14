@@ -203,7 +203,12 @@ export default async function HermeticidadPage({
   for (const paso of pasos) {
     const codigo = paso.clave === "PC_GAS" ? "GAS" : "HIDRAULICA";
     const datos = datosPaso(paso.datos);
-    if (!datos.pruebaProlongada && !datos.pruebaProlongadaNoAplica) continue;
+    const pruebaDisponible =
+      codigo === "HIDRAULICA" ||
+      codigo === "GAS" ||
+      Boolean(datos.pruebaProlongada) ||
+      Boolean(datos.pruebaProlongadaNoAplica);
+    if (!pruebaDisponible) continue;
 
     const items = await prisma.$queryRaw<Item[]>`
       SELECT "id","concepto","observacion"
