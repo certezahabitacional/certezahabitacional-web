@@ -90,10 +90,20 @@ export default async function AreasPage({
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const [controlRows, areas, fotosFachada] = await Promise.all([
+  const [controlRows, criticalRows, areas, fotosFachada] = await Promise.all([
     prisma.$queryRaw<Control[]>`
       SELECT "proyectoConfirmado","areasConfirmadas"
       FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
+    `,
+    prisma.$queryRaw<Array<{ pruebasAbiertas: number }>>`
+      SELECT COUNT(*) FILTER (
+        WHERE p."clave" IN ('PC_HIDRAULICA','PC_GAS')
+          AND p."lecturaInicial" IS NOT NULL
+          AND p."lecturaFinal" IS NULL
+          AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
+      )::int AS "pruebasAbiertas"
+      FROM "ProtocoloInspeccionPaso" p
+      WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
     `,
     prisma.$queryRaw<Area[]>`
       SELECT a."id",a."codigo",a."nombre",a."tipo",a."origen",a."obligatoria",a."estado",a."comentarioFinal",
@@ -116,6 +126,7 @@ export default async function AreasPage({
   ]);
 
   const control = controlRows[0] ?? null;
+  const critical = criticalRows[0];
 
   // Esta pantalla queda reservada a la preparación del recorrido.
   // Una vez confirmadas las áreas, cualquier enlace antiguo regresa al recorrido unificado.
