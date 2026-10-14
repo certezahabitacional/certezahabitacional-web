@@ -277,42 +277,6 @@ async function herramientasDeCotizacion(inspeccionId: string) {
   return obtenerHerramientasCotizadasDesdeCotizacion(inspeccion?.cotizacion?.observacionesInternas);
 }
 
-async function verificarSecuencia(inspeccionId: string, codigo: CodigoPuntoCriticoV1) {
-  const indice = PUNTOS_CRITICOS_V1.findIndex((item) => item.codigo === codigo);
-  const anteriores = PUNTOS_CRITICOS_V1.slice(0, indice).map((item) => `PC_${item.codigo}`);
-  if (!anteriores.length) return;
-
-  const pasos = await prisma.$queryRaw<Array<{ clave: string; estado: string; datos: unknown; lecturaInicial: string | null }>>`
-    SELECT "clave","estado","datos","lecturaInicial" FROM "ProtocoloInspeccionPaso"
-    WHERE "inspeccionId"=${inspeccionId} AND "clave"=ANY(${anteriores}::text[])
-    ORDER BY "orden"
-  `;
-
-  for (const paso of pasos) {
-    if (paso.estado === "COMPLETADO" || paso.estado === "NO_APLICA") continue;
-    const datos = datosObjeto(paso.datos);
-    if (paso.estado === "EN_PROCESO" && datos.pruebaProlongada && paso.lecturaInicial) {
-      const [control] = await prisma.$queryRaw<Array<{ fotoInicial: number; pendientesOtros: number }>>`
-        SELECT
-          COUNT(*) FILTER (
-            WHERE g."concepto" ILIKE '%manómetro%' AND fa."fotografiaId" IS NOT NULL
-          )::int AS "fotoInicial",
-          COUNT(DISTINCT g."id") FILTER (
-            WHERE g."estadoV3"='PENDIENTE'
-              AND g."concepto" NOT ILIKE '%manómetro%'
-              AND g."concepto" NOT ILIKE '%lectura final%'
-          )::int AS "pendientesOtros"
-        FROM "GuiaInspeccionItem" g
-        LEFT JOIN "FotografiaArea" fa ON fa."guiaItemId"=g."id"
-        WHERE g."inspeccionId"=${inspeccionId}
-          AND g."area"=concat('__PUNTO_CRITICO__:',replace(${paso.clave},'PC_',''))
-      `;
-      if (Number(control?.fotoInicial ?? 0) > 0 && Number(control?.pendientesOtros ?? 0) === 0) continue;
-    }
-    throw new Error("Debes cerrar al 100% el punto crítico anterior antes de continuar.");
-  }
-}
-
 async function asegurarPasos(inspeccionId: string, usuarioId: string) {
   const herramientas = await herramientasDeCotizacion(inspeccionId);
   const documentos = await prisma.$queryRaw<Array<{ tipo: string; datosExtraidos: unknown }>>`
@@ -498,12 +462,6 @@ export async function configurarPuntoCriticoV1(formData: FormData) {
   if (!inspeccionId || !esCodigo(codigoTexto)) redirect("/panel/inspecciones");
   const codigo = codigoTexto;
   const { usuario, responsable } = await exigirResponsable(inspeccionId);
-
-  try {
-    await verificarSecuencia(inspeccionId, codigo);
-  } catch (error) {
-    volver(inspeccionId, codigo, "error", error instanceof Error ? error.message : "No puedes continuar todavía.");
-  }
 
   if (!["SI", "NO"].includes(aplicaTexto)) volver(inspeccionId, codigo, "error", "Selecciona SI APLICA o NO APLICA.");
   if (!["PROYECTO", "PLANTILLA"].includes(fuenteTexto)) volver(inspeccionId, codigo, "error", "Selecciona PROYECTO o PLANTILLA PRECARGADA.");
