@@ -97,3 +97,4 @@ export default async function FlujoV1Page({
 
 
   redirect(`/panel/inspecciones/${id}/campo-v1`);
+}
