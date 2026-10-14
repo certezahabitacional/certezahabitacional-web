@@ -287,7 +287,10 @@ async function asegurarPasos(inspeccionId: string, usuarioId: string) {
   let orden = 100;
   for (const punto of PUNTOS_CRITICOS_V1) {
     const proyectoDisponible = proyectoDisponibleParaPuntoCritico(punto, documentos);
-    const pruebaProlongada = tienePruebaProlongadaCotizada(punto, herramientas);
+    const pruebaProlongada =
+      punto.codigo === "HIDRAULICA" ||
+      punto.codigo === "GAS" ||
+      tienePruebaProlongadaCotizada(punto, herramientas);
     const datos: DatosPasoCritico = {
       configurado: false,
       aplica: null,
@@ -317,13 +320,10 @@ async function asegurarPasos(inspeccionId: string, usuarioId: string) {
 
 
 async function prepararPruebasHermeticidadIniciales(inspeccionId: string, usuarioId: string) {
-  const herramientas = await herramientasDeCotizacion(inspeccionId);
-
   for (const codigo of ["HIDRAULICA", "GAS"] as CodigoPuntoCriticoV1[]) {
     const punto = puntoPorCodigo(codigo);
-    if (!tienePruebaProlongadaCotizada(punto, herramientas)) continue;
 
-    const plantilla = plantillaAplicablePuntoCritico(punto, herramientas)
+    const plantilla = punto.plantilla
       .filter((item) => /manómetro/i.test(item.nombre) || /lectura final/i.test(item.nombre));
 
     if (plantilla.length < 2) continue;
@@ -484,6 +484,8 @@ export async function configurarPuntoCriticoV1(formData: FormData) {
   `;
   const datosExistentes = datosObjeto(pasoExistente?.datos);
   const pruebaProlongada =
+    codigo === "HIDRAULICA" ||
+    codigo === "GAS" ||
     Boolean(datosExistentes.pruebaProlongada) ||
     tienePruebaProlongadaCotizada(punto, herramientas);
   const herramientasEfectivas = [...herramientas];
