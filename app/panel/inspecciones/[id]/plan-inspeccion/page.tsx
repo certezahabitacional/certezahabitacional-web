@@ -315,7 +315,7 @@ export default async function PlanInspeccionPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={regreso} className="text-sm font-black text-cyan-300">← Regresar</Link>
           <span className={"rounded-full border px-4 py-2 text-xs font-black " + (planConfirmado ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200" : "border-white/10 text-slate-300")}>
-            {planConfirmado ? "PLAN CONFIRMADO" : "PLANEAR INSPECCIÓN"}
+            {planConfirmado ? "PLANEACIÓN GUARDADA" : "PLANEACIÓN OPCIONAL"}
           </span>
         </div>
 
@@ -328,7 +328,7 @@ export default async function PlanInspeccionPage({
         <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
           <p className="text-xs font-black uppercase tracking-[.22em] text-cyan-300">Preparación previa del Inspector</p>
           <h1 className="mt-2 text-3xl font-black">Qué voy a inspeccionar antes de llegar al inmueble</h1>
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">El sistema depura conceptos repetitivos en puntos maestros y prioriza el alcance según el tipo de servicio. El orden mostrado sigue siendo la ruta recomendada, pero durante la inspección podrás entrar a cualquier partida o concepto en cualquier momento.</p>
+          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">Esta planeación es una herramienta opcional de preparación y nunca bloquea el inicio de la inspección. El sistema depura conceptos repetitivos y propone una ruta, pero durante el trabajo de campo cada inspector puede entrar a cualquier partida, área o concepto en el momento que corresponda.</p>
           <div className="mt-5 flex flex-wrap gap-2"><Link href={`/panel/inspecciones/${id}/plan-inspeccion?perfil=NUEVA`} className={`rounded-full px-4 py-2 text-xs font-black ${perfil==="NUEVA"?"bg-cyan-300 text-slate-950":"border border-white/10 text-slate-300"}`}>VIVIENDA NUEVA / ENTREGA</Link><Link href={`/panel/inspecciones/${id}/plan-inspeccion?perfil=USADA`} className={`rounded-full px-4 py-2 text-xs font-black ${perfil==="USADA"?"bg-amber-300 text-slate-950":"border border-white/10 text-slate-300"}`}>VIVIENDA USADA / COMPRA</Link></div>
           {!hayPlanMaterializado && (
             <p className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-sm font-bold text-amber-200">

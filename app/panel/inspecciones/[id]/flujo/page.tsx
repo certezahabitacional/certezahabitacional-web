@@ -89,55 +89,12 @@ export default async function FlujoV1Page({
     redirect(`/panel/inspecciones/${id}/puntos-criticos`);
   }
 
-  const pendiente = pasos.find((paso) => {
-    if (paso.estado === "COMPLETADO" || paso.estado === "NO_APLICA") return false;
-
-    const esHermeticidadAbierta =
-      ["PC_HIDRAULICA", "PC_GAS"].includes(paso.clave) &&
-      paso.pruebaProlongada &&
-      Boolean(paso.lecturaInicial) &&
-      !paso.lecturaFinal &&
-      Number(paso.pendientesNormales) === 0;
-
-    // Una prueba de hermeticidad abierta NO bloquea el paso a las áreas.
-    // Su lectura final se toma después de concluir todas las áreas.
-    return !esHermeticidadAbierta;
-  });
-
-  if (pendiente) {
-    const codigo = pendiente.clave.replace(/^PC_/, "");
-    redirect(
-      `/panel/inspecciones/${id}/puntos-criticos?punto=${encodeURIComponent(codigo)}`,
-    );
+  // El orden del recorrido es sugerido. No se fuerza el primer punto pendiente:
+  // el inspector puede abrir cualquier partida o área disponible.
+  if (!control?.areasConfirmadas) {
+    redirect(`/panel/inspecciones/${id}/areas`);
   }
 
-  if (control?.areasConfirmadas) {
-    const [totalesAreas] = await prisma.$queryRaw<Array<{ total: number; completas: number }>>`
-      SELECT COUNT(*)::int AS "total",
-             COUNT(*) FILTER (WHERE "estado"='REVISADA')::int AS "completas"
-      FROM "AreaInspeccion"
-      WHERE "inspeccionId"=${id} AND "tipo" <> 'PUNTO_CRITICO'
-    `;
-    const criticosListos = pasos.every((paso) => paso.estado === "COMPLETADO" || paso.estado === "NO_APLICA" || (
-      ["PC_HIDRAULICA","PC_GAS"].includes(paso.clave) && paso.pruebaProlongada && Boolean(paso.lecturaInicial) && Number(paso.pendientesNormales) === 0
-    ));
-    if (criticosListos && Number(totalesAreas?.total ?? 0) > 0 && Number(totalesAreas?.total ?? 0) === Number(totalesAreas?.completas ?? 0)) {
-      redirect(`/panel/inspecciones/${id}/cierre-v1`);
-    }
 
-    const [areaActiva] = await prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT "id"::text
-      FROM "AreaInspeccion"
-      WHERE "inspeccionId"=${id}
-        AND "tipo" <> 'PUNTO_CRITICO'
-        AND "estado" <> 'REVISADA'
-      ORDER BY "orden","nombre"
-      LIMIT 1
-    `;
-    if (areaActiva?.id) {
-      redirect(`/panel/inspecciones/${id}/campo-v1?area=${areaActiva.id}`);
-    }
-  }
-
-  redirect(`/panel/inspecciones/${id}/areas`);
+  redirect(`/panel/inspecciones/${id}/campo-v1`);
 }
