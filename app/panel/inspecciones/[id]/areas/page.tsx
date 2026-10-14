@@ -90,40 +90,10 @@ export default async function AreasPage({
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const [controlRows, criticalRows, areas, fotosFachada] = await Promise.all([
+  const [controlRows, areas, fotosFachada] = await Promise.all([
     prisma.$queryRaw<Control[]>`
       SELECT "proyectoConfirmado","areasConfirmadas"
       FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
-    `,
-    prisma.$queryRaw<Array<{ total: number; bloqueantes: number; pruebasAbiertas: number }>>`
-      SELECT
-        COUNT(*)::int AS "total",
-        COUNT(*) FILTER (
-          WHERE p."estado" NOT IN ('COMPLETADO','NO_APLICA')
-            AND NOT (
-              p."clave" IN ('PC_HIDRAULICA','PC_GAS')
-              AND p."lecturaInicial" IS NOT NULL
-              AND p."lecturaFinal" IS NULL
-              AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
-              AND NOT EXISTS (
-                SELECT 1
-                FROM "GuiaInspeccionItem" g
-                WHERE g."inspeccionId"=p."inspeccionId"
-                  AND g."area"=concat('__PUNTO_CRITICO__:',replace(p."clave",'PC_',''))
-                  AND g."estadoV3"='PENDIENTE'
-                  AND g."concepto" NOT ILIKE '%manómetro%'
-                  AND g."concepto" NOT ILIKE '%lectura final%'
-              )
-            )
-        )::int AS "bloqueantes",
-        COUNT(*) FILTER (
-          WHERE p."clave" IN ('PC_HIDRAULICA','PC_GAS')
-            AND p."lecturaInicial" IS NOT NULL
-            AND p."lecturaFinal" IS NULL
-            AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
-        )::int AS "pruebasAbiertas"
-      FROM "ProtocoloInspeccionPaso" p
-      WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
     `,
     prisma.$queryRaw<Area[]>`
       SELECT a."id",a."codigo",a."nombre",a."tipo",a."origen",a."obligatoria",a."estado",a."comentarioFinal",
@@ -156,7 +126,6 @@ export default async function AreasPage({
   if (inspeccion.estado === EstadoInspeccion.EN_PROCESO && !control?.proyectoConfirmado) {
     redirect(`/panel/inspecciones/${id}/proyecto-v1`);
   }
-  const critical = criticalRows[0];
   const fotosFachadaConUrl = await Promise.all(
     fotosFachada.map(async (foto) => ({
       ...foto,
@@ -179,7 +148,7 @@ export default async function AreasPage({
           <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente</Link>
           <div className="flex flex-wrap gap-2">
             {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Plan de 27 partidas</Link>
+            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Planeación opcional</Link>
           </div>
         </div>
 
