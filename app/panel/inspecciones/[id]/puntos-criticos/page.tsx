@@ -553,13 +553,13 @@ export default async function PuntosCriticosPage({
                                     </a>
                                   )}
                                 </div>
-                                {!cerrado && puedeCapturar && (
+                                {puedeCapturar && !noAplica && (
                                   <form action={eliminarFotoPuntoCriticoV1} className="mt-3">
                                     <input type="hidden" name="inspeccionId" value={id} />
                                     <input type="hidden" name="codigo" value={codigoSolicitado} />
                                     <input type="hidden" name="fotografiaId" value={foto.fotografiaId} />
                                     <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">
-                                      QUITAR / REPETIR ESTA FOTO
+                                      ELIMINAR FOTOGRAFÍA
                                     </button>
                                   </form>
                                 )}
