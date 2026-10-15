@@ -95,7 +95,7 @@ export default async function ConceptoAreaCard({
   );
 
   const obs = observacion(punto.observacion);
-  const medicionObligatoria = punto.requiereMedicion && !/^vanos?( de (puerta|ventana))?$/i.test(punto.concepto.trim());
+  const permiteMedicion = punto.requiereMedicion || /^(vanos?( de (puerta|ventana))?|piso: (condición general|nivelación y planeidad))$/i.test(punto.concepto.trim());
   const noAplica = punto.estadoV3 === "NO_APLICA";
   const cerrado = punto.estadoV3 !== "PENDIENTE";
   const evidenciaCompleta = noAplica || (fotos.length >= 1 && fotos.length <= 4);
@@ -231,7 +231,8 @@ export default async function ConceptoAreaCard({
               inspeccionId={inspeccionId}
               areaId={areaId}
               itemId={punto.id}
-              requiereMedicion={medicionObligatoria}
+              requiereMedicion={false}
+              medicionOpcional={permiteMedicion}
               requiereComparacionProyecto={punto.requiereComparacionProyecto}
               origenV3={punto.origenV3}
               valorMedidoInicial={punto.valorMedido}
@@ -246,12 +247,12 @@ export default async function ConceptoAreaCard({
               <input type="hidden" name="areaId" value={areaId}/>
               <input type="hidden" name="itemId" value={punto.id}/>
 
-              {medicionObligatoria && (
+              {permiteMedicion && (
                 <div className="mb-4 rounded-xl border border-amber-300/20 bg-slate-950 p-3">
-                  <p className="text-xs font-black uppercase text-amber-200">Medición obligatoria</p>
+                  <p className="text-xs font-black uppercase text-amber-200">Medición opcional</p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <input name="valorMedido" required defaultValue={punto.valorMedido ?? ""} placeholder="Valor medido" className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
-                    <input name="unidadMedida" required defaultValue={punto.unidadMedida ?? ""} placeholder="Unidad" className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
+                    <input name="valorMedido" defaultValue={punto.valorMedido ?? ""} placeholder="Valor medido" className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
+                    <input name="unidadMedida" defaultValue={punto.unidadMedida ?? ""} placeholder="Unidad" className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
                   </div>
                   {punto.requiereComparacionProyecto && punto.origenV3 === "PROYECTO" && (
                     <input name="valorProyecto" required defaultValue={punto.valorProyecto ?? ""} placeholder="Valor de proyecto" className="mt-3 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
