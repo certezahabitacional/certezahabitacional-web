@@ -50,6 +50,7 @@ type Item = {
 type Foto = {
   fotografiaId: string;
   guiaItemId: string;
+  orden: number;
   ruta: string;
   urlTemporal: string | null;
 };
@@ -224,8 +225,8 @@ export default async function HermeticidadPage({
     const ids = [inicial?.id, final?.id].filter((x): x is string => Boolean(x));
 
     const fotosBase = ids.length
-      ? await prisma.$queryRaw<Array<{ fotografiaId: string; guiaItemId: string; ruta: string }>>`
-          SELECT f."id" AS "fotografiaId", fa."guiaItemId", f."url" AS "ruta"
+      ? await prisma.$queryRaw<Array<{ fotografiaId: string; guiaItemId: string; orden: number; ruta: string }>>`
+          SELECT f."id" AS "fotografiaId", fa."guiaItemId", fa."orden", f."url" AS "ruta"
           FROM "FotografiaArea" fa
           JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
           WHERE fa."guiaItemId"=ANY(${ids}::text[])
@@ -246,8 +247,8 @@ export default async function HermeticidadPage({
       datos,
       inicial,
       final,
-      fotoInicial: inicial ? fotos.find((f) => f.guiaItemId === inicial.id) : undefined,
-      fotoFinal: final ? fotos.find((f) => f.guiaItemId === final.id) : undefined,
+      fotosIniciales: inicial ? fotos.filter((f) => f.guiaItemId === inicial.id) : [],
+      fotosFinales: final ? fotos.filter((f) => f.guiaItemId === final.id) : [],
       obs: observacion(final?.observacion ?? null),
     });
   }
@@ -354,7 +355,7 @@ export default async function HermeticidadPage({
             </div>
           )}
 
-          {pruebas.map(({ codigo, paso, datos, inicial, final, fotoInicial, fotoFinal, obs }) => {
+          {pruebas.map(({ codigo, paso, datos, inicial, final, fotosIniciales, fotosFinales, obs }) => {
             const etiqueta = codigo === "HIDRAULICA" ? "INSTALACIÓN HIDRÁULICA" : "INSTALACIÓN DE GAS";
             const noAplica = Boolean(datos.pruebaProlongadaNoAplica);
 
@@ -393,11 +394,15 @@ export default async function HermeticidadPage({
                       <div className="rounded-2xl bg-emerald-300/10 p-4 text-emerald-200">
                         <p className="font-black">LECTURA INICIAL REGISTRADA ✓</p>
                         <p className="mt-2 text-sm">{paso.lecturaInicial} {paso.unidad ?? ""}</p>
-                        {fotoInicial?.urlTemporal && (
-                          <a href={fotoInicial.urlTemporal} target="_blank" rel="noreferrer" className="mt-3 block max-w-xl bg-black">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={fotoInicial.urlTemporal} alt={`Lectura inicial ${etiqueta}`} className="h-64 w-full object-contain" />
-                          </a>
+                        {fotosIniciales.length > 0 && (
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            {fotosIniciales.map((foto) => (
+                              <a key={foto.fotografiaId} href={foto.urlTemporal ?? "#"} target="_blank" rel="noreferrer" className="block bg-black">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                {foto.urlTemporal && <img src={foto.urlTemporal} alt={`Lectura inicial ${etiqueta} · foto ${foto.orden}`} className="h-64 w-full object-contain" />}
+                              </a>
+                            ))}
+                          </div>
                         )}
                         {puedeCapturar && (
                           <form action={reabrirPruebaProlongadaV1} className="mt-4">
@@ -412,30 +417,37 @@ export default async function HermeticidadPage({
                       </div>
                     ) : (
                       <>
-                        {!fotoInicial?.urlTemporal ? (
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <CapturaCamara inspeccionId={id} codigo={codigo} itemId={inicial.id} numeroFoto={1} totalFotos={1} retorno="HERMETICIDAD_INICIO" subirFoto={subirFotoPuntoCriticoV1} />
-                            <CargaGaleriaConPreview inspeccionId={id} codigo={codigo} itemId={inicial.id} numeroFoto={1} totalFotos={1} retorno="HERMETICIDAD_INICIO" subirFoto={subirFotoPuntoCriticoV1} />
+                        {fotosIniciales.length > 0 && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {fotosIniciales.map((foto) => (
+                              <div key={foto.fotografiaId} className="overflow-hidden rounded-xl border border-white/10 bg-slate-950">
+                                {foto.urlTemporal && (
+                                  <a href={foto.urlTemporal} target="_blank" rel="noreferrer" className="block bg-black">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={foto.urlTemporal} alt={`Lectura inicial ${etiqueta} · foto ${foto.orden}`} className="h-64 w-full object-contain" />
+                                  </a>
+                                )}
+                                {puedeCapturar && (
+                                  <form action={eliminarFotoPuntoCriticoV1} className="p-2">
+                                    <input type="hidden" name="inspeccionId" value={id}/>
+                                    <input type="hidden" name="codigo" value={codigo}/>
+                                    <input type="hidden" name="fotografiaId" value={foto.fotografiaId}/>
+                                    <input type="hidden" name="retorno" value="HERMETICIDAD_INICIO"/>
+                                    <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">ELIMINAR FOTOGRAFÍA</button>
+                                  </form>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        ) : (
-                          <div className="max-w-xl">
-                            <a href={fotoInicial.urlTemporal} target="_blank" rel="noreferrer" className="block bg-black">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={fotoInicial.urlTemporal} alt={`Lectura inicial ${etiqueta}`} className="h-64 w-full object-contain" />
-                            </a>
-                            {puedeCapturar && (
-                              <form action={eliminarFotoPuntoCriticoV1} className="mt-2">
-                                <input type="hidden" name="inspeccionId" value={id}/>
-                                <input type="hidden" name="codigo" value={codigo}/>
-                                <input type="hidden" name="fotografiaId" value={fotoInicial.fotografiaId}/>
-                                <input type="hidden" name="retorno" value="HERMETICIDAD_INICIO"/>
-                                <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">QUITAR / REPETIR FOTO INICIAL</button>
-                              </form>
-                            )}
+                        )}
+                        {puedeCapturar && fotosIniciales.length < 4 && (
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <CapturaCamara inspeccionId={id} codigo={codigo} itemId={inicial.id} numeroFoto={fotosIniciales.length + 1} totalFotos={4} retorno="HERMETICIDAD_INICIO" subirFoto={subirFotoPuntoCriticoV1} />
+                            <CargaGaleriaConPreview inspeccionId={id} codigo={codigo} itemId={inicial.id} numeroFoto={fotosIniciales.length + 1} totalFotos={4} retorno="HERMETICIDAD_INICIO" subirFoto={subirFotoPuntoCriticoV1} />
                           </div>
                         )}
 
-                        {fotoInicial && (
+                        {fotosIniciales.length > 0 && (
                           <OfflineHermeticityStartForm
                             inspeccionId={id}
                             codigo={codigo}
@@ -444,7 +456,7 @@ export default async function HermeticidadPage({
                           />
                         )}
 
-                        {!fotoInicial && puedeCapturar && (
+                        {fotosIniciales.length === 0 && puedeCapturar && (
                           <form action={marcarPruebaProlongadaNoAplicaV1} className="mt-4">
                             <input type="hidden" name="inspeccionId" value={id} />
                             <input type="hidden" name="codigo" value={codigo} />
@@ -484,30 +496,37 @@ export default async function HermeticidadPage({
                       </p>
                     ) : (
                       <>
-                        {!fotoFinal?.urlTemporal ? (
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <CapturaCamara inspeccionId={id} codigo={codigo} itemId={final.id} numeroFoto={1} totalFotos={1} retorno="HERMETICIDAD_CIERRE" subirFoto={subirFotoPuntoCriticoV1} />
-                            <CargaGaleriaConPreview inspeccionId={id} codigo={codigo} itemId={final.id} numeroFoto={1} totalFotos={1} retorno="HERMETICIDAD_CIERRE" subirFoto={subirFotoPuntoCriticoV1} />
+                        {fotosFinales.length > 0 && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {fotosFinales.map((foto) => (
+                              <div key={foto.fotografiaId} className="overflow-hidden rounded-xl border border-white/10 bg-slate-950">
+                                {foto.urlTemporal && (
+                                  <a href={foto.urlTemporal} target="_blank" rel="noreferrer" className="block bg-black">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={foto.urlTemporal} alt={`Lectura final ${etiqueta} · foto ${foto.orden}`} className="h-64 w-full object-contain" />
+                                  </a>
+                                )}
+                                {puedeCapturar && (
+                                  <form action={eliminarFotoPuntoCriticoV1} className="p-2">
+                                    <input type="hidden" name="inspeccionId" value={id}/>
+                                    <input type="hidden" name="codigo" value={codigo}/>
+                                    <input type="hidden" name="fotografiaId" value={foto.fotografiaId}/>
+                                    <input type="hidden" name="retorno" value="HERMETICIDAD_CIERRE"/>
+                                    <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">ELIMINAR FOTOGRAFÍA</button>
+                                  </form>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        ) : (
-                          <div className="max-w-xl">
-                            <a href={fotoFinal.urlTemporal} target="_blank" rel="noreferrer" className="block bg-black">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={fotoFinal.urlTemporal} alt={`Lectura final ${etiqueta}`} className="h-64 w-full object-contain" />
-                            </a>
-                            {puedeCapturar && (
-                              <form action={eliminarFotoPuntoCriticoV1} className="mt-2">
-                                <input type="hidden" name="inspeccionId" value={id}/>
-                                <input type="hidden" name="codigo" value={codigo}/>
-                                <input type="hidden" name="fotografiaId" value={fotoFinal.fotografiaId}/>
-                                <input type="hidden" name="retorno" value="HERMETICIDAD_CIERRE"/>
-                                <button className="w-full rounded-xl border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">QUITAR / REPETIR FOTO FINAL</button>
-                              </form>
-                            )}
+                        )}
+                        {puedeCapturar && fotosFinales.length < 4 && (
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <CapturaCamara inspeccionId={id} codigo={codigo} itemId={final.id} numeroFoto={fotosFinales.length + 1} totalFotos={4} retorno="HERMETICIDAD_CIERRE" subirFoto={subirFotoPuntoCriticoV1} />
+                            <CargaGaleriaConPreview inspeccionId={id} codigo={codigo} itemId={final.id} numeroFoto={fotosFinales.length + 1} totalFotos={4} retorno="HERMETICIDAD_CIERRE" subirFoto={subirFotoPuntoCriticoV1} />
                           </div>
                         )}
 
-                        {fotoFinal && (
+                        {fotosFinales.length > 0 && (
                           <div className="mt-4 grid gap-4 lg:grid-cols-2">
                             <form action={generarInterpretacionIaPruebaProlongadaV1} className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
                               <input type="hidden" name="inspeccionId" value={id} />
