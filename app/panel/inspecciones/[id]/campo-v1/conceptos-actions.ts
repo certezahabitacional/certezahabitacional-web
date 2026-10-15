@@ -103,20 +103,11 @@ async function exigirAreaActiva(inspeccionId: string, areaId: string) {
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
     ORDER BY "orden","nombre"
   `;
-  const indice = areas.findIndex((area) => area.estado !== "REVISADA");
-  const solicitada = areas.find((area) => area.id === areaId);
-  if (!solicitada) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
-  if (indice < 0) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?ok=${encodeURIComponent("Todos los puntos de área están cerrados al 100%.")}`);
-  const activa = areas[indice];
-  if (activa.id !== areaId) {
-    volver(
-      inspeccionId,
-      activa.id,
-      "error",
-      `Debes concluir al 100% el Punto ${9 + indice} · ${activa.nombre} antes de avanzar.`,
-    );
+  const indice = areas.findIndex((area) => area.id === areaId);
+  if (indice < 0) {
+    redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
   }
-  return { area: activa, numero: 9 + indice };
+  return { area: areas[indice], numero: 9 + indice };
 }
 
 async function exigirAreaEditable(inspeccionId: string, areaId: string) {
@@ -126,24 +117,12 @@ async function exigirAreaEditable(inspeccionId: string, areaId: string) {
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
     ORDER BY "orden","nombre"
   `;
-  const solicitadaIndex = areas.findIndex((area) => area.id === areaId);
-  if (solicitadaIndex < 0) {
+  const indice = areas.findIndex((area) => area.id === areaId);
+  if (indice < 0) {
     redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
   }
-  const activaIndex = areas.findIndex((area) => area.estado !== "REVISADA");
-  const solicitada = areas[solicitadaIndex];
-
-  // Se permite volver a cualquier área ya cerrada y al área activa actual.
-  // No se permite saltar hacia un área futura todavía bloqueada.
-  if (solicitada.estado !== "REVISADA" && activaIndex >= 0 && solicitadaIndex !== activaIndex) {
-    volver(
-      inspeccionId,
-      areas[activaIndex].id,
-      "error",
-      `El Punto ${9 + solicitadaIndex} todavía está bloqueado. Concluye primero el punto activo.`,
-    );
-  }
-  return { area: solicitada, indice: solicitadaIndex };
+  // Navegacion libre: cualquier area puede editarse sin cerrar las anteriores.
+  return { area: areas[indice], indice };
 }
 
 async function itemArea(inspeccionId: string, areaId: string, itemId: string) {
