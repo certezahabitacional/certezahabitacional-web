@@ -255,7 +255,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const puedeOperarPreReporte = esInspector || esDirector;
-  if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
+  if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
 
   const [areas, conceptosReporte, procesos] = await Promise.all([
     prisma.$queryRaw<Area[]>`
