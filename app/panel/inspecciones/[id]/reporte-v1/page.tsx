@@ -12,6 +12,7 @@ import IndicePaginasReporte from "@/components/reportes/IndicePaginasReporte";
 import ReportPageGuides from "@/components/reportes/ReportPageGuides";
 import FiltroHallazgosReporte from "@/components/reportes/FiltroHallazgosReporte";
 import ReportExportActions from "@/components/reportes/ReportExportActions";
+import AutoPrintReport from "@/components/reportes/AutoPrintReport";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { evaluarPromedioV1, referenciaPrioridadV1 } from "@/lib/evaluacion-reporte-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
@@ -219,7 +220,7 @@ function referenciasNormativas(ciudad: string) {
 
 export default async function ReporteV1Page({ params, searchParams }: {
   params: Promise<{ id:string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; print?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -324,12 +325,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
     PC_ELECTRICA: 7,
     PC_LOSAS_AZOTEA: 8,
   };
-  const partidasReporte = [...areas].sort((a,b)=>{
+  const hayHermeticidadEjecutada = areas.some((a)=>["PC_HIDRAULICA","PC_GAS"].includes(a.codigo) && procesoPorNombre.get(a.nombre.toUpperCase())?.estado==="COMPLETADO");
+  const partidasReporte = [...areas].filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).sort((a,b)=>{
     const oa = ordenCritico[a.codigo] ?? (1000 + a.orden);
     const ob = ordenCritico[b.codigo] ?? (1000 + b.orden);
     return oa - ob || a.nombre.localeCompare(b.nombre,"es");
   });
-  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+2]));
+  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+(hayHermeticidadEjecutada?2:1)]));
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
     SELECT f."id"::text "fotografiaId",fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
@@ -450,7 +452,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const evaluacionesPorArea = new Map<string,{calificacion:number;nivel:string}>();
   const conteosPorArea = new Map<string,{definidos:number;aplicables:number;revisados:number;noAplica:number;hallazgos:number}>();
   const numeroPunto = new Map<string,number>();
-  let consecutivoPunto = 3;
+  let consecutivoPunto = hayHermeticidadEjecutada ? 3 : 1;
   for (const area of partidasReporte) {
     const todos = (conceptosTodosPorArea.get(area.id) ?? []).filter((g)=>!esConceptoHermeticidad(area.codigo,g));
     const conceptos = conceptosPorArea.get(area.id) ?? [];
@@ -500,7 +502,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
 
-  const totalPartidasReporte = 1 + partidasReporte.length;
+  const totalPartidasReporte = (hayHermeticidadEjecutada ? 1 : 0) + partidasReporte.length;
   const partidasSinHallazgos =
     (pruebasHermeticidad.some((p)=>p.inspeccionada) && pruebasHermeticidad.every((p)=>!p.inspeccionada || !p.hallazgo) ? 1 : 0)
     + partidasReporte.filter((a)=>{
@@ -548,7 +550,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
     ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
     : null;
   const tituloReporte = "Reporte de Inspección";
-  const estadoReporte = autorizado ? "AUTORIZADO" : "PENDIENTE DE AUTORIZACIÓN";
+  const esReporteParcial = !autorizado && !controlReporte?.inspeccionTecnicaConcluidaEn;
+  const estadoReporte = autorizado ? "AUTORIZADO" : esReporteParcial ? "PARCIAL · INSPECCIÓN EN PROCESO" : "PENDIENTE DE AUTORIZACIÓN";
 
   const cabeceras = await headers();
   const host = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host");
@@ -657,7 +660,17 @@ export default async function ReporteV1Page({ params, searchParams }: {
         h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
         footer{break-before:avoid;page-break-before:avoid}
       }`}</style>
-      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">REPORTE DE INSPECCIÓN</span></div>
+      {query.print === "1" && <AutoPrintReport />}
+      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3">
+        <Link href={`/panel/inspecciones/${id}/campo-v1`} className="font-black text-slate-700">← Volver a la inspección</Link>
+        <Link href={`/panel/inspecciones/${id}/reporte-v1?print=1`} className="rounded-xl bg-cyan-800 px-5 py-3 text-sm font-black text-white">IMPRIMIR / GUARDAR COMO PDF</Link>
+      </div>
+      {esReporteParcial && (
+        <section className="mx-auto mb-4 max-w-5xl rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950">
+          <p className="text-lg font-black">REPORTE PARCIAL DE AVANCE · NO FINAL</p>
+          <p className="mt-2 text-sm leading-6">Este documento refleja únicamente la información registrada hasta este momento. Existen partidas o conceptos pendientes de inspección. No representa una inspección completa, no está autorizado por Dirección y no debe presentarse como reporte final.</p>
+        </section>
+      )}
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
@@ -811,7 +824,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-desarrollo" n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
-            <article className="rounded-3xl border-2 border-amber-300 p-5">
+            {hayHermeticidadEjecutada && <article className="rounded-3xl border-2 border-amber-300 p-5">
               <div data-page-unit className="partida-header keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                 <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida 1</p><h3 className="mt-1 text-xl font-black">Pruebas de hermeticidad</h3><p className="mt-2 text-xs font-bold text-slate-500">Pruebas de hermeticidad de las instalaciones hidráulica y de gas.</p></div>
                 <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionHermeticidad.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionHermeticidad.nivel}</span></p></div>
@@ -834,8 +847,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
                   </section>;
                 })}
               </div>
-            </article>
-            {partidasReporte.filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).map((a)=>{
+            </article>}
+            {partidasReporte.map((a)=>{
               const conceptos=conceptosPorArea.get(a.id)??[];
               const evaluacionArea=evaluacionesPorArea.get(a.id);
               return <article key={a.id} className="report-card rounded-3xl border-2 border-slate-200 p-5">
@@ -861,7 +874,6 @@ export default async function ReporteV1Page({ params, searchParams }: {
                           .map((foto)=>({id:`hallazgo-${foto.id}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
                         const fotos=[...fotosHallazgo,...fotosConcepto]
                           .filter((foto,index,lista)=>Boolean(foto.urlFirmada)&&lista.findIndex((item)=>item.urlFirmada===foto.urlFirmada)===index);
-                        const foto=fotos[0];
                         const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
                         return <section key={g.id} data-page-unit className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
                           <div className="flex items-start justify-between gap-2">
@@ -875,7 +887,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                           {ev.hallazgo&&<div className="point-detail mt-2 rounded-lg bg-slate-950 p-2 text-white"><p className="font-black text-amber-300">{ev.hallazgo.prioridad} · {ev.hallazgo.titulo}</p>{ev.hallazgo.recomendacion&&<p className="mt-1 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
                           {textoDescripcion&&<p className="point-detail mt-2 text-slate-700"><strong>Descripción:</strong> {textoDescripcion}</p>}
                           {(g.valorMedido||g.valorProyecto)&&<p className="point-detail mt-2 text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Ref. ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
-                          {foto&&<figure className="mt-2 overflow-hidden rounded-lg border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="point-photo w-full bg-slate-950 object-contain"/>:<div className="point-photo grid place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-[10px] text-slate-500">{foto.descripcion??"Evidencia principal"}{fotos.length>1?` · +${fotos.length-1} evidencia(s)`:""}</figcaption></figure>}
+                          {fotos.length>0&&<div className="mt-2 grid gap-3 sm:grid-cols-2">{fotos.map((evidencia,indice)=><figure key={evidencia.id} className="overflow-hidden rounded-lg border border-slate-200">{evidencia.urlFirmada?<img src={evidencia.urlFirmada} alt={evidencia.descripcion??`${g.concepto} · Evidencia ${indice+1}`} className="point-photo w-full bg-slate-950 object-contain"/>:<div className="point-photo grid place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-[10px] text-slate-500">Evidencia {indice+1} de {fotos.length} · {evidencia.descripcion??"Fotografía del concepto"}</figcaption></figure>)}</div>}
                         </section>;
                       })}
                     </div>
