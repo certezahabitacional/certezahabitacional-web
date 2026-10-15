@@ -476,9 +476,6 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
   if (Number(item.fotos) < MIN_FOTOS_CONCEPTO || Number(item.fotos) > MAX_FOTOS_CONCEPTO) {
     volver(inspeccionId, areaId, "error", `${item.concepto} requiere entre 1 y 4 fotografías antes de cerrarse.`, itemId);
   }
-  const medicionObligatoria = item.requiereMedicion && !/^vanos?( de (puerta|ventana))?$/i.test(item.concepto.trim());
-  if (medicionObligatoria && !valorMedido) volver(inspeccionId, areaId, "error", `${item.concepto} requiere registrar el valor medido.`, itemId);
-  if (medicionObligatoria && !unidadMedida) volver(inspeccionId, areaId, "error", `${item.concepto} requiere indicar la unidad de medición.`, itemId);
   if (item.requiereComparacionProyecto && item.origenV3 === "PROYECTO" && !valorProyecto) {
     volver(inspeccionId, areaId, "error", `${item.concepto} requiere registrar el valor de proyecto para la comparación.`, itemId);
   }
