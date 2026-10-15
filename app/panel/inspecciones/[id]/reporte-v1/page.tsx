@@ -869,11 +869,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
                         const ev=evaluacionConcepto(g);
                         const textoDescripcion = descripcionReporte || ev.hallazgo?.descripcion || "";
                         const fotosConcepto=(fotosPorConcepto.get(g.id)??[])
-                          .map((foto)=>({id:`concepto-${foto.fotografiaId}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
+                          .map((foto)=>({id:foto.fotografiaId,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
                         const fotosHallazgo=(ev.hallazgo?.fotografiasFirmadas??[])
-                          .map((foto)=>({id:`hallazgo-${foto.id}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
-                        const fotos=[...fotosHallazgo,...fotosConcepto]
-                          .filter((foto,index,lista)=>Boolean(foto.urlFirmada)&&lista.findIndex((item)=>item.urlFirmada===foto.urlFirmada)===index);
+                          .map((foto)=>({id:foto.id,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
+                        // La misma fotografía puede pertenecer al concepto y al hallazgo.
+                        // Las URL firmadas son distintas en cada consulta; deduplicar por ID real.
+                        const fotos=[...fotosConcepto,...fotosHallazgo]
+                          .filter((foto,index,lista)=>Boolean(foto.urlFirmada)&&lista.findIndex((item)=>item.id===foto.id)===index);
                         const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
                         return <section key={g.id} data-page-unit className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
                           <div className="flex items-start justify-between gap-2">
