@@ -40,6 +40,8 @@ export default async function PortalLayout({
         Inspecciones
       </Link>
 
+      <Link href="/portal/reportes" className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300">REPORTES</Link>
+
       <Link
         href="/portal/inmuebles"
         className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:border-cyan-300 hover:text-cyan-300"

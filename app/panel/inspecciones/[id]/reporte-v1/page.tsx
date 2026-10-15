@@ -86,6 +86,7 @@ type EvidenciaCompleta = {
 };
 type ObservacionConcepto = {
   descripcionFinal?: string;
+  descripcionIa?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
   calificacionFinal?: number;
@@ -255,7 +256,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const puedeOperarPreReporte = esInspector || esDirector;
-  if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
+  if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
 
   const [areas, conceptosReporte, procesos] = await Promise.all([
     prisma.$queryRaw<Area[]>`
@@ -851,7 +852,9 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     <div key={`${a.id}-grupo-${grupoIndex}`} className="inspection-pair">
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
+                        const descripcionReporte = (obs.descripcionFinal ?? "").trim() || (obs.descripcionIa ?? "").trim();
                         const ev=evaluacionConcepto(g);
+                        const textoDescripcion = descripcionReporte || ev.hallazgo?.descripcion || "";
                         const fotosConcepto=(fotosPorConcepto.get(g.id)??[])
                           .map((foto)=>({id:`concepto-${foto.fotografiaId}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
                         const fotosHallazgo=(ev.hallazgo?.fotografiasFirmadas??[])
@@ -869,8 +872,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
                             <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black ${tieneHallazgo?"bg-amber-100 text-amber-900":"bg-emerald-100 text-emerald-900"}`}>{ev.nivel} · {ev.calificacion.toFixed(0)}</span>
                           </div>
                           {g.especificacion&&<p className="point-detail mt-2 text-slate-500">{g.especificacion}</p>}
-                          {ev.hallazgo&&<div className="point-detail mt-2 rounded-lg bg-slate-950 p-2 text-white"><p className="font-black text-amber-300">{ev.hallazgo.prioridad} · {ev.hallazgo.titulo}</p><p className="mt-1 text-slate-300">{ev.hallazgo.descripcion}</p>{ev.hallazgo.recomendacion&&<p className="mt-1 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
-                          {obs.descripcionFinal&&<p className="point-detail mt-2 text-slate-700"><strong>Inspector:</strong> {obs.descripcionFinal}</p>}
+                          {ev.hallazgo&&<div className="point-detail mt-2 rounded-lg bg-slate-950 p-2 text-white"><p className="font-black text-amber-300">{ev.hallazgo.prioridad} · {ev.hallazgo.titulo}</p>{ev.hallazgo.recomendacion&&<p className="mt-1 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
+                          {textoDescripcion&&<p className="point-detail mt-2 text-slate-700"><strong>Descripción:</strong> {textoDescripcion}</p>}
                           {(g.valorMedido||g.valorProyecto)&&<p className="point-detail mt-2 text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Ref. ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
                           {foto&&<figure className="mt-2 overflow-hidden rounded-lg border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="point-photo w-full bg-slate-950 object-contain"/>:<div className="point-photo grid place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-[10px] text-slate-500">{foto.descripcion??"Evidencia principal"}{fotos.length>1?` · +${fotos.length-1} evidencia(s)`:""}</figcaption></figure>}
                         </section>;
