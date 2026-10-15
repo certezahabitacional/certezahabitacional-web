@@ -874,7 +874,6 @@ export default async function ReporteV1Page({ params, searchParams }: {
                           .map((foto)=>({id:`hallazgo-${foto.id}`,urlFirmada:foto.urlFirmada,descripcion:foto.descripcion}));
                         const fotos=[...fotosHallazgo,...fotosConcepto]
                           .filter((foto,index,lista)=>Boolean(foto.urlFirmada)&&lista.findIndex((item)=>item.urlFirmada===foto.urlFirmada)===index);
-                        const foto=fotos[0];
                         const tieneHallazgo=Boolean(ev.hallazgo)||g.estadoV3==="CON_HALLAZGO";
                         return <section key={g.id} data-page-unit className="inspection-point-card rounded-2xl border border-slate-200 bg-white">
                           <div className="flex items-start justify-between gap-2">
@@ -888,7 +887,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                           {ev.hallazgo&&<div className="point-detail mt-2 rounded-lg bg-slate-950 p-2 text-white"><p className="font-black text-amber-300">{ev.hallazgo.prioridad} · {ev.hallazgo.titulo}</p>{ev.hallazgo.recomendacion&&<p className="mt-1 text-slate-300"><strong>Recomendación:</strong> {ev.hallazgo.recomendacion}</p>}</div>}
                           {textoDescripcion&&<p className="point-detail mt-2 text-slate-700"><strong>Descripción:</strong> {textoDescripcion}</p>}
                           {(g.valorMedido||g.valorProyecto)&&<p className="point-detail mt-2 text-slate-700"><strong>Medición:</strong> {g.valorMedido??"—"} {g.unidadMedida??""}{g.valorProyecto?` · Ref. ${g.valorProyecto} ${g.unidadMedida??""}`:""}</p>}
-                          {foto&&<figure className="mt-2 overflow-hidden rounded-lg border border-slate-200">{foto.urlFirmada?<img src={foto.urlFirmada} alt={foto.descripcion??g.concepto} className="point-photo w-full bg-slate-950 object-contain"/>:<div className="point-photo grid place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-[10px] text-slate-500">{foto.descripcion??"Evidencia principal"}{fotos.length>1?` · +${fotos.length-1} evidencia(s)`:""}</figcaption></figure>}
+                          {fotos.length>0&&<div className="mt-2 grid gap-3 sm:grid-cols-2">{fotos.map((evidencia,indice)=><figure key={evidencia.id} className="overflow-hidden rounded-lg border border-slate-200">{evidencia.urlFirmada?<img src={evidencia.urlFirmada} alt={evidencia.descripcion??`${g.concepto} · Evidencia ${indice+1}`} className="point-photo w-full bg-slate-950 object-contain"/>:<div className="point-photo grid place-items-center bg-slate-100 text-xs text-slate-400">Imagen no disponible</div>}<figcaption className="p-2 text-[10px] text-slate-500">Evidencia {indice+1} de {fotos.length} · {evidencia.descripcion??"Fotografía del concepto"}</figcaption></figure>)}</div>}
                         </section>;
                       })}
                     </div>
