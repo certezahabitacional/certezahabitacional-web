@@ -37,15 +37,15 @@ export async function calificarPuntoConIaV1({
   const rango=RANGOS[prioridad];
   const sb=obtenerSupabaseAdmin();
   const bucket=process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const partes:Array<Record<string,unknown>>=[];
-
-  for(const ruta of rutasEvidencia.slice(0,4)){
-    const {data,error}=await sb.storage.from(bucket).download(ruta);
-    if(error||!data) throw new Error("No fue posible recuperar una evidencia para calcular la evaluación.");
-    const mime=data.type||"image/jpeg";
-    const base64=Buffer.from(await data.arrayBuffer()).toString("base64");
-    partes.push({inlineData:{mimeType:mime,data:base64}});
-  }
+  const partes:Array<Record<string,unknown>>=await Promise.all(
+    rutasEvidencia.slice(0,4).map(async (ruta)=>{
+      const {data,error}=await sb.storage.from(bucket).download(ruta);
+      if(error||!data) throw new Error("No fue posible recuperar una evidencia para calcular la evaluación.");
+      const mime=data.type||"image/jpeg";
+      const base64=Buffer.from(await data.arrayBuffer()).toString("base64");
+      return {inlineData:{mimeType:mime,data:base64}};
+    }),
+  );
 
   partes.push({text:[
     "Actúa como evaluador técnico auxiliar de una inspección habitacional.",
@@ -72,7 +72,7 @@ export async function calificarPuntoConIaV1({
       headers:{"Content-Type":"application/json","x-goog-api-key":apiKey},
       body:JSON.stringify({
         contents:[{role:"user",parts:partes}],
-        generationConfig:{responseMimeType:"application/json",temperature:0.05},
+        generationConfig:{responseMimeType:"application/json",temperature:0.05,maxOutputTokens:240},
       }),
       cache:"no-store",
     },
