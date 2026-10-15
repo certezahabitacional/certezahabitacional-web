@@ -74,7 +74,7 @@ export default function ReportShareActions({
       >
         COMPARTIR PDF
       </button>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-4">\n        <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-amber-300/30 px-4 py-3 text-center text-sm font-black text-amber-300">ABRIR / IMPRIMIR PDF</a>
         <button
           type="button"
           onClick={compartirWhatsApp}
