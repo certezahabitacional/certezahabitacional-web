@@ -301,9 +301,9 @@ export async function eliminarFotoConceptoAreaV1(formData: FormData) {
   if (!inspeccionId || !areaId || !itemId || !fotografiaId) redirect("/panel/inspecciones");
 
   const { usuario } = await exigirResponsable(inspeccionId);
-  await exigirAreaActiva(inspeccionId, areaId);
+  await exigirAreaEditable(inspeccionId, areaId);
   const item = await itemArea(inspeccionId, areaId, itemId);
-  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "El concepto ya está cerrado.", itemId);
+  if (item.estadoV3 === "NO_APLICA") volver(inspeccionId, areaId, "error", "El concepto está marcado NO APLICA y no tiene evidencia editable.", itemId);
 
   const [foto] = await prisma.$queryRaw<Array<{ url: string }>>`
     SELECT f."url"
@@ -317,7 +317,32 @@ export async function eliminarFotoConceptoAreaV1(formData: FormData) {
   `;
   if (!foto) volver(inspeccionId, areaId, "error", "Fotografía no encontrada.", itemId);
 
-  await prisma.fotografia.delete({ where: { id: fotografiaId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.fotografia.delete({ where: { id: fotografiaId } });
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "observacion"=NULL,
+          "estadoV3"='PENDIENTE',
+          "completado"=false,
+          "cerradoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',"resultado"=NULL,"cerradaEn"=NULL,"revisadaEn"=NULL,
+          "comentarioFinal"=NULL,"actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   await obtenerSupabaseAdmin().storage.from(bucket).remove([foto.url]);
   await prisma.$executeRaw`
