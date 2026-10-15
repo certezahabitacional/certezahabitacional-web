@@ -194,6 +194,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   const totalConceptosCriticos = Number(conceptosCriticos[0]?.total ?? 0);
 
   const totalPuntos = areas.reduce((s, a) => s + Number(a.puntos), 0);
+  const totalConceptosPlan = totalPuntos + totalConceptosCriticos + 2;
   const totalPendientes = areas.reduce((s, a) => s + Number(a.pendientes), 0);
   const cerradas = areas.filter((a) => a.estado === "REVISADA").length;
   const criticosCerrados = pasosCriticos.filter((p) => p.estado === "COMPLETADO" || p.estado === "NO_APLICA").length;
@@ -256,7 +257,7 @@ export default async function CampoV1Page({ params, searchParams }: {
         <section className="mt-6 flex flex-wrap items-center gap-3">
           <details className="relative">
             <summary className="cursor-pointer list-none rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
-              IR A PARTIDA / CONCEPTO INSPECCIONADO
+              CONSULTAR TODOS LOS CONCEPTOS POR PARTIDA
             </summary>
             <div className="absolute left-0 z-40 mt-2 max-h-[70vh] w-[min(92vw,560px)] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl">
               <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="block rounded-xl border border-white/10 p-3">
@@ -293,9 +294,9 @@ export default async function CampoV1Page({ params, searchParams }: {
               })}
             </div>
           </details>
-          <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-xl border border-amber-300/30 px-4 py-3 text-sm font-black text-amber-200">
-            CONSULTAR PLAN DE {totalRecorrido} PARTIDAS
-          </Link>
+          <span className="rounded-xl border border-amber-300/30 px-4 py-3 text-sm font-black text-amber-200">
+            {totalConceptosPlan} CONCEPTOS · {totalRecorrido} PARTIDAS
+          </span>
           {desarrolloCompleto && !controlV1?.inspeccionTecnicaConcluidaEn && (
             <form action={concluirInspeccionTecnicaV1}>
               <input type="hidden" name="inspeccionId" value={id}/>
