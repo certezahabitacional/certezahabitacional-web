@@ -57,7 +57,7 @@ export default function FiltroHallazgosReporte({
     window.setTimeout(()=>window.print(),50);
     const limpiar=()=>document.documentElement.classList.remove("print-hallazgos-mode");
     window.addEventListener("afterprint",limpiar,{once:true});
-    window.setTimeout(limpiar,3000);
+    window.setTimeout(limpiar,60000);
   }
 
   return (
