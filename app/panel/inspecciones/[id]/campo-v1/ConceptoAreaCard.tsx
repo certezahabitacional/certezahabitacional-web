@@ -95,6 +95,7 @@ export default async function ConceptoAreaCard({
   );
 
   const obs = observacion(punto.observacion);
+  const medicionObligatoria = punto.requiereMedicion && !/^vanos?( de (puerta|ventana))?$/i.test(punto.concepto.trim());
   const noAplica = punto.estadoV3 === "NO_APLICA";
   const cerrado = punto.estadoV3 !== "PENDIENTE";
   const evidenciaCompleta = noAplica || (fotos.length >= 1 && fotos.length <= 4);
@@ -230,7 +231,7 @@ export default async function ConceptoAreaCard({
               inspeccionId={inspeccionId}
               areaId={areaId}
               itemId={punto.id}
-              requiereMedicion={punto.requiereMedicion}
+              requiereMedicion={medicionObligatoria}
               requiereComparacionProyecto={punto.requiereComparacionProyecto}
               origenV3={punto.origenV3}
               valorMedidoInicial={punto.valorMedido}
@@ -245,7 +246,7 @@ export default async function ConceptoAreaCard({
               <input type="hidden" name="areaId" value={areaId}/>
               <input type="hidden" name="itemId" value={punto.id}/>
 
-              {punto.requiereMedicion && (
+              {medicionObligatoria && (
                 <div className="mb-4 rounded-xl border border-amber-300/20 bg-slate-950 p-3">
                   <p className="text-xs font-black uppercase text-amber-200">Medición obligatoria</p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
