@@ -86,6 +86,7 @@ type EvidenciaCompleta = {
 };
 type ObservacionConcepto = {
   descripcionFinal?: string;
+  descripcionIa?: string;
   clasificacionFinal?: string;
   prioridadFinal?: string;
   calificacionFinal?: number;
@@ -851,7 +852,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     <div key={`${a.id}-grupo-${grupoIndex}`} className="inspection-pair">
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
-                        const descripcionReporte = (obs.descripcionFinal ?? "").trim();
+                        const descripcionReporte = (obs.descripcionFinal ?? "").trim() || (obs.descripcionIa ?? "").trim();
                         const ev=evaluacionConcepto(g);
                         const textoDescripcion = descripcionReporte || ev.hallazgo?.descripcion || "";
                         const fotosConcepto=(fotosPorConcepto.get(g.id)??[])
