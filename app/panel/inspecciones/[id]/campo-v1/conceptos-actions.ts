@@ -103,20 +103,11 @@ async function exigirAreaActiva(inspeccionId: string, areaId: string) {
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
     ORDER BY "orden","nombre"
   `;
-  const indice = areas.findIndex((area) => area.estado !== "REVISADA");
-  const solicitada = areas.find((area) => area.id === areaId);
-  if (!solicitada) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
-  if (indice < 0) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?ok=${encodeURIComponent("Todos los puntos de área están cerrados al 100%.")}`);
-  const activa = areas[indice];
-  if (activa.id !== areaId) {
-    volver(
-      inspeccionId,
-      activa.id,
-      "error",
-      `Debes concluir al 100% el Punto ${9 + indice} · ${activa.nombre} antes de avanzar.`,
-    );
+  const indice = areas.findIndex((area) => area.id === areaId);
+  if (indice < 0) {
+    redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
   }
-  return { area: activa, numero: 9 + indice };
+  return { area: areas[indice], numero: 9 + indice };
 }
 
 async function exigirAreaEditable(inspeccionId: string, areaId: string) {
@@ -126,24 +117,12 @@ async function exigirAreaEditable(inspeccionId: string, areaId: string) {
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
     ORDER BY "orden","nombre"
   `;
-  const solicitadaIndex = areas.findIndex((area) => area.id === areaId);
-  if (solicitadaIndex < 0) {
+  const indice = areas.findIndex((area) => area.id === areaId);
+  if (indice < 0) {
     redirect(`/panel/inspecciones/${inspeccionId}/campo-v1?error=${encodeURIComponent("El punto de área no pertenece a esta inspección.")}`);
   }
-  const activaIndex = areas.findIndex((area) => area.estado !== "REVISADA");
-  const solicitada = areas[solicitadaIndex];
-
-  // Se permite volver a cualquier área ya cerrada y al área activa actual.
-  // No se permite saltar hacia un área futura todavía bloqueada.
-  if (solicitada.estado !== "REVISADA" && activaIndex >= 0 && solicitadaIndex !== activaIndex) {
-    volver(
-      inspeccionId,
-      areas[activaIndex].id,
-      "error",
-      `El Punto ${9 + solicitadaIndex} todavía está bloqueado. Concluye primero el punto activo.`,
-    );
-  }
-  return { area: solicitada, indice: solicitadaIndex };
+  // Navegacion libre: cualquier area puede editarse sin cerrar las anteriores.
+  return { area: areas[indice], indice };
 }
 
 async function itemArea(inspeccionId: string, areaId: string, itemId: string) {
@@ -301,9 +280,9 @@ export async function eliminarFotoConceptoAreaV1(formData: FormData) {
   if (!inspeccionId || !areaId || !itemId || !fotografiaId) redirect("/panel/inspecciones");
 
   const { usuario } = await exigirResponsable(inspeccionId);
-  await exigirAreaActiva(inspeccionId, areaId);
+  await exigirAreaEditable(inspeccionId, areaId);
   const item = await itemArea(inspeccionId, areaId, itemId);
-  if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, areaId, "error", "El concepto ya está cerrado.", itemId);
+  if (item.estadoV3 === "NO_APLICA") volver(inspeccionId, areaId, "error", "El concepto está marcado NO APLICA y no tiene evidencia editable.", itemId);
 
   const [foto] = await prisma.$queryRaw<Array<{ url: string }>>`
     SELECT f."url"
@@ -317,7 +296,32 @@ export async function eliminarFotoConceptoAreaV1(formData: FormData) {
   `;
   if (!foto) volver(inspeccionId, areaId, "error", "Fotografía no encontrada.", itemId);
 
-  await prisma.fotografia.delete({ where: { id: fotografiaId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.fotografia.delete({ where: { id: fotografiaId } });
+    await tx.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "observacion"=NULL,
+          "estadoV3"='PENDIENTE',
+          "completado"=false,
+          "cerradoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "id"=${itemId} AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',"resultado"=NULL,"cerradaEn"=NULL,"revisadaEn"=NULL,
+          "comentarioFinal"=NULL,"actualizadoEn"=NOW()
+      WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+    `;
+  });
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   await obtenerSupabaseAdmin().storage.from(bucket).remove([foto.url]);
   await prisma.$executeRaw`

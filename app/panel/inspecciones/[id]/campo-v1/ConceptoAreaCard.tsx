@@ -157,14 +157,14 @@ export default async function ConceptoAreaCard({
                   ) : (
                     <div className="flex h-56 items-center justify-center text-xs text-slate-500">Vista previa no disponible</div>
                   )}
-                  {editable && (
+                  {puedeCapturar && !noAplica && (
                     <form action={eliminarFotoConceptoAreaV1} className="p-3">
                       <input type="hidden" name="inspeccionId" value={inspeccionId}/>
                       <input type="hidden" name="areaId" value={areaId}/>
                       <input type="hidden" name="itemId" value={punto.id}/>
                       <input type="hidden" name="fotografiaId" value={foto.fotografiaId}/>
                       <button className="w-full rounded-lg border border-rose-300/30 px-3 py-2 text-xs font-black text-rose-300">
-                        QUITAR / REPETIR FOTO
+                        ELIMINAR FOTOGRAFÍA
                       </button>
                     </form>
                   )}

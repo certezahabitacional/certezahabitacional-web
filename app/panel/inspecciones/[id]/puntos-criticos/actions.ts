@@ -122,9 +122,10 @@ function esItemPruebaProlongada(concepto: string) {
   return /manómetro/i.test(concepto) || /lectura final/i.test(concepto);
 }
 
-function fotosRequeridas(origen: OrigenEvidencia | null, concepto: string) {
-  if (esItemPruebaProlongada(concepto)) return 1;
-  return origen === "GALERIA" ? 1 : 4;
+const MAX_FOTOS_CONCEPTO = 4;
+
+function evidenciaFotograficaValida(cantidad: number) {
+  return cantidad >= 1 && cantidad <= MAX_FOTOS_CONCEPTO;
 }
 
 function ruta(
@@ -633,16 +634,9 @@ export async function subirFotoPuntoCriticoV1(formData: FormData) {
   `;
   if (!item?.areaId) volver(inspeccionId, codigo, "error", "El concepto no pertenece a este punto crítico.");
   if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y su evidencia no puede modificarse.");
-  const origenActual = origenEvidenciaDescripcion(item.descripcionPrimera) ?? (Number(item.fotos) > 0 ? "CAMARA" : null);
-  if (!esItemPruebaProlongada(item.concepto) && origenActual && origenActual !== origenEvidencia) {
-    volver(inspeccionId, codigo, "error", "No combines cámara y galería dentro del mismo concepto. Quita la evidencia actual para cambiar de modalidad.");
-  }
-  const origenRegla = esItemPruebaProlongada(item.concepto) ? origenEvidencia : (origenActual ?? origenEvidencia);
-  const limiteFotos = fotosRequeridas(origenRegla, item.concepto);
+  const limiteFotos = MAX_FOTOS_CONCEPTO;
   if (Number(item.fotos) >= limiteFotos) {
-    volver(inspeccionId, codigo, "error", limiteFotos === 1
-      ? "Este concepto ya tiene la evidencia requerida."
-      : "Este concepto ya tiene sus 4 fotografías tomadas desde la aplicación.");
+    volver(inspeccionId, codigo, "error", "Este concepto ya tiene el máximo de 4 fotografías.");
   }
   const ordenFoto = Array.from({ length: limiteFotos }, (_, index) => index + 1)
     .find((orden) => !item.ordenes.includes(orden));
@@ -726,8 +720,8 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
     LIMIT 1
   `;
   if (!foto) volver(inspeccionId, codigo, "error", "Fotografía no encontrada.");
-  if (foto.estadoV3 !== "PENDIENTE") {
-    volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y su evidencia no puede modificarse.");
+  if (foto.estadoV3 === "NO_APLICA") {
+    volver(inspeccionId, codigo, "error", "El concepto está marcado NO APLICA y no tiene evidencia editable.");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -735,8 +729,39 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
     await tx.$executeRaw`
       UPDATE "GuiaInspeccionItem"
       SET "observacion"=${JSON.stringify({ actualizadoEn: new Date().toISOString() })},
+          "estadoV3"='PENDIENTE',
+          "completado"=false,
+          "cerradoEn"=NULL,
           "actualizadoEn"=NOW()
       WHERE "id"=${foto.guiaItemId} AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "ProtocoloInspeccionPaso"
+      SET "estado"='EN_PROCESO',
+          "completadoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "clave"=${`PC_${codigo}`}
+    `;
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',
+          "resultado"=NULL,
+          "comentarioFinal"=NULL,
+          "revisadaEn"=NULL,
+          "cerradaEn"=NULL,
+          "cerradaPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "codigo"=${`PC_${codigo}`}
+    `;
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
     `;
   });
 
@@ -1111,25 +1136,31 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
     WHERE fa."guiaItemId"=ANY(${[inicial.id, final.id]}::text[])
     ORDER BY CASE WHEN fa."guiaItemId"=${inicial.id} THEN 1 ELSE 2 END,fa."orden"
   `;
-  const fotoInicial = fotos.find((foto) => foto.guiaItemId === inicial.id);
-  const fotoFinal = fotos.find((foto) => foto.guiaItemId === final.id);
-  if (!fotoInicial || !fotoFinal) {
-    volver(inspeccionId, codigo, "error", "La IA requiere la fotografía inicial y la fotografía final del manómetro.");
+  const fotosIniciales = fotos.filter((foto) => foto.guiaItemId === inicial.id);
+  const fotosFinales = fotos.filter((foto) => foto.guiaItemId === final.id);
+  if (fotosIniciales.length < 1 || fotosFinales.length < 1) {
+    volver(inspeccionId, codigo, "error", "La IA requiere al menos una fotografía inicial y una final del manómetro.");
+  }
+  if (fotosIniciales.length > 4 || fotosFinales.length > 4) {
+    volver(inspeccionId, codigo, "error", "Cada lectura admite como máximo 4 fotografías.");
   }
 
   const sb = obtenerSupabaseAdmin();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const partes: Array<Record<string, unknown>> = [];
 
-  for (const [indice, foto] of [fotoInicial, fotoFinal].entries()) {
-    const { data, error } = await sb.storage.from(bucket).download(foto.url);
-    if (error || !data) volver(inspeccionId, codigo, "error", "No fue posible recuperar una de las fotografías del manómetro.");
-    const mime = data.type || "image/jpeg";
-    const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
-    partes.push({
-      text: indice === 0 ? "Fotografía inicial del manómetro:" : "Fotografía final del manómetro:",
-    });
-    partes.push({ inlineData: { mimeType: mime, data: base64 } });
+  for (const [momento, evidencias] of [
+    ["inicial", fotosIniciales],
+    ["final", fotosFinales],
+  ] as const) {
+    for (const [indice, foto] of evidencias.entries()) {
+      const { data, error } = await sb.storage.from(bucket).download(foto.url);
+      if (error || !data) volver(inspeccionId, codigo, "error", "No fue posible recuperar una de las fotografías del manómetro.");
+      const mime = data.type || "image/jpeg";
+      const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+      partes.push({ text: `Fotografía ${indice + 1} de ${evidencias.length} de la lectura ${momento} del manómetro:` });
+      partes.push({ inlineData: { mimeType: mime, data: base64 } });
+    }
   }
 
   partes.push({
@@ -1140,7 +1171,7 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
       `Lectura inicial registrada por el inspector: ${paso.lecturaInicial} ${paso.unidad ?? unidadFinalPropuesta}.`,
       `Lectura final registrada para análisis: ${lecturaFinalPropuesta} ${unidadFinalPropuesta}.`,
       `Variación numérica calculada por el sistema: ${variacionPresion ?? "no calculable automáticamente"}.`,
-      "Compara ambos momentos de la prueba y las dos fotografías.",
+      "Compara ambos momentos de la prueba usando todas las fotografías iniciales y finales disponibles.",
       "Describe objetivamente si la presión se mantiene, aumenta o disminuye y cuantifica la variación.",
       "Después del resultado observado, formula un DIAGNÓSTICO PROBABLE en lenguaje técnico pero prudente. No afirmes una causa como hecho si la prueba no la demuestra.",
       codigo === "HIDRAULICA"
@@ -1529,12 +1560,8 @@ export async function generarDescripcionIaPuntoCriticoV1(formData: FormData) {
     WHERE fa."guiaItemId"=${itemId}
     ORDER BY fa."orden",fa."creadoEn"
   `;
-  const origenFotos = origenEvidenciaDescripcion(fotos[0]?.descripcion) ?? (fotos.length > 0 ? "CAMARA" : null);
-  const requeridas = fotosRequeridas(origenFotos, item.concepto);
-  if (fotos.length !== requeridas) {
-    volver(inspeccionId, codigo, "error", requeridas === 1
-      ? "La evidencia de galería requiere una fotografía antes del análisis con IA."
-      : "Completa las 4 fotografías tomadas desde la aplicación antes del análisis con IA.");
+  if (!evidenciaFotograficaValida(fotos.length)) {
+    volver(inspeccionId, codigo, "error", "Agrega al menos 1 fotografía y como máximo 4 antes del análisis con IA.");
   }
 
   const sb = obtenerSupabaseAdmin();
@@ -1678,12 +1705,9 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
   `;
   if (!item) volver(inspeccionId, codigo, "error", "Concepto no encontrado.");
   if (item.estadoV3 !== "PENDIENTE") volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y no puede modificarse.");
-  const origenFotosItem = origenEvidenciaDescripcion(item.descripcionPrimera) ?? (Number(item.fotos) > 0 ? "CAMARA" : null);
-  const requeridasItem = fotosRequeridas(origenFotosItem, item.concepto);
-  if (Number(item.fotos) !== requeridasItem) {
-    volver(inspeccionId, codigo, "error", requeridasItem === 1
-      ? `${item.concepto} requiere una fotografía de galería antes de cerrarse.`
-      : `${item.concepto} requiere 4 fotografías tomadas desde la aplicación antes de cerrarse.`);
+  const fotosItem = Number(item.fotos);
+  if (!evidenciaFotograficaValida(fotosItem)) {
+    volver(inspeccionId, codigo, "error", `${item.concepto} requiere al menos 1 fotografía y admite un máximo de 4.`);
   }
   if (item.requiereMedicion && !valorMedido) {
     volver(inspeccionId, codigo, "error", `${item.concepto} requiere registrar el valor medido.`);
@@ -1806,7 +1830,7 @@ export async function guardarResultadoPuntoCriticoV1(formData: FormData) {
     entidadId: itemId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} cerró el concepto crítico “${item.concepto}” con clasificación ${clasificacionTexto}, evaluación ${calificacionFinal}/100${clasificacionTexto === "C" ? "" : `, prioridad ${prioridadTexto}`} y ${requeridasItem} evidencia(s).`,
+    descripcion: `${responsable} cerró el concepto crítico “${item.concepto}” con clasificación ${clasificacionTexto}, evaluación ${calificacionFinal}/100${clasificacionTexto === "C" ? "" : `, prioridad ${prioridadTexto}`} y ${fotosItem} evidencia(s).`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/puntos-criticos`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
@@ -1834,19 +1858,7 @@ export async function cerrarPuntoCriticoV1(formData: FormData) {
       COUNT(*) FILTER (WHERE g."estadoV3"='PENDIENTE')::int AS "pendientes",
       COUNT(*) FILTER (
         WHERE g."estadoV3" <> 'NO_APLICA'
-          AND CASE
-            WHEN g."concepto" ILIKE '%manómetro%' OR g."concepto" ILIKE '%lectura final%'
-              THEN (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 1
-            WHEN EXISTS (
-              SELECT 1
-              FROM "FotografiaArea" fa
-              JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
-              WHERE fa."guiaItemId"=g."id"
-                AND f."descripcion" LIKE '[ORIGEN:GALERIA]%'
-            )
-              THEN (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 1
-            ELSE (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") <> 4
-          END
+          AND (SELECT COUNT(*) FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") NOT BETWEEN 1 AND 4
       )::int AS "incompletosFotos",
       COALESCE((SELECT ("datos"->>'pruebaProlongada')::boolean FROM "ProtocoloInspeccionPaso"
         WHERE "inspeccionId"=${inspeccionId} AND "clave"=${`PC_${codigo}`} LIMIT 1),false) AS "pruebaProlongada",
@@ -1859,7 +1871,7 @@ export async function cerrarPuntoCriticoV1(formData: FormData) {
   `;
   if (Number(estado?.total ?? 0) === 0) volver(inspeccionId, codigo, "error", "Primero configura este punto como SI APLICA.");
   if (Number(estado?.pendientes ?? 0) > 0) volver(inspeccionId, codigo, "error", `Faltan ${estado.pendientes} concepto(s) por cerrar.`);
-  if (Number(estado?.incompletosFotos ?? 0) > 0) volver(inspeccionId, codigo, "error", "Hay conceptos sin la evidencia requerida: 1 foto de galería o 4 fotos tomadas desde la aplicación.");
+  if (Number(estado?.incompletosFotos ?? 0) > 0) volver(inspeccionId, codigo, "error", "Hay conceptos sin evidencia fotográfica. Cada concepto requiere al menos 1 fotografía y admite un máximo de 4.");
   if (estado?.pruebaProlongada && !estado.lecturaInicial) {
     volver(inspeccionId, codigo, "error", "Falta registrar la lectura inicial de la prueba prolongada.");
   }
