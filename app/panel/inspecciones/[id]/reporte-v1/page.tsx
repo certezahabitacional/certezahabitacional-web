@@ -724,7 +724,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           </p>
         </section>
       )}
-      <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} />
+      <FiltroHallazgosReporte folio={inspeccion.folio} hallazgos={hallazgosFiltrables} inmueble={inspeccion.inmueble?.alias ?? inspeccion.tipoInmueble} direccion={`${inspeccion.direccion}, ${inspeccion.ciudad}`} fechaInspeccion={fecha} />
       {autorizado && inspeccion.certificado?.codigoValidacion && (
         <ReportExportActions
           folio={inspeccion.folio}
