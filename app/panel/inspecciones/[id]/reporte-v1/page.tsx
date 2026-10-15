@@ -324,12 +324,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
     PC_ELECTRICA: 7,
     PC_LOSAS_AZOTEA: 8,
   };
-  const partidasReporte = [...areas].sort((a,b)=>{
+  const hayHermeticidadEjecutada = areas.some((a)=>["PC_HIDRAULICA","PC_GAS"].includes(a.codigo) && procesoPorNombre.get(a.nombre.toUpperCase())?.estado==="COMPLETADO");
+  const partidasReporte = [...areas].filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).sort((a,b)=>{
     const oa = ordenCritico[a.codigo] ?? (1000 + a.orden);
     const ob = ordenCritico[b.codigo] ?? (1000 + b.orden);
     return oa - ob || a.nombre.localeCompare(b.nombre,"es");
   });
-  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+2]));
+  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+(hayHermeticidadEjecutada?2:1)]));
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
     SELECT f."id"::text "fotografiaId",fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
@@ -450,7 +451,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const evaluacionesPorArea = new Map<string,{calificacion:number;nivel:string}>();
   const conteosPorArea = new Map<string,{definidos:number;aplicables:number;revisados:number;noAplica:number;hallazgos:number}>();
   const numeroPunto = new Map<string,number>();
-  let consecutivoPunto = 3;
+  let consecutivoPunto = hayHermeticidadEjecutada ? 3 : 1;
   for (const area of partidasReporte) {
     const todos = (conceptosTodosPorArea.get(area.id) ?? []).filter((g)=>!esConceptoHermeticidad(area.codigo,g));
     const conceptos = conceptosPorArea.get(area.id) ?? [];
@@ -500,7 +501,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
 
-  const totalPartidasReporte = 1 + partidasReporte.length;
+  const totalPartidasReporte = (hayHermeticidadEjecutada ? 1 : 0) + partidasReporte.length;
   const partidasSinHallazgos =
     (pruebasHermeticidad.some((p)=>p.inspeccionada) && pruebasHermeticidad.every((p)=>!p.inspeccionada || !p.hallazgo) ? 1 : 0)
     + partidasReporte.filter((a)=>{
@@ -818,7 +819,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
 
         <Seccion final={autorizado} folio={inspeccion.folio} id="sec-desarrollo" n="05" titulo="Desarrollo de la inspección" subtitulo="Inspección documentada punto por punto y organizada por partida">
           <div className="space-y-8">
-            <article className="rounded-3xl border-2 border-amber-300 p-5">
+            {hayHermeticidadEjecutada && <article className="rounded-3xl border-2 border-amber-300 p-5">
               <div data-page-unit className="partida-header keep-with-next flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
                 <div><p className="text-xs font-black uppercase tracking-[.18em] text-amber-700">Partida 1</p><h3 className="mt-1 text-xl font-black">Pruebas de hermeticidad</h3><p className="mt-2 text-xs font-bold text-slate-500">Pruebas de hermeticidad de las instalaciones hidráulica y de gas.</p></div>
                 <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-white"><p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Evaluación de partida</p><p className="mt-1 text-2xl font-black">{evaluacionHermeticidad.calificacion.toFixed(2)} <span className="text-base text-amber-300">{evaluacionHermeticidad.nivel}</span></p></div>
@@ -841,8 +842,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
                   </section>;
                 })}
               </div>
-            </article>
-            {partidasReporte.filter((a)=>(conceptosPorArea.get(a.id)??[]).length>0).map((a)=>{
+            </article>}
+            {partidasReporte.map((a)=>{
               const conceptos=conceptosPorArea.get(a.id)??[];
               const evaluacionArea=evaluacionesPorArea.get(a.id);
               return <article key={a.id} className="report-card rounded-3xl border-2 border-slate-200 p-5">
