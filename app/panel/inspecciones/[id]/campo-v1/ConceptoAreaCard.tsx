@@ -194,7 +194,7 @@ export default async function ConceptoAreaCard({
               <p className="text-xs font-black uppercase text-slate-400">
                 {fotos.length === 0 ? "Agrega la primera evidencia" : `Agregar evidencia opcional ${fotos.length + 1}/4`}
               </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 grid gap-3 grid-cols-1">
                 <CapturaConceptoArea
                   inspeccionId={inspeccionId}
                   areaId={areaId}
