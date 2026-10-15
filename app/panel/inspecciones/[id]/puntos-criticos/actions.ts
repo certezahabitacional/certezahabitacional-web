@@ -1136,25 +1136,31 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
     WHERE fa."guiaItemId"=ANY(${[inicial.id, final.id]}::text[])
     ORDER BY CASE WHEN fa."guiaItemId"=${inicial.id} THEN 1 ELSE 2 END,fa."orden"
   `;
-  const fotoInicial = fotos.find((foto) => foto.guiaItemId === inicial.id);
-  const fotoFinal = fotos.find((foto) => foto.guiaItemId === final.id);
-  if (!fotoInicial || !fotoFinal) {
-    volver(inspeccionId, codigo, "error", "La IA requiere la fotografía inicial y la fotografía final del manómetro.");
+  const fotosIniciales = fotos.filter((foto) => foto.guiaItemId === inicial.id);
+  const fotosFinales = fotos.filter((foto) => foto.guiaItemId === final.id);
+  if (fotosIniciales.length < 1 || fotosFinales.length < 1) {
+    volver(inspeccionId, codigo, "error", "La IA requiere al menos una fotografía inicial y una final del manómetro.");
+  }
+  if (fotosIniciales.length > 4 || fotosFinales.length > 4) {
+    volver(inspeccionId, codigo, "error", "Cada lectura admite como máximo 4 fotografías.");
   }
 
   const sb = obtenerSupabaseAdmin();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const partes: Array<Record<string, unknown>> = [];
 
-  for (const [indice, foto] of [fotoInicial, fotoFinal].entries()) {
-    const { data, error } = await sb.storage.from(bucket).download(foto.url);
-    if (error || !data) volver(inspeccionId, codigo, "error", "No fue posible recuperar una de las fotografías del manómetro.");
-    const mime = data.type || "image/jpeg";
-    const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
-    partes.push({
-      text: indice === 0 ? "Fotografía inicial del manómetro:" : "Fotografía final del manómetro:",
-    });
-    partes.push({ inlineData: { mimeType: mime, data: base64 } });
+  for (const [momento, evidencias] of [
+    ["inicial", fotosIniciales],
+    ["final", fotosFinales],
+  ] as const) {
+    for (const [indice, foto] of evidencias.entries()) {
+      const { data, error } = await sb.storage.from(bucket).download(foto.url);
+      if (error || !data) volver(inspeccionId, codigo, "error", "No fue posible recuperar una de las fotografías del manómetro.");
+      const mime = data.type || "image/jpeg";
+      const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+      partes.push({ text: `Fotografía ${indice + 1} de ${evidencias.length} de la lectura ${momento} del manómetro:` });
+      partes.push({ inlineData: { mimeType: mime, data: base64 } });
+    }
   }
 
   partes.push({
@@ -1165,7 +1171,7 @@ export async function generarInterpretacionIaPruebaProlongadaV1(formData: FormDa
       `Lectura inicial registrada por el inspector: ${paso.lecturaInicial} ${paso.unidad ?? unidadFinalPropuesta}.`,
       `Lectura final registrada para análisis: ${lecturaFinalPropuesta} ${unidadFinalPropuesta}.`,
       `Variación numérica calculada por el sistema: ${variacionPresion ?? "no calculable automáticamente"}.`,
-      "Compara ambos momentos de la prueba y las dos fotografías.",
+      "Compara ambos momentos de la prueba usando todas las fotografías iniciales y finales disponibles.",
       "Describe objetivamente si la presión se mantiene, aumenta o disminuye y cuantifica la variación.",
       "Después del resultado observado, formula un DIAGNÓSTICO PROBABLE en lenguaje técnico pero prudente. No afirmes una causa como hecho si la prueba no la demuestra.",
       codigo === "HIDRAULICA"
