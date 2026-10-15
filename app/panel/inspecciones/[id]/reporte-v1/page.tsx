@@ -12,6 +12,7 @@ import IndicePaginasReporte from "@/components/reportes/IndicePaginasReporte";
 import ReportPageGuides from "@/components/reportes/ReportPageGuides";
 import FiltroHallazgosReporte from "@/components/reportes/FiltroHallazgosReporte";
 import ReportExportActions from "@/components/reportes/ReportExportActions";
+import AutoPrintReport from "@/components/reportes/AutoPrintReport";
 import { nivelEvaluacionV1, obtenerMetricasV1 } from "@/lib/calificacion-v1";
 import { evaluarPromedioV1, referenciaPrioridadV1 } from "@/lib/evaluacion-reporte-v1";
 import { extraerResultadosInstrumentales } from "@/lib/resultados-instrumentales";
@@ -219,7 +220,7 @@ function referenciasNormativas(ciudad: string) {
 
 export default async function ReporteV1Page({ params, searchParams }: {
   params: Promise<{ id:string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; print?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -659,7 +660,11 @@ export default async function ReporteV1Page({ params, searchParams }: {
         h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
         footer{break-before:avoid;page-break-before:avoid}
       }`}</style>
-      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">REPORTE DE INSPECCIÓN</span></div>
+      {query.print === "1" && <AutoPrintReport />}
+      <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3">
+        <Link href={`/panel/inspecciones/${id}/campo-v1`} className="font-black text-slate-700">← Volver a la inspección</Link>
+        <Link href={`/panel/inspecciones/${id}/reporte-v1?print=1`} className="rounded-xl bg-cyan-800 px-5 py-3 text-sm font-black text-white">IMPRIMIR / GUARDAR COMO PDF</Link>
+      </div>
       {esReporteParcial && (
         <section className="mx-auto mb-4 max-w-5xl rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950">
           <p className="text-lg font-black">REPORTE PARCIAL DE AVANCE · NO FINAL</p>
