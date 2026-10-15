@@ -296,6 +296,11 @@ export default async function CampoV1Page({ params, searchParams }: {
           <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-xl border border-amber-300/30 px-4 py-3 text-sm font-black text-amber-200">
             CONSULTAR PLAN DE {totalRecorrido} PARTIDAS
           </Link>
+          {!desarrolloCompleto && (
+            <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-cyan-300/40 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-200">
+              CONSULTAR REPORTE PARCIAL DE AVANCE
+            </Link>
+          )}
           {desarrolloCompleto && !controlV1?.inspeccionTecnicaConcluidaEn && (
             <form action={concluirInspeccionTecnicaV1}>
               <input type="hidden" name="inspeccionId" value={id}/>
