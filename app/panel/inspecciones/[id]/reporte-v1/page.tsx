@@ -638,6 +638,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       @media print{
         html,body{background:#fff!important}
         .no-print{display:none!important}
+        .certeza-panel-menu{display:none!important}
         .hallazgos-print-view{display:none!important}
         html.print-hallazgos-mode .hallazgos-print-view{display:block!important}
         .page-break{break-before:page;page-break-before:always}
