@@ -159,7 +159,6 @@ export default async function AreasPage({
           <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente</Link>
           <div className="flex flex-wrap gap-2">
             {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 px-4 py-2 text-sm font-black text-amber-200">Planeación opcional</Link>
           </div>
         </div>
 
