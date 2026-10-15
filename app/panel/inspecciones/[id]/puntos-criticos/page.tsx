@@ -492,10 +492,8 @@ export default async function PuntosCriticosPage({
             {itemsNormales.map((item, index) => {
               const obs = observacionItem(item.observacion);
               const fotosItem = fotos.filter((foto) => foto.guiaItemId === item.id);
-              const origenGaleria = fotosItem.some((foto) => foto.descripcionArchivo?.includes("[ORIGEN:GALERIA]"));
-              const requeridas = origenGaleria ? 1 : 4;
               const noAplica = item.estadoV3 === "NO_APLICA";
-              const evidenciaCompleta = noAplica || fotosItem.length === requeridas;
+              const evidenciaCompleta = noAplica || (fotosItem.length >= 1 && fotosItem.length <= 4);
               const cerrado = item.estadoV3 !== "PENDIENTE";
               return (
                 <article id={`item-${item.id}`} key={item.id} className={`scroll-mt-24 rounded-3xl border p-5 ${cerrado ? "border-emerald-300/20 bg-emerald-300/5" : "border-white/10 bg-slate-900"}`}>
@@ -514,7 +512,7 @@ export default async function PuntosCriticosPage({
                         </p>
                       ) : (
                         <p className={`mt-3 text-sm font-black ${evidenciaCompleta ? "text-emerald-300" : "text-amber-300"}`}>
-                          📷 Evidencia obligatoria: {origenGaleria ? "1 foto de galería" : "4 fotos tomadas desde la aplicación"} · {fotosItem.length}/{requeridas}
+                          📷 Evidencia: mínimo 1 y máximo 4 fotografías · {fotosItem.length}/4
                         </p>
                       )}
                       {fotosItem.length > 0 && (
@@ -585,36 +583,31 @@ export default async function PuntosCriticosPage({
                         />
                       )}
 
-                      {!cerrado && puedeCapturar && !evidenciaCompleta && (
+                      {!cerrado && puedeCapturar && fotosItem.length < 4 && (
                         <div className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-4">
                           <p className="text-xs font-black uppercase tracking-wider text-slate-400">
-                            {fotosItem.length === 0 ? "Elige una modalidad de evidencia" : `Agregar fotografía ${fotosItem.length + 1}/4`}
+                            {fotosItem.length === 0 ? "Agrega la primera evidencia" : `Agregar evidencia opcional ${fotosItem.length + 1}/4`}
                           </p>
                           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            {!origenGaleria && (
-                              <CapturaCamara
-                                inspeccionId={id}
-                                codigo={codigoSolicitado}
-                                itemId={item.id}
-                                numeroFoto={fotosItem.length + 1}
-                                totalFotos={4}
-                                subirFoto={subirFotoPuntoCriticoV1}
-                              />
-                            )}
-
-                            {fotosItem.length === 0 && (
-                              <CargaGaleriaConPreview
-                                inspeccionId={id}
-                                codigo={codigoSolicitado}
-                                itemId={item.id}
-                                numeroFoto={1}
-                                totalFotos={1}
-                                subirFoto={subirFotoPuntoCriticoV1}
-                              />
-                            )}
+                            <CapturaCamara
+                              inspeccionId={id}
+                              codigo={codigoSolicitado}
+                              itemId={item.id}
+                              numeroFoto={fotosItem.length + 1}
+                              totalFotos={4}
+                              subirFoto={subirFotoPuntoCriticoV1}
+                            />
+                            <CargaGaleriaConPreview
+                              inspeccionId={id}
+                              codigo={codigoSolicitado}
+                              itemId={item.id}
+                              numeroFoto={fotosItem.length + 1}
+                              totalFotos={4}
+                              subirFoto={subirFotoPuntoCriticoV1}
+                            />
                           </div>
                           <p className="mt-3 text-[11px] leading-5 text-slate-500">
-                            Elige una sola modalidad por concepto: 4 fotografías si las tomas desde la aplicación, o 1 fotografía si la seleccionas de la galería.
+                            Puedes conservar de 1 a 4 fotografías por concepto y combinar cámara con galería. Las fotografías 2, 3 y 4 son opcionales.
                           </p>
                         </div>
                       )}
