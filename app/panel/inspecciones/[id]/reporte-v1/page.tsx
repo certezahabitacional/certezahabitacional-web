@@ -548,7 +548,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
     ? new Intl.DateTimeFormat("es-MX",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:inspeccion.zonaHoraria}).format(autorizacionDireccion.creadaEn)
     : null;
   const tituloReporte = "Reporte de Inspección";
-  const estadoReporte = autorizado ? "AUTORIZADO" : "PENDIENTE DE AUTORIZACIÓN";
+  const esReporteParcial = !autorizado && !controlReporte?.inspeccionTecnicaConcluidaEn;
+  const estadoReporte = autorizado ? "AUTORIZADO" : esReporteParcial ? "PARCIAL · INSPECCIÓN EN PROCESO" : "PENDIENTE DE AUTORIZACIÓN";
 
   const cabeceras = await headers();
   const host = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host");
@@ -658,6 +659,12 @@ export default async function ReporteV1Page({ params, searchParams }: {
         footer{break-before:avoid;page-break-before:avoid}
       }`}</style>
       <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3"><Link href={`/panel/inspecciones/${id}/cierre-v1`} className="font-black text-slate-700">← Cierre V1</Link><span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white">REPORTE DE INSPECCIÓN</span></div>
+      {esReporteParcial && (
+        <section className="mx-auto mb-4 max-w-5xl rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950">
+          <p className="text-lg font-black">REPORTE PARCIAL DE AVANCE · NO FINAL</p>
+          <p className="mt-2 text-sm leading-6">Este documento refleja únicamente la información registrada hasta este momento. Existen partidas o conceptos pendientes de inspección. No representa una inspección completa, no está autorizado por Dirección y no debe presentarse como reporte final.</p>
+        </section>
+      )}
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
       {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
