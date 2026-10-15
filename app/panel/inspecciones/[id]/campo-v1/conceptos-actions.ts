@@ -269,7 +269,7 @@ export async function subirFotoConceptoAreaV1(formData: FormData) {
     descripcion: `${responsable} agregó evidencia ${ordenFoto}/${MAX_FOTOS_CONCEPTO} (${origenEvidencia}) al concepto “${item.concepto}” en ${item.areaNombre}.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
-  volver(inspeccionId, areaId, "ok", "Fotografía registrada.", itemId);
+  // Cliente actualiza la vista con router.refresh; no enviar NEXT_REDIRECT a un callback.
 }
 
 export async function eliminarFotoConceptoAreaV1(formData: FormData) {

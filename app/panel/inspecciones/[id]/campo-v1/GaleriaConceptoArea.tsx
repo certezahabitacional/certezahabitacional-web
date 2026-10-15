@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { normalizarImagenCliente } from "./normalizarImagenCliente";
 import { saveOfflineFile } from "@/lib/offline/files";
 import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subirFoto }: Props) {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
@@ -90,6 +92,9 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
         formData.set("archivo", normalizado);
         formData.set("origenEvidencia", "GALERIA");
         await subirFoto(formData);
+        seleccionar(null);
+        setAviso("Fotografía registrada. Puedes agregar otra hasta completar 4.");
+        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "No fue posible preparar la fotografía para cargarla.");
       }
@@ -101,11 +106,11 @@ export default function GaleriaConceptoArea({ inspeccionId, areaId, itemId, subi
       <div className="rounded-xl border border-violet-300/30 bg-violet-300/5 p-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={preview} alt="Vista previa" className="h-56 w-full bg-black object-contain" />
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button type="button" onClick={guardar} disabled={enviando} className="rounded-xl bg-violet-300 px-3 py-3 text-sm font-black text-slate-950 disabled:opacity-50">
+        <div className="mt-3 flex flex-col gap-2">
+          <button type="button" onClick={guardar} disabled={enviando} className="w-full rounded-xl bg-violet-300 px-3 py-3 text-sm font-black text-slate-950 disabled:opacity-50">
             {enviando ? "COMPRIMIENDO / GUARDANDO..." : "CONSERVAR Y GUARDAR"}
           </button>
-          <button type="button" disabled={enviando} onClick={() => { seleccionar(null); void abrirGaleria(); }} className="rounded-xl border border-white/15 px-3 py-3 text-sm font-black text-slate-300">
+          <button type="button" disabled={enviando} onClick={() => { seleccionar(null); void abrirGaleria(); }} className="w-full rounded-xl border border-white/15 px-3 py-3 text-sm font-black text-slate-300">
             CAMBIAR FOTO
           </button>
         </div>

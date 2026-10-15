@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { normalizarImagenCliente } from "./normalizarImagenCliente";
 import { saveOfflineFile } from "@/lib/offline/files";
 import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
@@ -23,6 +24,7 @@ export default function CapturaConceptoArea({
   totalFotos = 4,
   subirFoto,
 }: Props) {
+  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [abierta, setAbierta] = useState(false);
@@ -162,6 +164,10 @@ export default function CapturaConceptoArea({
         formData.set("archivo", archivo);
         formData.set("origenEvidencia", "CAMARA");
         await subirFoto(formData);
+        setCaptura(null);
+        setPreview("");
+        setAviso("Fotografía registrada. Puedes agregar otra hasta completar 4.");
+        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "No fue posible preparar la fotografía para cargarla.");
       }
