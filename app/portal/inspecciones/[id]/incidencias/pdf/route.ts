@@ -72,7 +72,7 @@ export async function GET(request: NextRequest,{params}:{params:Promise<{id:stri
       headless:"shell"
     });
     const page=await browser.newPage();
-    await page.setContent(html,{waitUntil:"networkidle0",timeout:45000});
+    await page.setContent(html,{waitUntil:"load",timeout:45000});
     await page.evaluate(async()=>{await Promise.all(Array.from(document.images).map(im=>im.complete?Promise.resolve():new Promise<void>(r=>{im.addEventListener("load",()=>r(),{once:true});im.addEventListener("error",()=>r(),{once:true});setTimeout(r,5000)})));});
     const pdf=await page.pdf({format:"Letter",printBackground:true});
     const nombre=`${inspeccion.folio}-incidencias-inmobiliaria.pdf`.replace(/[^a-zA-Z0-9._-]/g,"_");
