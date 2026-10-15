@@ -65,10 +65,10 @@ export default function FiltroHallazgosReporte({
       <style>{`
         @media print {
           .hallazgos-print-view { display:none!important; }
-          html.print-hallazgos-mode body > * { display:none!important; }
-          html.print-hallazgos-mode body main { display:block!important; background:#fff!important; padding:0!important; }
-          html.print-hallazgos-mode body main > * { display:none!important; }
-          html.print-hallazgos-mode .hallazgos-print-view { display:block!important; margin:0!important; max-width:none!important; padding:0!important; }
+          html.print-hallazgos-mode main { display:block!important; background:#fff!important; padding:0!important; }
+          html.print-hallazgos-mode main > :not(.hallazgos-print-view) { display:none!important; }
+          html.print-hallazgos-mode main > .hallazgos-print-view { display:block!important; margin:0!important; max-width:none!important; padding:0!important; }
+          html.print-hallazgos-mode .certeza-panel-menu { display:none!important; }
           html.print-hallazgos-mode .hallazgos-filter-controls,
           html.print-hallazgos-mode .hallazgos-toggle,
           html.print-hallazgos-mode .hallazgos-intro { display:none!important; }
@@ -116,7 +116,7 @@ export default function FiltroHallazgosReporte({
             })}
             <button type="button" onClick={()=>setSeleccionadas(PRIORIDADES)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-black text-slate-700">TODOS</button>
             <button type="button" onClick={()=>setSeleccionadas(["P1","P2"])} className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-900">P1 + P2</button>
-            <button type="button" onClick={imprimirFiltrado} disabled={visibles.length===0} className="rounded-full bg-slate-950 px-5 py-2 text-sm font-black text-white disabled:opacity-30">IMPRIMIR / GUARDAR PDF FILTRADO</button>
+            <button type="button" onClick={imprimirFiltrado} disabled={visibles.length===0} className="rounded-full bg-slate-950 px-5 py-2 text-sm font-black text-white disabled:opacity-30">IMPRIMIR SOLO HALLAZGOS FILTRADOS / GUARDAR PDF</button>
           </div>
 
           <div className="mt-5">
