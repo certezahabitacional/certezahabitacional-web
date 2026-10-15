@@ -9,6 +9,7 @@ export default function OfflineManualConceptResult({
   areaId,
   itemId,
   requiereMedicion,
+  medicionOpcional = false,
   requiereComparacionProyecto,
   origenV3,
   valorMedidoInicial,
@@ -19,6 +20,7 @@ export default function OfflineManualConceptResult({
   areaId: string;
   itemId: string;
   requiereMedicion: boolean;
+  medicionOpcional?: boolean;
   requiereComparacionProyecto: boolean;
   origenV3: string;
   valorMedidoInicial?: string | null;
@@ -64,10 +66,6 @@ export default function OfflineManualConceptResult({
       setMensaje("Selecciona una prioridad P1–P5 para el hallazgo.");
       return;
     }
-    if (requiereMedicion && (!valorMedido || !unidadMedida)) {
-      setMensaje("Este concepto requiere valor medido y unidad.");
-      return;
-    }
     if (requiereComparacionProyecto && origenV3 === "PROYECTO" && !valorProyecto) {
       setMensaje("Este concepto requiere el valor de proyecto.");
       return;
@@ -99,10 +97,10 @@ export default function OfflineManualConceptResult({
         La IA no puede ejecutarse sin Internet. Registra tu criterio técnico; al recuperar conexión el sistema validará evidencia, calculará la evaluación y creará el hallazgo cuando corresponda.
       </p>
 
-      {requiereMedicion && (
+      {(requiereMedicion || medicionOpcional) && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <input name="valorMedido" defaultValue={valorMedidoInicial ?? ""} required placeholder="Valor medido" className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
-          <input name="unidadMedida" defaultValue={unidadInicial ?? ""} required placeholder="Unidad" className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+          <input name="valorMedido" defaultValue={valorMedidoInicial ?? ""} placeholder="Valor medido" className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+          <input name="unidadMedida" defaultValue={unidadInicial ?? ""} placeholder="Unidad" className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
         </div>
       )}
 
