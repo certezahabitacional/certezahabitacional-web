@@ -22,18 +22,18 @@ type HallazgoFiltro = {
 
 const PRIORIDADES: Prioridad[] = ["P1","P2","P3","P4","P5"];
 
-function agruparDeTres<T>(items:T[]) {
-  const grupos:T[][] = [];
-  for (let i=0;i<items.length;i+=3) grupos.push(items.slice(i,i+3));
-  return grupos;
-}
-
 export default function FiltroHallazgosReporte({
   folio,
   hallazgos,
+  inmueble,
+  direccion,
+  fechaInspeccion,
 }: {
   folio: string;
   hallazgos: HallazgoFiltro[];
+  inmueble: string;
+  direccion: string;
+  fechaInspeccion: string;
 }) {
   const [abierto,setAbierto] = useState(false);
   const [seleccionadas,setSeleccionadas] = useState<Prioridad[]>(PRIORIDADES);
@@ -42,7 +42,11 @@ export default function FiltroHallazgosReporte({
     () => hallazgos.filter((h)=>seleccionadas.includes(h.prioridad)),
     [hallazgos,seleccionadas],
   );
-  const paginas = useMemo(()=>agruparDeTres(visibles),[visibles]);
+  const partidas = useMemo(() => {
+    const grupos = new Map<string, HallazgoFiltro[]>();
+    for (const h of visibles) grupos.set(h.partida,[...(grupos.get(h.partida)??[]),h]);
+    return Array.from(grupos,([nombre,hallazgos])=>({nombre,hallazgos}));
+  },[visibles]);
 
   function alternar(prioridad: Prioridad) {
     setSeleccionadas((actual)=>
@@ -72,9 +76,15 @@ export default function FiltroHallazgosReporte({
           html.print-hallazgos-mode .hallazgos-filter-controls,
           html.print-hallazgos-mode .hallazgos-toggle,
           html.print-hallazgos-mode .hallazgos-intro { display:none!important; }
-          html.print-hallazgos-mode .hallazgos-pagina { break-after:page!important; page-break-after:always!important; padding:10mm!important; }
-          html.print-hallazgos-mode .hallazgos-pagina:last-child { break-after:auto!important; page-break-after:auto!important; }
-          html.print-hallazgos-mode .hallazgo-resumen-card { break-inside:avoid!important; page-break-inside:avoid!important; min-height:78mm; }
+          html.print-hallazgos-mode .hallazgos-portada { break-after:page!important; page-break-after:always!important; display:flex!important; }
+          html.print-hallazgos-mode .hallazgos-partida { break-before:auto!important; break-after:auto!important; padding:0!important; }
+          html.print-hallazgos-mode .hallazgos-partida-titulo { break-after:avoid!important; page-break-after:avoid!important; }
+          html.print-hallazgos-mode .hallazgo-resumen-card { break-inside:avoid!important; page-break-inside:avoid!important; min-height:0!important; margin:4mm 0!important; display:grid!important; grid-template-columns:34% 1fr!important; }
+          html.print-hallazgos-mode .hallazgo-resumen-card img { max-height:78mm!important; object-fit:contain!important; width:100%!important; }
+          html.print-hallazgos-mode .hallazgos-print-view { font-size:10pt; }
+          html.print-hallazgos-mode .hallazgos-contenido { border:0!important; padding:0!important; margin:0!important; box-shadow:none!important; }
+          html.print-hallazgos-mode .hallazgos-portada { height:235mm; min-height:235mm; flex-direction:column; justify-content:center; padding:15mm; border:2px solid #0f172a; }
+          html.print-hallazgos-mode .hallazgos-partida { margin-bottom:6mm; }
         }
       `}</style>
 
@@ -94,7 +104,21 @@ export default function FiltroHallazgosReporte({
       </div>
 
       {abierto && (
-        <div className="mt-3 rounded-3xl border border-slate-300 bg-white p-5 shadow-sm">
+        <div className="hallazgos-contenido mt-3 rounded-3xl border border-slate-300 bg-white p-5 shadow-sm">
+          <section className="hallazgos-portada hidden">
+            <p className="text-sm font-black uppercase tracking-[.3em] text-cyan-800">Certeza Habitacional</p>
+            <h1 className="mt-8 text-3xl font-black text-slate-950">RELACIÓN DE HALLAZGOS PARA CORRECCIÓN</h1>
+            <p className="mt-3 text-sm text-slate-500">Documento técnico independiente para el responsable de realizar las correcciones.</p>
+            <div className="mt-12 space-y-4 border-t border-slate-300 pt-8 text-base">
+              <p><strong>Inmueble:</strong> {inmueble}</p>
+              <p><strong>Ubicación:</strong> {direccion}</p>
+              <p><strong>Folio de inspección:</strong> {folio}</p>
+              <p><strong>Fecha de inspección:</strong> {fechaInspeccion}</p>
+              <p><strong>Prioridades incluidas:</strong> {seleccionadas.join(", ")}</p>
+              <p><strong>Hallazgos por corregir:</strong> {visibles.length}</p>
+            </div>
+            <p className="mt-12 text-xs text-slate-500">El contenido incluye únicamente las observaciones y evidencias correspondientes a las prioridades seleccionadas. No contiene datos personales del cliente.</p>
+          </section>
           <div className="hallazgos-intro flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-800">Hallazgos filtrados · {folio}</p>
@@ -120,9 +144,10 @@ export default function FiltroHallazgosReporte({
           </div>
 
           <div className="mt-5">
-            {paginas.map((grupo, paginaIndex)=>(
-              <div key={paginaIndex} className="hallazgos-pagina space-y-3">
-                {grupo.map((h)=>{
+            {partidas.map((partida)=>(
+              <div key={partida.nombre} className="hallazgos-partida space-y-3">
+                <h2 className="hallazgos-partida-titulo mt-5 border-b-2 border-slate-900 pb-2 text-lg font-black">{partida.nombre}</h2>
+                {partida.hallazgos.map((h)=>{
                   const fotos=(h.fotografias??[]).slice(0,2);
                   return (
                     <article key={h.id} className="hallazgo-resumen-card grid gap-4 rounded-2xl border border-slate-200 p-4 md:grid-cols-[34%_1fr]">
