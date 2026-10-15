@@ -666,7 +666,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         <Link href={`/panel/inspecciones/${id}/reporte-v1?print=1`} className="rounded-xl bg-cyan-800 px-5 py-3 text-sm font-black text-white">IMPRIMIR / GUARDAR COMO PDF</Link>
       </div>
       {esReporteParcial && (
-        <section className="mx-auto mb-4 max-w-5xl rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950">
+        <section className="no-print mx-auto mb-4 max-w-5xl rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950">
           <p className="text-lg font-black">REPORTE PARCIAL DE AVANCE · NO FINAL</p>
           <p className="mt-2 text-sm leading-6">Este documento refleja únicamente la información registrada hasta este momento. Existen partidas o conceptos pendientes de inspección. No representa una inspección completa, no está autorizado por Dirección y no debe presentarse como reporte final.</p>
         </section>
