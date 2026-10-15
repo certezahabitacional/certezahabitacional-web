@@ -720,8 +720,8 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
     LIMIT 1
   `;
   if (!foto) volver(inspeccionId, codigo, "error", "Fotografía no encontrada.");
-  if (foto.estadoV3 !== "PENDIENTE") {
-    volver(inspeccionId, codigo, "error", "Este concepto ya está cerrado y su evidencia no puede modificarse.");
+  if (foto.estadoV3 === "NO_APLICA") {
+    volver(inspeccionId, codigo, "error", "El concepto está marcado NO APLICA y no tiene evidencia editable.");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -729,8 +729,39 @@ export async function eliminarFotoPuntoCriticoV1(formData: FormData) {
     await tx.$executeRaw`
       UPDATE "GuiaInspeccionItem"
       SET "observacion"=${JSON.stringify({ actualizadoEn: new Date().toISOString() })},
+          "estadoV3"='PENDIENTE',
+          "completado"=false,
+          "cerradoEn"=NULL,
           "actualizadoEn"=NOW()
       WHERE "id"=${foto.guiaItemId} AND "inspeccionId"=${inspeccionId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "ProtocoloInspeccionPaso"
+      SET "estado"='EN_PROCESO',
+          "completadoEn"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "clave"=${`PC_${codigo}`}
+    `;
+    await tx.$executeRaw`
+      UPDATE "AreaInspeccion"
+      SET "estado"='PENDIENTE',
+          "resultado"=NULL,
+          "comentarioFinal"=NULL,
+          "revisadaEn"=NULL,
+          "cerradaEn"=NULL,
+          "cerradaPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
+        AND "codigo"=${`PC_${codigo}`}
+    `;
+    await tx.$executeRaw`
+      UPDATE "InspeccionControlV2"
+      SET "preReporteGeneradoEn"=NULL,
+          "revisionInspectorFinalEn"=NULL,
+          "revisionInspectorFinalPorId"=NULL,
+          "actualizadoEn"=NOW()
+      WHERE "inspeccionId"=${inspeccionId}
     `;
   });
 
