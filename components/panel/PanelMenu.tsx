@@ -20,7 +20,7 @@ export default function PanelMenu({ opciones }: { opciones: OpcionNavegacionPane
   if (visibles.length === 0) return null;
 
   return (
-    <nav className="certeza-panel-menu sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 px-4 py-2 backdrop-blur sm:py-3">
+    <nav className="certeza-panel-menu print:hidden sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 px-4 py-2 backdrop-blur sm:py-3">
       <div className="certeza-panel-menu-inner mx-auto max-w-7xl">
         <button
           type="button"
