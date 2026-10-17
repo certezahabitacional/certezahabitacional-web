@@ -1,4 +1,4 @@
-// Catálogo base de Dirección, octubre de 2026. Se utiliza para próximas inspecciones;
+// Catálogo base de Dirección, actualizado en octubre de 2026. Se utiliza para próximas inspecciones;
 // no migrar ni sobrescribir evidencias y conceptos de inspecciones existentes.
 export type SubpartidaCatalogo = { nombre: string; conceptos: readonly string[] };
 export type PartidaCatalogo = { orden: number; nombre: string; subpartidas: readonly SubpartidaCatalogo[] };
@@ -467,5 +467,25 @@ export const CATALOGO_16_PARTIDAS: readonly PartidaCatalogo[] = [
         ]
       }
     ]
+  },
+  {
+    "orden": 17,
+    "nombre": "Losa de Azotea",
+    "subpartidas": [
+      {
+        "nombre": "Losa de Azotea",
+        "conceptos": [
+          "Impermeabilización",
+          "Escurrimiento",
+          "Chaflanes",
+          "Diamantes",
+          "Pretiles",
+          "Remates",
+          "Goterones",
+          "Limpieza"
+        ]
+      }
+    ]
   }
+
 ] as const;
