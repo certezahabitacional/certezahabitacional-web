@@ -47,7 +47,9 @@ export async function guardarAuditoriaPrevia(formData: FormData) {
         if (!actualSub || !Array.isArray(sub.conceptos)) continue;
         for (const concepto of sub.conceptos) {
           if (concepto?.adicional===true && concepto.nombre) {
-            actualSub.conceptos.push({nombre:concepto.nombre,aplica:concepto.aplica!==false,adicional:true} as {nombre:string;aplica:boolean});
+            const clave = `adicional:${p.orden}:${sub.nombre}:${concepto.nombre}`;
+            const seleccionado = formData.get(clave);
+            actualSub.conceptos.push({nombre:concepto.nombre,aplica:seleccionado==="no"?false:seleccionado==="si"?true:concepto.aplica!==false,adicional:true} as {nombre:string;aplica:boolean});
           }
         }
       }
