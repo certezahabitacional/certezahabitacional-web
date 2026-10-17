@@ -1,8 +1,20 @@
-import { redirect } from "next/navigation";
+import { EstadoInspeccion } from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 
-// La planeacion fue retirada del flujo. Conservamos la ruta antigua
-// para llevar enlaces previos directamente a la inspeccion.
-export default async function PlanInspeccionRetirada({ params }: { params: Promise<{ id: string }> }) {
+// Mantener compatibilidad con enlaces existentes sin saltar la revision inicial.
+export default async function PlanInspeccionRedirect({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  redirect(`/panel/inspecciones/${id}/campo-v1`);
+  const inspeccion = await prisma.inspeccion.findUnique({
+    where: { id },
+    select: { estado: true, numeroInspeccion: true },
+  });
+  if (!inspeccion) notFound();
+  if (inspeccion.estado === EstadoInspeccion.PROGRAMADA) {
+    redirect(`/panel/inspecciones/${id}/revision-inicial`);
+  }
+  if (inspeccion.numeroInspeccion !== 1) {
+    redirect(`/panel/inspecciones/${id}/captura`);
+  }
+  redirect(`/panel/inspecciones/${id}/flujo`);
 }
