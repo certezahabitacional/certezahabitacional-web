@@ -355,6 +355,10 @@ export default async function RevisionInicialPage({
           </form>
           {puedeEditarPlan && <div className="mt-6 space-y-4 border-t border-white/10 pt-4">
             <h3 className="font-black text-violet-200">Agregar conceptos nuevos</h3>
+            {partidasGuardadas.flatMap(p=>p.subpartidas.flatMap(sub=>sub.conceptos.filter(c=>(c as {adicional?:boolean}).adicional===true).map(c=>(
+              <p key={`${p.orden}:${sub.nombre}:${c.nombre}`} className="rounded-lg bg-slate-800 p-2 text-sm text-emerald-200">Agregado en {sub.nombre}: {c.nombre}</p>
+            ))))}
+
             {vistaPreviaPartidasCotizadas(snapshot).map(partida=>partida.subpartidas.map(subpartida=>(
               <form key={`${partida.orden}:${subpartida.nombre}`} action={agregarConceptoPrevio} className="grid gap-2 rounded-lg bg-slate-950 p-3 sm:grid-cols-[1fr_2fr_auto]">
                 <input type="hidden" name="inspeccionId" value={id}/>
