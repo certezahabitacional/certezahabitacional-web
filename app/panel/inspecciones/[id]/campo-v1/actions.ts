@@ -626,8 +626,9 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
   if (!inspeccionId || !areaId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
   await exigirAreaActivaV1(inspeccionId, areaId);
-  const [area] = await prisma.$queryRaw<Array<{ nombre:string; fotos:number; seleccionadas:number; pendientes:number; hallazgos:number }>>`
+  const [area] = await prisma.$queryRaw<Array<{ nombre:string; fotos:number; seleccionadas:number; pendientes:number; hallazgos:number; puntos:number }>>`
     SELECT a."nombre",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "puntos",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") "fotos",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id" AND fa."seleccionadaReporte"=true) "seleccionadas",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') "pendientes",
@@ -635,6 +636,7 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
     FROM "AreaInspeccion" a WHERE a."id"=${areaId}::uuid AND a."inspeccionId"=${inspeccionId}
   `;
   if (!area) volver(inspeccionId, "error", "Área no encontrada.");
+  if (Number(area.puntos) === 0) volver(inspeccionId, "error", "Esta partida no tiene conceptos vinculados. Debe completarse la preparación antes de cerrarla.", areaId);
   if (area.hallazgos > 0) volver(inspeccionId, "error", "El punto contiene hallazgos y debe cerrarse por el flujo correspondiente.", areaId);
   if (Number(area.pendientes) > 0) volver(inspeccionId, "error", `Faltan ${area.pendientes} concepto(s) por resolver. El punto debe llegar al 100% antes de cerrarse.`, areaId);
   if (area.fotos < 1) volver(inspeccionId, "error", "Toma al menos una fotografía representativa del punto.", areaId);
@@ -671,8 +673,9 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
   await exigirAreaActivaV1(inspeccionId, areaId);
 
-  const [area] = await prisma.$queryRaw<Array<{ nombre:string; hallazgos:number; completos:number; pendientes:number }>>`
+  const [area] = await prisma.$queryRaw<Array<{ nombre:string; hallazgos:number; completos:number; pendientes:number; puntos:number }>>`
     SELECT a."nombre",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "puntos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h
        WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h
@@ -685,6 +688,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
     WHERE a."id"=${areaId}::uuid AND a."inspeccionId"=${inspeccionId}
   `;
   if (!area) volver(inspeccionId, "error", "Área no encontrada.");
+  if (Number(area.puntos) === 0) volver(inspeccionId, "error", "Esta partida no tiene conceptos vinculados. Debe completarse la preparación antes de cerrarla.", areaId);
   if (area.hallazgos < 1) volver(inspeccionId, "error", "Registra al menos un hallazgo antes de cerrar el punto con hallazgos.", areaId);
   if (Number(area.pendientes) > 0) volver(inspeccionId, "error", `Faltan ${area.pendientes} concepto(s) por resolver. El punto debe llegar al 100% antes de cerrarse.`, areaId);
   if (area.completos !== area.hallazgos) {
