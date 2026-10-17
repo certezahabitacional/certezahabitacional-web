@@ -14,6 +14,7 @@ import {
   subirFotoFachadaPrevia,
 } from "./actions";
 import { FuentesAlternasFachada } from "./fuentes-fachada";
+import { guardarAuditoriaPrevia } from "./plan-actions";
 
 type FotoFachada = {
   fotografiaId: string;
@@ -144,6 +145,13 @@ export default async function RevisionInicialPage({
       ORDER BY s."solicitadaEn" DESC
     `,
   ]);
+
+  const planesGuardados = await prisma.$queryRaw<Array<{partidas: unknown; confirmadoEn: Date | null}>>`
+    SELECT "partidas","confirmadoEn" FROM "PlanPrevioInspeccion" WHERE "inspeccionId"=${id} LIMIT 1
+  `;
+  const planGuardado = planesGuardados[0];
+  const partidasGuardadas = Array.isArray(planGuardado?.partidas) ? planGuardado.partidas as Array<{orden:number;subpartidas:Array<{nombre:string;conceptos:Array<{nombre:string;aplica:boolean}>}>}> : [];
+  const puedeEditarPlan = responsableRevision && !planGuardado?.confirmadoEn;
 
   const fotosConUrl = await Promise.all(
     fotos.map(async (foto) => ({
@@ -315,6 +323,35 @@ export default async function RevisionInicialPage({
               </details>
             ))}
           </div>
+        </section>
+
+        <section className="mt-7 rounded-3xl border border-violet-300/20 bg-slate-900 p-5 sm:p-6">
+          <h2 className="text-xl font-black text-violet-200">Auditoría preliminar: aplicabilidad</h2>
+          <p className="mt-2 text-sm text-slate-400">Marca los conceptos que no corresponden a la vivienda y guarda tu revisión. No modifica la guía definitiva ni las evidencias registradas.</p>
+          <form action={guardarAuditoriaPrevia} className="mt-4 space-y-3">
+            <input type="hidden" name="inspeccionId" value={id}/>
+            {vistaPreviaPartidasCotizadas(snapshot).map(partida => (
+              <details key={partida.orden} className="rounded-xl border border-white/10 p-4">
+                <summary className="cursor-pointer font-black">{partida.orden}. {partida.nombre}</summary>
+                {partida.subpartidas.map(subpartida => (
+                  <div key={subpartida.nombre} className="mt-3 space-y-2">
+                    <h3 className="font-black text-cyan-200">{subpartida.nombre}</h3>
+                    {subpartida.conceptos.map((concepto, numero) => {
+                      const guardado = partidasGuardadas.find(x=>x.orden===partida.orden)?.subpartidas.find(x=>x.nombre===subpartida.nombre)?.conceptos[numero];
+                      return <label key={numero} className="flex items-center justify-between gap-3 text-sm">
+                        <span>{concepto}</span>
+                        <select name={`concepto:${partida.orden}:${subpartida.nombre}:${numero}`} disabled={!puedeEditarPlan} defaultValue={guardado?.aplica===false?"no":"si"} className="rounded-lg bg-slate-950 p-2">
+                          <option value="si">Aplica</option><option value="no">No aplica</option>
+                        </select>
+                      </label>;
+                    })}
+                  </div>
+                ))}
+              </details>
+            ))}
+            {puedeEditarPlan && <button className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">GUARDAR AUDITORÍA PRELIMINAR</button>}
+            {planGuardado?.confirmadoEn && <p className="text-sm text-emerald-300">Plan confirmado y bloqueado para edición.</p>}
+          </form>
         </section>
 
         <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
