@@ -292,6 +292,31 @@ export default async function RevisionInicialPage({
           </div>
         </section>
 
+        <section className="mt-7 rounded-3xl border border-violet-300/20 bg-slate-900 p-5 sm:p-6">
+          <p className="text-xs font-black uppercase tracking-widest text-violet-300">PASO 3 · AUDITORÍA PREVIA DE PARTIDAS Y CONCEPTOS</p>
+          <h2 className="mt-2 text-xl font-black">Revisar conceptos antes del recorrido</h2>
+          <p className="mt-2 text-sm text-slate-400">Despliega cada partida para consultar el detalle de todos los conceptos propuestos. Esta revisión aún es informativa; la edición y confirmación guardada del plan se habilitarán por separado. Ningún concepto existente se modifica aquí.</p>
+          <div className="mt-4 space-y-3">
+            {vistaPreviaPartidasCotizadas(snapshot).map((partida) => (
+              <details key={partida.orden} className="rounded-xl border border-white/10 bg-slate-950 p-4">
+                <summary className="cursor-pointer font-black text-violet-200">{partida.orden}. {partida.nombre}</summary>
+                <div className="mt-4 space-y-4">
+                  {partida.subpartidas.map((subpartida) => (
+                    <div key={subpartida.nombre}>
+                      <h3 className="text-sm font-black text-cyan-200">{subpartida.nombre}</h3>
+                      <ol className="mt-2 list-decimal space-y-1 pl-6 text-sm text-slate-300">
+                        {subpartida.conceptos.map((concepto, numero) => (
+                          <li key={numero}>{concepto}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
+
         <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
           <div className="text-center">
             <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 4 · INICIO DE INSPECCIÓN</p><h2 className="mt-1 text-xl font-black">Capturar fotografía definitiva de fachada para portada</h2>
