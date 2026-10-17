@@ -14,7 +14,7 @@ import {
   subirFotoFachadaPrevia,
 } from "./actions";
 import { FuentesAlternasFachada } from "./fuentes-fachada";
-import { agregarConceptoPrevio, guardarAuditoriaPrevia } from "./plan-actions";
+import { agregarConceptoPrevio, confirmarPlanPrevio, guardarAuditoriaPrevia } from "./plan-actions";
 
 type FotoFachada = {
   fotografiaId: string;
@@ -353,6 +353,11 @@ export default async function RevisionInicialPage({
             {puedeEditarPlan && <button className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">GUARDAR AUDITORÍA PRELIMINAR</button>}
             {planGuardado?.confirmadoEn && <p className="text-sm text-emerald-300">Plan confirmado y bloqueado para edición.</p>}
           </form>
+          {puedeEditarPlan && partidasGuardadas.length > 0 && <form action={confirmarPlanPrevio} className="mt-5 rounded-xl border border-emerald-300/20 p-4">
+            <input type="hidden" name="inspeccionId" value={id}/>
+            <p className="mb-3 text-sm text-slate-300">Revisa las partidas y conceptos guardados antes de confirmar. Esta confirmación bloqueará modificaciones al plan previo.</p>
+            <button className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">CONFIRMAR PLAN PREVIO</button>
+          </form>}
           {puedeEditarPlan && <div className="mt-6 space-y-4 border-t border-white/10 pt-4">
             <h3 className="font-black text-violet-200">Agregar conceptos nuevos</h3>
             {partidasGuardadas.flatMap(p=>p.subpartidas.flatMap(sub=>sub.conceptos.filter(c=>(c as {adicional?:boolean}).adicional===true).map(c=>(

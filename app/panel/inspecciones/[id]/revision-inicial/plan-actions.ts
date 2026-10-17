@@ -110,3 +110,44 @@ export async function agregarConceptoPrevio(formData: FormData) {
   revalidatePath(destino);
   redirect(`${destino}?ok=${encodeURIComponent("Concepto adicional guardado.")}`);
 }
+
+export async function confirmarPlanPrevio(formData: FormData) {
+  const id=String(formData.get("inspeccionId")??"").trim();
+  if (!id) redirect("/panel/inspecciones");
+  const destino=`/panel/inspecciones/${id}/revision-inicial`;
+  const session=await auth();
+  if (!session?.user?.id) redirect("/login");
+  const [usuario,inspeccion]=await Promise.all([
+    prisma.usuario.findUnique({where:{id:session.user.id},select:{id:true,activo:true,rol:true,inspector:{select:{id:true,activo:true}}}}),
+    prisma.inspeccion.findUnique({where:{id},select:{estado:true,inspectorId:true,cotizacion:{select:{versiones:{orderBy:{version:"desc"},take:1,select:{datos:true}}}}}}),
+  ]);
+  if (!usuario?.activo || !inspeccion || inspeccion.estado!==EstadoInspeccion.PROGRAMADA) redirect("/acceso");
+  if (usuario.rol!==RolUsuario.DIRECTOR &&
+     !(usuario.rol===RolUsuario.INSPECTOR && usuario.inspector?.activo===true && usuario.inspector.id===inspeccion.inspectorId)) redirect("/acceso");
+  const [plan]=await prisma.$queryRaw<Array<{partidas:unknown;confirmadoEn:Date|null}>>`
+    SELECT "partidas","confirmadoEn" FROM "PlanPrevioInspeccion" WHERE "inspeccionId"=${id} LIMIT 1
+  `;
+  if (!plan || plan.confirmadoEn) redirect(`${destino}?error=${encodeURIComponent("Guarda primero la auditoría sin confirmar, o el plan ya fue confirmado.")}`);
+  const raw=inspeccion.cotizacion?.versiones[0]?.datos;
+  const snapshot=raw && typeof raw==="object" && !Array.isArray(raw) ? raw as Record<string,unknown> : {};
+  const base=vistaPreviaPartidasCotizadas(snapshot);
+  type Partida={orden:number;subpartidas:Array<{nombre:string;conceptos:Array<{nombre:string;aplica:boolean}>}>};
+  const partidas=Array.isArray(plan.partidas)?plan.partidas as Partida[]:[];
+  const valido=base.every(p=>{
+    const actual=partidas.find(x=>x.orden===p.orden);
+    return actual && p.subpartidas.every(sub=>{
+      const encontrada=actual.subpartidas?.find(x=>x.nombre===sub.nombre);
+      return encontrada && sub.conceptos.every(nombre=>encontrada.conceptos?.some(c=>c.nombre===nombre));
+    });
+  });
+  if (!valido) redirect(`${destino}?error=${encodeURIComponent("El plan no contiene todos los conceptos base declarados. Guarda de nuevo la auditoría.")}`);
+  const resultado=await prisma.$executeRaw`
+    UPDATE "PlanPrevioInspeccion" SET "confirmadoEn"=NOW(),"confirmadoPorId"=${usuario.id},
+      "actualizadoEn"=NOW(),"actualizadoPorId"=${usuario.id}
+    WHERE "inspeccionId"=${id} AND "confirmadoEn" IS NULL
+  `;
+  if (resultado===0) redirect(`${destino}?error=${encodeURIComponent("El plan ya fue confirmado por otro usuario.")}`);
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"PlanPrevioInspeccion",entidadId:id,inspeccionId:id,usuarioId:usuario.id,descripcion:"Confirmó el plan previo de partidas y conceptos para la inspección."});
+  revalidatePath(destino);
+  redirect(`${destino}?ok=${encodeURIComponent("Plan previo confirmado. La guía de campo se actualizará en la siguiente etapa.")}`);
+}
