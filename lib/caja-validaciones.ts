@@ -34,7 +34,7 @@ export async function obtenerValidacionFinancieraCotizacion(cotizacionId: string
   if (cotizacion.estado !== EstadoCotizacion.AUTORIZADA) {
     return {
       ok: false as const,
-      error: "La cotización debe estar aceptada y autorizada para continuar con el proceso operativo.",
+      error: "La cotización debe estar autorizada por Dirección o Administración para continuar con el proceso operativo.",
       cotizacion,
     };
   }
