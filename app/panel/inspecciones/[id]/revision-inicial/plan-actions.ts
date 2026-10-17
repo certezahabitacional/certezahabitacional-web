@@ -97,7 +97,7 @@ export async function agregarConceptoPrevio(formData: FormData) {
   const sub=partidas.find(p=>p.orden===partidaOrden)?.subpartidas.find(x=>x.nombre===subpartidaNombre);
   if(!sub) redirect(`${destino}?error=Area%20no%20encontrada`);
   if(sub.conceptos.some(x=>x.nombre.toLocaleLowerCase("es-MX")===concepto.toLocaleLowerCase("es-MX"))) redirect(`${destino}?error=Concepto%20ya%20existente`);
-  sub.conceptos.push({nombre:concepto,aplica:true,adicional:true});
+  sub.conceptos.push({nombre:concepto,aplica:true,adicional:true} as {nombre:string;aplica:boolean});
   await prisma.$executeRaw`
     INSERT INTO "PlanPrevioInspeccion" ("inspeccionId","partidas","actualizadoPorId")
     VALUES (${id},${JSON.stringify(partidas)}::jsonb,${usuario.id})
