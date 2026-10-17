@@ -176,7 +176,7 @@ export default async function RevisionInicialPage({
         <section className="mt-6 text-center">
           <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 text-4xl" aria-label="Cámara">📷</div>
           <p className="mt-2 text-xs font-bold text-cyan-200">Toca la cámara para tomar fotografía en sitio</p>
-          <p className="mt-5 text-xs font-black uppercase tracking-[.28em] text-cyan-300">PASOS 1 Y 2 · PREPARACIÓN EN SITIO</p>
+          <p className="mt-5 text-xs font-black uppercase tracking-[.28em] text-cyan-300">PASO 1 · VALIDACIÓN DE DATOS</p>
           <h1 className="mt-2 text-3xl font-black sm:text-4xl">Preparar la inspección sin salir del flujo</h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-400">Revisa con el cliente la información proporcionada desde la precotización. La inspección seguirá PROGRAMADA hasta presionar INICIAR al final.</p>
         </section>
@@ -187,67 +187,7 @@ export default async function RevisionInicialPage({
           </p>
         )}
 
-        <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
-          <div className="text-center">
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 1</p><h2 className="mt-1 text-xl font-black">Capturar fotografía definitiva de fachada para portada</h2>
-            {!fotoDefinitiva ? (
-              <p className="mt-2 text-sm text-slate-400">Elige una ruta: tomar 4 fotografías en sitio y seleccionar la mejor, o usar 1 fotografía existente desde la base de evidencias o desde galería/archivos.</p>
-            ) : (
-              <p className="mt-2 text-sm font-bold text-emerald-300">Selección terminada: quedó una sola fotografía definitiva de fachada/portada.</p>
-            )}
-            <p className={`mt-3 font-black ${fotoDefinitiva ? "text-emerald-300" : fotos.length === 4 ? "text-cyan-300" : "text-amber-300"}`}>
-              {fotoDefinitiva ? "1 fotografía definitiva" : fotos.length > 0 ? `${fotos.length}/4 tomadas en sitio` : "Sin fotografía definitiva"}
-            </p>
-          </div>
-
-          {!fotoDefinitiva && fotos.length === 0 && puedeTomarFotos && (
-            <FuentesAlternasFachada inspeccionId={id} />
-          )}
-
-          {!fotoDefinitiva && puedeTomarFotos && (
-            <div className="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-center">
-              <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Tomar en sitio · 4 fotografías obligatorias</p>
-              <p className="mt-2 text-sm text-slate-300">Si eliges esta ruta, deberás completar las 4 tomas y después seleccionar la mejor. Las otras tres se eliminarán y no podrás cerrar esta revisión hasta definir la fotografía definitiva.</p>
-            </div>
-          )}
-
-          <div className={`mt-5 grid gap-4 ${fotoDefinitiva ? "mx-auto max-w-md" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
-            {(fotoDefinitiva ? fotosConUrl : [0, 1, 2, 3].map((indice) => fotosConUrl[indice] ?? null)).map((foto, indice) => (
-              <article key={foto?.fotografiaId ?? indice} className={`overflow-hidden rounded-2xl border ${foto?.candidataPortada ? "border-emerald-300/40 bg-emerald-300/5" : "border-white/10 bg-slate-950"}`}>
-                {foto?.urlTemporal ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={foto.urlTemporal} alt={`Fachada ${indice + 1}`} className="h-44 w-full object-cover" />
-                ) : (
-                  <div className="grid h-44 place-items-center text-3xl text-slate-600">📷</div>
-                )}
-                <div className="p-3">
-                  <p className="text-xs font-black text-slate-300">{fotoDefinitiva ? "FOTOGRAFÍA DEFINITIVA" : `Fotografía ${indice + 1}`}</p>
-                  {!foto && puedeTomarFotos && (
-                    <form action={subirFotoFachadaPrevia} className="mt-3">
-                      <input type="hidden" name="inspeccionId" value={id} />
-                      <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="block w-full text-xs text-slate-400" />
-                      <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950">TOMAR FOTO EN SITIO</button>
-                    </form>
-                  )}
-                  {foto && etapaSeleccion && puedeTomarFotos && (
-                    <form action={seleccionarMejorFachada} className="mt-3">
-                      <input type="hidden" name="inspeccionId" value={id} />
-                      <input type="hidden" name="fotografiaId" value={foto.fotografiaId} />
-                      <button className="w-full rounded-xl border border-emerald-300/40 px-3 py-2 text-xs font-black text-emerald-300">ELEGIR COMO MEJOR</button>
-                    </form>
-                  )}
-                  {foto?.candidataPortada && <p className="mt-3 text-xs font-black text-emerald-300">PORTADA DEFINITIVA ✓</p>}
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {etapaSeleccion && puedeTomarFotos && (
-            <p className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-center text-sm font-black text-amber-200">Ya completaste las 4 fotografías en sitio. Debes elegir una como definitiva antes de continuar. Al elegirla, las otras tres se eliminarán.</p>
-          )}
-        </section>
-
-        <div className="mt-8 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4"><p className="text-xs font-black uppercase tracking-widest text-amber-200">PASO 2 · VALIDACIÓN CON EL CLIENTE</p><p className="mt-1 text-sm text-slate-300">Confirma los datos del cliente y del inmueble antes de iniciar el desarrollo técnico.</p></div><Bloque titulo="Datos del cliente">
+        <div className="mt-8 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4"><p className="text-xs font-black uppercase tracking-widest text-amber-200">PASO 1 · VALIDACIÓN DE CLIENTE E INMUEBLE</p><p className="mt-1 text-sm text-slate-300">Confirma los datos del cliente y del inmueble antes de iniciar el desarrollo técnico.</p></div><Bloque titulo="Datos del cliente">
           <Dato etiqueta="Nombre" valor={textoSnapshot(snapshot, "nombre", inspeccion.cliente.nombre)} />
           <Dato etiqueta="Teléfono" valor={textoSnapshot(snapshot, "telefono", inspeccion.cliente.telefono ?? "—")} />
           <Dato etiqueta="Correo" valor={textoSnapshot(snapshot, "correo", inspeccion.cliente.correo ?? "—")} />
@@ -335,9 +275,70 @@ export default async function RevisionInicialPage({
           </section>
         )}
 
+        <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
+          <div className="text-center">
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 4 · INICIO DE INSPECCIÓN</p><h2 className="mt-1 text-xl font-black">Capturar fotografía definitiva de fachada para portada</h2>
+            {!fotoDefinitiva ? (
+              <p className="mt-2 text-sm text-slate-400">Elige una ruta: tomar 4 fotografías en sitio y seleccionar la mejor, o usar 1 fotografía existente desde la base de evidencias o desde galería/archivos.</p>
+            ) : (
+              <p className="mt-2 text-sm font-bold text-emerald-300">Selección terminada: quedó una sola fotografía definitiva de fachada/portada.</p>
+            )}
+            <p className={`mt-3 font-black ${fotoDefinitiva ? "text-emerald-300" : fotos.length === 4 ? "text-cyan-300" : "text-amber-300"}`}>
+              {fotoDefinitiva ? "1 fotografía definitiva" : fotos.length > 0 ? `${fotos.length}/4 tomadas en sitio` : "Sin fotografía definitiva"}
+            </p>
+          </div>
+
+          {!fotoDefinitiva && fotos.length === 0 && puedeTomarFotos && (
+            <FuentesAlternasFachada inspeccionId={id} />
+          )}
+
+          {!fotoDefinitiva && puedeTomarFotos && (
+            <div className="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-center">
+              <p className="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Tomar en sitio · 4 fotografías obligatorias</p>
+              <p className="mt-2 text-sm text-slate-300">Si eliges esta ruta, deberás completar las 4 tomas y después seleccionar la mejor. Las otras tres se eliminarán y no podrás cerrar esta revisión hasta definir la fotografía definitiva.</p>
+            </div>
+          )}
+
+          <div className={`mt-5 grid gap-4 ${fotoDefinitiva ? "mx-auto max-w-md" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
+            {(fotoDefinitiva ? fotosConUrl : [0, 1, 2, 3].map((indice) => fotosConUrl[indice] ?? null)).map((foto, indice) => (
+              <article key={foto?.fotografiaId ?? indice} className={`overflow-hidden rounded-2xl border ${foto?.candidataPortada ? "border-emerald-300/40 bg-emerald-300/5" : "border-white/10 bg-slate-950"}`}>
+                {foto?.urlTemporal ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={foto.urlTemporal} alt={`Fachada ${indice + 1}`} className="h-44 w-full object-cover" />
+                ) : (
+                  <div className="grid h-44 place-items-center text-3xl text-slate-600">📷</div>
+                )}
+                <div className="p-3">
+                  <p className="text-xs font-black text-slate-300">{fotoDefinitiva ? "FOTOGRAFÍA DEFINITIVA" : `Fotografía ${indice + 1}`}</p>
+                  {!foto && puedeTomarFotos && (
+                    <form action={subirFotoFachadaPrevia} className="mt-3">
+                      <input type="hidden" name="inspeccionId" value={id} />
+                      <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="block w-full text-xs text-slate-400" />
+                      <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950">TOMAR FOTO EN SITIO</button>
+                    </form>
+                  )}
+                  {foto && etapaSeleccion && puedeTomarFotos && (
+                    <form action={seleccionarMejorFachada} className="mt-3">
+                      <input type="hidden" name="inspeccionId" value={id} />
+                      <input type="hidden" name="fotografiaId" value={foto.fotografiaId} />
+                      <button className="w-full rounded-xl border border-emerald-300/40 px-3 py-2 text-xs font-black text-emerald-300">ELEGIR COMO MEJOR</button>
+                    </form>
+                  )}
+                  {foto?.candidataPortada && <p className="mt-3 text-xs font-black text-emerald-300">PORTADA DEFINITIVA ✓</p>}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {etapaSeleccion && puedeTomarFotos && (
+            <p className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-center text-sm font-black text-amber-200">Ya completaste las 4 fotografías en sitio. Debes elegir una como definitiva antes de continuar. Al elegirla, las otras tres se eliminarán.</p>
+          )}
+        </section>
+
+
         {responsableRevision && (
           <section className={`mt-7 rounded-3xl border p-6 text-center ${puedeIniciar ? "border-emerald-300/30 bg-emerald-300/10" : "border-white/10 bg-slate-900"}`}>
-            <h2 className="text-2xl font-black">Continuar al PASO 3 · Desarrollo de la inspección</h2>
+            <h2 className="text-2xl font-black">PASO 4 · Iniciar recorrido de inspección</h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-slate-300">INICIAR solo se habilita cuando la información fue revisada con el cliente, existe una sola fotografía definitiva —elegida entre 4 tomadas en sitio o cargada como 1 foto existente— y no hay correcciones pendientes.</p>
             {pendientes.length > 0 && <p className="mt-3 font-black text-amber-300">Bloqueado: hay {pendientes.length} corrección(es) pendiente(s).</p>}
             {!fotoDefinitiva && <p className="mt-3 font-black text-amber-300">Bloqueado: define la fachada mediante 4 fotografías en sitio o 1 fotografía existente.</p>}
