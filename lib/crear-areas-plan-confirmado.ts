@@ -13,11 +13,15 @@ export async function crearAreasDesdePlanConfirmado(inspeccionId: string) {
       WHERE "inspeccionId"=${inspeccionId} LIMIT 1
     `;
     if (!plan?.confirmadoEn || !Array.isArray(plan.partidas)) return 0;
-    const [existentes] = await tx.$queryRaw<Array<{ total: number }>>`
-      SELECT COUNT(*)::int AS "total" FROM "AreaInspeccion"
-      WHERE "inspeccionId"=${inspeccionId} AND "codigo"<>'FACHADA_PRINCIPAL'
+    // Solo completar áreas del propio plan previo. Nunca mezclar con proyectos,
+    // áreas manuales o expedientes que ya tengan un recorrido de otro origen.
+    const [existentes] = await tx.$queryRaw<Array<{ ajenas: number; revisadas: number }>>`
+      SELECT
+        COUNT(*) FILTER (WHERE "codigo"<>'FACHADA_PRINCIPAL' AND "origen"<>'PLAN_PREVIO')::int AS "ajenas",
+        COUNT(*) FILTER (WHERE "origen"='PLAN_PREVIO' AND ("estado"<>'PENDIENTE' OR "revisadaEn" IS NOT NULL OR "cerradaEn" IS NOT NULL))::int AS "revisadas"
+      FROM "AreaInspeccion" WHERE "inspeccionId"=${inspeccionId}
     `;
-    if (Number(existentes?.total ?? 0) > 0) return 0;
+    if (Number(existentes?.ajenas ?? 0) > 0 || Number(existentes?.revisadas ?? 0) > 0) return 0;
     let agregadas = 0;
     for (const partida of plan.partidas as Partida[]) {
       if (!Number.isInteger(partida?.orden) || !Array.isArray(partida.subpartidas)) continue;
