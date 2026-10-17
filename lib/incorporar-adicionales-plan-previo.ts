@@ -26,6 +26,22 @@ export async function incorporarAdicionalesConfirmados(inspeccionId: string, usu
   }
   let insertados = 0;
   for (const item of nuevos) {
+    // Conciliar solo elementos pendientes, sin mediciones ni observaciones.
+    // Nunca cambiar conceptos revisados, cerrados o con hallazgos.
+    if (!item.aplica) {
+      await prisma.$executeRaw`
+        UPDATE "GuiaInspeccionItem" AS g
+        SET "estadoV3"='NO_APLICA',
+            "motivoNoAplica"='No aplica según el plan previo confirmado',
+            "obligatorio"=false,"completado"=true,"actualizadoEn"=NOW()
+        WHERE g."inspeccionId"=${inspeccionId}
+          AND g."area"=${item.area} AND g."concepto"=${item.concepto}
+          AND g."estadoV3"='PENDIENTE' AND g."completado"=false
+          AND g."observacion" IS NULL AND g."valorMedido" IS NULL
+          AND g."cerradoEn" IS NULL
+          AND g."origen"='PLAN_PREVIO'
+      `;
+    }
     insertados += await prisma.$executeRaw`
       INSERT INTO "GuiaInspeccionItem"
         ("id","inspeccionId","origen","area","concepto","orden","obligatorio","completado","creadoPorId","estadoV3","motivoNoAplica","origenV3","creadoEn","actualizadoEn")
