@@ -10,6 +10,7 @@ import { obtenerAsignacionesInspeccion } from "@/lib/asignaciones-inspeccion";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { validarLiberacionCampoDesdeCaja } from "@/lib/caja-validaciones";
 import { prisma } from "@/lib/prisma";
+import { incorporarAdicionalesConfirmados } from "@/lib/incorporar-adicionales-plan-previo";
 import { eliminarArchivoStorage, subirArchivoStorage } from "@/lib/storage-gateway";
 
 const TIPOS = new Set([
@@ -314,6 +315,7 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   if (inspeccion.requiereGerenteZona && !asignaciones.gerenteId) volver(inspeccionId, "error", "La inspección requiere Gerente y todavía no tiene uno asignado.");
   if (inspeccion.requiereCoordinador && !asignaciones.coordinadorId) volver(inspeccionId, "error", "La inspección requiere Coordinador y todavía no tiene uno asignado.");
 
+  const incorporados = await incorporarAdicionalesConfirmados(inspeccionId, usuario.id);
   await prisma.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.EN_PROCESO } });
   const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
   await registrarAuditoria({
