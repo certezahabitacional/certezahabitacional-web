@@ -55,10 +55,10 @@ export async function validarAperturaDesdeCaja(cotizacionId: string) {
   const resultado = await obtenerValidacionFinancieraCotizacion(cotizacionId);
   if (!resultado.ok) return resultado;
 
-  if (!resultado.financiero.cumpleApertura50) {
+  if (!resultado.financiero.puedeAgendar) {
     return {
       ok: false as const,
-      error: "Caja no autoriza la apertura/agendamiento: se requiere al menos el 50% pagado.",
+      error: "Caja no autoriza la apertura/agendamiento: se requiere al menos 50% pagado o una excepción vigente autorizada por Director o Administrador.",
       cotizacion: resultado.cotizacion,
       financiero: resultado.financiero,
     };
@@ -71,10 +71,10 @@ export async function validarLiberacionCampoDesdeCaja(cotizacionId: string) {
   const resultado = await obtenerValidacionFinancieraCotizacion(cotizacionId);
   if (!resultado.ok) return resultado;
 
-  if (!resultado.financiero.cumpleLiberacion100) {
+  if (!resultado.financiero.puedeLiberarCampo) {
     return {
       ok: false as const,
-      error: "Caja no autoriza el inicio en campo: se requiere el 100% pagado.",
+      error: "Caja no autoriza el inicio en campo: se requiere el 100% pagado o una excepción vigente autorizada por Director o Administrador.",
       cotizacion: resultado.cotizacion,
       financiero: resultado.financiero,
     };
