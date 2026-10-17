@@ -14,7 +14,7 @@ import {
   subirFotoFachadaPrevia,
 } from "./actions";
 import { FuentesAlternasFachada } from "./fuentes-fachada";
-import { guardarAuditoriaPrevia } from "./plan-actions";
+import { agregarConceptoPrevio, guardarAuditoriaPrevia } from "./plan-actions";
 
 type FotoFachada = {
   fotografiaId: string;
@@ -345,6 +345,13 @@ export default async function RevisionInicialPage({
                         </select>
                       </label>;
                     })}
+                    {puedeEditarPlan && <form action={agregarConceptoPrevio} className="mt-3 flex flex-wrap gap-2">
+                      <input type="hidden" name="inspeccionId" value={id}/>
+                      <input type="hidden" name="partidaOrden" value={partida.orden}/>
+                      <input type="hidden" name="subpartidaNombre" value={subpartida.nombre}/>
+                      <input name="conceptoNuevo" required maxLength={160} placeholder="Nuevo concepto a inspeccionar" className="min-w-0 flex-1 rounded-lg bg-slate-800 px-3 py-2 text-sm"/>
+                      <button className="rounded-lg border border-violet-300/50 px-3 py-2 text-xs font-black text-violet-200">AGREGAR CONCEPTO</button>
+                    </form>}
                   </div>
                 ))}
               </details>
