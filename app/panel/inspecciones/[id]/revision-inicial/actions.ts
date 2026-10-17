@@ -12,6 +12,7 @@ import { validarLiberacionCampoDesdeCaja } from "@/lib/caja-validaciones";
 import { prisma } from "@/lib/prisma";
 import { incorporarAdicionalesConfirmados } from "@/lib/incorporar-adicionales-plan-previo";
 import { crearAreasDesdePlanConfirmado } from "@/lib/crear-areas-plan-confirmado";
+import { vincularConceptosConAreasPlan } from "@/lib/vincular-conceptos-areas-plan";
 import { eliminarArchivoStorage, subirArchivoStorage } from "@/lib/storage-gateway";
 
 const TIPOS = new Set([
@@ -318,6 +319,7 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
 
   await crearAreasDesdePlanConfirmado(inspeccionId);
   await incorporarAdicionalesConfirmados(inspeccionId, usuario.id);
+  await vincularConceptosConAreasPlan(inspeccionId);
   await prisma.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.EN_PROCESO } });
   const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
   await registrarAuditoria({
