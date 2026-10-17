@@ -345,7 +345,14 @@ export default async function RevisionInicialPage({
                         </select>
                       </label>;
                     })}
-
+                    {partidasGuardadas.find(p=>p.orden===partida.orden)?.subpartidas.find(x=>x.nombre===subpartida.nombre)?.conceptos.filter(c=>(c as {adicional?:boolean}).adicional===true).map(c=>(
+                      <label key={`extra:${c.nombre}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-800/70 p-2 text-sm">
+                        <span>{c.nombre} <span className="text-xs text-violet-300">(Adicional)</span></span>
+                        <select name={`adicional:${partida.orden}:${subpartida.nombre}:${c.nombre}`} disabled={!puedeEditarPlan} defaultValue={c.aplica===false?"no":"si"} className="rounded-lg bg-slate-950 p-2">
+                          <option value="si">Aplica</option><option value="no">No aplica</option>
+                        </select>
+                      </label>
+                    ))}
                   </div>
                 ))}
               </details>
