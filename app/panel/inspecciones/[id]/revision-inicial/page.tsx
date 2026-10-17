@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { vistaPreviaPartidasCotizadas } from "@/lib/vista-previa-partidas-cotizadas";
 import { urlFirmadaStorage } from "@/lib/storage-gateway";
 import {
   iniciarInspeccionConfirmada,
@@ -274,6 +275,20 @@ export default async function RevisionInicialPage({
             </form>
           </section>
         )}
+
+        <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
+          <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 2 · PROYECTOS DIGITALES O PLANTILLAS</p>
+          <h2 className="mt-2 text-xl font-black">Vista previa de partidas según cotización</h2>
+          <p className="mt-2 text-sm text-slate-400">Catálogo preliminar basado en la información declarada. No modifica conceptos existentes. La carga de proyectos y la auditoría editable se incorporarán en la siguiente etapa.</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {vistaPreviaPartidasCotizadas(snapshot).map((partida) => (
+              <div key={partida.orden} className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm">
+                <span className="font-black text-cyan-200">{partida.orden}. {partida.nombre}</span>
+                <span className="ml-2 text-slate-400">({partida.subpartidas.reduce((total, item) => total + item.conceptos.length, 0)} conceptos)</span>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
           <div className="text-center">
