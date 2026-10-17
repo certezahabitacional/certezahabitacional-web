@@ -345,13 +345,7 @@ export default async function RevisionInicialPage({
                         </select>
                       </label>;
                     })}
-                    {puedeEditarPlan && <form action={agregarConceptoPrevio} className="mt-3 flex flex-wrap gap-2">
-                      <input type="hidden" name="inspeccionId" value={id}/>
-                      <input type="hidden" name="partidaOrden" value={partida.orden}/>
-                      <input type="hidden" name="subpartidaNombre" value={subpartida.nombre}/>
-                      <input name="conceptoNuevo" required maxLength={160} placeholder="Nuevo concepto a inspeccionar" className="min-w-0 flex-1 rounded-lg bg-slate-800 px-3 py-2 text-sm"/>
-                      <button className="rounded-lg border border-violet-300/50 px-3 py-2 text-xs font-black text-violet-200">AGREGAR CONCEPTO</button>
-                    </form>}
+
                   </div>
                 ))}
               </details>
@@ -359,6 +353,19 @@ export default async function RevisionInicialPage({
             {puedeEditarPlan && <button className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">GUARDAR AUDITORÍA PRELIMINAR</button>}
             {planGuardado?.confirmadoEn && <p className="text-sm text-emerald-300">Plan confirmado y bloqueado para edición.</p>}
           </form>
+          {puedeEditarPlan && <div className="mt-6 space-y-4 border-t border-white/10 pt-4">
+            <h3 className="font-black text-violet-200">Agregar conceptos nuevos</h3>
+            {vistaPreviaPartidasCotizadas(snapshot).map(partida=>partida.subpartidas.map(subpartida=>(
+              <form key={`${partida.orden}:${subpartida.nombre}`} action={agregarConceptoPrevio} className="grid gap-2 rounded-lg bg-slate-950 p-3 sm:grid-cols-[1fr_2fr_auto]">
+                <input type="hidden" name="inspeccionId" value={id}/>
+                <input type="hidden" name="partidaOrden" value={partida.orden}/>
+                <input type="hidden" name="subpartidaNombre" value={subpartida.nombre}/>
+                <span className="self-center text-xs text-slate-300">{subpartida.nombre}</span>
+                <input name="conceptoNuevo" required maxLength={160} placeholder="Nuevo concepto" className="min-w-0 rounded-lg bg-slate-800 px-3 py-2 text-sm"/>
+                <button className="rounded-lg border border-violet-300/50 px-3 py-2 text-xs font-black text-violet-200">AGREGAR</button>
+              </form>
+            )))}
+          </div>}
         </section>
 
         <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
