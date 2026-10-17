@@ -5,7 +5,7 @@ type ConceptoPrevio = { nombre?: string; aplica?: boolean; adicional?: boolean }
 type SubpartidaPrevia = { nombre?: string; conceptos?: ConceptoPrevio[] };
 type PartidaPrevia = { subpartidas?: SubpartidaPrevia[] };
 
-// Incorpora conceptos adicionales de un plan CONFIRMADO, incluidos los No aplica.
+// Incorpora conceptos base y adicionales de un plan CONFIRMADO, incluidos los No aplica.
 // No elimina ni edita filas ya existentes, y la operación es repetible.
 export async function incorporarAdicionalesConfirmados(inspeccionId: string, usuarioId: string) {
   const [plan] = await prisma.$queryRaw<Array<{ partidas: unknown; confirmadoEn: Date | null }>>`
@@ -20,7 +20,7 @@ export async function incorporarAdicionalesConfirmados(inspeccionId: string, usu
       if (!area) continue;
       for (const concepto of Array.isArray(sub.conceptos) ? sub.conceptos : []) {
         const nombre = typeof concepto.nombre === "string" ? concepto.nombre.trim() : "";
-        if (nombre && concepto.adicional === true) nuevos.push({ area, concepto: nombre, aplica: concepto.aplica !== false });
+        if (nombre) nuevos.push({ area, concepto: nombre, aplica: concepto.aplica !== false });
       }
     }
   }
