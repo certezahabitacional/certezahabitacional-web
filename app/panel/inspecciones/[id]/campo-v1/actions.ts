@@ -200,14 +200,17 @@ export async function inicializarPlanAreasV1(formData: FormData) {
         AND (b."codigo"=a."codigo" OR b."codigo"=regexp_replace(upper(unaccent(a."nombre")), '[^A-Z0-9]+', '_', 'g'))
     `;
 
-    const areas = await tx.$queryRaw<Array<{ id: string; codigo: string; nombre: string; bibliotecaAreaId: string | null }>>`
-      SELECT "id"::text,"codigo","nombre","bibliotecaAreaId"::text
+    const areas = await tx.$queryRaw<Array<{ id: string; codigo: string; nombre: string; origen: string; bibliotecaAreaId: string | null }>>`
+      SELECT "id"::text,"codigo","nombre","origen","bibliotecaAreaId"::text
       FROM "AreaInspeccion"
       WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
       ORDER BY "orden","nombre"
     `;
 
     for (const [index, area] of areas.entries()) {
+      // No reconstruir partidas provenientes del plan preliminar confirmado.
+      // Sus conceptos ya están vinculados y tienen estados Aplica/No aplica propios.
+      if (area.origen === "PLAN_PREVIO") continue;
       const clave = String(index) + ":" + area.codigo + ":" + area.nombre;
       const partidaPlan = planPorClave.get(clave);
 
