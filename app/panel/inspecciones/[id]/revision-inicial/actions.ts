@@ -294,6 +294,18 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   }
   if (Number(pendientes[0]?.total ?? 0) > 0) volver(inspeccionId, "error", "Hay solicitudes de corrección pendientes. No se puede iniciar la inspección todavía.");
 
+  // Evitar que un plan preliminar ya creado se omita al iniciar.
+  // Inspecciones programadas antiguas sin plan conservan su flujo original.
+  const planesPendientes = await prisma.$queryRaw<Array<{pendiente: boolean}>>`
+    SELECT EXISTS (
+      SELECT 1 FROM "PlanPrevioInspeccion"
+      WHERE "inspeccionId"=${inspeccionId} AND "confirmadoEn" IS NULL
+    ) AS "pendiente"
+  `;
+  if (planesPendientes[0]?.pendiente) {
+    volver(inspeccionId, "error", "Confirma el plan previo de partidas y conceptos antes de iniciar la inspección.");
+  }
+
   if (!inspeccion.cotizacionId) volver(inspeccionId, "error", "La inspección no tiene cotización asociada.");
   const liberacion = await validarLiberacionCampoDesdeCaja(inspeccion.cotizacionId);
   if (!liberacion.ok) volver(inspeccionId, "error", liberacion.error);
