@@ -280,6 +280,8 @@ export default async function RevisionInicialPage({
           <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 2 · PROYECTOS DIGITALES O PLANTILLAS</p>
           <h2 className="mt-2 text-xl font-black">Vista previa de partidas según cotización</h2>
           <p className="mt-2 text-sm text-slate-400">Catálogo preliminar basado en la información declarada. No modifica conceptos existentes. La carga de proyectos y la auditoría editable se incorporarán en la siguiente etapa.</p>
+          <a href={`/panel/inspecciones/${id}/catalogo-previo/csv`} className="mt-4 inline-flex rounded-xl border border-cyan-300/30 px-4 py-3 text-sm font-black text-cyan-200">DESCARGAR CATÁLOGO PARA REVISIÓN SIN INTERNET (CSV)</a>
+          <p className="mt-2 text-xs text-slate-500">Puedes anotar Aplica y Observaciones en la hoja descargada. Los cambios en ese archivo aún no se importan al sistema.</p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {vistaPreviaPartidasCotizadas(snapshot).map((partida) => (
               <div key={partida.orden} className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm">
