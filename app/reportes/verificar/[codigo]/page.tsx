@@ -227,10 +227,10 @@ export default async function ReporteV1Publico({ params, searchParams }: {
     select: {
       vigente: true,
       inspeccionId: true,
-      inspeccion: { select: { estado: true, numeroInspeccion: true } },
+      inspeccion: { select: { estado: true, numeroInspeccion: true, liberacionBloqueada: true, revisiones: { where: { rol: "DIRECTOR", decision: "APROBADO", estado: "VIGENTE" }, take: 1, select: { id: true } } } },
     },
   });
-  if (!acceso?.vigente || acceso.inspeccion.estado !== "FINALIZADA" || acceso.inspeccion.numeroInspeccion !== 1) notFound();
+  if (!acceso?.vigente || acceso.inspeccion.estado !== "FINALIZADA" || acceso.inspeccion.numeroInspeccion !== 1 || acceso.inspeccion.liberacionBloqueada || acceso.inspeccion.revisiones.length === 0) notFound();
   const id = acceso.inspeccionId;
   const inspeccion = await prisma.inspeccion.findUnique({
     where:{id},
