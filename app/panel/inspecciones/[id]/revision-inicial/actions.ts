@@ -320,6 +320,30 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   await crearAreasDesdePlanConfirmado(inspeccionId);
   await incorporarAdicionalesConfirmados(inspeccionId, usuario.id);
   await vincularConceptosConAreasPlan(inspeccionId);
+  // No iniciar una inspección con un plan previo confirmado incompleto.
+  // En expedientes históricos sin ese plan se conserva el flujo anterior.
+  const [planConfirmado] = await prisma.$queryRaw<Array<{ confirmado: boolean }>>`
+    SELECT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" WHERE "inspeccionId"=${inspeccionId} AND "confirmadoEn" IS NOT NULL) AS "confirmado"
+  `;
+  if (planConfirmado?.confirmado) {
+    const [integridad] = await prisma.$queryRaw<Array<{ areas: number; conceptos: number; desvinculados: number; vacias: number }>>`
+      SELECT
+        (SELECT COUNT(*)::int FROM "AreaInspeccion" a
+          WHERE a."inspeccionId"=${inspeccionId} AND a."origen"='PLAN_PREVIO') AS "areas",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
+          WHERE g."inspeccionId"=${inspeccionId} AND g."origen"='PLAN_PREVIO') AS "conceptos",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
+          WHERE g."inspeccionId"=${inspeccionId} AND g."origen"='PLAN_PREVIO'
+            AND g."areaId" IS NULL) AS "desvinculados",
+        (SELECT COUNT(*)::int FROM "AreaInspeccion" a
+          WHERE a."inspeccionId"=${inspeccionId} AND a."origen"='PLAN_PREVIO'
+            AND NOT EXISTS (SELECT 1 FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id")) AS "vacias"
+    `;
+    if (!integridad || integridad.areas===0 || integridad.conceptos===0 ||
+        integridad.desvinculados>0 || integridad.vacias>0) {
+      volver(inspeccionId,"error","El plan confirmado tiene áreas sin conceptos o conceptos sin vincular. Solicita revisar la preparación antes de iniciar la inspección.");
+    }
+  }
   await prisma.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.EN_PROCESO } });
   const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
   await registrarAuditoria({
