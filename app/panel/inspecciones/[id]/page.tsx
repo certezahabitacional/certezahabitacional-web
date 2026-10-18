@@ -1333,6 +1333,7 @@ export default async function ExpedientePage({
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {inspeccion.estado === "EN_PROCESO" &&
+              inspeccion.numeroInspeccion !== 1 &&
               puedeFinalizarCaptura && (
                 <form
                   action={finalizarCaptura}
