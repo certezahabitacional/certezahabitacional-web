@@ -326,12 +326,19 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
     SELECT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" WHERE "inspeccionId"=${inspeccionId} AND "confirmadoEn" IS NOT NULL) AS "confirmado"
   `;
   if (planConfirmado?.confirmado) {
-    const [integridad] = await prisma.$queryRaw<Array<{ areas: number; conceptos: number; desvinculados: number; vacias: number }>>`
+    const [integridad] = await prisma.$queryRaw<Array<{ areas: number; conceptos: number; esperados: number; desvinculados: number; vacias: number }>>`
       SELECT
         (SELECT COUNT(*)::int FROM "AreaInspeccion" a
           WHERE a."inspeccionId"=${inspeccionId} AND a."origen"='PLAN_PREVIO') AS "areas",
         (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
           WHERE g."inspeccionId"=${inspeccionId} AND g."origen"='PLAN_PREVIO') AS "conceptos",
+        (SELECT COUNT(*)::int
+         FROM "PlanPrevioInspeccion" p
+         CROSS JOIN LATERAL jsonb_array_elements(p."partidas") partida
+         CROSS JOIN LATERAL jsonb_array_elements(partida->'subpartidas') subpartida
+         CROSS JOIN LATERAL jsonb_array_elements(subpartida->'conceptos') concepto
+         WHERE p."inspeccionId"=${inspeccionId} AND p."confirmadoEn" IS NOT NULL
+        ) AS "esperados",
         (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
           WHERE g."inspeccionId"=${inspeccionId} AND g."origen"='PLAN_PREVIO'
             AND g."areaId" IS NULL) AS "desvinculados",
@@ -340,7 +347,7 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
             AND NOT EXISTS (SELECT 1 FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id")) AS "vacias"
     `;
     if (!integridad || integridad.areas===0 || integridad.conceptos===0 ||
-        integridad.desvinculados>0 || integridad.vacias>0) {
+        integridad.desvinculados>0 || integridad.vacias>0 || integridad.conceptos!==integridad.esperados) {
       volver(inspeccionId,"error","El plan confirmado tiene áreas sin conceptos o conceptos sin vincular. Solicita revisar la preparación antes de iniciar la inspección.");
     }
   }
