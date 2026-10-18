@@ -866,6 +866,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
                     <div key={`${a.id}-grupo-${grupoIndex}`} className="inspection-pair">
                       {grupo.map((g)=>{
                         const obs=observacionConcepto(g.observacion);
+                        // Una sola descripción visible: versión definitiva del inspector o, si aún no existe, interpretación de IA.
+                        // Nunca concatenar ambos textos en el reporte.
                         const descripcionReporte = (obs.descripcionFinal ?? "").trim() || (obs.descripcionIa ?? "").trim();
                         const ev=evaluacionConcepto(g);
                         const textoDescripcion = descripcionReporte || ev.hallazgo?.descripcion || "";
