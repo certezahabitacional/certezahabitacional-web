@@ -135,6 +135,29 @@ export async function confirmarPlanPrevio(formData: FormData) {
   const base=vistaPreviaPartidasCotizadas(snapshot);
   type Partida={orden:number;subpartidas:Array<{nombre:string;conceptos:Array<{nombre:string;aplica:boolean}>}>};
   const partidas=Array.isArray(plan.partidas)?plan.partidas as Partida[]:[];
+  // La vinculación con el recorrido usa el nombre de subpartida.
+  // Si se repite, dos áreas distintas pueden compartir conceptos o perderlos.
+  const subpartidas=partidas.flatMap(p=>Array.isArray(p.subpartidas)?p.subpartidas:[]);
+  const normalizar=(valor:string)=>valor.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().replace(/\\s+/g," ").toLocaleLowerCase("es-MX");
+  const nombres=new Set<string>();
+  for (const sub of subpartidas) {
+    if (typeof sub.nombre!=="string" || !sub.nombre.trim() || !Array.isArray(sub.conceptos) || sub.conceptos.length===0) {
+      redirect(`${destino}?error=${encodeURIComponent("Cada subpartida debe tener nombre y al menos un concepto antes de confirmar.")}`);
+    }
+    const clave=normalizar(sub.nombre);
+    if (nombres.has(clave)) {
+      redirect(`${destino}?error=${encodeURIComponent(`El nombre de área "${sub.nombre}" está repetido. Distingue las subpartidas antes de confirmar para evitar mezclar sus conceptos.`)}`);
+    }
+    nombres.add(clave);
+    const conceptos=new Set<string>();
+    for (const concepto of sub.conceptos) {
+      const nombre=typeof concepto.nombre==="string"?normalizar(concepto.nombre):"";
+      if (!nombre || conceptos.has(nombre)) {
+        redirect(`${destino}?error=${encodeURIComponent(`La subpartida "${sub.nombre}" tiene conceptos vacíos o duplicados. Corrige el plan antes de confirmar.`)}`);
+      }
+      conceptos.add(nombre);
+    }
+  }
   const valido=base.every(p=>{
     const actual=partidas.find(x=>x.orden===p.orden);
     return actual && p.subpartidas.every(sub=>{
