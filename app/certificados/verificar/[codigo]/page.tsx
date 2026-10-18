@@ -25,6 +25,7 @@ export default async function VerificarCertificadoPage({
               usuario: true,
             },
           },
+          revisiones: { where: { rol: "DIRECTOR", decision: "APROBADO", estado: "VIGENTE" }, take: 1, select: { id: true } },
         },
       },
     },
@@ -72,7 +73,7 @@ export default async function VerificarCertificadoPage({
   }
 
   const inspeccion = certificado.inspeccion;
-  const vigente = certificado.vigente;
+  const vigente = certificado.vigente && inspeccion.estado === "FINALIZADA" && !inspeccion.liberacionBloqueada && inspeccion.revisiones.length > 0;
   const esV1 = inspeccion.numeroInspeccion === 1;
   const [controlV1] = esV1
     ? await prisma.$queryRaw<ControlPublicoV1[]>`
@@ -107,7 +108,7 @@ export default async function VerificarCertificadoPage({
             </div>
 
             <div className="rounded-full bg-slate-950 px-5 py-3 font-black text-white">
-              {vigente ? "✓ CERTIFICADO VIGENTE" : "✕ CERTIFICADO REVOCADO"}
+              {vigente ? "✓ CERTIFICADO VIGENTE" : "✕ CERTIFICADO NO LIBERADO O REVOCADO"}
             </div>
           </div>
         </header>
