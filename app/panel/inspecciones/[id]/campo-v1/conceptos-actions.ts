@@ -135,6 +135,7 @@ async function itemArea(inspeccionId: string, areaId: string, itemId: string) {
     herramientaSugerida: string | null;
     observacion: string | null;
     estadoV3: string;
+    motivoNoAplica: string | null;
     origenV3: string;
     requiereMedicion: boolean;
     requiereComparacionProyecto: boolean;
@@ -146,7 +147,7 @@ async function itemArea(inspeccionId: string, areaId: string, itemId: string) {
   }>>`
     SELECT g."id",g."areaId"::text AS "areaId",a."nombre" AS "areaNombre",
       g."concepto",g."especificacion",g."herramientaSugerida",g."observacion",
-      g."estadoV3",g."origenV3",g."requiereMedicion",g."requiereComparacionProyecto",
+      g."estadoV3",g."motivoNoAplica",g."origenV3",g."requiereMedicion",g."requiereComparacionProyecto",
       g."valorMedido",g."valorProyecto",g."unidadMedida",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."guiaItemId"=g."id") AS "fotos",
       (
@@ -713,7 +714,7 @@ export async function reactivarConceptoAreaV1(formData: FormData) {
     entidadId: itemId,
     inspeccionId,
     usuarioId: usuario.id,
-    descripcion: `${responsable} reactivó el concepto “${item.concepto}” en ${item.areaNombre}.`,
+    descripcion: `${responsable} reactivó el concepto “${item.concepto}” en ${item.areaNombre}. Motivo anterior de deshabilitación: ${item.motivoNoAplica?.trim() || "No registrado"}.`,
   });
   revalidatePath(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   volver(inspeccionId, areaId, "ok", "Concepto reactivado.", itemId);
