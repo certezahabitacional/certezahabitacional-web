@@ -58,6 +58,25 @@ export default async function FlujoV1Page({
     redirect(`/panel/inspecciones/${id}/reporte-v1`);
   }
 
+  // Los planes previos confirmados que ya tienen su recorrido conectado
+  // no deben regresar al asistente antiguo de proyecto/áreas.
+  // Un plan incompleto conserva el flujo existente para no ocultar conceptos.
+  const [planPrevio] = await prisma.$queryRaw<Array<{ areas: number; desvinculados: number }>>`
+    SELECT
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a
+       WHERE a."inspeccionId"=${id} AND a."origen"='PLAN_PREVIO') AS "areas",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
+       WHERE g."inspeccionId"=${id} AND g."origen"='PLAN_PREVIO'
+         AND g."areaId" IS NULL) AS "desvinculados"
+    WHERE EXISTS (
+      SELECT 1 FROM "PlanPrevioInspeccion" p
+      WHERE p."inspeccionId"=${id} AND p."confirmadoEn" IS NOT NULL
+    )
+  `;
+  if (planPrevio && planPrevio.areas > 0 && planPrevio.desvinculados === 0) {
+    redirect(`/panel/inspecciones/${id}/campo-v1`);
+  }
+
   if (!control?.proyectoConfirmado) {
     redirect(`/panel/inspecciones/${id}/proyecto-v1`);
   }
