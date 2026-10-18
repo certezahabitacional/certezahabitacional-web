@@ -74,6 +74,18 @@ export default async function VerificarCertificadoPage({
 
   const inspeccion = certificado.inspeccion;
   const vigente = certificado.vigente && inspeccion.estado === "FINALIZADA" && !inspeccion.liberacionBloqueada && inspeccion.revisiones.length > 0;
+  if (!vigente) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-white">
+        <section className="w-full max-w-xl rounded-3xl border border-rose-400/30 bg-slate-900 p-8 text-center">
+          <h1 className="text-2xl font-black text-rose-300">Certificado no disponible</h1>
+          <p className="mt-4 text-slate-300">Este certificado no está liberado o fue revocado. No se muestran datos del expediente.</p>
+          <Link href="/" className="mt-7 inline-block rounded-full bg-cyan-400 px-6 py-3 font-black text-slate-950">Ir a Certeza Habitacional</Link>
+        </section>
+      </main>
+    );
+  }
+
   const esV1 = inspeccion.numeroInspeccion === 1;
   const [controlV1] = esV1
     ? await prisma.$queryRaw<ControlPublicoV1[]>`
