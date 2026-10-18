@@ -601,43 +601,9 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
     }
   });
 
-  const [estadoArea] = await prisma.$queryRaw<Array<{ pendientes:number; hallazgos:number }>>`
-    SELECT
-      (SELECT COUNT(*)::int
-       FROM "GuiaInspeccionItem" g
-       WHERE g."areaId"=${areaId}::uuid
-         AND g."estadoV3" NOT IN ('REVISADO','CON_HALLAZGO','NO_APLICA')) AS "pendientes",
-      (SELECT COUNT(*)::int
-       FROM "Hallazgo" h
-       WHERE h."inspeccionId"=${inspeccionId}
-         AND h."areaId"=${areaId}::uuid) AS "hallazgos"
-  `;
-
-  if (Number(estadoArea?.pendientes ?? 1) === 0) {
-    const hallazgosArea = Number(estadoArea?.hallazgos ?? 0);
-    const resultadoArea = hallazgosArea > 0 ? "CON_HALLAZGOS" : "SIN_HALLAZGOS";
-    const comentarioArea = hallazgosArea > 0
-      ? `Se registraron ${hallazgosArea} hallazgo(s) en ${item.areaNombre}. Los puntos aplicables fueron revisados y los hallazgos cuentan con la evidencia mínima requerida para su documentación.`
-      : `Se realizó la inspección de ${item.areaNombre} conforme al plan establecido. Todos los puntos aplicables quedaron resueltos y no se identificaron hallazgos que impidan el cierre de la partida.`;
-    await prisma.$executeRaw`
-      UPDATE "AreaInspeccion"
-      SET "estado"='REVISADA',
-          "resultado"=${resultadoArea},
-          "comentarioFinal"=COALESCE(NULLIF(BTRIM("comentarioFinal"),''),${comentarioArea}),
-          "textoSinHallazgo"=CASE
-            WHEN ${resultadoArea}='SIN_HALLAZGOS'
-            THEN COALESCE(NULLIF(BTRIM("textoSinHallazgo"),''),${comentarioArea})
-            ELSE "textoSinHallazgo"
-          END,
-          "revisadaEn"=COALESCE("revisadaEn",NOW()),
-          "cerradaEn"=COALESCE("cerradaEn",NOW()),
-          "cerradaPorId"=COALESCE("cerradaPorId",${usuario.id}),
-          "actualizadoEn"=NOW()
-      WHERE "id"=${areaId}::uuid
-        AND "inspeccionId"=${inspeccionId}
-        AND "estado" <> 'REVISADA'
-    `;
-  }
+  // La partida no se cierra automáticamente al evaluar el último concepto.
+  // El inspector debe utilizar el cierre explícito, que verifica todas las
+  // evidencias y hallazgos antes de marcar el área como REVISADA.
 
   await recalcularIndice(inspeccionId);
   await registrarAuditoria({
