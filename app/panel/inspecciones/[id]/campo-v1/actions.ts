@@ -631,7 +631,7 @@ export async function cerrarAreaSinHallazgosV1(formData: FormData) {
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") "puntos",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") "fotos",
       (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id" AND fa."seleccionadaReporte"=true) "seleccionadas",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') "pendientes",
+      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='PENDIENTE') "pendientes",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
     FROM "AreaInspeccion" a WHERE a."id"=${areaId}::uuid AND a."inspeccionId"=${inspeccionId}
   `;
@@ -683,7 +683,7 @@ export async function cerrarAreaConHallazgosV1(formData: FormData) {
          AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL
          AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id" AND f."inspeccionId"=a."inspeccionId") BETWEEN 1 AND 4) "completos",
       (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
-       WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') "pendientes"
+       WHERE g."areaId"=a."id" AND g."estadoV3"='PENDIENTE') "pendientes"
     FROM "AreaInspeccion" a
     WHERE a."id"=${areaId}::uuid AND a."inspeccionId"=${inspeccionId}
   `;
