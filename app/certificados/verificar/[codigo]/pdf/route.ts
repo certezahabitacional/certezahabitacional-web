@@ -27,7 +27,7 @@ export async function GET(
     },
   });
 
-  if (!certificado || !certificado.vigente || certificado.inspeccion.estado !== "FINALIZADA") {
+  if (!certificado || !certificado.vigente || certificado.inspeccion.estado !== "FINALIZADA" || certificado.inspeccion.liberacionBloqueada || certificado.inspeccion.revisiones.length === 0) {
     return NextResponse.json({ error: "Certificado liberado no disponible." }, { status: 404 });
   }
 
