@@ -354,6 +354,13 @@ export default async function CampoV1Page({ params, searchParams }: {
                   </div>
                 )}
 
+                {puntos.length === 0 && (
+                  <div role="alert" className="mt-5 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
+                    <p className="font-black">PARTIDA SIN CONCEPTOS VINCULADOS</p>
+                    <p className="mt-2">No es posible registrar la inspección ni cerrar esta partida mientras no tenga conceptos asociados. Solicita a Dirección revisar la preparación del plan y la vinculación de sus conceptos. No utilices el cierre sin hallazgos para sustituir una inspección pendiente.</p>
+                  </div>
+                )}
+
                 <div className="mt-5 space-y-4">
                   {puntos.map((punto) => (
                     <ConceptoAreaCard
