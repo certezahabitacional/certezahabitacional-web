@@ -23,6 +23,8 @@ export async function GET(
           folio: true,
           estado: true,
           numeroInspeccion: true,
+          liberacionBloqueada: true,
+          revisiones: { where: { rol: "DIRECTOR", decision: "APROBADO", estado: "VIGENTE" }, take: 1, select: { id: true } },
         },
       },
     },
@@ -31,7 +33,9 @@ export async function GET(
   if (
     !certificado?.vigente ||
     certificado.inspeccion.estado !== "FINALIZADA" ||
-    certificado.inspeccion.numeroInspeccion !== 1
+    certificado.inspeccion.numeroInspeccion !== 1 ||
+    certificado.inspeccion.liberacionBloqueada ||
+    certificado.inspeccion.revisiones.length === 0
   ) {
     return NextResponse.json({ error: "Reporte oficial no disponible." }, { status: 404 });
   }
