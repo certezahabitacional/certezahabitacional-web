@@ -40,13 +40,14 @@ export default async function RevisionPage({ params, searchParams }: { params: P
   });
 
   if (!inspeccion) notFound();
-  if (inspeccion.numeroInspeccion === 1 && inspeccion.estado === "FINALIZADA") {
-    redirect(`/panel/inspecciones/${id}/reporte-v1?ok=${encodeURIComponent("REPORTE y CERTIFICADO liberados por Dirección.")}`);
-  }
   if (usuario.rol === RolUsuario.CLIENTE || usuario.rol === RolUsuario.ADMINISTRADOR || usuario.rol === RolUsuario.VENDEDOR) redirect("/acceso");
   if (usuario.rol === RolUsuario.COORDINADOR && !(await usuarioAsignadoAInspeccion(id, usuario.id, "COORDINADOR"))) redirect("/acceso");
   if (usuario.rol === RolUsuario.GERENTE && !(await usuarioAsignadoAInspeccion(id, usuario.id, "GERENTE"))) redirect("/acceso");
   if (usuario.rol === RolUsuario.INSPECTOR && !(await usuarioAsignadoAInspeccion(id, usuario.id, "INSPECTOR"))) redirect("/acceso");
+
+  if (inspeccion.numeroInspeccion === 1 && inspeccion.estado === "FINALIZADA") {
+    redirect(`/panel/inspecciones/${id}/reporte-v1?ok=${encodeURIComponent("REPORTE y CERTIFICADO liberados por Dirección.")}`);
+  }
 
   const estadoRevision = await obtenerEstadoExpedienteRevision(id);
   if (!estadoRevision) notFound();
