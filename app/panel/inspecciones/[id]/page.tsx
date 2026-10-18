@@ -1117,7 +1117,7 @@ export default async function ExpedientePage({
 
               <div className="flex shrink-0 flex-col gap-3">
                 <Link
-                  href={`/panel/inspecciones/${inspeccion.id}/captura`}
+                  href={inspeccion.numeroInspeccion === 1 ? `/panel/inspecciones/${inspeccion.id}/flujo` : `/panel/inspecciones/${inspeccion.id}/captura`}
                   className="rounded-full bg-rose-300 px-5 py-3 text-center font-black text-slate-950 transition hover:bg-rose-200"
                 >
                   Corregir inspección
@@ -1793,7 +1793,7 @@ export default async function ExpedientePage({
                   </div>
                 ) : (
                   <Link
-                    href={`/panel/inspecciones/${inspeccion.id}/captura`}
+                    href={inspeccion.numeroInspeccion === 1 ? `/panel/inspecciones/${inspeccion.id}/flujo` : `/panel/inspecciones/${inspeccion.id}/captura`}
                     className="rounded-2xl bg-cyan-400 px-4 py-3 text-center font-black text-slate-950"
                   >
                     Capturar Método Certeza
