@@ -322,7 +322,10 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   await vincularConceptosConAreasPlan(inspeccionId);
   // No iniciar una inspección con un plan previo confirmado incompleto.
   // En expedientes históricos sin ese plan se conserva el flujo anterior.
-  if (planPrevio?.confirmadoEn) {
+  const [planConfirmado] = await prisma.$queryRaw<Array<{ confirmado: boolean }>>`
+    SELECT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" WHERE "inspeccionId"=${inspeccionId} AND "confirmadoEn" IS NOT NULL) AS "confirmado"
+  `;
+  if (planConfirmado?.confirmado) {
     const [integridad] = await prisma.$queryRaw<Array<{ areas: number; conceptos: number; desvinculados: number; vacias: number }>>`
       SELECT
         (SELECT COUNT(*)::int FROM "AreaInspeccion" a
