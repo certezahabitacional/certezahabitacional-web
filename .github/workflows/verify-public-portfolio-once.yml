@@ -1,0 +1,89 @@
+name: Verify public approved portfolio once
+on:
+  push:
+    branches: [test/portafolio-produccion-20261019]
+    paths: [.github/workflows/verify-public-portfolio-once.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'certezahabitacional/certezahabitacional-web' && github.ref == 'refs/heads/test/portafolio-produccion-20261019'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Install isolated browser test tools
+        run: |
+          python -m venv "$RUNNER_TEMP/portfolio-browser"
+          "$RUNNER_TEMP/portfolio-browser/bin/pip" install playwright==1.55.0
+          "$RUNNER_TEMP/portfolio-browser/bin/python" -m playwright install --with-deps chromium
+      - name: Verify published original PNG and complete responsive rendering
+        run: |
+          "$RUNNER_TEMP/portfolio-browser/bin/python" - <<'PY'
+          import hashlib, json, time
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          output=Path('portfolio-verification');output.mkdir(exist_ok=True)
+          expected='e54c82b12e1321d361853ee0adcc9fbcca698f88537d626246e2d2531add4d99'
+          url='https://www.certezahabitacional.com/certeza-tecnica'
+          report=[]
+          with sync_playwright() as p:
+              browser=p.chromium.launch()
+              for label,width,height in [('desktop',1366,768),('tablet',768,1024),('mobile',390,844)]:
+                  context=browser.new_context(viewport={'width':width,'height':height},device_scale_factor=1)
+                  page=context.new_page()
+                  errors=[]
+                  page.on('pageerror',lambda error: errors.append(str(error)))
+                  response=page.goto(url,wait_until='domcontentloaded',timeout=60000)
+                  assert response and response.status==200, 'Public page HTTP failure'
+                  image=page.locator('img[src*="portafolio-servicios-certeza-tecnica"]')
+                  image.wait_for(state='visible',timeout=30000)
+                  src=image.evaluate('(img) => img.currentSrc')
+                  if label=='desktop' and '?v=0d7528594def' not in src:
+                      print('Publication is still propagating; one retry in 75 seconds.',flush=True)
+                      time.sleep(75)
+                      response=page.reload(wait_until='domcontentloaded',timeout=60000)
+                      image.wait_for(state='visible',timeout=30000)
+                      src=image.evaluate('(img) => img.currentSrc')
+                  assert response and response.status==200
+                  assert '?v=0d7528594def' in src and '/_next/image' not in src, 'Old asset URL still published'
+                  image.evaluate('(img) => img.decode()')
+                  page.evaluate('document.fonts.ready')
+                  asset=context.request.get(src,timeout=60000)
+                  assert asset.status==200, 'Image HTTP failure'
+                  raw=asset.body()
+                  assert len(raw)==2115560 and hashlib.sha256(raw).hexdigest()==expected, 'Published bytes differ from approved PNG'
+                  dimensions=image.evaluate('(img) => ({width:img.naturalWidth,height:img.naturalHeight,complete:img.complete})')
+                  assert dimensions=={'width':1254,'height':1254,'complete':True}, dimensions
+                  box=image.bounding_box()
+                  assert box and box['width']>300 and abs(box['width']-box['height'])<1, box
+                  assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), 'Horizontal overflow'
+                  cropped=image.evaluate('''(img) => {
+                    const r=img.getBoundingClientRect(),found=[];
+                    for(let a=img.parentElement;a;a=a.parentElement){
+                      const s=getComputedStyle(a),b=a.getBoundingClientRect();
+                      if(['hidden','clip'].includes(s.overflowY)&&(r.top<b.top-1||r.bottom>b.bottom+1)) found.push(a.tagName);
+                    }
+                    return found;
+                  }''')
+                  assert not cropped, cropped
+                  assert page.get_by_role('link',name='Volver a Grupo Certeza',exact=False).get_attribute('href')=='/'
+                  image.evaluate('(img) => {const r=img.getBoundingClientRect();window.scrollTo(0,window.scrollY+r.bottom-window.innerHeight+10)}')
+                  footer_visible=image.evaluate('(img) => {const r=img.getBoundingClientRect(); return document.elementFromPoint(r.x+r.width/2,Math.min(window.innerHeight-15,r.bottom-15))===img}')
+                  assert footer_visible, 'Image bottom is covered or inaccessible'
+                  page.screenshot(path=str(output/f'{label}.png'),full_page=True)
+                  if label=='desktop': (output/'approved-source.png').write_bytes(raw)
+                  report.append({'url':url,'viewport':label,'http':response.status,'image_sha256':expected,'natural_size':dimensions,'rendered_box':box,'cropped_by':cropped,'footer_visible':footer_visible,'page_errors':errors})
+                  context.close()
+              browser.close()
+          (output/'report.json').write_text(json.dumps(report,indent=2))
+          print('PASS: public website serves the exact approved PNG; full image and footer visible at desktop, tablet and mobile widths.')
+          print(json.dumps(report))
+          PY
+      - name: Preserve visual verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: approved-portfolio-public-verification
+          path: portfolio-verification/
+          retention-days: 2
+          if-no-files-found: warn
