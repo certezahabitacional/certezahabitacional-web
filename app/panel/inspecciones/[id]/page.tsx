@@ -1,3 +1,4 @@
+import { RetomarRecorrido } from "@/components/inspecciones/RecorridoConceptos";
 import Link from "next/link";
 import {
   EstadoInspeccion,
@@ -674,6 +675,8 @@ export default async function ExpedientePage({
                 </form>
               ) : inspeccion.estado === "EN_PROCESO" &&
                 puedeIniciarInspeccion ? (
+                <div className="flex flex-wrap gap-3">
+                {inspeccion.numeroInspeccion === 1 && session.user.id && <RetomarRecorrido usuarioId={session.user.id} inspeccionId={id} />}
                 <Link
                   href={inspeccion.numeroInspeccion === 1
                     ? `/panel/inspecciones/${inspeccion.id}/flujo`
@@ -682,6 +685,7 @@ export default async function ExpedientePage({
                 >
                   Continuar inspección
                 </Link>
+                </div>
               ) : null}
               <Link
                 href={

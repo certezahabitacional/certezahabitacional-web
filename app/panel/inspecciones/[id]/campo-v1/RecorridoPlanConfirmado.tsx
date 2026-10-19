@@ -1,3 +1,4 @@
+import RecorridoConceptos, { RetomarRecorrido } from "@/components/inspecciones/RecorridoConceptos";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { obtenerRecorridoConfirmado } from "@/lib/recorrido-plan-confirmado";
@@ -5,8 +6,8 @@ import ConceptoAreaCard, { type PuntoArea } from "./ConceptoAreaCard";
 import { agregarPuntoInspectorV1, cerrarAreaConHallazgosV1, cerrarAreaSinHallazgosV1, deshabilitarPartidaAreaV1, reactivarPartidaAreaV1 } from "./actions";
 import { concluirInspeccionTecnicaV1 } from "../cierre-v1/actions";
 
-type Props = {inspeccionId:string;folio:string;query:{area?:string;ok?:string;error?:string};puedeCapturar:boolean};
-export default async function RecorridoPlanConfirmado({inspeccionId:id,folio,query,puedeCapturar}:Props) {
+type Props = {usuarioId:string;inspeccionId:string;folio:string;query:{area?:string;ok?:string;error?:string};puedeCapturar:boolean};
+export default async function RecorridoPlanConfirmado({usuarioId,inspeccionId:id,folio,query,puedeCapturar}:Props) {
   let partidas;
   try { partidas = await obtenerRecorridoConfirmado(id); }
   catch (e) {
@@ -38,6 +39,7 @@ export default async function RecorridoPlanConfirmado({inspeccionId:id,folio,que
     <p className="mt-2 text-sm text-slate-400">El alcance corresponde a la vivienda cotizada. Los No aplica y las subpartidas deshabilitadas conservan su motivo; no se consideran pruebas realizadas.</p>
     {(query.ok||query.error)&&<p role="status" className={`mt-4 rounded-xl border p-4 ${query.error?"border-rose-300/30 text-rose-200":"border-emerald-300/30 text-emerald-200"}`}>{query.error??query.ok}</p>}
     <p className="mt-3 rounded-xl border border-amber-300/20 p-3 text-sm text-amber-200">Preparación sin conexión del nuevo catálogo pendiente de validación. Por ahora utiliza este recorrido con Internet; no descargues el recorrido anterior para este expediente.</p>
+    <div className="mt-4"><RetomarRecorrido usuarioId={usuarioId} inspeccionId={id}/></div>
     <div className="mt-6 grid gap-5 lg:grid-cols-[310px_minmax(0,1fr)]">
       <nav aria-label="Partidas del plan confirmado" className="space-y-3">
         {partidas.map(p=><section key={p.orden} className="rounded-2xl border border-white/10 bg-slate-900 p-4">
@@ -53,7 +55,7 @@ export default async function RecorridoPlanConfirmado({inspeccionId:id,folio,que
           {disabled&&<p className="mt-3 font-bold text-amber-200">Subpartida deshabilitada. Los antecedentes se conservan.</p>}
           {disabled&&puedeCapturar&&<form action={reactivarPartidaAreaV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={seleccion.area.id}/><button className="rounded-xl bg-cyan-300 px-4 py-3 font-black text-slate-950">REACTIVAR SUBPARTIDA</button></form>}
         </div>
-        <div className="mt-5 space-y-4">{puntos.map((p,i)=><ConceptoAreaCard key={p.id} inspeccionId={id} areaId={seleccion.area.id} punto={p} numeroConcepto={previos+i+1} puedeCapturar={puedeCapturar&&!disabled} areaActiva={true}/>)}</div>
+        <div className="mt-5"><RecorridoConceptos key={seleccion.area.id} usuarioId={usuarioId} inspeccionId={id} partida={`${partida.nombre} · ${seleccion.nombre}`} ruta={`${base}?area=${seleccion.area.id}`} conceptos={puntos.map(({id, concepto, estadoV3})=>({id, concepto, estadoV3}))}>{puntos.map((p,i)=><ConceptoAreaCard key={p.id} inspeccionId={id} areaId={seleccion.area.id} punto={p} numeroConcepto={previos+i+1} puedeCapturar={puedeCapturar&&!disabled} areaActiva={true}/>)}</RecorridoConceptos></div>
         {puedeCapturar&&!disabled&&<div className="mt-5 space-y-4">
           <form action={agregarPuntoInspectorV1} className="grid gap-3 rounded-2xl border border-violet-300/20 p-4"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={seleccion.area.id}/><h3 className="font-black text-violet-200">Agregar concepto a esta subpartida</h3><input name="concepto" required placeholder="Concepto adicional" className="rounded-xl bg-slate-900 px-4 py-3"/><input name="especificacion" placeholder="Criterio a revisar" className="rounded-xl bg-slate-900 px-4 py-3"/><button className="rounded-xl border border-violet-300/40 px-4 py-3 font-bold">AGREGAR CONCEPTO</button></form>
           {!seleccion.cerrada&&<>
