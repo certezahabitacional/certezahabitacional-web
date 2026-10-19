@@ -1,3 +1,4 @@
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
@@ -176,6 +177,8 @@ export default async function PuntosCriticosPage({
     usuario.rol === RolUsuario.GERENTE ||
     usuario.rol === RolUsuario.COORDINADOR;
   if (!esInspector && !esDirector && !consulta) redirect("/acceso");
+
+  if (await obtenerPlanConfirmado(id)) redirect(`/panel/inspecciones/${id}/${inspeccion.estado === EstadoInspeccion.PROGRAMADA ? "revision-inicial" : "campo-v1"}`);
 
   const [control] = await prisma.$queryRaw<Array<{ proyectoConfirmado: boolean }>>`
     SELECT "proyectoConfirmado" FROM "InspeccionControlV2"

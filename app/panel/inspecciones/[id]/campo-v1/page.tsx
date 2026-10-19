@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
+import RecorridoPlanConfirmado from "./RecorridoPlanConfirmado";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 
@@ -68,6 +70,12 @@ export default async function CampoV1Page({ params, searchParams }: {
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
+  if (await obtenerPlanConfirmado(id)) {
+    const puedeCapturar = (esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO) ||
+      (esDirector && [EstadoInspeccion.EN_PROCESO, EstadoInspeccion.REPORTE_PENDIENTE].some(e=>e===inspeccion.estado));
+    return <RecorridoPlanConfirmado inspeccionId={id} folio={inspeccion.folio} query={query} puedeCapturar={puedeCapturar} />;
+  }
+
 
   const [
     criticalRows,

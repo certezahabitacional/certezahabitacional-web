@@ -101,6 +101,7 @@ async function exigirAreaActiva(inspeccionId: string, areaId: string) {
     SELECT "id"::text,"nombre","estado"
     FROM "AreaInspeccion"
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
     ORDER BY "orden","nombre"
   `;
   const indice = areas.findIndex((area) => area.id === areaId);
@@ -115,6 +116,7 @@ async function exigirAreaEditable(inspeccionId: string, areaId: string) {
     SELECT "id"::text,"nombre","estado"
     FROM "AreaInspeccion"
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
     ORDER BY "orden","nombre"
   `;
   const indice = areas.findIndex((area) => area.id === areaId);
@@ -481,6 +483,9 @@ export async function guardarResultadoConceptoAreaV1(formData: FormData) {
     volver(inspeccionId, areaId, "error", `${item.concepto} requiere registrar el valor de proyecto para la comparación.`, itemId);
   }
 
+  if (item.origenV3 === "PLAN_PREVIO" && item.requiereMedicion && (!valorMedido || !unidadMedida || !Number.isFinite(Number(valorMedido.replace(",", "."))))) {
+    volver(inspeccionId, areaId, "error", "Registra la lectura medida y su unidad, o documenta No aplica. No se debe presentar una prueba no realizada como ejecutada.", itemId);
+  }
   const anterior = observacionObjeto(item.observacion);
   const rutasEvidencia = await prisma.$queryRaw<Array<{ url:string }>>`
     SELECT f."url"

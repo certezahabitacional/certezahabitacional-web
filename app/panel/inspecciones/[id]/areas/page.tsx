@@ -1,3 +1,4 @@
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
@@ -89,6 +90,8 @@ export default async function AreasPage({
   const rolesConsulta: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR];
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
+
+  if (await obtenerPlanConfirmado(id)) redirect(`/panel/inspecciones/${id}/${inspeccion.estado === EstadoInspeccion.PROGRAMADA ? "revision-inicial" : "campo-v1"}`);
 
   const [controlRows, criticalRows, areas, fotosFachada] = await Promise.all([
     prisma.$queryRaw<Control[]>`
