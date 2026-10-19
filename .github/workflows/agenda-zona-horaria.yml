@@ -1,0 +1,30 @@
+name: Agenda - zona horaria
+
+on:
+  pull_request:
+    paths:
+      - 'app/panel/agenda/**'
+      - 'tests/agenda-zona-horaria.test.cjs'
+      - '.github/workflows/agenda-zona-horaria.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify local scheduling with different server time zones
+        shell: bash
+        run: |
+          set -euo pipefail
+          for zone in UTC America/Mexico_City America/Tijuana; do
+            echo "Server TZ=$zone"
+            TZ="$zone" node --test tests/agenda-zona-horaria.test.cjs
+          done
