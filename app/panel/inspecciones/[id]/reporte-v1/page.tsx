@@ -1,3 +1,4 @@
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import Link from "next/link";
 import { RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
@@ -259,6 +260,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const puedeOperarPreReporte = esInspector || esDirector;
   if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
 
+  const planConfirmado = await obtenerPlanConfirmado(id);
   const [areas, conceptosReporte, procesos] = await Promise.all([
     prisma.$queryRaw<Area[]>`
       SELECT a."id"::text,a."orden",a."codigo",a."tipo",a."nombre",a."resultado",a."comentarioFinal",
@@ -270,6 +272,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       FROM "AreaInspeccion" a
       WHERE a."inspeccionId"=${id}
         AND (a."obligatoria"=true OR a."tipo"='PUNTO_CRITICO')
+        AND (${Boolean(planConfirmado)}=false OR a."origen"='PLAN_PREVIO')
       ORDER BY a."orden",a."nombre"
     `,
     prisma.$queryRaw<ConceptoReporte[]>`
@@ -287,6 +290,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         g."orden"
       FROM "GuiaInspeccionItem" g
       WHERE g."inspeccionId"=${id}
+        AND (${Boolean(planConfirmado)}=false OR EXISTS (SELECT 1 FROM "AreaInspeccion" ap WHERE ap."id"=g."areaId" AND ap."inspeccionId"=${id} AND ap."origen"='PLAN_PREVIO'))
       ORDER BY g."areaId", COALESCE(g."orden",999999), g."concepto"
     `,
     prisma.$queryRaw<Proceso[]>`
@@ -331,7 +335,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
     const ob = ordenCritico[b.codigo] ?? (1000 + b.orden);
     return oa - ob || a.nombre.localeCompare(b.nombre,"es");
   });
-  const numeroPartida = new Map(partidasReporte.map((a,index)=>[a.id,index+(hayHermeticidadEjecutada?2:1)]));
+  const numeroPartida = new Map<string, number>(partidasReporte.map((a,index)=>[a.id,planConfirmado ? Number(a.codigo.split("_")[1]) : index+(hayHermeticidadEjecutada?2:1)]));
 
   const fotosArea = await prisma.$queryRaw<FotoArea[]>`
     SELECT f."id"::text "fotografiaId",fa."areaId"::text "areaId",fa."guiaItemId"::text "guiaItemId",f."url",f."descripcion"
@@ -502,8 +506,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
   const prioridades = ["P1","P2","P3","P4","P5"] as const;
   const hallazgosP = prioridades.map(prioridad => ({prioridad,total:metricas.resumenPrioridades[prioridad]}));
 
-  const totalPartidasReporte = (hayHermeticidadEjecutada ? 1 : 0) + partidasReporte.length;
-  const partidasSinHallazgos =
+  const totalPartidasReporte = planConfirmado ? new Set(partidasReporte.map(a=>numeroPartida.get(a.id))).size : (hayHermeticidadEjecutada ? 1 : 0) + partidasReporte.length;
+  const partidasSinHallazgos = planConfirmado
+    ? planConfirmado.filter(p => {
+        const revisadas=partidasReporte.filter(a=>numeroPartida.get(a.id)===p.orden);
+        return revisadas.length>0 && revisadas.every(a=>Number(conteosPorArea.get(a.id)?.hallazgos??0)===0);
+      }).length
+    :
     (pruebasHermeticidad.some((p)=>p.inspeccionada) && pruebasHermeticidad.every((p)=>!p.inspeccionada || !p.hallazgo) ? 1 : 0)
     + partidasReporte.filter((a)=>{
         const ct=conteosPorArea.get(a.id);

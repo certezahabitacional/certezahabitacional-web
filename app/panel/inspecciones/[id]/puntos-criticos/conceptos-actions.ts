@@ -1,4 +1,6 @@
 "use server";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
+
 
 import { randomUUID } from "node:crypto";
 import {
@@ -102,6 +104,7 @@ async function exigirResponsable(inspeccionId: string) {
   const director = usuario.rol === RolUsuario.DIRECTOR;
 
   if (!inspectorAsignado && !director) redirect("/acceso");
+  if (await obtenerPlanConfirmado(inspeccionId)) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   if (inspeccion.numeroInspeccion !== 1) {
     volver(inspeccionId, undefined, "error", "Los puntos críticos corresponden a la inspección V1.");
   }

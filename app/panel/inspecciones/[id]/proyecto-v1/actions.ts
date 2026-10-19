@@ -1,4 +1,5 @@
 "use server";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 
 import { randomUUID } from "node:crypto";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
@@ -56,6 +57,7 @@ async function exigirInspectorEditable(inspeccionId: string) {
   });
   if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.activo) redirect("/acceso");
   if (!inspeccion || inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
+  if (await obtenerPlanConfirmado(inspeccionId)) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "Los documentos de proyecto de esta pantalla corresponden únicamente a V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "Los documentos solo pueden modificarse mientras V1 está EN PROCESO.");
 

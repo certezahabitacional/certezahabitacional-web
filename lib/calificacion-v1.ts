@@ -120,6 +120,7 @@ export async function obtenerMetricasV1(inspeccionId: string) {
     WHERE "inspeccionId" = ${inspeccionId}
       AND "areaId" IS NOT NULL
       AND COALESCE("area",'') NOT LIKE '__PUNTO_CRITICO__:%'
+      AND (NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL) OR "areaId" IN (SELECT "id" FROM "AreaInspeccion" WHERE "inspeccionId"=${inspeccionId} AND "origen"='PLAN_PREVIO'))
   `;
 
   const [conteoAreas] = await prisma.$queryRaw<ConteoAreas[]>`
@@ -128,6 +129,7 @@ export async function obtenerMetricasV1(inspeccionId: string) {
       COUNT(*) FILTER (WHERE "obligatoria" = true AND "resultado" = 'SIN_HALLAZGOS')::int AS "sinHallazgos"
     FROM "AreaInspeccion"
     WHERE "inspeccionId" = ${inspeccionId}
+      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
   `;
 
   const evaluaciones = await prisma.$queryRaw<EvaluacionPuntoV1[]>`
@@ -142,6 +144,7 @@ export async function obtenerMetricasV1(inspeccionId: string) {
     WHERE g."inspeccionId" = ${inspeccionId}
       AND g."areaId" IS NOT NULL
       AND COALESCE(g."area",'') NOT LIKE '__PUNTO_CRITICO__:%'
+      AND (NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL) OR g."areaId" IN (SELECT "id" FROM "AreaInspeccion" WHERE "inspeccionId"=${inspeccionId} AND "origen"='PLAN_PREVIO'))
       AND g."estadoV3" IN ('REVISADO','CON_HALLAZGO')
       AND g."concepto" NOT ILIKE '%fotografía del manómetro al iniciar%'
   `;
