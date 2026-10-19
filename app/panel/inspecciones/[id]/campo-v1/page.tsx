@@ -1,3 +1,4 @@
+import RecorridoConceptos, { RetomarRecorrido } from "@/components/inspecciones/RecorridoConceptos";
 import Link from "next/link";
 import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import RecorridoPlanConfirmado from "./RecorridoPlanConfirmado";
@@ -73,7 +74,7 @@ export default async function CampoV1Page({ params, searchParams }: {
   if (await obtenerPlanConfirmado(id)) {
     const puedeCapturar = (esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO) ||
       (esDirector && [EstadoInspeccion.EN_PROCESO, EstadoInspeccion.REPORTE_PENDIENTE].some(e=>e===inspeccion.estado));
-    return <RecorridoPlanConfirmado inspeccionId={id} folio={inspeccion.folio} query={query} puedeCapturar={puedeCapturar} />;
+    return <RecorridoPlanConfirmado inspeccionId={id} usuarioId={session.user.id} folio={inspeccion.folio} query={query} puedeCapturar={puedeCapturar} />;
   }
 
 
@@ -323,6 +324,7 @@ export default async function CampoV1Page({ params, searchParams }: {
           )}
         </section>
 
+        <div className="mt-4"><RetomarRecorrido usuarioId={session.user.id} inspeccionId={id} /></div>
         <section className="mt-6 grid gap-3 sm:grid-cols-4">
           <Card titulo="Partidas cerradas" valor={`${partidasCerradas}/${totalRecorrido}`} />
           <Card titulo="Puntos del plan" valor={String(totalPuntos)} />
@@ -369,7 +371,8 @@ export default async function CampoV1Page({ params, searchParams }: {
                   </div>
                 )}
 
-                <div className="mt-5 space-y-4">
+                <div className="mt-5">
+                  <RecorridoConceptos key={areaSeleccionada.id} usuarioId={session.user.id} inspeccionId={id} partida={areaSeleccionada.nombre} ruta={`/panel/inspecciones/${id}/campo-v1?area=${areaSeleccionada.id}`} conceptos={puntos.map(({id, concepto, estadoV3}) => ({id, concepto, estadoV3}))}>
                   {puntos.map((punto) => (
                     <ConceptoAreaCard
                       key={punto.id}
@@ -381,6 +384,7 @@ export default async function CampoV1Page({ params, searchParams }: {
                       areaActiva={true}
                     />
                   ))}
+                  </RecorridoConceptos>
                 </div>
 
                 {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
