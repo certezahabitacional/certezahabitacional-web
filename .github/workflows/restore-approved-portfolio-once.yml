@@ -1,0 +1,70 @@
+name: Restore approved portfolio once
+on:
+  push:
+    branches: [fix/imagen-original-verificada-20261019]
+    paths: [.github/workflows/restore-approved-portfolio-once.yml]
+permissions:
+  contents: write
+jobs:
+  restore:
+    if: github.repository == 'certezahabitacional/certezahabitacional-web' && github.ref == 'refs/heads/fix/imagen-original-verificada-20261019'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Validate and store the exact approved PNG
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_URL: 'https://sdmntprjapaneast.oaiusercontent.com/files/00000000-714c-8209-a974-2b62b2eabac2/raw?se=2026-10-19T18%3A59%3A09Z&sp=r&sv=2026-02-06&sr=b&scid=32e8a3bb-55dc-5151-9b84-9d16f9b1666c&skoid=dd316919-ffbf-4550-9c54-dfc99f412009&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-19T12%3A24%3A28Z&ske=2026-10-20T12%3A24%3A28Z&sks=b&skv=2026-02-06&sig=7%2BHqFmKM/GJA3CPsW45gfkfLGKySTLqpkhNcFrOpPCY%3D'
+        shell: python
+        run: |
+          import base64, hashlib, json, os, struct, urllib.request, zlib
+          repo = 'certezahabitacional/certezahabitacional-web'
+          branch = 'fix/imagen-original-verificada-20261019'
+          path = 'public/branding/portafolio-servicios-certeza-tecnica.png'
+          expected = 'e54c82b12e1321d361853ee0adcc9fbcca698f88537d626246e2d2531add4d99'
+          expected_blob = '0d7528594def1116e25f3008f742ccad88789bf4'
+          assert os.environ['GITHUB_REPOSITORY'] == repo
+          assert os.environ['GITHUB_REF'] == 'refs/heads/' + branch
+          with urllib.request.urlopen(os.environ['SOURCE_URL'], timeout=45) as response:
+              image = response.read(3000001)
+          assert len(image) == 2115560, 'Unexpected image length'
+          assert hashlib.sha256(image).hexdigest() == expected, 'Source does not match approved PNG'
+          assert image[:8] == b'\x89PNG\r\n\x1a\n'
+          offset = 8
+          compressed = []
+          ended = False
+          while offset < len(image):
+              size = struct.unpack('>I', image[offset:offset+4])[0]
+              kind = image[offset+4:offset+8]
+              data = image[offset+8:offset+8+size]
+              assert offset + size + 12 <= len(image), 'Truncated PNG chunk'
+              crc = struct.unpack('>I', image[offset+8+size:offset+12+size])[0]
+              assert zlib.crc32(kind + data) & 0xffffffff == crc, 'PNG CRC mismatch'
+              if kind == b'IHDR':
+                  assert struct.unpack('>IIBBBBB', data) == (1254, 1254, 8, 2, 0, 0, 0)
+              if kind == b'IDAT':
+                  compressed.append(data)
+              offset += size + 12
+              if kind == b'IEND':
+                  ended = True
+                  break
+          assert ended and offset == len(image), 'PNG is incomplete'
+          assert len(zlib.decompress(b''.join(compressed))) == 1254 * (1254 * 3 + 1)
+          api = 'https://api.github.com/repos/' + repo
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json'}
+          def request(suffix, payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(api + suffix, data=data, headers=headers, method='GET' if payload is None else 'PUT')
+              with urllib.request.urlopen(req, timeout=45) as response:
+                  return json.load(response)
+          head = request('/git/ref/heads/' + branch)['object']['sha']
+          assert head == os.environ['GITHUB_SHA'], 'Branch changed; refusing to overwrite'
+          old = request('/contents/' + path + '?ref=' + branch)
+          if old['sha'] == expected_blob:
+              print('Approved PNG already present; no write needed.')
+          else:
+              assert old['sha'] == '7a1af69dfb31b20e45d715282bf4c2b41b2653ba', 'Existing image changed'
+              result = request('/contents/' + path, {'message': 'fix: publicar el PNG completo autorizado de Certeza Tecnica', 'branch': branch, 'sha': old['sha'], 'content': base64.b64encode(image).decode('ascii')})
+              assert result['content']['sha'] == expected_blob, 'Stored blob mismatch'
+              print('VERIFIED_APPROVED_PNG bytes=2115560 dimensions=1254x1254 sha256=' + expected)
+              print('COMMIT=' + result['commit']['sha'])
