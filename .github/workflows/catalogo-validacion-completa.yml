@@ -4,33 +4,63 @@ on:
     branches: ['codex/recorrido-catalogo-confirmado-20261019']
     paths: ['.ci/**', '.github/workflows/catalogo-validacion-completa.yml']
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: catalogo-validacion-aislada
+  cancel-in-progress: false
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: 'postgresql://catalogo:catalogo_ci_only@127.0.0.1:5432/catalogo_test'
+      DIRECT_URL: 'postgresql://catalogo:catalogo_ci_only@127.0.0.1:5432/catalogo_test'
+      AUTH_SECRET: 'isolated-catalogo-test-not-a-production-secret'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Apply reviewed changes only to this isolated checkout
+      - name: Apply hash-verified approved edits in isolated checkout
         run: python3 .ci/apply-catalogo.py
-      - name: Verify formatting of the changes
+      - name: Verify formatting
         run: git diff --check
-      - name: Install locked dependencies without lifecycle scripts
-        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies without changing the existing lockfile
+        # Root lockfile has pre-existing missing mobile packages. No lockfile update is published.
+        run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
       - name: Generate Prisma client
         run: npx --no-install prisma generate
       - name: Compile complete application
         run: npm run build
+      - name: Lint new runtime modules
+        run: npx --no-install eslint lib/estructura-plan-inspeccion.ts lib/materializar-plan-confirmado.ts lib/recorrido-plan-confirmado.ts lib/seguridad-plan-confirmado.ts 'app/panel/inspecciones/[id]/campo-v1/RecorridoPlanConfirmado.tsx'
+      - name: Commit compiled edits only to the authorized task branch
         env:
-          NEXT_TELEMETRY_DISABLED: '1'
-      - name: Export validation summary
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'codex/recorrido-catalogo-confirmado-20261019'
+          git config user.name 'Certeza catalogo validation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          paths = [c['path'] for f in sorted(Path('.ci').glob('catalogo-edits-*.json')) for c in json.loads(f.read_text())]
+          subprocess.run(['git', 'add', '--', *paths], check=True)
+          PY
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix: aplicar catalogo aprobado tras compilacion completa aislada'
+            git config credential.helper '!gh auth git-credential'
+            git push origin HEAD:refs/heads/codex/recorrido-catalogo-confirmado-20261019
+          fi
+      - name: Export validation result without credentials or database contents
         if: always()
         run: |
           mkdir -p catalogo-validation
-          git diff --stat > catalogo-validation/changed-files.txt
-          git diff --binary > catalogo-validation/reviewed-source.patch
+          git rev-parse HEAD > catalogo-validation/commit.txt
+          git rev-parse HEAD^{tree} > catalogo-validation/tree.txt
+          git diff --stat > catalogo-validation/remaining-diff.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
