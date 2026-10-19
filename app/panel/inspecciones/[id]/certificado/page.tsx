@@ -155,11 +155,20 @@ export default async function CertificadoPage({
   const certificado = inspeccion.certificado;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const urlValidacion = `${baseUrl}/certificados/verificar/${certificado.codigoValidacion}`;
-  const qrDataUrl = await QRCode.toDataURL(urlValidacion, { width: 260, margin: 1, errorCorrectionLevel: "M" });
+  const urlReporteOficial = `${baseUrl}/reportes/verificar/${certificado.codigoValidacion}/pdf`;
+  const qrDataUrl = await QRCode.toDataURL(esV1 ? urlReporteOficial : urlValidacion, { width: 260, margin: 1, errorCorrectionLevel: "M" });
 
   return (
     <main className="min-h-screen bg-slate-200 px-4 py-8 text-slate-950 print:bg-white print:p-0">
-      <style>{`@page{size:Letter;margin:10mm} @media print{.certificate-shell{min-height:245mm!important}}`}</style>
+      <style>{`@page{size:Letter;margin:10mm}
+      @media print{
+        html,body{background:#fff!important}
+        .certificate-shell{min-height:auto!important;break-inside:avoid;page-break-inside:avoid}
+        .certificate-block{break-inside:avoid;page-break-inside:avoid}
+        img,svg{break-inside:avoid;page-break-inside:avoid;max-width:100%!important}
+        h1,h2,h3,p{orphans:3;widows:3}
+        h1,h2,h3{break-after:avoid;page-break-after:avoid}
+      }`}</style>
       <div className="mx-auto mb-5 flex max-w-5xl items-center justify-between print:hidden">
         <Link href={`/panel/inspecciones/${inspeccion.id}`} className="font-bold text-slate-700">← Volver al expediente</Link>
         {puedeImprimir && <PrintButton />}
@@ -168,7 +177,7 @@ export default async function CertificadoPage({
       {query.ok && <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-emerald-100 px-5 py-4 font-bold text-emerald-800 print:hidden">{query.ok}</div>}
       {query.error && <div className="mx-auto mb-5 max-w-5xl rounded-2xl bg-rose-100 px-5 py-4 font-bold text-rose-800 print:hidden">{query.error}</div>}
 
-      <article className="certificate-shell mx-auto min-h-[900px] max-w-5xl border-[12px] border-slate-950 bg-white p-12 shadow-2xl print:min-h-screen print:max-w-none print:shadow-none">
+      <article className="certificate-shell mx-auto max-w-5xl border-[12px] border-slate-950 bg-white p-12 shadow-2xl print:max-w-none print:shadow-none">
         <div className="border-2 border-amber-500 p-10 text-center">
           <ReportBrandHeader
             title={esV1 ? "Certificado Certeza Habitacional" : "Certificado de Estado Habitacional"}
@@ -192,7 +201,7 @@ export default async function CertificadoPage({
             Se hace constar que el inmueble descrito fue objeto de una inspección conforme al alcance y expediente técnico identificados en este certificado.
           </p>
 
-          <div className="mx-auto mt-10 max-w-3xl rounded-3xl bg-slate-950 p-8 text-left text-white">
+          <div className="certificate-block mx-auto mt-10 max-w-3xl rounded-3xl bg-slate-950 p-8 text-left text-white">
             <dl className="grid gap-5 md:grid-cols-2">
               <Data label="Certificado" value={certificado.folio} />
               <Data label="Inspección" value={inspeccion.folio} />
@@ -208,7 +217,7 @@ export default async function CertificadoPage({
             </dl>
           </div>
 
-          <div className="mx-auto mt-10 grid max-w-3xl items-center gap-8 md:grid-cols-[220px_1fr]">
+          <div className="certificate-block mx-auto mt-10 grid max-w-3xl items-center gap-8 md:grid-cols-[220px_1fr]">
             <div className="rounded-3xl bg-cyan-300 p-8 text-slate-950">
               <p className="text-xs font-black uppercase tracking-widest">{esV1 ? "Calificación Técnica Certeza" : "Índice"}</p>
               <p className="text-6xl font-black">{Number(certificado.ish).toFixed(esV1 ? 2 : 0)}</p>
@@ -225,20 +234,31 @@ export default async function CertificadoPage({
             </div>
           </div>
 
-          <div className="mx-auto mt-12 grid max-w-3xl gap-8 border-t border-slate-300 pt-8 text-sm text-slate-600 md:grid-cols-[1fr_180px] md:items-center">
+          <div className="certificate-block mx-auto mt-12 grid max-w-3xl gap-8 border-t border-slate-300 pt-8 text-sm text-slate-600 md:grid-cols-[1fr_180px] md:items-center">
             <div>
               <p>Emitido el {certificado.emitidoEn.toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}</p>
               <p className="mt-3 font-black tracking-widest text-slate-950">CÓDIGO DE VALIDACIÓN: {certificado.codigoValidacion}</p>
               <p className="mt-5 leading-6">Este certificado debe interpretarse junto con el reporte técnico completo. No sustituye peritajes estructurales, dictámenes de instalaciones ocultas ni estudios especializados.</p>
-              <p className="mt-5 text-xs">Escanee el código QR para verificar la autenticidad y vigencia del certificado.</p>
+              <p className="mt-5 text-xs">{esV1 ? "Escanee el código QR para abrir directamente el Reporte Oficial autorizado. Desde la página de validación también puede comprobar la vigencia y descargar el PDF." : "Escanee el código QR para verificar la autenticidad y vigencia del certificado."}</p>
             </div>
             <div className="flex flex-col items-center justify-center self-center">
               <img src={qrDataUrl} alt="Código QR de validación" className="mx-auto h-40 w-40" />
-              <p className="mt-2 text-xs font-bold text-slate-700">Verificar certificado</p>
+              <p className="mt-2 text-xs font-bold text-slate-700">{esV1 ? "Abrir Reporte Oficial" : "Verificar certificado"}</p>
             </div>
           </div>
         </div>
       </article>
+
+      {esV1 && certificado.vigente && (
+        <section className="mx-auto mt-6 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-6 shadow-xl print:hidden">
+          <p className="text-xs font-black uppercase tracking-widest text-cyan-800">Reporte Oficial compartible</p>
+          <p className="mt-2 text-sm leading-6 text-slate-700">El QR del certificado abre directamente la versión oficial autorizada. También puedes probar la vista o descargar el PDF desde aquí.</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a href={`/reportes/verificar/${certificado.codigoValidacion}/pdf`} target="_blank" rel="noreferrer" className="rounded-full bg-cyan-700 px-5 py-3 font-black text-white">VER REPORTE OFICIAL</a>
+            <a href={`/reportes/verificar/${certificado.codigoValidacion}/pdf?download=1`} className="rounded-full border border-cyan-700 px-5 py-3 font-black text-cyan-800">DESCARGAR PDF</a>
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto mt-6 max-w-5xl rounded-3xl border border-slate-300 bg-white p-7 shadow-xl print:hidden">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">

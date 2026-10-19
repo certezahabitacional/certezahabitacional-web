@@ -2,6 +2,7 @@ import { RolUsuario } from "@prisma/client";
 
 export type ModuloPanel =
   | "INSPECCIONES"
+  | "REPORTES"
   | "CLIENTES"
   | "INMUEBLES"
   | "AGENDA"
@@ -22,6 +23,7 @@ export type OpcionNavegacionPanel = {
 
 export const OPCIONES_PANEL: readonly OpcionNavegacionPanel[] = [
   { modulo: "INSPECCIONES", etiqueta: "Inspecciones", href: "/panel/inspecciones" },
+  { modulo: "REPORTES", etiqueta: "Reportes", href: "/panel/reportes" },
   { modulo: "CLIENTES", etiqueta: "Clientes", href: "/panel/clientes" },
   { modulo: "INMUEBLES", etiqueta: "Inmuebles", href: "/panel/inmuebles" },
   { modulo: "AGENDA", etiqueta: "Agenda", href: "/panel/agenda" },
@@ -52,6 +54,7 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
   ]),
   [RolUsuario.ADMINISTRADOR]: new Set<ModuloPanel>([
     "INSPECCIONES",
+    "REPORTES",
     "CLIENTES",
     "INMUEBLES",
     "AGENDA",
@@ -89,6 +92,8 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
 };
 
 export function puedeVerModuloPanel(rol: RolUsuario, modulo: ModuloPanel): boolean {
+  if (modulo === "REPORTES") return rol === RolUsuario.DIRECTOR || rol === RolUsuario.ADMINISTRADOR;
+  if (rol === RolUsuario.DIRECTOR) return true;
   return MODULOS_POR_ROL[rol]?.has(modulo) ?? false;
 }
 

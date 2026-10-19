@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import ReportShareActions from "@/components/reportes/ReportShareActions";
 
 type ControlPublicoV1 = { coberturaPorcentaje: number | null };
 
@@ -24,6 +25,7 @@ export default async function VerificarCertificadoPage({
               usuario: true,
             },
           },
+          revisiones: { where: { rol: "DIRECTOR", decision: "APROBADO", estado: "VIGENTE" }, take: 1, select: { id: true } },
         },
       },
     },
@@ -71,7 +73,19 @@ export default async function VerificarCertificadoPage({
   }
 
   const inspeccion = certificado.inspeccion;
-  const vigente = certificado.vigente;
+  const vigente = certificado.vigente && inspeccion.estado === "FINALIZADA" && !inspeccion.liberacionBloqueada && inspeccion.revisiones.length > 0;
+  if (!vigente) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-white">
+        <section className="w-full max-w-xl rounded-3xl border border-rose-400/30 bg-slate-900 p-8 text-center">
+          <h1 className="text-2xl font-black text-rose-300">Certificado no disponible</h1>
+          <p className="mt-4 text-slate-300">Este certificado no está liberado o fue revocado. No se muestran datos del expediente.</p>
+          <Link href="/" className="mt-7 inline-block rounded-full bg-cyan-400 px-6 py-3 font-black text-slate-950">Ir a Certeza Habitacional</Link>
+        </section>
+      </main>
+    );
+  }
+
   const esV1 = inspeccion.numeroInspeccion === 1;
   const [controlV1] = esV1
     ? await prisma.$queryRaw<ControlPublicoV1[]>`
@@ -106,7 +120,7 @@ export default async function VerificarCertificadoPage({
             </div>
 
             <div className="rounded-full bg-slate-950 px-5 py-3 font-black text-white">
-              {vigente ? "✓ CERTIFICADO VIGENTE" : "✕ CERTIFICADO REVOCADO"}
+              {vigente ? "✓ CERTIFICADO VIGENTE" : "✕ CERTIFICADO NO LIBERADO O REVOCADO"}
             </div>
           </div>
         </header>
@@ -199,9 +213,26 @@ export default async function VerificarCertificadoPage({
 
           <div className="mt-7 rounded-3xl bg-amber-400/10 p-5 text-sm leading-6 text-amber-200">
             {esV1
-              ? "Esta consulta pública confirma autenticidad y vigencia con información limitada. El reporte técnico completo y los datos del cliente permanecen en el portal autenticado de Certeza Habitacional."
+              ? "Esta consulta pública confirma autenticidad y vigencia. El reporte oficial autorizado puede consultarse o descargarse desde esta misma página."
               : "La validación confirma que el certificado está registrado en la plataforma. El documento debe interpretarse junto con el reporte técnico completo de la inspección."}
           </div>
+
+          {esV1 && vigente && (
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              <a
+                href={`/reportes/verificar/${certificado.codigoValidacion}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl bg-cyan-400 px-5 py-4 text-center font-black text-slate-950"
+              >
+                VER REPORTE OFICIAL
+              </a>
+              <ReportShareActions
+                pdfUrl={`/reportes/verificar/${certificado.codigoValidacion}/pdf`}
+                folio={inspeccion.folio}
+              />
+            </div>
+          )}
 
           <footer className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-slate-500">
             Consulta generada directamente desde el registro de Certeza Habitacional.

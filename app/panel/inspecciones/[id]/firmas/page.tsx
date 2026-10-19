@@ -10,6 +10,8 @@ import {
   useState,
 } from "react";
 
+import { enqueueOfflineOperation } from "@/lib/offline/sync-queue";
+
 type Inspeccion = {
   id: string;
   folio: string;
@@ -261,8 +263,8 @@ function FirmaCanvas({
   }
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="flex h-full min-h-[430px] flex-col rounded-3xl border border-white/10 bg-slate-900 p-6">
+      <div className="min-h-[92px] flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h2 className="text-xl font-black">{titulo}</h2>
 
         {!disabled && (
@@ -296,8 +298,8 @@ function FirmaCanvas({
 
       <p className="mt-2 text-sm text-slate-400">
         {disabled
-          ? "Firma registrada en el expediente. Esta vista es de solo lectura."
-          : "Firma dentro del recuadro usando el mouse o la pantalla táctil, o inserta una imagen de firma digital."}
+          ? (valor ? "Firma registrada en el expediente. Esta vista es de solo lectura." : "Firma pendiente. Esta vista está temporalmente en modo de solo lectura.")
+          : "Firma dentro del recuadro usando el mouse o la pantalla táctil, o inserta una imagen de firma digital desde el dispositivo."}
       </p>
 
       {!disabled && (
@@ -321,7 +323,7 @@ function FirmaCanvas({
         onPointerUp={finalizar}
         onPointerCancel={finalizar}
         onPointerLeave={finalizar}
-        className={`mt-5 h-56 w-full rounded-2xl bg-white ${
+        className={`mt-5 h-52 w-full flex-none rounded-2xl bg-white ${
           disabled ? "cursor-not-allowed opacity-90" : "touch-none"
         }`}
       />
@@ -386,11 +388,35 @@ export default function FirmasPage() {
         if (activo) {
           setInspeccion(datosInspeccion);
           setFirmas(datosFirmas);
+          localStorage.setItem(
+            `certeza:firmas:${inspeccionId}`,
+            JSON.stringify({
+              inspeccion: datosInspeccion,
+              firmas: datosFirmas,
+              guardadoEn: new Date().toISOString(),
+            }),
+          );
         }
       } catch {
         if (activo) {
-          setInspeccion(null);
-          setMensaje("No fue posible cargar el expediente.");
+          try {
+            const guardado = localStorage.getItem(`certeza:firmas:${inspeccionId}`);
+            if (guardado) {
+              const local = JSON.parse(guardado) as {
+                inspeccion: Inspeccion;
+                firmas: Firmas;
+              };
+              setInspeccion(local.inspeccion);
+              setFirmas({ ...local.firmas, puedeModificar: true });
+              setMensaje("MODO SIN CONEXIÓN · Las firmas se guardarán en este dispositivo y se sincronizarán al recuperar Internet.");
+            } else {
+              setInspeccion(null);
+              setMensaje("Esta pantalla no fue preparada previamente para trabajo sin conexión.");
+            }
+          } catch {
+            setInspeccion(null);
+            setMensaje("No fue posible recuperar el expediente guardado en este dispositivo.");
+          }
         }
       } finally {
         if (activo) setCargando(false);
@@ -418,6 +444,42 @@ export default function FirmasPage() {
     setMensaje("");
 
     try {
+      if (!navigator.onLine) {
+        await enqueueOfflineOperation({
+          inspectionId: inspeccionId,
+          operation: "SIGNATURES_V1",
+          payload: {
+            inspectionId: inspeccionId,
+            inspector: firmas.inspector,
+            cliente: firmas.cliente,
+          },
+        });
+
+        const firmasLocales: Firmas = {
+          ...firmas,
+          fechaInspector: new Date().toISOString(),
+          fechaCliente: new Date().toISOString(),
+          puedeModificar: false,
+          motivoSoloLectura: "Firmas guardadas localmente y pendientes de sincronización.",
+        };
+        setFirmas(firmasLocales);
+        localStorage.setItem(
+          `certeza:firmas:${inspeccionId}`,
+          JSON.stringify({
+            inspeccion,
+            firmas: {
+              ...firmasLocales,
+              inspector: "",
+              cliente: "",
+            },
+            firmasLocalesPendientes: true,
+            guardadoEn: new Date().toISOString(),
+          }),
+        );
+        setMensaje("MODO SIN CONEXIÓN · Firmas guardadas localmente. Se sincronizarán automáticamente.");
+        return;
+      }
+
       const respuesta = await fetch(
         `/api/inspecciones/${inspeccionId}/firmas`,
         {
@@ -465,7 +527,24 @@ export default function FirmasPage() {
         "Firmas guardadas correctamente en el expediente.",
       );
     } catch {
-      setMensaje("No fue posible guardar las firmas.");
+      if (!navigator.onLine) {
+        try {
+          await enqueueOfflineOperation({
+            inspectionId: inspeccionId,
+            operation: "SIGNATURES_V1",
+            payload: {
+              inspectionId: inspeccionId,
+              inspector: firmas.inspector,
+              cliente: firmas.cliente,
+            },
+          });
+          setMensaje("Conexión interrumpida · Firmas guardadas localmente y pendientes de sincronización.");
+        } catch {
+          setMensaje("No fue posible guardar las firmas.");
+        }
+      } else {
+        setMensaje("No fue posible guardar las firmas.");
+      }
     } finally {
       setGuardando(false);
     }
@@ -543,7 +622,7 @@ export default function FirmasPage() {
           </p>
         </div>
 
-        <div className="grid gap-7 lg:grid-cols-2">
+        <div className="grid items-stretch gap-7 lg:grid-cols-2">
           <FirmaCanvas
             titulo={`Inspector: ${inspeccion.inspector}`}
             valor={firmas.inspector}
@@ -583,10 +662,26 @@ export default function FirmasPage() {
           </p>
         )}
 
+        {firmas.inspector && firmas.cliente && (
+          <section className="mt-8 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Firmas completas · revisión final antes de Dirección</p>
+            <h2 className="mt-2 text-xl font-black">Vuelve al recorrido desde la Partida 1</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Antes de enviar el reporte a Dirección revisa nuevamente el recorrido completo. Si haces cualquier ajuste, vuelve a generar el PRE REPORTE para que la versión enviada sea la más reciente.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Link href={`/panel/inspecciones/${inspeccionId}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">
+                VOLVER AL RECORRIDO · PARTIDA 1
+              </Link>
+              <Link href={`/panel/inspecciones/${inspeccionId}/reporte-v1`} className="rounded-xl bg-cyan-300 px-5 py-4 text-center text-sm font-black text-slate-950">
+                VOLVER AL PRE REPORTE / REGENERAR
+              </Link>
+            </div>
+          </section>
+        )}
+
         <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-6 text-sm leading-7 text-cyan-100">
-          Las firmas quedan asociadas al expediente y pueden consultarse
-          desde los perfiles autorizados. La modificación queda restringida
-          al Inspector asignado mientras la inspección se encuentre EN PROCESO.
+          Las firmas quedan asociadas al expediente y pueden consultarse desde los perfiles autorizados. Mientras la inspección permanezca EN PROCESO, el Inspector asignado o Dirección pueden registrarlas dibujando en pantalla o insertando una imagen digital desde el dispositivo.
         </div>
       </div>
     </main>

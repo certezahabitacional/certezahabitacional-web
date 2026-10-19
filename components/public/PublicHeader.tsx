@@ -27,7 +27,7 @@ export default function PublicHeader({ active }: { active: ActivePage }) {
     <header className={styles.header}>
       <div className={styles.inner}>
         <Link
-          href="/"
+          href="/certeza-habitacional"
           aria-label="Inicio Certeza Habitacional"
           className={styles.brand}
         >
@@ -43,7 +43,7 @@ export default function PublicHeader({ active }: { active: ActivePage }) {
 
         <nav className={styles.nav} aria-label="Navegación principal">
           {internal && (
-            <Link href="/" className={styles.navLink}>
+            <Link href="/certeza-habitacional" className={styles.navLink}>
               INICIO
             </Link>
           )}
@@ -62,6 +62,12 @@ export default function PublicHeader({ active }: { active: ActivePage }) {
         </nav>
 
         <div className={styles.actions}>
+          {active === "acceso" && (
+            <Link href="/" className={`${styles.button} ${styles.groupBack}`}>
+              <span>← GRUPO CERTEZA</span>
+            </Link>
+          )}
+
           {active !== "acceso" && (
             <Link href="/login" className={`${styles.button} ${styles.outline}`}>
               <UserIcon />

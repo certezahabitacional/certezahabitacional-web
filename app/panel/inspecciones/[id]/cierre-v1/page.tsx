@@ -5,10 +5,16 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { bloquearContenidoTecnicoV1Finalizado } from "@/lib/acceso-v1-final";
 import { prisma } from "@/lib/prisma";
-import { enviarReporteDireccionV1, terminarTrabajoCampoV1 } from "./actions";
+import {
+  concluirInspeccionTecnicaV1,
+} from "./actions";
+import OfflineFieldCloseButton from "@/components/offline/OfflineFieldCloseButton";
 
 type Estado = {
+  inspeccionTecnicaConcluidaEn: Date | null;
   campoFinalizadoEn: Date | null;
+  preReporteGeneradoEn: Date | null;
+  revisionInspectorFinalEn: Date | null;
   reporteLimiteEn: Date | null;
   reabiertaEn: Date | null;
   areasTotal: number;
@@ -51,6 +57,19 @@ export default async function CierreV1Page({ params, searchParams }: {
       cliente: { select: { nombre: true } },
       inmueble: { select: { alias: true, direccion: true } },
       firmas: { select: { tipo: true, firmadaEn: true } },
+      revisiones: {
+        where: { rol: RolUsuario.DIRECTOR },
+        orderBy: { creadaEn: "desc" },
+        take: 6,
+        select: {
+          id: true,
+          decision: true,
+          estado: true,
+          comentario: true,
+          creadaEn: true,
+          usuario: { select: { nombre: true } },
+        },
+      },
     },
   });
   if (!inspeccion) notFound();
@@ -62,15 +81,16 @@ export default async function CierreV1Page({ params, searchParams }: {
 
   const [estado] = await prisma.$queryRaw<Estado[]>`
     SELECT
-      c."campoFinalizadoEn", c."reporteLimiteEn", c."reabiertaEn",
+      c."inspeccionTecnicaConcluidaEn", c."campoFinalizadoEn", c."preReporteGeneradoEn", c."revisionInspectorFinalEn",
+      c."reporteLimiteEn", c."reabiertaEn",
       (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true) AS "areasTotal",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS')) AS "areasCompletas",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} AND a."obligatoria"=true AND a."estado"='REVISADA' AND a."resultado" IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA')) AS "areasCompletas",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true) AS "procesosTotal",
       (SELECT COUNT(*)::int FROM "ProtocoloInspeccionPaso" p WHERE p."inspeccionId"=${id} AND p."obligatorio"=true AND p."estado" IN ('COMPLETADO','NO_APLICA')) AS "procesosCompletos",
       (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id}) AS "hallazgos",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id} AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") >= 4 AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL) AS "hallazgosCompletos",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL') AS "fotosFachada",
-      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL' AND fa."candidataPortada"=true) AS "portadaFachada",
+      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=${id} AND (SELECT COUNT(*) FROM "Fotografia" f WHERE f."hallazgoId"=h."id") BETWEEN 1 AND 4 AND nullif(btrim(coalesce(h."descripcion",'')),'') IS NOT NULL) AS "hallazgosCompletos",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')) AS "fotosFachada",
+      (SELECT COUNT(*)::int FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true) AS "portadaFachada",
       (SELECT COUNT(*)::int FROM "OperacionCampoSync" s WHERE s."inspeccionId"=${id} AND s."estado" <> 'PROCESADA') AS "syncPendientes"
     FROM "InspeccionControlV2" c WHERE c."inspeccionId"=${id} LIMIT 1
   `;
@@ -82,14 +102,44 @@ export default async function CierreV1Page({ params, searchParams }: {
   const firmaInspector = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("inspector"));
   const firmaCliente = firmasVigentes.some((f) => f.tipo.toLowerCase().includes("cliente"));
   const firmasListas = firmaInspector && firmaCliente;
+  const observacionesDireccion = inspeccion.revisiones.filter(
+    (revision) => revision.decision === "DEVUELTO_INSPECTOR" && Boolean(revision.comentario),
+  );
+  const observacionDireccionActual = observacionesDireccion[0] ?? null;
 
-  const listoCampo = Boolean(
+  const tecnicoListo = Boolean(
     estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal &&
     estado.procesosTotal > 0 && estado.procesosCompletos === estado.procesosTotal &&
-    estado.hallazgos === estado.hallazgosCompletos && estado.fotosFachada >= 4 &&
-    estado.portadaFachada === 1 && estado.syncPendientes === 0 && firmasListas
+    estado.hallazgos === estado.hallazgosCompletos &&
+    (estado.portadaFachada === 1 || estado.fotosFachada === 0) && estado.syncPendientes === 0
   );
+  const [hermeticidad] = await prisma.$queryRaw<Array<{ completa: boolean }>>`
+    SELECT (
+      COUNT(*) FILTER (
+        WHERE "clave" IN ('PC_HIDRAULICA','PC_GAS')
+          AND (
+            "estado"='NO_APLICA'
+            OR ("estado"='COMPLETADO' AND "lecturaInicial" IS NOT NULL AND "lecturaFinal" IS NOT NULL)
+          )
+      ) = 2
+    ) AS "completa"
+    FROM "ProtocoloInspeccionPaso"
+    WHERE "inspeccionId"=${id}
+  `;
+
+  const totalPartidas = Number(estado?.areasTotal ?? 0) + Number(estado?.procesosTotal ?? 0) + 1;
+  const partidasCompletas =
+    Number(estado?.areasCompletas ?? 0) +
+    Number(estado?.procesosCompletos ?? 0) +
+    Number(Boolean(hermeticidad?.completa));
+  const todasPartidasListas = totalPartidas > 0 && partidasCompletas === totalPartidas;
+
+  const inspeccionConcluida = Boolean(estado?.inspeccionTecnicaConcluidaEn);
+  const preReporteRevisado = Boolean(estado?.preReporteGeneradoEn);
   const campoTerminado = Boolean(estado?.campoFinalizadoEn);
+  const revisionInspectorFinal = Boolean(estado?.revisionInspectorFinalEn);
+  const listoCampo = tecnicoListo && todasPartidasListas && preReporteRevisado && firmasListas;
+  const puedeOperarCierre = esInspector || usuario.rol === RolUsuario.DIRECTOR;
   const ahora = new Date();
   const limite = estado?.reporteLimiteEn ? new Date(estado.reporteLimiteEn) : null;
   const minutosRestantes = limite ? Math.floor((limite.getTime() - ahora.getTime()) / 60000) : null;
@@ -101,7 +151,7 @@ export default async function CierreV1Page({ params, searchParams }: {
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo V1</Link>
+          <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="text-sm font-black text-cyan-300">← PRE REPORTE</Link>
           <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-slate-300">CIERRE V1</span>
         </div>
 
@@ -113,6 +163,27 @@ export default async function CierreV1Page({ params, searchParams }: {
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
 
+        {observacionDireccionActual && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
+          <section className="mt-5 rounded-3xl border border-rose-300/20 bg-rose-300/5 p-5">
+            <p className="text-xs font-black uppercase tracking-widest text-rose-300">Observaciones de Dirección pendientes de atender</p>
+            <h2 className="mt-2 text-xl font-black">PRE REPORTE devuelto al Inspector</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-200">
+              {observacionDireccionActual.comentario}
+            </p>
+            <p className="mt-3 text-xs text-slate-500">
+              {observacionDireccionActual.usuario.nombre} · {new Date(observacionDireccionActual.creadaEn).toLocaleString("es-MX")}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href={`/panel/inspecciones/${id}/revision-final-inspector`} className="rounded-xl bg-rose-300 px-4 py-3 text-sm font-black text-slate-950">
+                ATENDER OBSERVACIONES
+              </Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">
+                REVISAR PRE REPORTE
+              </Link>
+            </div>
+          </section>
+        )}
+
         {reabiertaEn && !firmasListas && (
           <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5">
             <p className="text-xs font-black uppercase tracking-widest text-amber-300">Reporte devuelto por Dirección</p>
@@ -123,47 +194,85 @@ export default async function CierreV1Page({ params, searchParams }: {
         )}
 
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card titulo="Áreas" valor={`${estado?.areasCompletas ?? 0}/${estado?.areasTotal ?? 0}`} ok={Boolean(estado && estado.areasTotal > 0 && estado.areasCompletas === estado.areasTotal)} />
-          <Card titulo="Procesos" valor={`${estado?.procesosCompletos ?? 0}/${estado?.procesosTotal ?? 0}`} ok={Boolean(estado && estado.procesosTotal > 0 && estado.procesosCompletos === estado.procesosTotal)} />
+          <Card titulo="Partidas cerradas" valor={`${partidasCompletas}/${totalPartidas}`} ok={todasPartidasListas} />
+          <Card titulo="PRE REPORTE" valor={preReporteRevisado ? "Generado" : "Pendiente"} ok={preReporteRevisado} />
           <Card titulo="Hallazgos completos" valor={`${estado?.hallazgosCompletos ?? 0}/${estado?.hallazgos ?? 0}`} ok={Boolean(estado && estado.hallazgosCompletos === estado.hallazgos)} />
           <Card titulo="Firmas vigentes" valor={`${Number(firmaInspector) + Number(firmaCliente)}/2`} ok={firmasListas} />
         </section>
 
-        <section className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
-          <h2 className="text-xl font-black">Semáforo de salida</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Linea ok={(estado?.fotosFachada ?? 0) >= 4} texto={`Fachada: ${estado?.fotosFachada ?? 0}/4 fotografías`} />
-            <Linea ok={(estado?.portadaFachada ?? 0) === 1} texto={`Foto de portada: ${(estado?.portadaFachada ?? 0) === 1 ? "seleccionada" : "pendiente"}`} />
-            <Linea ok={(estado?.syncPendientes ?? 0) === 0} texto={`Sincronización: ${estado?.syncPendientes ?? 0} pendientes`} />
-            <Linea ok={firmaInspector} texto={`Firma Inspector: ${firmaInspector ? "vigente" : "pendiente"}`} />
-            <Linea ok={firmaCliente} texto={`Firma cliente: ${firmaCliente ? "vigente" : "pendiente"}`} />
-            <Linea ok={listoCampo} texto={listoCampo ? "Visita lista para terminar o reenviar" : "Aún existen requisitos pendientes"} />
+        <section className="mt-6 rounded-3xl border border-white/10 bg-slate-900 p-6">
+          <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-300">Ruta de cierre de la inspección</p>
+          <h2 className="mt-2 text-2xl font-black">Secuencia única antes de Dirección</h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Linea ok={todasPartidasListas} texto="1. Recorrido completo y hermeticidades cerradas" />
+            <Linea ok={preReporteRevisado} texto="2. PRE REPORTE generado y revisado con el cliente" />
+            <Linea ok={firmasListas} texto="3. Firmas Inspector + Cliente" />
+            <Linea ok={inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE || inspeccion.estado === EstadoInspeccion.FINALIZADA} texto="4. Enviado a Dirección" />
           </div>
         </section>
 
-        {!campoTerminado && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
-          <section className={`mt-5 rounded-3xl border p-6 ${listoCampo ? "border-emerald-300/20 bg-emerald-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
-            <h2 className="text-xl font-black">Terminar trabajo de campo</h2>
-            <p className="mt-2 text-sm text-slate-300">Al terminar, el cliente podrá ver el pre-reporte y comenzará la ventana máxima de 12 horas para la edición final del reporte.</p>
-            {esInspector && <form action={terminarTrabajoCampoV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button disabled={!listoCampo} className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">TERMINAR TRABAJO DE CAMPO</button></form>}
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && !tecnicoListo && (
+          <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-amber-300">Inspección todavía en proceso</p>
+            <h2 className="mt-2 text-xl font-black">Concluir todas las partidas y las dos pruebas de hermeticidad</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">El botón GENERAR PRE REPORTE sólo debe habilitarse cuando el recorrido esté realmente terminado al 100%.</p>
+            <Link href={`/panel/inspecciones/${id}/flujo`} className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">VOLVER AL RECORRIDO</Link>
           </section>
         )}
 
-        {campoTerminado && (
-          <section className={`mt-5 rounded-3xl border p-6 ${vencido ? "border-rose-300/20 bg-rose-300/5" : "border-cyan-300/20 bg-cyan-300/5"}`}>
-            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Ventana de edición</p>
-            <h2 className="mt-2 text-2xl font-black">{vencido ? "Plazo objetivo vencido" : `${horasRestantes} h ${mins} min restantes`}</h2>
-            {limite && <p className="mt-2 text-sm text-slate-300">Límite registrado: {limite.toLocaleString("es-MX")}</p>}
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/panel/inspecciones/${id}/pre-reporte`} className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-950">Ver pre-reporte</Link>
-              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Revisar reporte V1</Link>
-              <Link href={`/panel/inspecciones/${id}/reporte-evidencias`} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Editar evidencias</Link>
-            </div>
-            {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && (
-              <form action={enviarReporteDireccionV1} className="mt-5">
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && tecnicoListo && !inspeccionConcluida && (
+          <section className="mt-5 rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Recorrido concluido al 100%</p>
+            <h2 className="mt-2 text-xl font-black">Generar PRE REPORTE</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Al generar esta versión comienza la revisión con el cliente antes de retirarse del inmueble.</p>
+            {esInspector && (
+              <form action={concluirInspeccionTecnicaV1} className="mt-4">
                 <input type="hidden" name="inspeccionId" value={id}/>
-                <button disabled={!firmasListas} className="w-full rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">ENVIAR REPORTE A DIRECCIÓN</button>
+                <input type="hidden" name="retorno" value="PRE_REPORTE"/>
+                <button className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">GENERAR PRE REPORTE</button>
               </form>
+            )}
+          </section>
+        )}
+
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && !firmasListas && (
+          <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Revisión con el cliente · antes de retirarse</p>
+            <h2 className="mt-2 text-xl font-black">Revisa el PRE REPORTE y corrige lo necesario antes de firmas</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Si detectas una omisión, vuelve al recorrido desde la Partida 1. Cuando termines los ajustes, registra las firmas del Inspector y del Cliente.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-center text-sm font-black">CONSULTAR PRE REPORTE</Link>
+              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-4 py-3 text-center text-sm font-black text-slate-950">REVISAR Y AJUSTAR · PARTIDA 1</Link>
+              <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-300 px-4 py-3 text-center text-sm font-black text-slate-950">PASAR A FIRMAS</Link>
+            </div>
+          </section>
+        )}
+
+        {esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO && !campoTerminado && (
+          <OfflineFieldCloseButton inspeccionId={id} />
+        )}
+
+        {inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && firmasListas && (
+          <section className="mt-5 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-violet-300">Firmas completas · última revisión del Inspector</p>
+            <h2 className="mt-2 text-xl font-black">Vuelve al recorrido desde la Partida 1 y regenera el PRE REPORTE</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Después de cualquier ajuste, vuelve al PRE REPORTE y genera una nueva versión. Desde esa pantalla aparecerán únicamente las opciones REVISAR Y AJUSTAR y AUTORIZACIÓN DEL REPORTE.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">VOLVER AL RECORRIDO · PARTIDA 1</Link>
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-cyan-300 px-5 py-4 text-center text-sm font-black text-slate-950">PRE REPORTE · REGENERAR / AUTORIZAR</Link>
+            </div>
+          </section>
+        )}
+
+        {inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE && (
+          <section className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
+            <p className="text-xs font-black uppercase tracking-widest text-amber-300">Reporte en Dirección</p>
+            <h2 className="mt-2 text-xl font-black">Pendiente de autorización o devolución con observaciones</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Si Dirección devuelve el reporte, el Inspector recuperará el acceso de revisión y ajuste para repetir el ciclo hasta la autorización.</p>
+            {usuario.rol === RolUsuario.DIRECTOR ? (
+              <Link href={`/panel/inspecciones/${id}/revision`} className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">REVISAR · AUTORIZAR O DEVOLVER</Link>
+            ) : (
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="mt-4 inline-block rounded-xl border border-white/15 px-5 py-3 text-sm font-black">CONSULTAR PRE REPORTE ENVIADO</Link>
             )}
           </section>
         )}

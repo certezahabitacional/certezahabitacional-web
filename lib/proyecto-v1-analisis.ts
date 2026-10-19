@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import { instalarCompatibilidadOpenAIGateway } from "@/lib/ai-gateway-openai-compat";
+
+instalarCompatibilidadOpenAIGateway();
+
 export const DimensionProyectoV1Schema = z.object({
   nombre: z.string().min(1),
   valor: z.string().min(1),

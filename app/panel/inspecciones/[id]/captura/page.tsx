@@ -149,6 +149,12 @@ export default async function CapturaPage({
     notFound();
   }
 
+  // V1 usa exclusivamente el recorrido unificado de 27 partidas.
+  // La captura legacy se conserva solo para inspecciones de seguimiento (V2+).
+  if (inspeccion.numeroInspeccion === 1) {
+    redirect(`/panel/inspecciones/${id}/flujo`);
+  }
+
   const esSeguimiento = inspeccion.numeroInspeccion > 1;
   const areasV1 = !esSeguimiento
     ? await prisma.$queryRaw<Array<{ nombre: string }>>`
@@ -892,15 +898,18 @@ export default async function CapturaPage({
                           : "Editar hallazgo"}
                       </Link>
 
-                      <Link
-                        href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgo.id}`}
-                        className="min-h-11 rounded-2xl bg-cyan-400 px-4 py-3 text-center text-sm font-black text-slate-950"
-                      >
-                        📷{" "}
-                        {fotos > 0
-                          ? `Agregar otra evidencia (${fotos})`
-                          : "Tomar / agregar evidencia"}
-                      </Link>
+                      {fotos < 4 ? (
+                        <Link
+                          href={`/panel/inspecciones/${id}/evidencias?hallazgoId=${hallazgo.id}`}
+                          className="min-h-11 rounded-2xl bg-cyan-400 px-4 py-3 text-center text-sm font-black text-slate-950"
+                        >
+                          📷 {fotos > 0 ? `Agregar evidencia ${fotos + 1}/4` : "Agregar primera evidencia"}
+                        </Link>
+                      ) : (
+                        <div className="min-h-11 rounded-2xl border border-emerald-300/20 bg-emerald-300/5 px-4 py-3 text-center text-sm font-black text-emerald-300">
+                          Máximo 4 evidencias ✓
+                        </div>
+                      )}
 
                       {fotos > 0 ? (
                         <Link

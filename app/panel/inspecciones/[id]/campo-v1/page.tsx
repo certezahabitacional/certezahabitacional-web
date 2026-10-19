@@ -4,24 +4,18 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { PUNTOS_CRITICOS_V1 } from "@/lib/puntos-criticos-v1";
 import {
   agregarPuntoInspectorV1,
   cerrarAreaConHallazgosV1,
   cerrarAreaSinHallazgosV1,
+  deshabilitarPartidaAreaV1,
   inicializarPlanAreasV1,
-  marcarPuntoNoAplicaV1,
+  reactivarPartidaAreaV1,
 } from "./actions";
-
-type Punto = {
-  id: string;
-  concepto: string;
-  grupo: string | null;
-  estadoV3: string;
-  origenV3: string;
-  obligatorio: boolean;
-  herramientaSugerida: string | null;
-  motivoNoAplica: string | null;
-};
+import { concluirInspeccionTecnicaV1 } from "../cierre-v1/actions";
+import ConceptoAreaCard, { type PuntoArea } from "./ConceptoAreaCard";
+import OfflineInspectionDownload from "@/components/offline/OfflineInspectionDownload";
 
 type Area = {
   id: string;
@@ -37,6 +31,12 @@ type Area = {
   noAplica: number;
 };
 
+function tituloPartida(valor: string) {
+  return valor
+    .toLocaleLowerCase("es-MX")
+    .replace(/(^|[\s/\-])([a-záéíóúüñ])/g, (_, separador: string, letra: string) => `${separador}${letra.toLocaleUpperCase("es-MX")}`);
+}
+
 export default async function CampoV1Page({ params, searchParams }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ ok?: string; error?: string; area?: string }>;
@@ -46,73 +46,277 @@ export default async function CampoV1Page({ params, searchParams }: {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: session.user.id },
-    select: { rol: true, activo: true, inspector: { select: { id: true } } },
-  });
+  const [usuario, inspeccion] = await Promise.all([
+    prisma.usuario.findUnique({
+      where: { id: session.user.id },
+      select: { rol: true, activo: true, inspector: { select: { id: true } } },
+    }),
+    prisma.inspeccion.findUnique({
+      where: { id },
+      select: {
+        id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true,
+        cliente: { select: { nombre: true } },
+        inmueble: { select: { alias: true, direccion: true } },
+      },
+    }),
+  ]);
   if (!usuario?.activo) redirect("/acceso");
-
-  const inspeccion = await prisma.inspeccion.findUnique({
-    where: { id },
-    select: {
-      id: true, folio: true, numeroInspeccion: true, estado: true, inspectorId: true,
-      cliente: { select: { nombre: true } },
-      inmueble: { select: { alias: true, direccion: true } },
-    },
-  });
   if (!inspeccion) notFound();
   if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/flujo`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const esDirectorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const areas = await prisma.$queryRaw<Area[]>`
-    SELECT a."id"::text,a."codigo",a."nombre",a."estado",a."resultado",
-      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") AS "fotos",
-      (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id" AND fa."seleccionadaReporte"=true) AS "seleccionadas",
-      (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") AS "hallazgos",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") AS "puntos",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') AS "pendientes",
-      (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') AS "noAplica"
-    FROM "AreaInspeccion" a WHERE a."inspeccionId"=${id} ORDER BY a."orden",a."nombre"
-  `;
+  const [
+    criticalRows,
+    pasosCriticos,
+    controlRows,
+    protocoloRows,
+    areas,
+    puntosNavegacion,
+    conceptosCriticos,
+  ] = await Promise.all([
+    prisma.$queryRaw<Array<{ total: number; bloqueantes: number }>>`
+      SELECT
+        COUNT(*)::int AS "total",
+        COUNT(*) FILTER (
+          WHERE p."estado" NOT IN ('COMPLETADO','NO_APLICA')
+            AND NOT (
+              p."clave" IN ('PC_HIDRAULICA','PC_GAS')
+              AND p."lecturaInicial" IS NOT NULL
+              AND p."lecturaFinal" IS NULL
+              AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
+              AND NOT EXISTS (
+                SELECT 1
+                FROM "GuiaInspeccionItem" g
+                WHERE g."inspeccionId"=p."inspeccionId"
+                  AND g."area"=concat('__PUNTO_CRITICO__:',replace(p."clave",'PC_',''))
+                  AND g."estadoV3"='PENDIENTE'
+                  AND g."concepto" NOT ILIKE '%manómetro%'
+                  AND g."concepto" NOT ILIKE '%lectura final%'
+              )
+            )
+        )::int AS "bloqueantes"
+      FROM "ProtocoloInspeccionPaso" p
+      WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
+    `,
+    prisma.$queryRaw<Array<{
+      clave: string;
+      estado: string;
+      lecturaInicial: string | null;
+      lecturaFinal: string | null;
+      datos: unknown;
+    }>>`
+      SELECT "clave","estado","lecturaInicial","lecturaFinal","datos"
+      FROM "ProtocoloInspeccionPaso"
+      WHERE "inspeccionId"=${id} AND "tipo"='PUNTO_CRITICO'
+      ORDER BY "orden"
+    `,
+    prisma.$queryRaw<Array<{
+      inspeccionTecnicaConcluidaEn: Date | null;
+      preReporteGeneradoEn: Date | null;
+    }>>`
+      SELECT "inspeccionTecnicaConcluidaEn","preReporteGeneradoEn"
+      FROM "InspeccionControlV2"
+      WHERE "inspeccionId"=${id}
+      LIMIT 1
+    `,
+    prisma.$queryRaw<Array<{ total:number; completos:number }>>`
+      SELECT COUNT(*)::int AS "total",
+             COUNT(*) FILTER (WHERE "estado" IN ('COMPLETADO','NO_APLICA'))::int AS "completos"
+      FROM "ProtocoloInspeccionPaso"
+      WHERE "inspeccionId"=${id} AND "obligatorio"=true
+    `,
+    prisma.$queryRaw<Area[]>`
+      SELECT a."id"::text,a."codigo",a."nombre",a."estado",a."resultado",
+        (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id") AS "fotos",
+        (SELECT COUNT(*)::int FROM "FotografiaArea" fa WHERE fa."areaId"=a."id" AND fa."seleccionadaReporte"=true) AS "seleccionadas",
+        (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") AS "hallazgos",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id") AS "puntos",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."obligatorio"=true AND g."estadoV3"='PENDIENTE') AS "pendientes",
+        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id" AND g."estadoV3"='NO_APLICA') AS "noAplica"
+      FROM "AreaInspeccion" a
+      WHERE a."inspeccionId"=${id} AND a."tipo" <> 'PUNTO_CRITICO'
+      ORDER BY a."orden",a."nombre"
+    `,
+    prisma.$queryRaw<Array<{
+      id:string; areaId:string|null; area:string; concepto:string; estadoV3:string; orden:number|null;
+    }>>`
+      SELECT g."id"::text AS "id",g."areaId"::text AS "areaId",g."area",g."concepto",g."estadoV3",g."orden"
+      FROM "GuiaInspeccionItem" g
+      WHERE g."inspeccionId"=${id}
+        AND g."concepto" NOT ILIKE '%manómetro%'
+        AND g."concepto" NOT ILIKE '%lectura final%'
+      ORDER BY COALESCE(g."orden",999999),g."concepto"
+    `,
+    prisma.$queryRaw<Array<{ total: number }>>`
+      SELECT COUNT(*)::int AS "total"
+      FROM "GuiaInspeccionItem"
+      WHERE "inspeccionId"=${id}
+        AND "area" LIKE '__PUNTO_CRITICO__:%'
+        AND "concepto" NOT ILIKE '%manómetro%'
+        AND "concepto" NOT ILIKE '%lectura final%'
+    `,
+  ]);
 
-  const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areas.find((a) => a.estado !== "REVISADA") ?? areas[0];
-  const puntos = areaSeleccionada ? await prisma.$queryRaw<Punto[]>`
-    SELECT g."id",g."concepto",p."grupo",g."estadoV3",g."origenV3",g."obligatorio",g."herramientaSugerida",g."motivoNoAplica"
-    FROM "GuiaInspeccionItem" g LEFT JOIN "BibliotecaPuntoCerteza" p ON p."id"=g."bibliotecaPuntoId"
-    WHERE g."areaId"=${areaSeleccionada.id}::uuid ORDER BY g."orden",g."concepto"
+  const [critical] = criticalRows;
+  const [controlV1] = controlRows;
+  const [protocoloEstado] = protocoloRows;
+
+  const areaActiva = areas.find((a) => a.estado !== "REVISADA") ?? null;
+  // El Inspector puede entrar, capturar y regresar a cualquier partida en cualquier momento.
+  const areaSeleccionada = areas.find((a) => a.id === query.area) ?? areaActiva ?? areas[0];
+  const puntos = areaSeleccionada ? await prisma.$queryRaw<PuntoArea[]>`
+    SELECT
+      g."id",g."concepto",g."especificacion",p."grupo",g."estadoV3",g."origenV3",
+      g."obligatorio",g."herramientaSugerida",g."motivoNoAplica",g."observacion",
+      g."requiereMedicion",g."requiereComparacionProyecto",
+      g."valorMedido",g."valorProyecto",g."unidadMedida"
+    FROM "GuiaInspeccionItem" g
+    LEFT JOIN "BibliotecaPuntoCerteza" p ON p."id"=g."bibliotecaPuntoId"
+    WHERE g."areaId"=${areaSeleccionada.id}::uuid
+    ORDER BY g."orden",g."concepto"
   ` : [];
+
+  const puntosFisicosPorArea = new Map<string, typeof puntosNavegacion>();
+  const puntosCriticosPorCodigo = new Map<string, typeof puntosNavegacion>();
+  for (const p of puntosNavegacion) {
+    if (p.area.startsWith("__PUNTO_CRITICO__:")) {
+      const codigo=p.area.replace("__PUNTO_CRITICO__:","");
+      puntosCriticosPorCodigo.set(codigo,[...(puntosCriticosPorCodigo.get(codigo)??[]),p]);
+    } else if (p.areaId) {
+      puntosFisicosPorArea.set(p.areaId,[...(puntosFisicosPorArea.get(p.areaId)??[]),p]);
+    }
+  }
+
+  const totalConceptosCriticos = Number(conceptosCriticos[0]?.total ?? 0);
 
   const totalPuntos = areas.reduce((s, a) => s + Number(a.puntos), 0);
   const totalPendientes = areas.reduce((s, a) => s + Number(a.pendientes), 0);
   const cerradas = areas.filter((a) => a.estado === "REVISADA").length;
-  const avance = areas.length ? Math.round((cerradas / areas.length) * 100) : 0;
-  const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const criticosCerrados = pasosCriticos.filter((p) => p.estado === "COMPLETADO" || p.estado === "NO_APLICA").length;
+  const hermeticidadCerrada = ["PC_HIDRAULICA","PC_GAS"].every((clave) => {
+    const paso = pasosCriticos.find((p) => p.clave === clave);
+    if (!paso) return false;
+    if (paso.estado === "NO_APLICA") return true;
+    return paso.estado === "COMPLETADO" && Boolean(paso.lecturaInicial) && Boolean(paso.lecturaFinal);
+  });
+  const totalRecorrido = 8 + areas.length;
+  const partidasCerradas = cerradas + criticosCerrados + (hermeticidadCerrada ? 1 : 0);
+  const avance = totalRecorrido ? Math.round((partidasCerradas / totalRecorrido) * 100) : 0;
+  const desarrolloCompleto =
+    totalRecorrido > 8 &&
+    partidasCerradas === totalRecorrido &&
+    cerradas === areas.length &&
+    criticosCerrados === 7 &&
+    hermeticidadCerrada &&
+    Number(protocoloEstado?.total ?? 0) > 0 &&
+    Number(protocoloEstado?.total ?? 0) === Number(protocoloEstado?.completos ?? 0) &&
+    totalPendientes === 0;
+  const indiceAreaActiva = areaSeleccionada ? areas.findIndex((area) => area.id === areaSeleccionada.id) : -1;
+  const numeroAreaActiva = indiceAreaActiva >= 0 ? 9 + indiceAreaActiva : null;
+  const puedeCapturar =
+    (esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO) ||
+    (esDirector &&
+      (inspeccion.estado === EstadoInspeccion.EN_PROCESO ||
+       inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE));
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo V1</Link>
+          <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
           <div className="flex flex-wrap items-center gap-2">
-            {esDirectorPorAusencia && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR POR AUSENCIA</span>}
+            {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-emerald-300">V1 · INSPECCIÓN INTEGRAL</span>
           </div>
         </div>
 
         <div className="mt-6">
-          <p className="text-xs font-black uppercase tracking-[.22em] text-emerald-300">Método Certeza Habitacional</p>
-          <h1 className="mt-2 text-3xl font-black">Recorrido guiado por áreas</h1>
+          <p className="text-xs font-black uppercase tracking-[.22em] text-emerald-300">
+            {numeroAreaActiva ? `RECORRIDO TÉCNICO · PARTIDA ${numeroAreaActiva} DE ${totalRecorrido}` : "RECORRIDO TÉCNICO"}
+          </p>
+          <h1 className="mt-2 text-3xl font-black">Recorrido guiado por partidas</h1>
           <p className="mt-2 text-sm text-slate-400">{inspeccion.folio} · {inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? inspeccion.inmueble?.direccion ?? "Inmueble"}</p>
         </div>
 
         {(query.ok || query.error) && <div className={`mt-5 rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}>{query.error ?? query.ok}</div>}
 
+        {puedeCapturar && (
+          <div className="mt-5">
+            <OfflineInspectionDownload
+              inspeccionId={id}
+              areaIds={areas.map((area) => area.id)}
+            />
+          </div>
+        )}
+
+        <section className="mt-6 flex flex-wrap items-center gap-3">
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
+              IR A PARTIDA / CONCEPTO INSPECCIONADO
+            </summary>
+            <div className="absolute left-0 z-40 mt-2 max-h-[70vh] w-[min(92vw,560px)] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl">
+              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="block rounded-xl border border-white/10 p-3">
+                <span className="text-[9px] font-black text-slate-500">Partida 1</span>
+                <p className="text-sm font-black">Pruebas De Hermeticidad</p>
+                <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                  <p>Concepto 1 · Hermeticidad Hidráulica</p>
+                  <p>Concepto 2 · Hermeticidad De Gas</p>
+                </div>
+              </Link>
+              {PUNTOS_CRITICOS_V1.map((punto,index)=>{
+                const conceptos=puntosCriticosPorCodigo.get(punto.codigo)??[];
+                return <div key={punto.codigo} className="mt-2 rounded-xl border border-white/10 p-3">
+                  <Link href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}`} className="block text-sm font-black"><span className="mr-2 text-[9px] text-slate-500">Partida {index+2}</span>{tituloPartida(punto.etiqueta)}</Link>
+                  {conceptos.length>0&&<div className="mt-2 space-y-1">{conceptos.map((p)=>{
+                    const inspeccionado=["REVISADO","CON_HALLAZGO","NO_APLICA"].includes(p.estadoV3);
+                    return inspeccionado
+                      ? <Link key={p.id} href={`/panel/inspecciones/${id}/puntos-criticos?punto=${punto.codigo}&foco=${p.id}`} className="block rounded-lg bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">{tituloPartida(p.concepto)}</Link>
+                      : <span key={p.id} className="block rounded-lg bg-white/[.03] px-3 py-1.5 text-[11px] text-slate-600">{tituloPartida(p.concepto)} · Pendiente</span>;
+                  })}</div>}
+                </div>;
+              })}
+              {areas.map((area,index)=>{
+                const conceptos=puntosFisicosPorArea.get(area.id)??[];
+                return <div key={area.id} className="mt-2 rounded-xl border border-white/10 p-3">
+                  <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block text-sm font-black"><span className="mr-2 text-[9px] text-slate-500">Partida {index+9}</span>{tituloPartida(area.nombre)}</Link>
+                  {conceptos.length>0&&<div className="mt-2 space-y-1">{conceptos.map((p)=>{
+                    const inspeccionado=["REVISADO","CON_HALLAZGO","NO_APLICA"].includes(p.estadoV3);
+                    return inspeccionado
+                      ? <a key={p.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}#item-${p.id}`} className="block rounded-lg bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">{tituloPartida(p.concepto)}</a>
+                      : <span key={p.id} className="block rounded-lg bg-white/[.03] px-3 py-1.5 text-[11px] text-slate-600">{tituloPartida(p.concepto)} · Pendiente</span>;
+                  })}</div>}
+                </div>;
+              })}
+            </div>
+          </details>
+          <Link href={`/panel/inspecciones/${id}/revision-inicial`} className="rounded-xl border border-amber-300/30 px-4 py-3 text-sm font-black text-amber-200">
+            CONSULTAR PLAN PREVIO
+          </Link>
+          {!desarrolloCompleto && (
+            <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-cyan-300/40 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-200">
+              CONSULTAR REPORTE PARCIAL DE AVANCE
+            </Link>
+          )}
+          {desarrolloCompleto && !controlV1?.inspeccionTecnicaConcluidaEn && (
+            <form action={concluirInspeccionTecnicaV1}>
+              <input type="hidden" name="inspeccionId" value={id}/>
+              <input type="hidden" name="retorno" value="PRE_REPORTE"/>
+              <button className="rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950">GENERAR PRE REPORTE</button>
+            </form>
+          )}
+          {controlV1?.inspeccionTecnicaConcluidaEn && (
+            <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950">
+              {controlV1.preReporteGeneradoEn ? "CONSULTAR PRE REPORTE" : "GENERAR PRE REPORTE"}
+            </Link>
+          )}
+        </section>
+
         <section className="mt-6 grid gap-3 sm:grid-cols-4">
-          <Card titulo="Áreas cerradas" valor={`${cerradas}/${areas.length}`} />
+          <Card titulo="Partidas cerradas" valor={`${partidasCerradas}/${totalRecorrido}`} />
           <Card titulo="Puntos del plan" valor={String(totalPuntos)} />
           <Card titulo="Pendientes" valor={String(totalPendientes)} />
           <Card titulo="Avance" valor={`${avance}%`} />
@@ -127,67 +331,95 @@ export default async function CampoV1Page({ params, searchParams }: {
           </form>
         )}
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-[320px_1fr]">
-          <aside className="space-y-2">
-            {areas.map((area, index) => (
-              <Link key={area.id} href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className={`block rounded-2xl border p-4 ${areaSeleccionada?.id === area.id ? "border-cyan-300/40 bg-cyan-300/10" : area.estado === "REVISADA" ? "border-emerald-400/15 bg-emerald-400/5" : "border-white/10 bg-slate-900"}`}>
-                <div className="flex items-start justify-between gap-3"><span className="text-xs font-black text-slate-500">{String(index + 1).padStart(2,"0")}</span><span className={`text-xs font-black ${area.estado === "REVISADA" ? "text-emerald-300" : "text-amber-300"}`}>{area.estado === "REVISADA" ? "CERRADA" : `${area.pendientes} pendientes`}</span></div>
-                <p className="mt-1 font-black">{area.nombre}</p>
-                <p className="mt-1 text-xs text-slate-400">{area.puntos} puntos · {area.hallazgos} hallazgos · {area.noAplica} no aplica</p>
-              </Link>
-            ))}
-          </aside>
-
+        <div className="mt-6">
           <section>
             {!areaSeleccionada ? <div className="rounded-3xl border border-white/10 bg-slate-900 p-8 text-slate-400">Aún no existen áreas para V1.</div> : (
               <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">Área activa</p><h2 className="mt-1 text-2xl font-black">{areaSeleccionada.nombre}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} puntos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
-                  {areaSeleccionada.resultado && <span className="rounded-full bg-emerald-300/10 px-3 py-2 text-xs font-black text-emerald-300">{areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
+                  <div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">{numeroAreaActiva ? `Partida ${numeroAreaActiva} de ${totalRecorrido}` : "Partida activa"}</p><h2 className="mt-1 text-xl font-black">{tituloPartida(areaSeleccionada.nombre)}</h2><p className="mt-2 text-sm text-slate-400">{areaSeleccionada.puntos} conceptos · {areaSeleccionada.fotos} evidencias · {areaSeleccionada.hallazgos} hallazgos</p></div>
+                  {areaSeleccionada.resultado && <span className={`rounded-full px-3 py-2 text-xs font-black ${areaSeleccionada.resultado === "NO_APLICA" ? "bg-slate-300/10 text-slate-300" : "bg-emerald-300/10 text-emerald-300"}`}>{areaSeleccionada.resultado === "NO_APLICA" ? "PARTIDA DESHABILITADA" : areaSeleccionada.resultado.replaceAll("_"," ")}</span>}
                 </div>
 
-                <div className="mt-5 space-y-2">
+                {areaSeleccionada.resultado === "NO_APLICA" && (
+                  <div className="mt-5 rounded-2xl border border-slate-300/15 bg-slate-300/5 p-4">
+                    <p className="font-black text-slate-200">Partida completa deshabilitada</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">Esta partida quedó fuera de la inspección por una condición documentada. No bloquea el avance y conservará la causa en el reporte.</p>
+                    {areaSeleccionada.resultado === "NO_APLICA" && puedeCapturar && (
+                      <form action={reactivarPartidaAreaV1} className="mt-4">
+                        <input type="hidden" name="inspeccionId" value={id}/>
+                        <input type="hidden" name="areaId" value={areaSeleccionada.id}/>
+                        <button className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">REACTIVAR PARTIDA PARA INSPECCIONAR</button>
+                      </form>
+                    )}
+                  </div>
+                )}
+
+                {puntos.length === 0 && (
+                  <div role="alert" className="mt-5 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
+                    <p className="font-black">PARTIDA SIN CONCEPTOS VINCULADOS</p>
+                    <p className="mt-2">No es posible registrar la inspección ni cerrar esta partida mientras no tenga conceptos asociados. Solicita a Dirección revisar la preparación del plan y la vinculación de sus conceptos. No utilices el cierre sin hallazgos para sustituir una inspección pendiente.</p>
+                  </div>
+                )}
+
+                <div className="mt-5 space-y-4">
                   {puntos.map((punto) => (
-                    <article key={punto.id} className={`rounded-2xl border p-4 ${punto.estadoV3 === "NO_APLICA" ? "border-slate-700 bg-slate-950/50 opacity-70" : punto.estadoV3 === "PENDIENTE" ? "border-amber-300/15 bg-amber-300/5" : "border-emerald-300/15 bg-emerald-300/5"}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div><div className="flex flex-wrap gap-2"><span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{punto.grupo ?? "ADICIONAL"}</span>{punto.origenV3 === "INSPECTOR" && <span className="rounded-full bg-violet-300/10 px-2 py-0.5 text-[10px] font-black text-violet-300">AGREGADO EN CAMPO</span>}</div><p className="mt-1 font-bold">{punto.concepto}</p>{punto.herramientaSugerida && <p className="mt-1 text-xs text-slate-500">Herramienta sugerida: {punto.herramientaSugerida}</p>}{punto.motivoNoAplica && <p className="mt-1 text-xs text-slate-500">Motivo: {punto.motivoNoAplica}</p>}</div>
-                        <span className={`text-xs font-black ${punto.estadoV3 === "PENDIENTE" ? "text-amber-300" : "text-emerald-300"}`}>{punto.estadoV3.replaceAll("_"," ")}</span>
-                      </div>
-                      {puedeCapturar && punto.estadoV3 === "PENDIENTE" && (
-                        <form action={marcarPuntoNoAplicaV1} className="mt-3 flex gap-2">
-                          <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="itemId" value={punto.id}/>
-                          <input name="motivo" placeholder="Si no aplica, indica por qué" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
-                          <button className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-slate-300">NO APLICA</button>
-                        </form>
-                      )}
-                    </article>
+                    <ConceptoAreaCard
+                      key={punto.id}
+                      inspeccionId={id}
+                      areaId={areaSeleccionada.id}
+                      punto={punto}
+                      numeroConcepto={2 + totalConceptosCriticos + areas.slice(0, Math.max(indiceAreaActiva,0)).reduce((s,a)=>s+Number(a.puntos),0) + puntos.findIndex((x)=>x.id===punto.id) + 1}
+                      puedeCapturar={puedeCapturar}
+                      areaActiva={true}
+                    />
                   ))}
                 </div>
 
                 {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (
-                  <div className="mt-6 grid gap-4 xl:grid-cols-2">
+                  <>
+                    <div className="mt-6 rounded-2xl border border-rose-300/20 bg-rose-300/5 p-4">
+                      <p className="font-black text-rose-200">DESHABILITAR PARTIDA COMPLETA</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">Úsalo cuando no exista acceso, continuar represente un riesgo, la partida no aplique o exista otra imposibilidad documentable. La partida quedará resuelta sin bloquear el recorrido y el motivo aparecerá en el expediente.</p>
+                      <form action={deshabilitarPartidaAreaV1} className="mt-3 grid gap-3 sm:grid-cols-[220px_1fr_auto]">
+                        <input type="hidden" name="inspeccionId" value={id}/>
+                        <input type="hidden" name="areaId" value={areaSeleccionada.id}/>
+                        <select name="causa" required className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm">
+                          <option value="">Seleccionar causa</option>
+                          <option value="SIN_ACCESO">Sin acceso</option>
+                          <option value="CONDICION_INSEGURA">Condición insegura</option>
+                          <option value="NO_APLICA">No aplica</option>
+                          <option value="OTRO">Otro motivo</option>
+                        </select>
+                        <input name="motivo" required placeholder="Describe brevemente la condición" className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+                        <button className="rounded-xl border border-rose-300/30 px-4 py-2 text-sm font-black text-rose-200">DESHABILITAR</button>
+                      </form>
+                    </div>
+
+                    <div className="mt-6 grid gap-4 xl:grid-cols-2">
                     <form action={agregarPuntoInspectorV1} className="rounded-2xl border border-violet-300/15 bg-violet-300/5 p-4">
                       <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/>
-                      <p className="font-black text-violet-200">+ Agregar punto de inspección</p>
-                      <p className="mt-1 text-xs text-slate-400">Amplía el plan cuando tu criterio profesional lo considere necesario.</p>
-                      <input name="concepto" required placeholder="Ej. Revisar sellado en cancel fijo" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
-                      <button className="mt-3 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-black text-violet-200">Agregar al área</button>
+                      <p className="font-black text-violet-200">+ AGREGAR CONCEPTO MANUALMENTE</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">El concepto agregado usará el mismo flujo completo: 1 a 4 fotografías, interpretación de IA, descripción editable del Inspector, clasificación, prioridad y NO APLICA.</p>
+                      <input name="concepto" required placeholder="Ej. Sellado inferior de puerta corrediza" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+                      <input name="especificacion" placeholder="Indica exactamente qué revisar y el criterio esperado" className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"/>
+                      <button className="mt-3 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-black text-violet-200">AGREGAR AL PUNTO ACTIVO</button>
                     </form>
 
                     {Number(areaSeleccionada.hallazgos) === 0 ? (
                       <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/5 p-4">
                         <p className="font-black text-emerald-200">Cierre rápido sin hallazgos</p>
-                        <p className="mt-1 text-xs text-slate-400">Confirma que revisaste todos los puntos aplicables del área. Los puntos pendientes se marcarán automáticamente como revisados.</p>
-                        <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">SIN HALLAZGOS · CERRAR ÁREA</button></form>
+                        <p className="mt-1 text-xs text-slate-400">Todos los conceptos aplicables deben quedar resueltos individualmente como REVISADO / CONFORME o NO APLICA. El cierre sólo se habilita cuando el punto llega al 100%.</p>
+                        <form action={cerrarAreaSinHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.fotos)<1 || Number(areaSeleccionada.pendientes)>0} className="w-full rounded-xl bg-emerald-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PUNTO AL 100% · SIN HALLAZGOS</button></form>
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
                         <p className="font-black text-amber-200">Cierre con hallazgos</p>
-                        <p className="mt-1 text-xs text-slate-400">El sistema comprobará que cada hallazgo tenga descripción y mínimo 4 evidencias antes de cerrar el área.</p>
-                        <form action={cerrarAreaConHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button className="w-full rounded-xl bg-amber-300 px-4 py-3 font-black text-slate-950">CERRAR ÁREA CON {areaSeleccionada.hallazgos} HALLAZGO(S)</button></form>
+                        <p className="mt-1 text-xs text-slate-400">El sistema comprobará que cada hallazgo tenga una sola descripción final y entre 1 y 4 evidencias antes de cerrar el área.</p>
+                        <form action={cerrarAreaConHallazgosV1} className="mt-3"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={areaSeleccionada.id}/><button disabled={Number(areaSeleccionada.pendientes)>0} className="w-full rounded-xl bg-amber-300 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-30">CERRAR PUNTO AL 100% · {areaSeleccionada.hallazgos} HALLAZGO(S)</button></form>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </>
                 )}
 
                 {puedeCapturar && areaSeleccionada.estado !== "REVISADA" && (

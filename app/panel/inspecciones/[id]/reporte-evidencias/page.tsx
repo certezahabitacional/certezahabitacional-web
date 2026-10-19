@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { RolUsuario } from "@prisma/client";
+import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { createClient } from "@supabase/supabase-js";
 import { notFound, redirect } from "next/navigation";
 
@@ -65,6 +65,11 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
       `
     : [{ existe: false }];
 
+  const inspectorAsignadoEnRevision =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    inspeccion.inspector?.usuario.id === usuario.id &&
+    inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+
   const inspectorDocumental =
     usuario.rol === RolUsuario.INSPECTOR &&
     inspeccion.inspector?.usuario.id === usuario.id &&
@@ -74,6 +79,7 @@ export default async function ReporteEvidenciasPage({ params, searchParams }: {
     usuario.rol === RolUsuario.DIRECTOR ||
     (usuario.rol === RolUsuario.GERENTE && inspeccion.inspector?.usuario.gerenteId === usuario.id) ||
     (usuario.rol === RolUsuario.COORDINADOR && inspeccion.inspector?.usuario.coordinadorId === usuario.id) ||
+    inspectorAsignadoEnRevision ||
     inspectorDocumental;
   if (!puedeEditar) redirect("/acceso");
 

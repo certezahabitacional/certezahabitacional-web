@@ -1,13 +1,14 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { RolUsuario, TipoEvento } from "@prisma/client";
+import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
+import { invalidarPreReportePorAjusteV1 } from "@/lib/revision-pre-reporte-v1";
 
 function texto(fd: FormData, campo: string) {
   return String(fd.get(campo) ?? "").trim();
@@ -38,6 +39,7 @@ async function obtenerEditor(inspeccionId: string) {
     select: {
       id: true,
       numeroInspeccion: true,
+      estado: true,
       inspector: {
         select: {
           usuario: {
@@ -67,6 +69,11 @@ async function obtenerEditor(inspeccionId: string) {
       `
     : [{ existe: false }];
 
+  const inspectorAsignadoEnRevision =
+    usuario.rol === RolUsuario.INSPECTOR &&
+    inspeccion.inspector?.usuario.id === usuario.id &&
+    inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+
   const inspectorDocumental =
     usuario.rol === RolUsuario.INSPECTOR &&
     inspeccion.inspector?.usuario.id === usuario.id &&
@@ -76,6 +83,7 @@ async function obtenerEditor(inspeccionId: string) {
     usuario.rol === RolUsuario.DIRECTOR ||
     (usuario.rol === RolUsuario.GERENTE && inspeccion.inspector?.usuario.gerenteId === usuario.id) ||
     (usuario.rol === RolUsuario.COORDINADOR && inspeccion.inspector?.usuario.coordinadorId === usuario.id) ||
+    inspectorAsignadoEnRevision ||
     inspectorDocumental;
 
   if (!permitido) redirect("/acceso");
@@ -136,6 +144,8 @@ export async function cambiarSeleccionEvidencia(formData: FormData) {
     `;
   }
 
+  await invalidarPreReportePorAjusteV1(inspeccionId);
+
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,
     entidad: "SeleccionEvidenciaReporte",
@@ -185,6 +195,7 @@ export async function actualizarOrdenEvidencia(formData: FormData) {
     ]);
   }
 
+  await invalidarPreReportePorAjusteV1(inspeccionId);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-evidencias`);
   redirect(`/panel/inspecciones/${inspeccionId}/reporte-evidencias`);
 }

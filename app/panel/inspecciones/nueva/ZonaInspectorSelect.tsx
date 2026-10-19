@@ -9,7 +9,7 @@ type Inspector = { id: string; usuario: { nombre: string; zonaId: string | null 
 export default function ZonaInspectorSelect({
   zonas, inspectores, gerentes, coordinadores,
   zonaInicial = "", inspectorInicial = "", gerenteInicial = "", coordinadorInicial = "",
-  gerenteFijoId = "",
+  gerenteFijoId = "", zonaRequired = true,
 }: {
   zonas: Zona[];
   inspectores: Inspector[];
@@ -20,6 +20,7 @@ export default function ZonaInspectorSelect({
   gerenteInicial?: string;
   coordinadorInicial?: string;
   gerenteFijoId?: string;
+  zonaRequired?: boolean;
 }) {
   const [zonaId, setZonaId] = useState(zonaInicial);
   const [inspectorId, setInspectorId] = useState(inspectorInicial);
@@ -37,15 +38,15 @@ export default function ZonaInspectorSelect({
 
   return <div className="space-y-5">
     <div className="grid gap-5 md:grid-cols-2">
-      <Select label="Zona *" name="zonaId" required value={zonaId} onChange={cambiarZona} options={zonas.map(z=>({value:z.id,label:`${z.nombre} (${z.codigo})`}))} placeholder="Selecciona una zona" />
-      <Select label="Inspector" name="inspectorId" value={inspectorId} onChange={setInspectorId} disabled={!zonaId} options={inspectoresZona.map(i=>({value:i.id,label:i.usuario.nombre}))} placeholder={zonaId?"Pendiente de asignar":"Selecciona primero una zona"} />
+      <Select label="Zona" name="zonaId" required={zonaRequired} value={zonaId} onChange={cambiarZona} options={zonas.map(z=>({value:z.id,label:`${z.nombre} (${z.codigo})`}))} placeholder="Conservar actual al retomar / seleccionar para nueva" />
+      <Select label="Inspector" name="inspectorId" value={inspectorId} onChange={setInspectorId} disabled={!zonaId} options={inspectoresZona.map(i=>({value:i.id,label:i.usuario.nombre}))} placeholder={zonaId?"Conservar actual o dejar pendiente":"Selecciona zona para cambiar Inspector"} />
     </div>
     <div className="grid gap-5 md:grid-cols-2">
-      <Select label="Gerente de esta inspección (opcional)" name="gerenteId" value={gerenteId} onChange={setGerenteId} disabled={!zonaId || Boolean(gerenteFijoId)} options={gerentesZona.map(g=>({value:g.id,label:g.nombre}))} placeholder="Sin Gerente asignado" />
+      <Select label="Gerente de esta inspección" name="gerenteId" value={gerenteId} onChange={setGerenteId} disabled={!zonaId || Boolean(gerenteFijoId)} options={gerentesZona.map(g=>({value:g.id,label:g.nombre}))} placeholder="Conservar actual / sin Gerente" />
       {gerenteFijoId && <input type="hidden" name="gerenteId" value={gerenteFijoId} />}
-      <Select label="Coordinador de esta inspección (opcional)" name="coordinadorId" value={coordinadorId} onChange={setCoordinadorId} disabled={!zonaId} options={coordinadoresZona.map(c=>({value:c.id,label:c.nombre}))} placeholder="Sin Coordinador asignado" />
+      <Select label="Coordinador de esta inspección" name="coordinadorId" value={coordinadorId} onChange={setCoordinadorId} disabled={!zonaId} options={coordinadoresZona.map(c=>({value:c.id,label:c.nombre}))} placeholder="Conservar actual / sin Coordinador" />
     </div>
-    <p className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">Estas asignaciones aplican únicamente a esta inspección. Gerente, Coordinador e Inspector solo podrán visualizarla si quedaron vinculados aquí.</p>
+    <p className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">Al retomar una inspección PROGRAMADA, los campos que no cambies conservan su asignación actual. Las nuevas selecciones sustituyen o completan la programación existente.</p>
   </div>;
 }
 

@@ -2,6 +2,8 @@
 const nextConfig = {
   poweredByHeader: false,
 
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+
   allowedDevOrigins: ["192.168.1.4"],
 
   outputFileTracingIncludes: {

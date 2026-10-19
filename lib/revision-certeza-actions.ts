@@ -24,11 +24,15 @@ function texto(formData: FormData, campo: string) {
 }
 
 function error(inspeccionId: string, mensaje: string): never {
-  redirect(`/panel/inspecciones/${inspeccionId}?error=${encodeURIComponent(mensaje)}`);
+  redirect(`/panel/inspecciones/${inspeccionId}/revision?error=${encodeURIComponent(mensaje)}`);
 }
 
 function ok(inspeccionId: string, mensaje: string): never {
-  redirect(`/panel/inspecciones/${inspeccionId}?ok=${encodeURIComponent(mensaje)}`);
+  redirect(`/panel/inspecciones/${inspeccionId}/revision?ok=${encodeURIComponent(mensaje)}`);
+}
+
+function liberarV1(inspeccionId: string): never {
+  redirect(`/panel/inspecciones/${inspeccionId}/reporte-v1?ok=${encodeURIComponent("REPORTE y CERTIFICADO liberados por Dirección.")}`);
 }
 
 function revalidar(inspeccionId: string) {
@@ -243,14 +247,15 @@ export async function aprobarDireccionMetodoCerteza(formData: FormData): Promise
     }
   });
 
-  await registrarAuditoria({ tipo: TipoEvento.REVISION_INSPECCION, entidad: "RevisionInspeccion", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección aprobó y cerró la inspección ${inspeccion.folio}.` });
+  await registrarAuditoria({ tipo: TipoEvento.REVISION_INSPECCION, entidad: "RevisionInspeccion", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA", descripcion: `Dirección autorizó el PRE REPORTE ${inspeccion.folio}; desde este momento queda convertido en REPORTE LIBERADO y el CERTIFICADO queda LIBERADO.` });
   if (preparado && !preparado.existente) {
     await registrarAuditoria({ tipo: TipoEvento.EMITIR_CERTIFICADO, entidad: "Certificado", inspeccionId, usuarioId: usuario.id, origen: "METODO_CERTEZA_V1", descripcion: `Dirección autorizó y emitió automáticamente el Certificado V1 de ${inspeccion.folio} con calificación técnica ${preparado.metricas.calificacion}/100 y cobertura ${preparado.metricas.cobertura}%.` });
   } else if (preparado?.existente && reactivarCertificado) {
     await registrarAuditoria({ tipo: TipoEvento.REACTIVAR_CERTIFICADO, entidad: "Certificado", entidadId: preparado.certificadoId, inspeccionId, usuarioId: usuario.id, origen: "REAUTORIZACION_DIRECCION_V1", descripcion: `Dirección reautorizó V1 y reactivó el certificado existente de ${inspeccion.folio} con calificación técnica ${preparado.metricas.calificacion}/100 y cobertura ${preparado.metricas.cobertura}%.` });
   }
   revalidar(inspeccionId);
-  ok(inspeccionId, preparado ? "Dirección autorizó V1. El reporte, la calificación final y el certificado quedaron liberados al cliente." : "Dirección aprobó la inspección. El expediente quedó FINALIZADO.");
+  if (preparado) liberarV1(inspeccionId);
+  ok(inspeccionId, "Dirección aprobó la inspección. El expediente quedó FINALIZADO.");
 }
 
 export async function levantarBloqueoYAprobarMetodoCerteza(formData: FormData): Promise<boolean> {

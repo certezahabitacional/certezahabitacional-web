@@ -21,6 +21,9 @@ export default function OfflineStatus() {
   const [ready, setReady] =
     useState(false);
 
+  const [syncing, setSyncing] =
+    useState(false);
+
   const refreshPending =
     useCallback(async () => {
       try {
@@ -59,6 +62,17 @@ export default function OfflineStatus() {
       void refreshPending();
     };
 
+    const handleSyncState = (event: Event) => {
+      const detail = (event as CustomEvent<{ estado?: string }>).detail;
+      if (detail?.estado === "syncing") {
+        setSyncing(true);
+        return;
+      }
+
+      setSyncing(false);
+      void refreshPending();
+    };
+
     window.addEventListener(
       "online",
       handleOnline,
@@ -69,9 +83,32 @@ export default function OfflineStatus() {
       handleOffline,
     );
 
+    const handleOfflineLink = (event: MouseEvent) => {
+      if (navigator.onLine) return;
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (
+        url.origin === window.location.origin &&
+        url.pathname.startsWith("/panel/inspecciones/")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.assign(url.href);
+      }
+    };
+
+    document.addEventListener("click", handleOfflineLink, true);
+
     window.addEventListener(
       OFFLINE_QUEUE_CHANGED,
       handleQueueChanged,
+    );
+
+    window.addEventListener(
+      "certeza:offline-sync-state",
+      handleSyncState,
     );
 
     return () => {
@@ -85,9 +122,16 @@ export default function OfflineStatus() {
         handleOffline,
       );
 
+      document.removeEventListener("click", handleOfflineLink, true);
+
       window.removeEventListener(
         OFFLINE_QUEUE_CHANGED,
         handleQueueChanged,
+      );
+
+      window.removeEventListener(
+        "certeza:offline-sync-state",
+        handleSyncState,
       );
     };
   }, [refreshPending]);
@@ -96,7 +140,7 @@ export default function OfflineStatus() {
     return null;
   }
 
-  if (online && pending === 0) {
+  if (online && pending === 0 && !syncing) {
     return null;
   }
 
@@ -114,13 +158,17 @@ export default function OfflineStatus() {
 
         <div>
           <p className="font-black">
-            {online
-              ? "Conexión recuperada"
-              : "Sin conexión"}
+            {syncing
+              ? "SINCRONIZANDO"
+              : online
+                ? "Conexión recuperada"
+                : "MODO SIN CONEXIÓN"}
           </p>
 
           <p className="mt-0.5 text-xs text-slate-300">
-            {pending > 0
+            {syncing
+              ? `Subiendo ${pending} cambio${pending === 1 ? "" : "s"} pendiente${pending === 1 ? "" : "s"}.`
+              : pending > 0
               ? `${pending} cambio${
                   pending === 1
                     ? ""
@@ -130,7 +178,7 @@ export default function OfflineStatus() {
                     ? ""
                     : "s"
                 } de sincronizar.`
-              : "La captura offline se habilitará en la siguiente fase."}
+              : "Modo sin conexión activo. La inspección descargada puede seguir consultándose."}
           </p>
         </div>
       </div>

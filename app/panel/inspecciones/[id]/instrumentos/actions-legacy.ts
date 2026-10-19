@@ -15,6 +15,7 @@ import {
   serializarResultadosInstrumentales,
 } from "@/lib/resultados-instrumentales";
 import { prisma } from "@/lib/prisma";
+import { invalidarPreReportePorAjusteV1 } from "@/lib/revision-pre-reporte-v1";
 
 function volver(id: string, mensaje: string, tipo: "ok" | "error"): never {
   redirect(
@@ -129,6 +130,7 @@ export async function guardarResultadosInstrumentales(formData: FormData) {
       ),
     },
   });
+  await invalidarPreReportePorAjusteV1(id);
 
   revalidatePath(`/panel/inspecciones/${id}`);
   revalidatePath(`/panel/inspecciones/${id}/captura`);

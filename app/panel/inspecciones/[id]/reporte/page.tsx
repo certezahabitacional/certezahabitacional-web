@@ -124,8 +124,7 @@ export default async function ReportePage({
   }
 
   if (
-    usuarioActual.rol === RolUsuario.CLIENTE ||
-    usuarioActual.rol === RolUsuario.ADMINISTRADOR
+    usuarioActual.rol === RolUsuario.CLIENTE
   ) {
     redirect(
       usuarioActual.rol === RolUsuario.CLIENTE
@@ -182,6 +181,7 @@ export default async function ReportePage({
   }
 
   const puedeAbrirReporte =
+    usuarioActual.rol === RolUsuario.ADMINISTRADOR || (
     puede(
       usuarioActual.rol,
       "REPORTE_VER",
@@ -210,7 +210,7 @@ export default async function ReportePage({
         gerenteUsuarioId:
           inspeccion.inspector?.usuario.gerenteId ?? null,
       },
-    );
+    ));
 
   if (!puedeAbrirReporte) {
     redirect("/acceso");
@@ -490,7 +490,7 @@ export default async function ReportePage({
         </Link>
 
         <div className="flex gap-3">
-          {seleccionEditorial.disponible && (
+          {seleccionEditorial.disponible && usuarioActual.rol !== RolUsuario.VENDEDOR && (
             <Link
               href={`/panel/inspecciones/${inspeccion.id}/reporte-evidencias`}
               className="rounded-full border border-violet-400 px-5 py-3 font-bold text-violet-800"

@@ -1,7 +1,6 @@
 "use server";
 
-import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -9,7 +8,6 @@ import { exigirZonaInspeccionForm } from "@/lib/alcance-zona-inspeccion";
 import { validarAjustesParaCertificado } from "@/lib/ajustes-comerciales";
 import { asignarInspectorPorInspeccion } from "@/lib/asignar-inspector-por-inspeccion";
 import { obtenerAsignacionesInspeccion } from "@/lib/asignaciones-inspeccion";
-import { registrarAuditoria } from "@/lib/auditoria";
 import { validarLiberacionCampoDesdeCaja } from "@/lib/caja-validaciones";
 import { finalizarCapturaMetodoCerteza } from "@/lib/cierre-captura";
 import { prisma } from "@/lib/prisma";
@@ -96,15 +94,14 @@ export async function iniciarInspeccion(formData: FormData) {
 
   const usuario=await prisma.usuario.findUnique({where:{id:session.user.id},select:{id:true,rol:true,activo:true,inspector:{select:{id:true}}}});
   if(!usuario||!usuario.activo)redirect("/acceso");
-  if(usuario.rol!==RolUsuario.DIRECTOR&&usuario.rol!==RolUsuario.INSPECTOR)errorInicio(id,"Solo Dirección o el Inspector asignado pueden iniciar una inspección.");
+  if(usuario.rol!==RolUsuario.DIRECTOR&&usuario.rol!==RolUsuario.INSPECTOR)errorInicio(id,"Solo Dirección o el Inspector asignado pueden abrir la revisión final previa al inicio.");
 
-  const inspeccion=await prisma.inspeccion.findUnique({where:{id},select:{id:true,folio:true,estado:true,numeroInspeccion:true,cotizacionId:true,inspectorId:true,requiereGerenteZona:true,requiereCoordinador:true,inspector:{select:{usuarioId:true}}}});
+  const inspeccion=await prisma.inspeccion.findUnique({where:{id},select:{id:true,estado:true,cotizacionId:true,inspectorId:true,requiereGerenteZona:true,requiereCoordinador:true,inspector:{select:{usuarioId:true}}}});
   if(!inspeccion)errorInicio(id,"La inspección no existe.");
-  if(inspeccion.estado!==EstadoInspeccion.PROGRAMADA)errorInicio(id,"Solo una inspección PROGRAMADA puede iniciarse.");
+  if(inspeccion.estado!==EstadoInspeccion.PROGRAMADA)errorInicio(id,"Solo una inspección PROGRAMADA puede pasar a revisión final.");
 
-  const directorPorAusencia=usuario.rol===RolUsuario.DIRECTOR&&!inspeccion.inspectorId;
   if(usuario.rol===RolUsuario.INSPECTOR){
-    if(!inspeccion.inspectorId||!inspeccion.inspector?.usuarioId)errorInicio(id,"La inspección no puede ser iniciada por un Inspector hasta que esté asignada.");
+    if(!inspeccion.inspectorId||!inspeccion.inspector?.usuarioId)errorInicio(id,"La inspección no puede ser revisada por un Inspector hasta que esté asignada.");
     if(inspeccion.inspector.usuarioId!==usuario.id)errorInicio(id,"Esta inspección está asignada a otro Inspector.");
   }
 
@@ -116,10 +113,7 @@ export async function iniciarInspeccion(formData: FormData) {
   const liberacion=await validarLiberacionCampoDesdeCaja(inspeccion.cotizacionId);
   if(!liberacion.ok)errorInicio(id,liberacion.error);
 
-  await prisma.inspeccion.update({where:{id},data:{estado:EstadoInspeccion.EN_PROCESO}});
-  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Inspeccion",entidadId:id,inspeccionId:id,usuarioId:usuario.id,descripcion:directorPorAusencia?`DIRECTOR inició y asumió la ejecución de ${inspeccion.folio} como Director por ausencia de Inspector.`:`${usuario.rol} inició la inspección ${inspeccion.folio} después de validar equipo asignado y liberación financiera.`});
-  revalidatePath(`/panel/inspecciones/${id}`);revalidatePath("/panel/inspecciones");revalidatePath("/panel/agenda");revalidatePath("/panel");
-  redirect(inspeccion.numeroInspeccion===1?`/panel/inspecciones/${id}/flujo`:`/panel/inspecciones/${id}/captura`);
+  redirect(`/panel/inspecciones/${id}/revision-inicial`);
 }
 
 export async function cancelarInspeccion(formData: FormData) { await exigirZonaInspeccionForm(formData); return legacy.cancelarInspeccion(formData); }

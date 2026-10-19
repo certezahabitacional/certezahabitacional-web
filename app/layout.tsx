@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import OfflineStatus from "@/components/offline/OfflineStatus";
+import OfflineSyncManager from "@/components/offline/OfflineSyncManager";
 import ServiceWorkerRegister from "@/components/offline/ServiceWorkerRegister";
+import MobileRuntimeBridge from "@/components/mobile/MobileRuntimeBridge";
 
 import "./globals.css";
 
@@ -65,6 +67,8 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ServiceWorkerRegister />
+        <MobileRuntimeBridge />
+        <OfflineSyncManager />
         <OfflineStatus />
         {children}
       </body>

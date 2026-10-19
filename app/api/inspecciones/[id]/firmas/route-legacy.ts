@@ -158,11 +158,16 @@ async function obtenerAcceso(inspeccionId: string) {
     };
   }
 
-  const puedeModificar =
+  const inspectorAsignado =
     usuario.rol === RolUsuario.INSPECTOR &&
-    inspeccion.estado === EstadoInspeccion.EN_PROCESO &&
     inspeccion.inspectorId === usuario.inspector?.id &&
     inspeccion.inspector?.usuarioId === usuario.id;
+
+  // En V1, Inspector asignado y Dirección pueden registrar las firmas
+  // mientras el expediente todavía no haya sido enviado a autorización.
+  const puedeModificar =
+    inspeccion.estado === EstadoInspeccion.EN_PROCESO &&
+    (inspectorAsignado || usuario.rol === RolUsuario.DIRECTOR);
 
   let motivoSoloLectura = "";
 
@@ -175,7 +180,7 @@ async function obtenerAcceso(inspeccionId: string) {
         "Gerencia puede consultar las firmas, pero no modificarlas.";
     } else if (usuario.rol === RolUsuario.DIRECTOR) {
       motivoSoloLectura =
-        "Dirección puede auditar las firmas, pero no sustituirlas.";
+        "Dirección puede registrar firmas únicamente mientras la inspección permanezca EN PROCESO.";
     } else if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) {
       motivoSoloLectura =
         "Las firmas solo pueden modificarse mientras la inspección está EN PROCESO.";

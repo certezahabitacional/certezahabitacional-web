@@ -87,6 +87,18 @@
   color: #fff;
 }
 
+.groupBack {
+  border: 1px solid rgba(141, 200, 255, 0.55);
+  background: rgba(25, 78, 125, 0.16);
+  color: #cfe9ff;
+}
+
+.groupBack:hover {
+  border-color: rgba(141, 200, 255, 0.9);
+  background: rgba(25, 78, 125, 0.28);
+  color: #fff;
+}
+
 .gold {
   background: linear-gradient(90deg, #a76c13, #d8a22f, #efc55f);
   border: 0;
@@ -129,7 +141,11 @@
     width: 100%;
     justify-self: stretch;
     display: grid;
-    grid-template-columns: 0.95fr 1.05fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .groupBack {
+    grid-column: 1 / -1;
   }
 
   .button {

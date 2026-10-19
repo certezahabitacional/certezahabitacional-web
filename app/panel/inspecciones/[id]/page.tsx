@@ -111,7 +111,8 @@ export default async function ExpedientePage({
 
   /*
    * Alcance técnico:
-   * DIRECTOR     -> acceso global.
+   * DIRECTOR     -> acceso global y facultades absolutas.
+   * VENDEDOR     -> consulta de solo lectura dentro de su zona.
    * GERENTE      -> inspecciones de Inspectores adscritos a su Gerencia.
    * COORDINADOR  -> inspecciones de Inspectores bajo su coordinación.
    * INSPECTOR    -> únicamente inspecciones asignadas a él.
@@ -120,6 +121,8 @@ export default async function ExpedientePage({
     where: { id },
     select: {
       id: true,
+      estado: true,
+      numeroInspeccion: true,
       zonaId: true,
       inspectorId: true,
       requiereGerenteZona: true,
@@ -150,6 +153,12 @@ export default async function ExpedientePage({
       accesoAutorizado = true;
       break;
 
+    case RolUsuario.VENDEDOR:
+      accesoAutorizado =
+        Boolean(usuarioActual.zonaId) &&
+        inspeccionAlcance.zonaId === usuarioActual.zonaId;
+      break;
+
     case RolUsuario.GERENTE:
       accesoAutorizado =
         inspeccionAlcance.requiereGerenteZona &&
@@ -174,6 +183,35 @@ export default async function ExpedientePage({
 
   if (!accesoAutorizado) {
     redirect("/acceso");
+  }
+
+  // Las inspecciones activas no usan el panel intermedio del expediente.
+  // Se envían directamente a la etapa operativa correspondiente.
+  const esVendedor = rolActual === RolUsuario.VENDEDOR;
+
+  if (!esVendedor && inspeccionAlcance.estado === EstadoInspeccion.PROGRAMADA) {
+    redirect(`/panel/inspecciones/${id}/revision-inicial`);
+  }
+  if (!esVendedor && inspeccionAlcance.estado === EstadoInspeccion.EN_PROCESO) {
+    redirect(
+      inspeccionAlcance.numeroInspeccion === 1
+        ? `/panel/inspecciones/${id}/flujo`
+        : `/panel/inspecciones/${id}/captura`,
+    );
+  }
+  if (
+    rolActual === RolUsuario.INSPECTOR &&
+    inspeccionAlcance.numeroInspeccion === 1 &&
+    inspeccionAlcance.estado === EstadoInspeccion.REPORTE_PENDIENTE
+  ) {
+    redirect(`/panel/inspecciones/${id}/reporte-v1`);
+  }
+  if (
+    rolActual === RolUsuario.INSPECTOR &&
+    inspeccionAlcance.numeroInspeccion === 1 &&
+    inspeccionAlcance.estado === EstadoInspeccion.FINALIZADA
+  ) {
+    redirect(`/panel/inspecciones/${id}/reporte-v1`);
   }
 
   const inspeccion = await prisma.inspeccion.findUnique({
@@ -311,7 +349,7 @@ export default async function ExpedientePage({
   // certificado ni reabre un expediente finalizado.
   const expedienteFinalizado = inspeccion.estado === "FINALIZADA";
   const expedienteCancelado = inspeccion.estado === "CANCELADA";
-  const capturaSoloLectura = expedienteFinalizado || expedienteCancelado;
+  const capturaSoloLectura = expedienteFinalizado || expedienteCancelado || esVendedor;
   const certificadoFinancieramenteLiberado = pagoLiquidado;
 
   /*
@@ -602,9 +640,9 @@ export default async function ExpedientePage({
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {expedienteFinalizado ? (
-                <span className="cursor-not-allowed rounded-full border border-white/10 px-5 py-3 font-black text-slate-600">
-                  Expediente en solo lectura
+              {esVendedor || expedienteFinalizado ? (
+                <span className="cursor-not-allowed rounded-full border border-white/10 px-5 py-3 font-black text-slate-500">
+                  {esVendedor ? "Consulta de vendedor · solo lectura" : "Expediente en solo lectura"}
                 </span>
               ) : (
                 <Link
@@ -635,21 +673,25 @@ export default async function ExpedientePage({
                   </button>
                 </form>
               ) : inspeccion.estado === "EN_PROCESO" &&
-                (inspectorResponsable || directorPorAusencia) ? (
+                puedeIniciarInspeccion ? (
                 <Link
                   href={inspeccion.numeroInspeccion === 1
                     ? `/panel/inspecciones/${inspeccion.id}/flujo`
                     : `/panel/inspecciones/${inspeccion.id}/captura`}
                   className="rounded-full bg-cyan-400 px-5 py-3 font-black text-slate-950 hover:bg-cyan-300"
                 >
-                  Continuar captura
+                  Continuar inspección
                 </Link>
               ) : null}
               <Link
-                href={`/panel/inspecciones/${inspeccion.id}/reporte`}
+                href={
+                  inspeccion.numeroInspeccion === 1
+                    ? `/panel/inspecciones/${inspeccion.id}/reporte-v1`
+                    : `/panel/inspecciones/${inspeccion.id}/reporte`
+                }
                 className="rounded-full border border-white/15 px-5 py-3 font-black hover:bg-white/5"
               >
-                Ver reporte
+                {expedienteFinalizado ? "Ver reporte autorizado" : "Ver reporte"}
               </Link>
               {inspeccion.liberacionBloqueada ? (
                 <span className="cursor-not-allowed rounded-full border border-rose-400/30 bg-rose-400/10 px-5 py-3 font-black text-rose-300">
@@ -1075,7 +1117,7 @@ export default async function ExpedientePage({
 
               <div className="flex shrink-0 flex-col gap-3">
                 <Link
-                  href={`/panel/inspecciones/${inspeccion.id}/captura`}
+                  href={inspeccion.numeroInspeccion === 1 ? `/panel/inspecciones/${inspeccion.id}/flujo` : `/panel/inspecciones/${inspeccion.id}/captura`}
                   className="rounded-full bg-rose-300 px-5 py-3 text-center font-black text-slate-950 transition hover:bg-rose-200"
                 >
                   Corregir inspección
@@ -1291,6 +1333,7 @@ export default async function ExpedientePage({
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {inspeccion.estado === "EN_PROCESO" &&
+              inspeccion.numeroInspeccion !== 1 &&
               puedeFinalizarCaptura && (
                 <form
                   action={finalizarCaptura}
@@ -1751,7 +1794,7 @@ export default async function ExpedientePage({
                   </div>
                 ) : (
                   <Link
-                    href={`/panel/inspecciones/${inspeccion.id}/captura`}
+                    href={inspeccion.numeroInspeccion === 1 ? `/panel/inspecciones/${inspeccion.id}/flujo` : `/panel/inspecciones/${inspeccion.id}/captura`}
                     className="rounded-2xl bg-cyan-400 px-4 py-3 text-center font-black text-slate-950"
                   >
                     Capturar Método Certeza

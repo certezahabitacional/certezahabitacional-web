@@ -1,5 +1,5 @@
 -- Certeza Habitacional · Reglas de cierre V1
--- 1-4 evidencias para áreas sin hallazgos; 4+ evidencias iniciales por hallazgo.
+-- 1-4 evidencias por concepto/hallazgo. Una sola descripción final por hallazgo.
 -- Fachada principal: 4 fotografías y exactamente una seleccionada como portada.
 
 create or replace function public.validar_evidencia_minima_cierre_inspeccion()
@@ -71,12 +71,12 @@ begin
       from public."Hallazgo" h
       where h."inspeccionId" = new."id"
         and (
-          (select count(*) from public."Fotografia" f where f."hallazgoId" = h."id" and f."inspeccionId" = new."id") < 4
+          (select count(*) from public."Fotografia" f where f."hallazgoId" = h."id" and f."inspeccionId" = new."id") not between 1 and 4
           or nullif(btrim(coalesce(h."descripcion", '')), '') is null
         );
 
       if hallazgos_incompletos > 0 then
-        raise exception using message = format('No se puede finalizar la V1: %s hallazgo(s) no tienen 4 evidencias iniciales o descripción completa.', hallazgos_incompletos), errcode = '23514';
+        raise exception using message = format('No se puede finalizar la V1: %s hallazgo(s) no tienen una descripción final o están fuera del rango de 1 a 4 fotografías.', hallazgos_incompletos), errcode = '23514';
       end if;
 
       select count(*) into pasos_incompletos
@@ -92,12 +92,12 @@ begin
       select count(*) into fotos_fachada
       from public."AreaInspeccion" a
       join public."FotografiaArea" fa on fa."areaId" = a."id"
-      where a."inspeccionId" = new."id" and a."codigo" = 'FACHADA_PRINCIPAL';
+      where a."inspeccionId" = new."id" and a."codigo" in ('FACHADA_FRONTAL','FACHADA_PRINCIPAL');
 
       select count(*) into portadas_fachada
       from public."AreaInspeccion" a
       join public."FotografiaArea" fa on fa."areaId" = a."id"
-      where a."inspeccionId" = new."id" and a."codigo" = 'FACHADA_PRINCIPAL' and fa."candidataPortada" = true;
+      where a."inspeccionId" = new."id" and a."codigo" in ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') and fa."candidataPortada" = true;
 
       if fotos_fachada < 4 then
         raise exception using message = 'No se puede finalizar la V1: la fachada principal requiere 4 fotografías.', errcode = '23514';

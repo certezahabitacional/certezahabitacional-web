@@ -1,8 +1,9 @@
 export const OFFLINE_DB_NAME = "certeza-habitacional-offline";
-export const OFFLINE_DB_VERSION = 1;
+export const OFFLINE_DB_VERSION = 2;
 
 export const STORE_QUEUE = "syncQueue";
 export const STORE_META = "meta";
+export const STORE_FILES = "files";
 
 export type SyncQueueStatus =
   | "PENDING"
@@ -81,6 +82,12 @@ export function openOfflineDb(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains(STORE_META)) {
         db.createObjectStore(STORE_META, {
+          keyPath: "key",
+        });
+      }
+
+      if (!db.objectStoreNames.contains(STORE_FILES)) {
+        db.createObjectStore(STORE_FILES, {
           keyPath: "key",
         });
       }

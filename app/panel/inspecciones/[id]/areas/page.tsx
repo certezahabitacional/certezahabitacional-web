@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import {
   agregarAreaManual,
+  aplicarOrdenLogicoAreasV1,
   confirmarAreasV1,
-  confirmarProyectoV1,
   generarAreasDesdeGuia,
+  moverAreaRutaV1,
   subirFotoArea,
 } from "./actions";
 import { seleccionarPortadaFachadaV1 } from "./portada-actions";
@@ -41,15 +42,8 @@ type Control = {
   areasConfirmadas: boolean;
 } | null;
 
-function supabaseAdmin() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
 async function urlTemporalFoto(ruta: string) {
-  const sb = supabaseAdmin();
+  const sb = obtenerSupabaseAdminOpcional();
   if (!sb) return null;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
   const { data, error } = await sb.storage.from(bucket).createSignedUrl(ruta, 60 * 15);
@@ -68,37 +62,48 @@ export default async function AreasPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: session.user.id },
-    select: { rol: true, activo: true, inspector: { select: { id: true } } },
-  });
+  const [usuario, inspeccion] = await Promise.all([
+    prisma.usuario.findUnique({
+      where: { id: session.user.id },
+      select: { rol: true, activo: true, inspector: { select: { id: true } } },
+    }),
+    prisma.inspeccion.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        folio: true,
+        numeroInspeccion: true,
+        estado: true,
+        inspectorId: true,
+        cliente: { select: { nombre: true } },
+        inmueble: { select: { alias: true } },
+      },
+    }),
+  ]);
   if (!usuario?.activo) redirect("/acceso");
-
-  const inspeccion = await prisma.inspeccion.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      folio: true,
-      numeroInspeccion: true,
-      estado: true,
-      inspectorId: true,
-      cliente: { select: { nombre: true } },
-      inmueble: { select: { alias: true } },
-    },
-  });
   if (!inspeccion) notFound();
   if (inspeccion.numeroInspeccion > 1) redirect(`/panel/inspecciones/${id}/captura`);
 
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
-  const esDirectorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
+  const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const rolesConsulta: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR];
   const consulta = rolesConsulta.includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
 
-  const [controlRows, areas, fotosFachada] = await Promise.all([
+  const [controlRows, criticalRows, areas, fotosFachada] = await Promise.all([
     prisma.$queryRaw<Control[]>`
       SELECT "proyectoConfirmado","areasConfirmadas"
       FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
+    `,
+    prisma.$queryRaw<Array<{ pruebasAbiertas: number }>>`
+      SELECT COUNT(*) FILTER (
+        WHERE p."clave" IN ('PC_HIDRAULICA','PC_GAS')
+          AND p."lecturaInicial" IS NOT NULL
+          AND p."lecturaFinal" IS NULL
+          AND COALESCE((p."datos"->>'pruebaProlongada')::boolean,false)
+      )::int AS "pruebasAbiertas"
+      FROM "ProtocoloInspeccionPaso" p
+      WHERE p."inspeccionId"=${id} AND p."tipo"='PUNTO_CRITICO'
     `,
     prisma.$queryRaw<Area[]>`
       SELECT a."id",a."codigo",a."nombre",a."tipo",a."origen",a."obligatoria",a."estado",a."comentarioFinal",
@@ -106,7 +111,7 @@ export default async function AreasPage({
              COALESCE(BOOL_OR(fa."candidataPortada"),false) AS "portada"
       FROM "AreaInspeccion" a
       LEFT JOIN "FotografiaArea" fa ON fa."areaId"=a."id"
-      WHERE a."inspeccionId"=${id}
+      WHERE a."inspeccionId"=${id} AND a."tipo" <> 'PUNTO_CRITICO'
       GROUP BY a."id"
       ORDER BY a."orden",a."nombre"
     `,
@@ -115,11 +120,23 @@ export default async function AreasPage({
       FROM "FotografiaArea" fa
       JOIN "AreaInspeccion" a ON a."id"=fa."areaId"
       JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
-      WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_PRINCIPAL'
+      WHERE a."inspeccionId"=${id} AND a."codigo"='FACHADA_FRONTAL'
       ORDER BY fa."orden",fa."creadoEn"
     `,
   ]);
 
+  const control = controlRows[0] ?? null;
+  const critical = criticalRows[0];
+
+  // Esta pantalla queda reservada a la preparación del recorrido.
+  // Una vez confirmadas las áreas, cualquier enlace antiguo regresa al recorrido unificado.
+  if (control?.areasConfirmadas) {
+    redirect(`/panel/inspecciones/${id}/campo-v1`);
+  }
+
+  if (inspeccion.estado === EstadoInspeccion.EN_PROCESO && !control?.proyectoConfirmado) {
+    redirect(`/panel/inspecciones/${id}/proyecto-v1`);
+  }
   const fotosFachadaConUrl = await Promise.all(
     fotosFachada.map(async (foto) => ({
       ...foto,
@@ -127,25 +144,28 @@ export default async function AreasPage({
     })),
   );
 
-  const control = controlRows[0] ?? null;
-  const puedeCapturar = (esInspector || esDirectorPorAusencia) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
+  const puedeCapturar = (esInspector || esDirector) && inspeccion.estado === EstadoInspeccion.EN_PROCESO;
   const completas = areas.filter((a) => a.estado === "REVISADA").length;
   const avance = areas.length ? Math.round((completas / areas.length) * 100) : 0;
+  const totalRecorrido = 8 + areas.length;
+  const primerPuntoArea = areas.length > 0 ? 9 : null;
+  const ultimoPuntoArea = areas.length > 0 ? totalRecorrido : null;
+  const areaActivaId = areas.find((area) => area.estado !== "REVISADA")?.id ?? null;
 
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-8 text-white">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}/flujo`} className="text-sm font-black text-cyan-300">← Flujo de campo</Link>
+          <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente</Link>
           <div className="flex flex-wrap gap-2">
-            {esDirectorPorAusencia && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR POR AUSENCIA</span>}
-            <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-full border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-300">Recorrido V1</Link>
-            <Link href={`/panel/inspecciones/${id}/protocolo`} className="rounded-full border border-white/15 px-4 py-2 text-sm font-black text-amber-300">Protocolo V1</Link>
+            {esDirector && <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">DIRECTOR · SUPERVISIÓN / CAPTURA</span>}
           </div>
         </div>
 
-        <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-emerald-300">Preparación y evidencia V1</p>
-        <h1 className="mt-2 text-4xl font-black">Áreas de la vivienda</h1>
+        <p className="mt-7 text-xs font-black uppercase tracking-[.24em] text-emerald-300">
+          RECORRIDO TÉCNICO · {primerPuntoArea ? `PUNTOS ${primerPuntoArea} A ${ultimoPuntoArea}` : "ÁREAS PENDIENTES DE DEFINIR"}
+        </p>
+        <h1 className="mt-2 text-4xl font-black">Áreas de la vivienda como puntos del recorrido</h1>
         <p className="mt-2 text-slate-400">{inspeccion.folio} · {inspeccion.cliente.nombre} · {inspeccion.inmueble?.alias ?? "Inmueble"}</p>
 
         {(query.ok || query.error) && (
@@ -155,42 +175,81 @@ export default async function AreasPage({
         )}
 
         <section className="mt-7 grid gap-4 sm:grid-cols-4">
-          <Resumen titulo="Proyecto" valor={control?.proyectoConfirmado ? "Confirmado" : "Pendiente"} />
-          <Resumen titulo="Áreas" valor={String(areas.length)} />
+          <Resumen titulo="Proyecto / Plantilla" valor={control?.proyectoConfirmado ? "Confirmado" : "Pendiente"} />
+          <Resumen titulo="Puntos de área" valor={String(areas.length)} />
           <Resumen titulo="Cerradas" valor={`${completas}/${areas.length}`} />
           <Resumen titulo="Avance" valor={`${avance}%`} />
         </section>
 
-        {puedeCapturar && !control?.proyectoConfirmado && (
-          <section className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-6">
-            <h2 className="text-xl font-black">1. Confirmar información de proyecto</h2>
-            <p className="mt-2 text-sm text-slate-300">Antes del recorrido, documenta si existe proyecto PDF o si la inspección se realizará formalmente sin proyecto disponible.</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <form action={confirmarProyectoV1}><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="modalidad" value="CON_PDF"/><button className="w-full rounded-xl bg-cyan-300 px-4 py-3 font-black text-slate-950">Confirmar PDF cargado</button></form>
-              <form action={confirmarProyectoV1}><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="modalidad" value="SIN_PDF"/><button className="w-full rounded-xl border border-white/15 px-4 py-3 font-black text-slate-200">Declarar sin proyecto PDF</button></form>
-            </div>
-          </section>
-        )}
+        <section className="mt-7 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-5 sm:p-6">
+          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-300">
+            Partidas 1 a 8 · acceso permanente
+          </p>
+          <h2 className="mt-2 text-2xl font-black">Instalaciones y pruebas técnicas</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Estas partidas forman parte del mismo recorrido. Puedes regresar a cualquiera ya inspeccionada para consultar o corregir su captura; las partidas físicas continúan a partir de la 9.
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/5 p-4">
+              <span className="text-xs font-black text-slate-500">PARTIDA 1</span>
+              <p className="mt-1 font-black text-emerald-200">Pruebas de hermeticidad</p>
+            </Link>
+            {[
+              ["HIDRAULICA", "Instalación hidráulica"],
+              ["SANITARIA", "Instalación sanitaria"],
+              ["PLUVIAL", "Instalación pluvial"],
+              ["GAS", "Instalación de gas"],
+              ["DUCTOS", "Instalación de ductos"],
+              ["ELECTRICA", "Instalación eléctrica"],
+              ["LOSAS_AZOTEA", "Losas de azotea"],
+            ].map(([codigo, nombre], index) => (
+              <Link
+                key={codigo}
+                href={`/panel/inspecciones/${id}/puntos-criticos?punto=${codigo}`}
+                className="rounded-2xl border border-white/10 bg-slate-900 p-4 hover:border-cyan-300/30"
+              >
+                <span className="text-xs font-black text-slate-500">PARTIDA {index + 2}</span>
+                <p className="mt-1 font-black text-cyan-200">{nombre}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
 
         {puedeCapturar && areas.length === 0 && (
           <section className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
-            <h2 className="text-xl font-black">2. Construir ecosistema físico</h2>
-            <p className="mt-2 text-sm text-slate-300">Genera las áreas a partir de la guía técnica. El sistema añadirá siempre la Fachada principal como primera área.</p>
+            <h2 className="text-xl font-black">Definir puntos de área del recorrido</h2>
+            <p className="mt-2 text-sm text-slate-300">Genera cualquier área adicional desde la guía técnica. La correlación Proyecto/Plantilla ya incorporó al expediente las áreas identificadas antes de llegar a esta pantalla.</p>
             <form action={generarAreasDesdeGuia} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950">Generar áreas desde guía</button></form>
           </section>
         )}
 
         {puedeCapturar && areas.length > 0 && !control?.areasConfirmadas && (
           <section className="mt-6 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
-            <h2 className="text-xl font-black">3. Verificar y confirmar áreas</h2>
-            <p className="mt-2 text-sm text-slate-300">Antes de confirmar, agrega cualquier recámara, baño, estancia, patio, cochera u otra área física que no haya surgido de la guía.</p>
+            <h2 className="text-xl font-black">Verificar y confirmar puntos de área</h2>
+            <p className="mt-2 text-sm text-slate-300">Antes de confirmar, agrega cualquier recámara, baño, estancia, patio, cochera u otra área física que no haya surgido del proyecto, la cotización o la guía.</p>
+            <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+              <p className="text-sm font-black text-cyan-200">Orden lógico sugerido del recorrido</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Planta baja: sala → comedor → cocina → 1/2 baño → áreas de servicio; después escalera; planta alta: baño compartido → estancia → recámara principal → baño principal → balcón → recámaras 2, 3...; exteriores al final. Puedes ajustar el orden manualmente antes de confirmarlo.
+              </p>
+              <form action={aplicarOrdenLogicoAreasV1} className="mt-3">
+                <input type="hidden" name="inspeccionId" value={id}/>
+                <button className="rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-200">
+                  APLICAR ORDEN LÓGICO SUGERIDO
+                </button>
+              </form>
+            </div>
             <form action={agregarAreaManual} className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]">
               <input type="hidden" name="inspeccionId" value={id}/>
               <input name="nombre" required placeholder="Ej. Recámara 3" className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3"/>
               <select name="tipo" defaultValue="INTERIOR" className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3"><option value="INTERIOR">Interior</option><option value="EXTERIOR">Exterior</option><option value="INSTALACION">Instalación</option></select>
               <button className="rounded-xl border border-violet-300/30 px-5 py-3 font-black text-violet-300">Agregar área</button>
             </form>
-            <form action={confirmarAreasV1} className="mt-4"><input type="hidden" name="inspeccionId" value={id}/><button className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">Confirmar ecosistema de áreas</button></form>
+            <form action={confirmarAreasV1} className="mt-4">
+              <input type="hidden" name="inspeccionId" value={id}/>
+              <button className="rounded-xl bg-violet-300 px-5 py-3 font-black text-slate-950">CONFIRMAR ORDEN Y PUNTOS DE ÁREA</button>
+              <p className="mt-2 text-xs text-slate-500">El orden es únicamente una guía sugerida. Durante la inspección se puede entrar a cualquier área o partida sin cerrar previamente las anteriores.</p>
+            </form>
           </section>
         )}
 
@@ -198,19 +257,48 @@ export default async function AreasPage({
           {areas.map((area, index) => {
             const fotos = Number(area.fotos);
             const completa = area.estado === "REVISADA";
-            const fachada = area.codigo === "FACHADA_PRINCIPAL";
-            const minimo = fachada ? 4 : 1;
+            const fachada = area.codigo.startsWith("FACHADA_");
+            const minimo = 1;
             const evidenciaLista = fotos >= minimo;
+            const activa = area.id === areaActivaId;
             return (
-              <article key={area.id} className={`rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-white/10 bg-slate-900"}`}>
+              <article key={area.id} className={`relative rounded-3xl border p-5 ${completa ? "border-emerald-400/20 bg-emerald-400/5" : fachada ? "border-cyan-300/30 bg-cyan-300/5" : "border-amber-300/20 bg-amber-300/5"}`}>
+                {puedeCapturar && (
+                  <Link
+                    href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`}
+                    aria-label={`Abrir inspección detallada de ${area.nombre}`}
+                    className="absolute inset-0 z-10 rounded-3xl"
+                  />
+                )}
                 <div className="grid gap-4 lg:grid-cols-[65px_1fr_300px]">
-                  <span className="font-mono text-lg font-black text-cyan-300">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="font-mono text-lg font-black text-cyan-300">{9 + index}/{totalRecorrido}</span>
                   <div>
                     <div className="flex flex-wrap gap-2 text-xs font-black"><span className="rounded-full bg-white/5 px-2 py-1 text-slate-400">{area.tipo}</span><span className="rounded-full bg-white/5 px-2 py-1 text-slate-400">{area.origen}</span>{fachada && <span className="rounded-full bg-cyan-300/10 px-2 py-1 text-cyan-300">IDENTIFICACIÓN / PORTADA</span>}</div>
-                    <h2 className="mt-2 text-xl font-black">{area.nombre}</h2>
+                    <p className="mt-2 text-xs font-black uppercase tracking-wider text-emerald-300">Punto {9 + index} del recorrido · {completa ? "CERRADO 100%" : activa ? "SUGERIDO" : "DISPONIBLE"}</p>
+                    <h2 className="mt-1 text-xl font-black">{area.nombre}</h2>
                     <p className={`mt-2 text-sm font-bold ${evidenciaLista ? "text-emerald-300" : "text-amber-300"}`}>{fotos}/{minimo} fotografía{minimo === 1 ? " mínima" : "s mínimas"}{area.portada ? " · portada seleccionada" : fachada ? " · portada pendiente" : ""}</p>
                     {area.comentarioFinal && <p className="mt-3 text-sm text-slate-300"><strong>Resultado del recorrido:</strong> {area.comentarioFinal}</p>}
                     <p className="mt-3 text-xs text-slate-500">El cierre técnico del área se realiza únicamente desde Recorrido V1.</p>
+                    {puedeCapturar && !control?.areasConfirmadas && completas === 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <form action={moverAreaRutaV1}>
+                          <input type="hidden" name="inspeccionId" value={id}/>
+                          <input type="hidden" name="areaId" value={area.id}/>
+                          <input type="hidden" name="direccion" value="ARRIBA"/>
+                          <button disabled={index === 0} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-slate-300 disabled:opacity-30">
+                            ↑ MOVER ANTES
+                          </button>
+                        </form>
+                        <form action={moverAreaRutaV1}>
+                          <input type="hidden" name="inspeccionId" value={id}/>
+                          <input type="hidden" name="areaId" value={area.id}/>
+                          <input type="hidden" name="direccion" value="ABAJO"/>
+                          <button disabled={index === areas.length - 1} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-slate-300 disabled:opacity-30">
+                            ↓ MOVER DESPUÉS
+                          </button>
+                        </form>
+                      </div>
+                    )}
 
                     {fachada && fotosFachadaConUrl.length > 0 && (
                       <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-slate-950/60 p-4">
@@ -243,18 +331,18 @@ export default async function AreasPage({
                     )}
                   </div>
 
-                  {puedeCapturar && control?.areasConfirmadas ? (
+                  {puedeCapturar && control?.areasConfirmadas && activa ? (
                     <div className="space-y-3">
                       <form action={subirFotoArea} className="rounded-2xl border border-white/10 bg-slate-950 p-4">
                         <input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="areaId" value={area.id}/>
                         <input name="archivo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="block w-full text-xs text-slate-400"/>
                         <input name="descripcion" placeholder="Descripción opcional" className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm"/>
-                        <button className="mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-sm font-black text-slate-950">Tomar / agregar foto</button>
+                        <button className="relative z-20 mt-3 w-full rounded-xl bg-cyan-300 px-3 py-2 text-sm font-black text-slate-950">Tomar / agregar foto</button>
                       </form>
-                      <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="block rounded-xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-300">{completa ? "Ver resultado en Recorrido V1" : "Continuar revisión en Recorrido V1"}</Link>
+                      <Link href={`/panel/inspecciones/${id}/campo-v1?area=${area.id}`} className="relative z-20 block rounded-xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-300">{completa ? "Ver resultado en Recorrido V1" : "Continuar revisión en Recorrido V1"}</Link>
                     </div>
                   ) : (
-                    <div className={`rounded-2xl p-4 text-sm font-bold ${completa ? "bg-emerald-300/10 text-emerald-300" : "bg-white/5 text-slate-500"}`}>{completa ? "Área cerrada ✓" : control?.areasConfirmadas ? "Pendiente de recorrido" : "Confirma primero el ecosistema de áreas"}</div>
+                    <div className={`rounded-2xl p-4 text-sm font-bold ${completa ? "bg-emerald-300/10 text-emerald-300" : "bg-cyan-300/5 text-cyan-200"}`}>{completa ? "Punto cerrado al 100% ✓" : "DISPONIBLE · puedes iniciar este punto cuando lo decidas"}</div>
                   )}
                 </div>
               </article>
@@ -265,7 +353,21 @@ export default async function AreasPage({
         {areas.length > 0 && completas === areas.length && control?.areasConfirmadas && (
           <div className="mt-7 rounded-3xl border border-emerald-300/20 bg-emerald-300/5 p-6 text-emerald-200">
             <p className="font-black">Recorrido por áreas completo</p>
-            <p className="mt-2 text-sm">Todas las áreas obligatorias están cerradas desde el recorrido V1. El cierre formal validará además procesos, hallazgos, fachada, portada, firmas y sincronización.</p>
+            {Number(critical?.pruebasAbiertas ?? 0) > 0 ? (
+              <>
+                <p className="mt-2 text-sm">
+                  Ya terminaste Sala, Comedor, Cocina, Baños, Recámaras y demás áreas. Ahora corresponde regresar a las pruebas de hermeticidad para tomar las lecturas finales de Hidráulica y Gas.
+                </p>
+                <Link
+                  href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=cierre`}
+                  className="mt-4 inline-block rounded-xl bg-amber-300 px-5 py-3 font-black text-slate-950"
+                >
+                  TOMAR LECTURAS FINALES DE HERMETICIDAD
+                </Link>
+              </>
+            ) : (
+              <p className="mt-2 text-sm">Todas las áreas obligatorias y las pruebas de hermeticidad están cerradas. Puedes continuar al cierre formal de la inspección.</p>
+            )}
           </div>
         )}
       </div>

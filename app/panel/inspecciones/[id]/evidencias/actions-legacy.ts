@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
+import { invalidarPreReportePorAjusteV1 } from "@/lib/revision-pre-reporte-v1";
 
 const texto = (formData: FormData, campo: string) =>
   String(formData.get(campo) ?? "").trim();
@@ -333,6 +334,17 @@ export async function registrarEvidencia(
         "El hallazgo no pertenece a esta inspección.",
       );
     }
+
+    const totalEvidencias = await prisma.fotografia.count({
+      where: { inspeccionId, hallazgoId },
+    });
+    if (totalEvidencias >= 4) {
+      redirigirError(
+        inspeccionId,
+        hallazgoId,
+        "Este hallazgo ya tiene el máximo de 4 fotografías.",
+      );
+    }
   }
 
   const extension =
@@ -435,6 +447,10 @@ export async function registrarEvidencia(
       "No se pudo registrar la evidencia.",
     );
   }
+
+  await invalidarPreReportePorAjusteV1(inspeccionId);
+
+  await invalidarPreReportePorAjusteV1(inspeccionId);
 
   revalidatePath(
     `/panel/inspecciones/${inspeccionId}`,
@@ -603,6 +619,8 @@ export async function eliminarEvidencia(
           : "."
       }`,
   });
+
+  await invalidarPreReportePorAjusteV1(inspeccionId);
 
   revalidatePath(
     `/panel/inspecciones/${inspeccionId}`,

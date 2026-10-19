@@ -15,6 +15,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { invalidarPreReportePorAjusteV1 } from "@/lib/revision-pre-reporte-v1";
 import type { Session } from "next-auth";
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -1210,6 +1211,8 @@ export async function crearHallazgo(formData: FormData) {
     },
   });
 
+  await invalidarPreReportePorAjusteV1(inspeccionId);
+
   await registrarAuditoria({
     tipo: TipoEvento.CREAR,
     entidad: "Hallazgo",
@@ -1398,6 +1401,8 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
       semaforo: semaforoDesdeIndice(indice),
     },
   });
+
+  await invalidarPreReportePorAjusteV1(inspeccionId);
 
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,

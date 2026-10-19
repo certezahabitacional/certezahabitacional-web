@@ -149,3 +149,48 @@ export async function listQueueItems() {
     },
   );
 }
+
+
+export async function updateQueueItem(
+  id: string,
+  patch: Partial<Pick<SyncQueueItem, "status" | "attempts" | "lastError">>,
+) {
+  const db = await openOfflineDb();
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_QUEUE, "readwrite");
+    const store = tx.objectStore(STORE_QUEUE);
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+      const actual = request.result as SyncQueueItem | undefined;
+      if (!actual) return;
+      store.put({
+        ...actual,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      });
+    };
+
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+
+  emitQueueChanged();
+}
+
+export async function removeQueueItem(id: string) {
+  const db = await openOfflineDb();
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_QUEUE, "readwrite");
+    tx.objectStore(STORE_QUEUE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+
+  emitQueueChanged();
+}
