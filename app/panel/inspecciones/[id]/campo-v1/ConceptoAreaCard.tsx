@@ -95,6 +95,9 @@ export default async function ConceptoAreaCard({
   );
 
   const obs = observacion(punto.observacion);
+  // Una sola descripción, igual que en el reporte: texto final o interpretación IA.
+  // Las justificaciones permanecen guardadas, pero no son otra descripción.
+  const descripcion = (obs.descripcionFinal ?? "").trim() || (obs.descripcionIa ?? "").trim();
   const permiteMedicion = punto.requiereMedicion || /^(vanos?( de (puerta|ventana))?|piso: (condición general|nivelación y planeidad))$/i.test(punto.concepto.trim());
   const noAplica = punto.estadoV3 === "NO_APLICA";
   const cerrado = punto.estadoV3 !== "PENDIENTE";
@@ -174,11 +177,7 @@ export default async function ConceptoAreaCard({
             </div>
           )}
 
-          {obs.justificacionIa && (
-            <p className="mt-3 rounded-xl bg-cyan-300/5 p-3 text-xs leading-5 text-cyan-100">
-              <strong>IA:</strong> {obs.justificacionIa}
-            </p>
-          )}
+
         </div>
 
         <div className="space-y-3">
@@ -260,23 +259,15 @@ export default async function ConceptoAreaCard({
                 </div>
               )}
 
-              {obs.descripcionIa ? (
-                <div className="mb-4 rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3">
-                  <p className="text-xs font-black uppercase text-cyan-200">Interpretación inicial de IA</p>
-                  <p className="mt-2 text-xs leading-5 text-cyan-50">{obs.descripcionIa}</p>
-                  <p className="mt-2 text-[11px] leading-5 text-cyan-200/70">La IA relacionó la partida, el concepto y el grupo completo de fotografías. El texto de abajo se carga automáticamente como copia editable.</p>
-                </div>
-              ) : (
-                <div className="mb-4 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-                  Este concepto fue reabierto. Puedes editar directamente la descripción final ya guardada o generar nuevamente la IA si deseas una nueva interpretación.
-                </div>
-              )}
+              <p className="mb-4 text-xs leading-5 text-slate-400">
+                Revisa y ajusta la descripción en este único campo. Se conservará el texto que confirmes.
+              </p>
 
               <label className="text-xs font-black uppercase text-slate-400">Descripción final editable por el Inspector</label>
               <textarea
                 name="descripcionFinal"
                 required
-                defaultValue={obs.descripcionFinal ?? obs.descripcionIa ?? ""}
+                defaultValue={descripcion}
                 placeholder="Describe condición observada, funcionamiento, nivelación, acabado, sellado o criterio aplicable."
                 className="mt-2 min-h-28 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"
               />
@@ -313,8 +304,8 @@ export default async function ConceptoAreaCard({
             <div className="rounded-2xl bg-emerald-300/10 p-4 text-sm text-emerald-200">
               <p className="font-black">CONCEPTO CERRADO ✓</p>
               <p className="mt-2">Clasificación: <strong>{obs.clasificacionFinal ?? "registrada"}</strong></p>
-              {obs.calificacionFinal !== undefined && <p>Evaluación IA: <strong>{obs.calificacionFinal}/100</strong>{obs.prioridadEvaluadaIa ? <> · Rango <strong>{obs.prioridadEvaluadaIa}</strong></> : null}</p>}{obs.justificacionCalificacionIa && <p className="mt-1 text-xs text-emerald-100/80">{obs.justificacionCalificacionIa}</p>}{obs.prioridadFinal && <p>Evaluación / prioridad elegida por el Inspector: <strong>{obs.prioridadFinal}</strong></p>}
-              {obs.descripcionFinal && <p className="mt-2 text-xs leading-5">{obs.descripcionFinal}</p>}
+              {obs.calificacionFinal !== undefined && <p>Evaluación IA: <strong>{obs.calificacionFinal}/100</strong>{obs.prioridadEvaluadaIa ? <> · Rango <strong>{obs.prioridadEvaluadaIa}</strong></> : null}</p>}{obs.prioridadFinal && <p>Evaluación / prioridad elegida por el Inspector: <strong>{obs.prioridadFinal}</strong></p>}
+              {descripcion && <p className="mt-2 whitespace-pre-wrap text-xs leading-5" data-descripcion-concepto="final">{descripcion}</p>}
               {puedeReabrir && (
                 <form action={reabrirConceptoAreaV1} className="mt-4">
                   <input type="hidden" name="inspeccionId" value={inspeccionId}/>
