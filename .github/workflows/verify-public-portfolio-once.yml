@@ -19,7 +19,7 @@ jobs:
       - name: Verify published original PNG and complete responsive rendering
         run: |
           "$RUNNER_TEMP/portfolio-browser/bin/python" - <<'PY'
-          import hashlib, json, time
+          import hashlib, json
           from pathlib import Path
           from playwright.sync_api import sync_playwright
           output=Path('portfolio-verification');output.mkdir(exist_ok=True)
@@ -33,51 +33,60 @@ jobs:
                   page=context.new_page()
                   errors=[]
                   page.on('pageerror',lambda error: errors.append(str(error)))
-                  response=page.goto(url,wait_until='domcontentloaded',timeout=60000)
-                  assert response and response.status==200, 'Public page HTTP failure'
-                  image=page.locator('img[src*="portafolio-servicios-certeza-tecnica"]')
-                  image.wait_for(state='visible',timeout=30000)
-                  src=image.evaluate('(img) => img.currentSrc')
-                  if label=='desktop' and '?v=0d7528594def' not in src:
-                      print('Publication is still propagating; one retry in 75 seconds.',flush=True)
-                      time.sleep(75)
-                      response=page.reload(wait_until='domcontentloaded',timeout=60000)
+                  record={'url':url,'viewport':label}
+                  try:
+                      response=page.goto(url,wait_until='domcontentloaded',timeout=60000)
+                      record['http']=response.status if response else None
+                      assert record['http']==200, 'Public page HTTP failure'
+                      image=page.locator('img[src*="portafolio-servicios-certeza-tecnica"]')
                       image.wait_for(state='visible',timeout=30000)
+                      record['src_attribute']=image.get_attribute('src')
+                      print(label+' markup: '+str(record['src_attribute']),flush=True)
+                      assert '?v=0d7528594def' in record['src_attribute'], 'Old markup is still being served'
+                      image.evaluate('(img) => img.decode()')
+                      page.evaluate('document.fonts.ready')
                       src=image.evaluate('(img) => img.currentSrc')
-                  assert response and response.status==200
-                  assert '?v=0d7528594def' in src and '/_next/image' not in src, 'Old asset URL still published'
-                  image.evaluate('(img) => img.decode()')
-                  page.evaluate('document.fonts.ready')
-                  asset=context.request.get(src,timeout=60000)
-                  assert asset.status==200, 'Image HTTP failure'
-                  raw=asset.body()
-                  assert len(raw)==2115560 and hashlib.sha256(raw).hexdigest()==expected, 'Published bytes differ from approved PNG'
-                  dimensions=image.evaluate('(img) => ({width:img.naturalWidth,height:img.naturalHeight,complete:img.complete})')
-                  assert dimensions=={'width':1254,'height':1254,'complete':True}, dimensions
-                  box=image.bounding_box()
-                  assert box and box['width']>300 and abs(box['width']-box['height'])<1, box
-                  assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), 'Horizontal overflow'
-                  cropped=image.evaluate('''(img) => {
-                    const r=img.getBoundingClientRect(),found=[];
-                    for(let a=img.parentElement;a;a=a.parentElement){
-                      const s=getComputedStyle(a),b=a.getBoundingClientRect();
-                      if(['hidden','clip'].includes(s.overflowY)&&(r.top<b.top-1||r.bottom>b.bottom+1)) found.push(a.tagName);
-                    }
-                    return found;
-                  }''')
-                  assert not cropped, cropped
-                  assert page.get_by_role('link',name='Volver a Grupo Certeza',exact=False).get_attribute('href')=='/'
-                  image.evaluate('(img) => {const r=img.getBoundingClientRect();window.scrollTo(0,window.scrollY+r.bottom-window.innerHeight+10)}')
-                  footer_visible=image.evaluate('(img) => {const r=img.getBoundingClientRect(); return document.elementFromPoint(r.x+r.width/2,Math.min(window.innerHeight-15,r.bottom-15))===img}')
-                  assert footer_visible, 'Image bottom is covered or inaccessible'
-                  page.screenshot(path=str(output/f'{label}.png'),full_page=True)
-                  if label=='desktop': (output/'approved-source.png').write_bytes(raw)
-                  report.append({'url':url,'viewport':label,'http':response.status,'image_sha256':expected,'natural_size':dimensions,'rendered_box':box,'cropped_by':cropped,'footer_visible':footer_visible,'page_errors':errors})
-                  context.close()
+                      record['current_src']=src
+                      assert '?v=0d7528594def' in src and '/_next/image' not in src, 'Unexpected decoded source'
+                      asset=context.request.get(src,timeout=60000)
+                      record['image_http']=asset.status
+                      raw=asset.body()
+                      record['image_bytes']=len(raw)
+                      record['image_sha256']=hashlib.sha256(raw).hexdigest()
+                      assert asset.status==200 and len(raw)==2115560 and record['image_sha256']==expected, 'Published bytes differ from approved PNG'
+                      dimensions=image.evaluate('(img) => ({width:img.naturalWidth,height:img.naturalHeight,complete:img.complete})')
+                      record['natural_size']=dimensions
+                      assert dimensions=={'width':1254,'height':1254,'complete':True}, dimensions
+                      box=image.bounding_box()
+                      record['rendered_box']=box
+                      assert box and box['width']>300 and abs(box['width']-box['height'])<1, box
+                      record['horizontal_overflow']=page.evaluate('document.documentElement.scrollWidth > window.innerWidth + 1')
+                      assert not record['horizontal_overflow'], 'Horizontal overflow'
+                      cropped=image.evaluate('''(img) => {
+                        const r=img.getBoundingClientRect(),found=[];
+                        for(let a=img.parentElement;a;a=a.parentElement){
+                          const s=getComputedStyle(a),b=a.getBoundingClientRect();
+                          if(['hidden','clip'].includes(s.overflowY)&&(r.top<b.top-1||r.bottom>b.bottom+1)) found.push(a.tagName);
+                        }
+                        return found;
+                      }''')
+                      record['cropped_by']=cropped
+                      assert not cropped, cropped
+                      assert page.get_by_role('link',name='Volver a Grupo Certeza',exact=False).get_attribute('href')=='/'
+                      image.evaluate('(img) => {const r=img.getBoundingClientRect();window.scrollTo(0,window.scrollY+r.bottom-window.innerHeight+10)}')
+                      record['footer_visible']=image.evaluate('(img) => {const r=img.getBoundingClientRect(); return document.elementFromPoint(r.x+r.width/2,Math.min(window.innerHeight-15,r.bottom-15))===img}')
+                      assert record['footer_visible'], 'Image bottom is covered or inaccessible'
+                      if label=='desktop': (output/'approved-source.png').write_bytes(raw)
+                      record['passed']=True
+                  finally:
+                      record['page_errors']=errors
+                      page.screenshot(path=str(output/f'{label}.png'),full_page=True)
+                      report.append(record)
+                      (output/'report.json').write_text(json.dumps(report,indent=2))
+                      print(json.dumps(record),flush=True)
+                      context.close()
               browser.close()
-          (output/'report.json').write_text(json.dumps(report,indent=2))
           print('PASS: public website serves the exact approved PNG; full image and footer visible at desktop, tablet and mobile widths.')
-          print(json.dumps(report))
           PY
       - name: Preserve visual verification evidence
         if: always()
