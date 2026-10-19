@@ -1,0 +1,41 @@
+name: Recorrido - diagnostico aislado temporal
+on:
+  push:
+    branches: ['codex/recorrido-catalogo-confirmado-20261019']
+    paths: ['.github/workflows/recorrido-diagnostico-temporal.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Export reviewed source and isolated test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic-export
+          git archive --format=tar.gz HEAD app lib components docs prisma package.json package-lock.json tsconfig.json AGENTS.md > diagnostic-export/source.tar.gz
+          node <<'JS'
+          const fs=require('node:fs');
+          const lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          const dependencies={};
+          for(const name of ['typescript','react','react-dom','date-fns','date-fns-tz']) {
+            const version=lock.packages['node_modules/'+name].version;
+            if(!/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(version)) throw new Error('Unexpected version');
+            dependencies[name]=version;
+          }
+          fs.mkdirSync(process.env.RUNNER_TEMP+'/recorrido-deps',{recursive:true});
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/recorrido-deps/package.json',JSON.stringify({private:true,dependencies}));
+          JS
+          npm install --prefix "$RUNNER_TEMP/recorrido-deps" --ignore-scripts --no-audit --no-fund
+          tar -czf diagnostic-export/test-dependencies.tar.gz -C "$RUNNER_TEMP/recorrido-deps" node_modules
+          git rev-parse HEAD > diagnostic-export/commit.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: recorrido-diagnostico-sin-datos
+          path: diagnostic-export/
+          retention-days: 1
