@@ -1,6 +1,7 @@
 "use server";
 
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
+import { fromZonedTime } from "date-fns-tz";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { obtenerUsuarioConAlcanceZona, puedeAccederZona } from "@/lib/alcance-zona";
@@ -15,10 +16,13 @@ export async function actualizarAgenda(formData: FormData) {
   const usuario=await gestorAgenda(); const inspeccionId=texto(formData,"inspeccionId"),fechaTexto=texto(formData,"fechaProgramada"),estadoTexto=texto(formData,"estado");
   const permitidos:EstadoInspeccion[]=[EstadoInspeccion.PROGRAMADA,EstadoInspeccion.EN_PROCESO,EstadoInspeccion.FINALIZADA];
   if(!inspeccionId||!fechaTexto||!permitidos.includes(estadoTexto as EstadoInspeccion)) volver("error","Fecha o estatus inválidos.");
-  const fechaProgramada=new Date(fechaTexto); if(Number.isNaN(fechaProgramada.getTime())) volver("error","La fecha agendada no es válida.");
-  const inspeccion=await prisma.inspeccion.findUnique({where:{id:inspeccionId},select:{id:true,folio:true,estado:true,fechaProgramada:true,cotizacionId:true,zonaId:true}});
+  const inspeccion=await prisma.inspeccion.findUnique({where:{id:inspeccionId},select:{id:true,folio:true,estado:true,fechaProgramada:true,cotizacionId:true,zonaId:true,zonaHoraria:true,zona:{select:{zonaHoraria:true}}}});
   if(!inspeccion) volver("error","La inspección no existe.");
   if(!puedeAccederZona(usuario,inspeccion.zonaId)) volver("error","No tienes acceso para modificar la agenda de otra zona.");
+  // Usar la misma zona que al mostrar Agenda y al crear la inspección.
+  const zonaHoraria=inspeccion.zona?.zonaHoraria??inspeccion.zonaHoraria??"America/Ciudad_Juarez";
+  const fechaProgramada=fromZonedTime(fechaTexto,zonaHoraria);
+  if(Number.isNaN(fechaProgramada.getTime())) volver("error","La fecha agendada no es válida.");
   await prisma.inspeccion.update({where:{id:inspeccionId},data:{fechaProgramada,estado:estadoTexto as EstadoInspeccion,agendadaPorId:usuario.id}});
   await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Inspeccion",entidadId:inspeccionId,usuarioId:usuario.id,descripcion:`${usuario.rol} actualizó Agenda de ${inspeccion.folio}: fecha ${inspeccion.fechaProgramada.toISOString()} → ${fechaProgramada.toISOString()}, estatus ${inspeccion.estado} → ${estadoTexto}.`});
   revalidatePath("/panel/agenda");revalidatePath("/panel/inspecciones");revalidatePath("/panel/cotizaciones");revalidatePath("/panel/caja");volver("ok","Agenda actualizada correctamente.");

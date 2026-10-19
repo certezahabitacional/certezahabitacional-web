@@ -1,0 +1,53 @@
+name: Agenda - zona horaria
+
+on:
+  pull_request:
+    paths:
+      - 'app/panel/agenda/**'
+      - 'tests/agenda-zona-horaria.test.cjs'
+      - '.github/workflows/agenda-zona-horaria.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Prepare isolated test dependencies from existing locked versions
+        # The root lockfile predates unrelated mobile dependencies. Do not
+        # regenerate production dependencies as part of an Agenda fix.
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const dependencies = {};
+          for (const name of ['date-fns', 'date-fns-tz', 'react', 'typescript']) {
+            const version = lock.packages?.['node_modules/' + name]?.version;
+            if (!version || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+              throw new Error('Missing exact locked version: ' + name);
+            }
+            dependencies[name] = version;
+          }
+          const target = path.join(process.env.RUNNER_TEMP, 'agenda-test-deps');
+          fs.mkdirSync(target, { recursive: true });
+          fs.writeFileSync(path.join(target, 'package.json'), JSON.stringify({ private: true, dependencies }));
+          console.log('Testing locked versions:', dependencies);
+          JS
+          npm install --prefix "$RUNNER_TEMP/agenda-test-deps" --ignore-scripts --no-audit --no-fund
+      - name: Verify local scheduling with different server time zones
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NODE_PATH="$RUNNER_TEMP/agenda-test-deps/node_modules"
+          for zone in UTC America/Mexico_City America/Tijuana; do
+            echo "Server TZ=$zone"
+            TZ="$zone" node --test tests/agenda-zona-horaria.test.cjs
+          done
