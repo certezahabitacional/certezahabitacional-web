@@ -5,7 +5,7 @@ SET search_path TO 'public','pg_temp'
 AS $validated_catalog$
 DECLARE
   plan jsonb; p jsonb; s jsonb; c jsonb; n integer; cod text; aid uuid;
-  revisada text; resultado text; conceptos_encontrados integer; total integer; ids uuid[] := '{}';
+  revisada text; v_resultado text; conceptos_encontrados integer; total integer; ids uuid[] := '{}';
 BEGIN
   SELECT "partidas" INTO plan FROM public."PlanPrevioInspeccion"
   WHERE "inspeccionId"=p_inspeccion AND "confirmadoEn" IS NOT NULL;
@@ -23,11 +23,11 @@ BEGIN
       SELECT count(*) INTO total FROM public."AreaInspeccion"
       WHERE "inspeccionId"=p_inspeccion AND "origen"='PLAN_PREVIO' AND "codigo"=cod AND "nombre"=s->>'nombre';
       IF total<>1 THEN RAISE EXCEPTION 'Subpartida faltante o ambigua: %',s->>'nombre' USING ERRCODE='23514'; END IF;
-      SELECT "id","estado","resultado" INTO aid,revisada,resultado FROM public."AreaInspeccion"
+      SELECT "id","estado","resultado" INTO aid,revisada,v_resultado FROM public."AreaInspeccion"
       WHERE "inspeccionId"=p_inspeccion AND "origen"='PLAN_PREVIO' AND "codigo"=cod AND "nombre"=s->>'nombre';
       IF aid=ANY(ids) THEN RAISE EXCEPTION 'Subpartida repetida en el plan.' USING ERRCODE='23514'; END IF;
       ids:=array_append(ids,aid);
-      IF revisada IS DISTINCT FROM 'REVISADA' OR resultado IS NULL OR resultado NOT IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA') THEN
+      IF revisada IS DISTINCT FROM 'REVISADA' OR v_resultado IS NULL OR v_resultado NOT IN ('SIN_HALLAZGOS','CON_HALLAZGOS','NO_APLICA') THEN
         RAISE EXCEPTION 'Falta el cierre explicito de %',s->>'nombre' USING ERRCODE='23514';
       END IF;
       IF jsonb_typeof(s->'conceptos') IS DISTINCT FROM 'array' OR jsonb_array_length(s->'conceptos')=0 THEN
