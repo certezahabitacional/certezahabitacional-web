@@ -1,0 +1,39 @@
+name: Catalogo - validacion completa aislada
+on:
+  push:
+    branches: ['codex/recorrido-catalogo-confirmado-20261019']
+    paths: ['.ci/**', '.github/workflows/catalogo-validacion-completa.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Apply reviewed changes only to this isolated checkout
+        run: python3 .ci/apply-catalogo.py
+      - name: Verify formatting of the changes
+        run: git diff --check
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Generate Prisma client
+        run: npx --no-install prisma generate
+      - name: Compile complete application
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Export validation summary
+        if: always()
+        run: |
+          mkdir -p catalogo-validation
+          git diff --stat > catalogo-validation/changed-files.txt
+          git diff --binary > catalogo-validation/reviewed-source.patch
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: catalogo-full-build-validation
+          path: catalogo-validation/
+          retention-days: 1
