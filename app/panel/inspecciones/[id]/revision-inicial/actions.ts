@@ -9,10 +9,9 @@ import { auth } from "@/auth";
 import { obtenerAsignacionesInspeccion } from "@/lib/asignaciones-inspeccion";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { validarLiberacionCampoDesdeCaja } from "@/lib/caja-validaciones";
+import { materializarPlanConfirmado } from "@/lib/materializar-plan-confirmado";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import { prisma } from "@/lib/prisma";
-import { incorporarAdicionalesConfirmados } from "@/lib/incorporar-adicionales-plan-previo";
-import { crearAreasDesdePlanConfirmado } from "@/lib/crear-areas-plan-confirmado";
-import { vincularConceptosConAreasPlan } from "@/lib/vincular-conceptos-areas-plan";
 import { eliminarArchivoStorage, subirArchivoStorage } from "@/lib/storage-gateway";
 
 const TIPOS = new Set([
@@ -297,16 +296,8 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   }
   if (Number(pendientes[0]?.total ?? 0) > 0) volver(inspeccionId, "error", "Hay solicitudes de corrección pendientes. No se puede iniciar la inspección todavía.");
 
-  // Evitar que un plan preliminar ya creado se omita al iniciar.
-  // Inspecciones programadas antiguas sin plan conservan su flujo original.
-  const planesPendientes = await prisma.$queryRaw<Array<{pendiente: boolean}>>`
-    SELECT EXISTS (
-      SELECT 1 FROM "PlanPrevioInspeccion"
-      WHERE "inspeccionId"=${inspeccionId} AND "confirmadoEn" IS NULL
-    ) AS "pendiente"
-  `;
-  if (planesPendientes[0]?.pendiente) {
-    volver(inspeccionId, "error", "Confirma el plan previo de partidas y conceptos antes de iniciar la inspección.");
+  if (inspeccion.numeroInspeccion === 1 && !(await obtenerPlanConfirmado(inspeccionId))) {
+    volver(inspeccionId, "error", "Guarda y confirma el plan de partidas y conceptos antes de iniciar la inspección.");
   }
 
   if (!inspeccion.cotizacionId) volver(inspeccionId, "error", "La inspección no tiene cotización asociada.");
@@ -317,41 +308,18 @@ export async function iniciarInspeccionConfirmada(formData: FormData) {
   if (inspeccion.requiereGerenteZona && !asignaciones.gerenteId) volver(inspeccionId, "error", "La inspección requiere Gerente y todavía no tiene uno asignado.");
   if (inspeccion.requiereCoordinador && !asignaciones.coordinadorId) volver(inspeccionId, "error", "La inspección requiere Coordinador y todavía no tiene uno asignado.");
 
-  await crearAreasDesdePlanConfirmado(inspeccionId);
-  await incorporarAdicionalesConfirmados(inspeccionId, usuario.id);
-  await vincularConceptosConAreasPlan(inspeccionId);
-  // No iniciar una inspección con un plan previo confirmado incompleto.
-  // En expedientes históricos sin ese plan se conserva el flujo anterior.
-  const [planConfirmado] = await prisma.$queryRaw<Array<{ confirmado: boolean }>>`
-    SELECT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" WHERE "inspeccionId"=${inspeccionId} AND "confirmadoEn" IS NOT NULL) AS "confirmado"
-  `;
-  if (planConfirmado?.confirmado) {
-    const [integridad] = await prisma.$queryRaw<Array<{ areas: number; conceptos: number; esperados: number; desvinculados: number; vacias: number }>>`
-      SELECT
-        (SELECT COUNT(*)::int FROM "AreaInspeccion" a
-          WHERE a."inspeccionId"=${inspeccionId} AND a."origen"='PLAN_PREVIO') AS "areas",
-        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
-          WHERE g."inspeccionId"=${inspeccionId} AND g."origen"='PLAN_PREVIO') AS "conceptos",
-        (SELECT COUNT(*)::int
-         FROM "PlanPrevioInspeccion" p
-         CROSS JOIN LATERAL jsonb_array_elements(p."partidas") partida
-         CROSS JOIN LATERAL jsonb_array_elements(partida->'subpartidas') subpartida
-         CROSS JOIN LATERAL jsonb_array_elements(subpartida->'conceptos') concepto
-         WHERE p."inspeccionId"=${inspeccionId} AND p."confirmadoEn" IS NOT NULL
-        ) AS "esperados",
-        (SELECT COUNT(*)::int FROM "GuiaInspeccionItem" g
-          WHERE g."inspeccionId"=${inspeccionId} AND g."origen"='PLAN_PREVIO'
-            AND g."areaId" IS NULL) AS "desvinculados",
-        (SELECT COUNT(*)::int FROM "AreaInspeccion" a
-          WHERE a."inspeccionId"=${inspeccionId} AND a."origen"='PLAN_PREVIO'
-            AND NOT EXISTS (SELECT 1 FROM "GuiaInspeccionItem" g WHERE g."areaId"=a."id")) AS "vacias"
-    `;
-    if (!integridad || integridad.areas===0 || integridad.conceptos===0 ||
-        integridad.desvinculados>0 || integridad.vacias>0 || integridad.conceptos!==integridad.esperados) {
-      volver(inspeccionId,"error","El plan confirmado tiene áreas sin conceptos o conceptos sin vincular. Solicita revisar la preparación antes de iniciar la inspección.");
-    }
+  try {
+    await prisma.$transaction(async tx => {
+      const [actual] = await tx.$queryRaw<Array<{estado: string}>>`
+        SELECT "estado"::text FROM "Inspeccion" WHERE "id"=${inspeccionId} FOR UPDATE
+      `;
+      if (actual?.estado !== "PROGRAMADA") throw new Error("La inspección ya fue iniciada por otro usuario.");
+      if (inspeccion.numeroInspeccion === 1) await materializarPlanConfirmado(tx, inspeccionId, usuario.id);
+      await tx.inspeccion.update({where:{id:inspeccionId},data:{estado:EstadoInspeccion.EN_PROCESO}});
+    }, {timeout:60000, isolationLevel:"Serializable"});
+  } catch (e) {
+    volver(inspeccionId, "error", e instanceof Error ? e.message : "No se pudo preparar el recorrido. No se inició la inspección.");
   }
-  await prisma.inspeccion.update({ where: { id: inspeccionId }, data: { estado: EstadoInspeccion.EN_PROCESO } });
   const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
   await registrarAuditoria({
     tipo: TipoEvento.EDITAR,

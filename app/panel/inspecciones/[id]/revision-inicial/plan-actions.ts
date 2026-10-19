@@ -1,4 +1,5 @@
 "use server";
+import { exigirPersistenciaSeguraPlan } from "@/lib/seguridad-plan-confirmado";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -55,6 +56,8 @@ export async function guardarAuditoriaPrevia(formData: FormData) {
       }
     }
   }
+  try { await exigirPersistenciaSeguraPlan(prisma); }
+  catch (e) { redirect(`/panel/inspecciones/${id}/revision-inicial?error=${encodeURIComponent(e instanceof Error ? e.message : "Protección del plan pendiente de validar.")}`); }
   const actualizadas = await prisma.$executeRaw`
     INSERT INTO "PlanPrevioInspeccion" ("inspeccionId","partidas","actualizadoPorId")
     VALUES (${id}, ${JSON.stringify(partidas)}::jsonb, ${usuario.id})
@@ -100,6 +103,8 @@ export async function agregarConceptoPrevio(formData: FormData) {
   if(!sub) redirect(`${destino}?error=Area%20no%20encontrada`);
   if(sub.conceptos.some(x=>x.nombre.toLocaleLowerCase("es-MX")===concepto.toLocaleLowerCase("es-MX"))) redirect(`${destino}?error=Concepto%20ya%20existente`);
   sub.conceptos.push({nombre:concepto,aplica:true,adicional:true} as {nombre:string;aplica:boolean});
+  try { await exigirPersistenciaSeguraPlan(prisma); }
+  catch (e) { redirect(`/panel/inspecciones/${id}/revision-inicial?error=${encodeURIComponent(e instanceof Error ? e.message : "Protección del plan pendiente de validar.")}`); }
   await prisma.$executeRaw`
     INSERT INTO "PlanPrevioInspeccion" ("inspeccionId","partidas","actualizadoPorId")
     VALUES (${id},${JSON.stringify(partidas)}::jsonb,${usuario.id})
@@ -138,7 +143,7 @@ export async function confirmarPlanPrevio(formData: FormData) {
   // La vinculación con el recorrido usa el nombre de subpartida.
   // Si se repite, dos áreas distintas pueden compartir conceptos o perderlos.
   const subpartidas=partidas.flatMap(p=>Array.isArray(p.subpartidas)?p.subpartidas:[]);
-  const normalizar=(valor:string)=>valor.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().replace(/\\s+/g," ").toLocaleLowerCase("es-MX");
+  const normalizar=(valor:string)=>valor.normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().replace(/\s+/g," ").toLocaleLowerCase("es-MX");
   const nombres=new Set<string>();
   for (const sub of subpartidas) {
     if (typeof sub.nombre!=="string" || !sub.nombre.trim() || !Array.isArray(sub.conceptos) || sub.conceptos.length===0) {
@@ -166,6 +171,8 @@ export async function confirmarPlanPrevio(formData: FormData) {
     });
   });
   if (!valido) redirect(`${destino}?error=${encodeURIComponent("El plan no contiene todos los conceptos base declarados. Guarda de nuevo la auditoría.")}`);
+  try { await exigirPersistenciaSeguraPlan(prisma); }
+  catch (e) { redirect(`/panel/inspecciones/${id}/revision-inicial?error=${encodeURIComponent(e instanceof Error ? e.message : "Protección del plan pendiente de validar.")}`); }
   const resultado=await prisma.$executeRaw`
     UPDATE "PlanPrevioInspeccion" SET "confirmadoEn"=NOW(),"confirmadoPorId"=${usuario.id},
       "actualizadoEn"=NOW(),"actualizadoPorId"=${usuario.id}
@@ -174,5 +181,5 @@ export async function confirmarPlanPrevio(formData: FormData) {
   if (resultado===0) redirect(`${destino}?error=${encodeURIComponent("El plan ya fue confirmado por otro usuario.")}`);
   await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"PlanPrevioInspeccion",entidadId:id,inspeccionId:id,usuarioId:usuario.id,descripcion:"Confirmó el plan previo de partidas y conceptos para la inspección."});
   revalidatePath(destino);
-  redirect(`${destino}?ok=${encodeURIComponent("Plan previo confirmado. La guía de campo se actualizará en la siguiente etapa.")}`);
+  redirect(`${destino}?ok=${encodeURIComponent("Plan previo confirmado. El recorrido se cargará con este catálogo al iniciar.")}`);
 }

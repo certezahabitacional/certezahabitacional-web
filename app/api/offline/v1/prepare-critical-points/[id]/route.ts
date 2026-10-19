@@ -1,3 +1,4 @@
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import { randomUUID } from "node:crypto";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -83,6 +84,10 @@ export async function POST(
 
   if (!permitido || !usuario || !inspeccion) {
     return NextResponse.json({ error: "No tienes acceso para preparar esta inspección." }, { status: 403 });
+  }
+
+  if (await obtenerPlanConfirmado(id)) {
+    return NextResponse.json({ error: "El plan confirmado no utiliza la preparación de puntos críticos anterior. Continúa en el recorrido del catálogo aprobado." }, { status: 409 });
   }
 
   if (!control?.proyectoConfirmado) {

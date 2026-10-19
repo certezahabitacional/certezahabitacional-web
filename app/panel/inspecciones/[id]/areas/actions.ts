@@ -1,4 +1,5 @@
 "use server";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 
 import { randomUUID } from "node:crypto";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
@@ -133,6 +134,7 @@ async function exigirResponsableV1(inspeccionId: string) {
   const inspectorAsignado = usuario.rol === RolUsuario.INSPECTOR && Boolean(usuario.inspector?.activo) && inspeccion.inspectorId === usuario.inspector?.id;
   const directorPorAusencia = usuario.rol === RolUsuario.DIRECTOR && !inspeccion.inspectorId;
   if (!inspectorAsignado && !directorPorAusencia) redirect("/acceso");
+  if (await obtenerPlanConfirmado(inspeccionId)) redirect(`/panel/inspecciones/${inspeccionId}/campo-v1`);
   if (inspeccion.numeroInspeccion !== 1) volver(inspeccionId, "error", "La cobertura integral por áreas corresponde a V1.");
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) volver(inspeccionId, "error", "Las áreas solo pueden documentarse mientras la inspección está EN PROCESO.");
 

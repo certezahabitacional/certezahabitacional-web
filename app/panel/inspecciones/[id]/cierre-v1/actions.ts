@@ -13,6 +13,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { obtenerMetricasV1 } from "@/lib/calificacion-v1";
+import { obtenerPlanConfirmado, validarCierrePlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import { prisma } from "@/lib/prisma";
 
 const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
@@ -58,6 +59,7 @@ async function exigirInspectorV1(inspeccionId: string) {
 }
 
 async function validarCierreCampo(inspeccionId: string) {
+  if (await obtenerPlanConfirmado(inspeccionId)) return validarCierrePlanConfirmado(inspeccionId);
   // Reparación defensiva: si todos los conceptos de una partida están resueltos,
   // la partida no debe permanecer PENDIENTE por un estado padre desfasado.
   await prisma.$executeRaw`

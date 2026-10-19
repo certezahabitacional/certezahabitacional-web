@@ -1,4 +1,5 @@
 "use server";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 
 import { randomUUID } from "node:crypto";
 import { EstadoInspeccion, RolUsuario, TipoEvento } from "@prisma/client";
@@ -149,6 +150,7 @@ async function exigirAreaActivaV1(inspeccionId: string, areaId: string) {
     WHERE "inspeccionId"=${inspeccionId}
       AND "id"=${areaId}::uuid
       AND "tipo" <> 'PUNTO_CRITICO'
+      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
       AND COALESCE("excluirReporte",false)=false
     LIMIT 1
   `;
@@ -162,6 +164,7 @@ async function siguienteAreaPendienteV1(inspeccionId: string) {
     FROM "AreaInspeccion"
     WHERE "inspeccionId"=${inspeccionId}
       AND "tipo" <> 'PUNTO_CRITICO'
+      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
       AND "estado" <> 'REVISADA'
     ORDER BY "orden","nombre"
     LIMIT 1
@@ -173,6 +176,7 @@ export async function inicializarPlanAreasV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  if (await obtenerPlanConfirmado(inspeccionId)) volver(inspeccionId, "ok", "El recorrido del plan confirmado ya está preparado.");
 
   const [plan] = await prisma.$queryRaw<Array<{ perfil: string; estado: string; seleccion: unknown }>>`
     SELECT "perfil","estado","seleccion"
@@ -204,6 +208,7 @@ export async function inicializarPlanAreasV1(formData: FormData) {
       SELECT "id"::text,"codigo","nombre","origen","bibliotecaAreaId"::text
       FROM "AreaInspeccion"
       WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
+      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
       ORDER BY "orden","nombre"
     `;
 
@@ -388,6 +393,7 @@ export async function marcarPuntoRevisadoV1(formData: FormData) {
   const itemId = texto(formData, "itemId");
   if (!inspeccionId || !itemId) redirect("/panel/inspecciones");
   const { usuario, responsable } = await exigirResponsableV1(inspeccionId);
+  if (await obtenerPlanConfirmado(inspeccionId)) volver(inspeccionId, "error", "Registra el resultado y las evidencias desde el concepto del plan confirmado.");
 
   const [item] = await prisma.$queryRaw<Array<{ areaId: string; concepto: string; estadoV3: string }>>`
     SELECT "areaId"::text AS "areaId","concepto","estadoV3"
@@ -556,6 +562,7 @@ export async function reactivarPartidaAreaV1(formData: FormData) {
     SELECT "nombre","resultado"
     FROM "AreaInspeccion"
     WHERE "id"=${areaId}::uuid AND "inspeccionId"=${inspeccionId}
+      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
     LIMIT 1
   `;
   if (!area) volver(inspeccionId, "error", "Partida no encontrada.", areaId);

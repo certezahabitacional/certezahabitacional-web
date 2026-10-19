@@ -164,7 +164,7 @@ export default async function RevisionInicialPage({
   const etapaSeleccion = fotos.length === 4 && !fotos.some((f) => f.candidataPortada);
   const puedeTomarFotos = responsableRevision;
   const puedeSolicitar = responsableRevision;
-  const puedeIniciar = responsableRevision && Boolean(fotoDefinitiva) && pendientes.length === 0;
+  const puedeIniciar = responsableRevision && Boolean(fotoDefinitiva) && pendientes.length === 0 && (inspeccion.numeroInspeccion !== 1 || Boolean(planGuardado?.confirmadoEn));
 
   const areasDeclaradas = AREAS_BOOLEANAS
     .filter(([campo]) => snapshot[campo] === true)
@@ -177,7 +177,7 @@ export default async function RevisionInicialPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente</Link>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href={`/panel/inspecciones/${id}/plan-inspeccion`} className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">VER PLAN COMPLETO DE INSPECCIÓN</Link>
+            <Link href="#auditoria-previa" className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-200">VER PLAN COMPLETO DE INSPECCIÓN</Link>
             <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-slate-300">{inspeccion.folio}</span>
           </div>
         </div>
@@ -287,7 +287,7 @@ export default async function RevisionInicialPage({
         <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
           <p className="text-xs font-black uppercase tracking-widest text-cyan-300">PASO 2 · PROYECTOS DIGITALES O PLANTILLAS</p>
           <h2 className="mt-2 text-xl font-black">Vista previa de partidas según cotización</h2>
-          <p className="mt-2 text-sm text-slate-400">Catálogo preliminar basado en la información declarada. No modifica conceptos existentes. La carga de proyectos y la auditoría editable se incorporarán en la siguiente etapa.</p>
+          <p className="mt-2 text-sm text-slate-400">Catálogo aprobado basado en las áreas declaradas en la cotización. Revisa su aplicabilidad y confirma el plan antes de iniciar.</p>
           <a href={`/panel/inspecciones/${id}/catalogo-previo/csv`} className="mt-4 inline-flex rounded-xl border border-cyan-300/30 px-4 py-3 text-sm font-black text-cyan-200">DESCARGAR CATÁLOGO PARA REVISIÓN SIN INTERNET (CSV)</a>
           <p className="mt-2 text-xs text-slate-500">Puedes anotar Aplica y Observaciones en la hoja descargada. Los cambios en ese archivo aún no se importan al sistema.</p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -303,7 +303,7 @@ export default async function RevisionInicialPage({
         <section className="mt-7 rounded-3xl border border-violet-300/20 bg-slate-900 p-5 sm:p-6">
           <p className="text-xs font-black uppercase tracking-widest text-violet-300">PASO 3 · AUDITORÍA PREVIA DE PARTIDAS Y CONCEPTOS</p>
           <h2 className="mt-2 text-xl font-black">Revisar conceptos antes del recorrido</h2>
-          <p className="mt-2 text-sm text-slate-400">Despliega cada partida para consultar el detalle de todos los conceptos propuestos. Esta revisión aún es informativa; la edición y confirmación guardada del plan se habilitarán por separado. Ningún concepto existente se modifica aquí.</p>
+          <p className="mt-2 text-sm text-slate-400">Despliega cada partida para consultar el detalle de todos los conceptos propuestos. La aplicabilidad y los conceptos adicionales se guardan en la auditoría de abajo. El recorrido usará exclusivamente ese plan confirmado.</p>
           <div className="mt-4 space-y-3">
             {vistaPreviaPartidasCotizadas(snapshot).map((partida) => (
               <details key={partida.orden} className="rounded-xl border border-white/10 bg-slate-950 p-4">
@@ -326,8 +326,9 @@ export default async function RevisionInicialPage({
         </section>
 
         <section className="mt-7 rounded-3xl border border-violet-300/20 bg-slate-900 p-5 sm:p-6">
-          <h2 className="text-xl font-black text-violet-200">Auditoría preliminar: aplicabilidad</h2>
+          <h2 id="auditoria-previa" className="scroll-mt-28 text-xl font-black text-violet-200">Auditoría previa: partidas y conceptos</h2>
           <p className="mt-2 text-sm text-slate-400">Marca los conceptos que no corresponden a la vivienda y guarda tu revisión. No modifica la guía definitiva ni las evidencias registradas.</p>
+          <p className="mt-3 text-sm font-bold text-amber-200">Para iniciar: guarda la auditoría y confirma el plan. No se cargará la plantilla anterior.</p>
           <form action={guardarAuditoriaPrevia} className="mt-4 space-y-3">
             <input type="hidden" name="inspeccionId" value={id}/>
             {vistaPreviaPartidasCotizadas(snapshot).map(partida => (
