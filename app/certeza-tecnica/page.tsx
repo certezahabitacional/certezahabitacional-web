@@ -15,9 +15,9 @@ export default function CertezaTecnicaPage() {
         <span style={{ color: "#edcb71", fontWeight: 700 }}>CERTEZA TÉCNICA</span>
       </header>
       <section aria-label="Portafolio de servicios de Certeza Técnica" style={{ padding: "0 12px", margin: "0 auto", maxWidth: 1400, height: "auto", overflow: "visible" }}>
-        {/* Conservar el arte autorizado: cargar el PNG completo, no el derivado de /_next/image. */}
+        {/* Servir el PNG autorizado completo sin modificar sus pixeles. */}
         <Image
-          src="/branding/portafolio-servicios-certeza-tecnica.png?v=7a1af69dfb31"
+          src="/branding/portafolio-servicios-certeza-tecnica.png?v=0d7528594def"
           alt="Infografía del portafolio de Certeza Técnica: Presupuestos y Costos; Planeación y Administración; Supervisión y Auditoría; Dirección y Desarrollo. Sitio www.certezahabitacional.com."
           width={1254}
           height={1254}
