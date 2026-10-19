@@ -1,3 +1,4 @@
+import RecorridoConceptos, { RetomarRecorrido } from "@/components/inspecciones/RecorridoConceptos";
 import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
@@ -19,7 +20,6 @@ import { obtenerSupabaseAdminOpcional } from "@/lib/supabase-admin";
 import CapturaCamara from "./CapturaCamara";
 import CargaGaleriaConPreview from "./CargaGaleriaConPreview";
 import BotonGenerarIa from "./BotonGenerarIa";
-import RestaurarFocoConcepto from "./RestaurarFocoConcepto";
 import OfflineManualCriticalResult from "@/components/offline/OfflineManualCriticalResult";
 import OfflineCriticalNoAplicaForm from "@/components/offline/OfflineCriticalNoAplicaForm";
 import {
@@ -338,7 +338,6 @@ export default async function PuntosCriticosPage({
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-7 text-white">
-      <RestaurarFocoConcepto itemId={query.foco} />
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-black text-cyan-300">RECORRIDO ÚNICO · {totalRecorrido} PARTIDAS</p>
@@ -361,6 +360,7 @@ export default async function PuntosCriticosPage({
           </div>
         )}
 
+        <div className="mt-4"><RetomarRecorrido usuarioId={session.user.id} inspeccionId={id} /></div>
         <section className="mt-6 grid gap-2 md:grid-cols-8">
           <Link
             href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`}
@@ -492,6 +492,7 @@ export default async function PuntosCriticosPage({
 
         {datos.configurado && datos.aplica && (
           <section className="mt-7 space-y-4">
+            <RecorridoConceptos key={codigoSolicitado} usuarioId={session.user.id} inspeccionId={id} partida={punto.etiqueta} ruta={`/panel/inspecciones/${id}/puntos-criticos?punto=${codigoSolicitado}`} conceptos={itemsNormales.map(({id, concepto, estadoV3})=>({id, concepto, estadoV3}))}>
             {itemsNormales.map((item, index) => {
               const obs = observacionItem(item.observacion);
               const fotosItem = fotos.filter((foto) => foto.guiaItemId === item.id);
@@ -760,6 +761,7 @@ export default async function PuntosCriticosPage({
                 </article>
               );
             })}
+            </RecorridoConceptos>
 
             {puedeCapturar && paso.estado !== "COMPLETADO" && paso.estado !== "NO_APLICA" && (
               <form action={agregarConceptoManualPuntoCriticoV1} className="rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
