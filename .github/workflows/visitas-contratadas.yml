@@ -1,0 +1,71 @@
+name: Visitas contratadas - pruebas aisladas
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'lib/visitas-*.ts'
+      - 'app/panel/cotizaciones/visitas/**'
+      - 'app/panel/cotizaciones/layout.tsx'
+      - 'app/panel/inspecciones/nueva/**'
+      - 'tests/visitas-*.cjs'
+      - 'tests/fixtures/visitas-cotizacion.sql'
+      - '.github/workflows/visitas-contratadas.yml'
+permissions:
+  contents: read
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16.10
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: visitas_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitas_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/visitas_test?schema=public
+      PGPASSWORD: postgres
+      CH_VISITAS_CONTRATADAS: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SUPABASE_URL: https://visitas-test.invalid
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-only-not-a-real-key
+      AUTH_SECRET: isolated-ci-test-only-not-a-production-secret
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Preparar dependencias sin credenciales productivas
+        run: |
+          rm -f .env .env.local .env.production .env.production.local .env.development .env.development.local
+          node --version
+          npm ci --ignore-scripts
+          npx prisma generate
+      - name: Preparar base efimera
+        run: |
+          psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 -c 'CREATE SEQUENCE "Cliente_folio_seq";'
+          npx prisma db push --skip-generate
+          psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 -f tests/fixtures/visitas-cotizacion.sql
+      - name: Pruebas de importes y persistencia
+        run: |
+          npx tsc lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts --outDir .test-visitas --target es2020 --module commonjs --moduleResolution node --strict --skipLibCheck
+          node --test tests/visitas-contrato.test.cjs tests/visitas-integracion.test.cjs
+      - name: Generar nombre de migracion con CLI, sin aplicar a ningun proyecto
+        run: |
+          npx --yes supabase@2.81.3 --help > /dev/null
+          npx --yes supabase@2.81.3 migration --help > /dev/null
+          npx --yes supabase@2.81.3 migration new --help > /dev/null
+          npx --yes supabase@2.81.3 migration new visitas_cotizacion_importe
+          file=$(find supabase/migrations -name '*_visitas_cotizacion_importe.sql' | sort | tail -n 1)
+          test -n "$file"
+          cp tests/fixtures/visitas-cotizacion.sql "$file"
+          echo "Migracion generada (NO aplicada): $file"
+          echo "Migracion generada (NO aplicada): $file" >> "$GITHUB_STEP_SUMMARY"
+      - name: Compilacion completa
+        run: npm run build
