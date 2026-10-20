@@ -1,0 +1,67 @@
+name: V2 - preparar lockfile para revision
+on:
+  push:
+    branches: [codex/visitas-importe-contratado]
+    paths: ['.github/workflows/visitas-lockfile-revision.yml']
+permissions:
+  contents: read
+jobs:
+  candidato:
+    if: github.repository == 'certezahabitacional/certezahabitacional-web' && github.ref == 'refs/heads/codex/visitas-importe-contratado'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Preparar candidato sin ejecutar scripts ni alterar el manifiesto
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/visitas-lock" "$RUNNER_TEMP/visitas-lock-entrega"
+          cp package.json package-lock.json "$RUNNER_TEMP/visitas-lock/"
+          cp package-lock.json "$RUNNER_TEMP/visitas-lock/anterior.json"
+          cd "$RUNNER_TEMP/visitas-lock"
+          node --version
+          npm --version
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/
+          cmp package.json "$GITHUB_WORKSPACE/package.json"
+          npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/
+          node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const path = require('node:path');
+          const old = JSON.parse(fs.readFileSync('anterior.json', 'utf8'));
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const bytes = fs.readFileSync('package-lock.json');
+          const lock = JSON.parse(bytes);
+          if (lock.lockfileVersion !== 3) throw new Error('Formato inesperado');
+          for (const section of ['dependencies', 'devDependencies']) {
+            const expected = Object.entries(pkg[section] || {}).sort();
+            const actual = Object.entries(lock.packages[''][section] || {}).sort();
+            if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('El manifiesto no coincide');
+          }
+          for (const [name, entry] of Object.entries(lock.packages)) {
+            if (!name || entry.link) continue;
+            if (!entry.integrity || !entry.resolved?.startsWith('https://registry.npmjs.org/')) throw new Error('Paquete sin origen o integridad permitidos: ' + name);
+          }
+          const changed = Object.keys(lock.packages).filter(p => old.packages[p] && old.packages[p].version !== lock.packages[p].version).map(p => ({paquete:p, anterior:old.packages[p].version, candidato:lock.packages[p].version}));
+          const added = Object.keys(lock.packages).filter(p => !old.packages[p]).map(p => ({paquete:p, version:lock.packages[p].version}));
+          const removed = Object.keys(old.packages).filter(p => !lock.packages[p]);
+          const report = {baseCommit:process.env.GITHUB_SHA, node:process.version, manifestSinCambios:true, npmCi:'SUCCESS', sha256:crypto.createHash('sha256').update(bytes).digest('hex'), changed, added, removed};
+          const out = path.join(process.env.RUNNER_TEMP, 'visitas-lock-entrega');
+          fs.copyFileSync('package.json', path.join(out, 'package.json'));
+          fs.copyFileSync('package-lock.json', path.join(out, 'package-lock.json'));
+          fs.writeFileSync(path.join(out, 'revision.json'), JSON.stringify(report,null,2));
+          console.log('BASE_COMMIT=' + report.baseCommit);
+          console.log('LOCK_SHA256=' + report.sha256);
+          console.log('PAQUETES_EXISTENTES_MODIFICADOS=' + JSON.stringify(changed));
+          console.log('NPM_CI=SUCCESS; MANIFEST_SIN_CAMBIOS; SIN_COMMIT_NI_DESPLIEGUE');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, 'Candidato de lockfile generado y npm ci aprobado. Manifiesto sin cambios. ' + changed.length + ' paquetes existentes modificados y ' + added.length + ' agregados. Requiere revision: no se integra ni se publica automaticamente.\n');
+          NODE
+      - name: Entregar candidato y diferencias para revision
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: visitas-lockfile-candidato
+          path: ${{ runner.temp }}/visitas-lock-entrega/
+          retention-days: 7
+          if-no-files-found: error
