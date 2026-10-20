@@ -239,10 +239,10 @@ export default async function CierreV1Page({ params, searchParams }: {
           <section className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
             <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Revisión con el cliente · antes de retirarse</p>
             <h2 className="mt-2 text-xl font-black">Revisa el PRE REPORTE y corrige lo necesario antes de firmas</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">Si detectas una omisión, vuelve al recorrido desde la Partida 1. Cuando termines los ajustes, registra las firmas del Inspector y del Cliente.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Si detectas una omisión, abre el recorrido vigente y selecciona la partida o concepto que deseas corregir. Cuando termines los ajustes, registra las firmas del Inspector y del Cliente.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl border border-white/15 px-4 py-3 text-center text-sm font-black">CONSULTAR PRE REPORTE</Link>
-              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-4 py-3 text-center text-sm font-black text-slate-950">REVISAR Y AJUSTAR · PARTIDA 1</Link>
+              <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl bg-violet-300 px-4 py-3 text-center text-sm font-black text-slate-950">REVISAR Y AJUSTAR</Link>
               <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-300 px-4 py-3 text-center text-sm font-black text-slate-950">PASAR A FIRMAS</Link>
             </div>
           </section>
@@ -255,10 +255,10 @@ export default async function CierreV1Page({ params, searchParams }: {
         {inspeccion.estado === EstadoInspeccion.EN_PROCESO && inspeccionConcluida && firmasListas && (
           <section className="mt-5 rounded-3xl border border-violet-300/20 bg-violet-300/5 p-6">
             <p className="text-xs font-black uppercase tracking-widest text-violet-300">Firmas completas · última revisión del Inspector</p>
-            <h2 className="mt-2 text-xl font-black">Vuelve al recorrido desde la Partida 1 y regenera el PRE REPORTE</h2>
+            <h2 className="mt-2 text-xl font-black">Revisa las partidas y conceptos y regenera el PRE REPORTE</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">Después de cualquier ajuste, vuelve al PRE REPORTE y genera una nueva versión. Desde esa pantalla aparecerán únicamente las opciones REVISAR Y AJUSTAR y AUTORIZACIÓN DEL REPORTE.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">VOLVER AL RECORRIDO · PARTIDA 1</Link>
+              <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl bg-violet-300 px-5 py-4 text-center text-sm font-black text-slate-950">VOLVER AL RECORRIDO</Link>
               <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-cyan-300 px-5 py-4 text-center text-sm font-black text-slate-950">PRE REPORTE · REGENERAR / AUTORIZAR</Link>
             </div>
           </section>

@@ -78,7 +78,7 @@ export default async function InspeccionLayout({ children, params }: { children:
     { n: 2, titulo: "Validar datos", href: `/panel/inspecciones/${id}/revision-inicial` },
     { n: 3, titulo: "Desarrollo de inspección", href: `/panel/inspecciones/${id}/flujo` },
     { n: 4, titulo: "Generar PRE REPORTE", href: `/panel/inspecciones/${id}/reporte-v1` },
-    { n: 5, titulo: "Revisión y ajustes", href: `/panel/inspecciones/${id}/revision-final-inspector` },
+    { n: 5, titulo: "Revisión y ajustes", href: `/panel/inspecciones/${id}/campo-v1` },
     { n: 6, titulo: "Enviar / autorización Dirección", href: inspeccion.estado === EstadoInspeccion.FINALIZADA ? `/panel/inspecciones/${id}/reporte-v1` : `/panel/inspecciones/${id}/cierre-v1` },
   ];
 

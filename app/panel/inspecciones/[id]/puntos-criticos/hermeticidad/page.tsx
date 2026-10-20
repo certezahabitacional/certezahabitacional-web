@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 
@@ -149,6 +150,12 @@ export default async function HermeticidadPage({
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const consulta = usuario.rol === RolUsuario.GERENTE || usuario.rol === RolUsuario.COORDINADOR;
   if (!esInspector && !esDirector && !consulta) redirect("/acceso");
+
+  // Las pruebas del plan confirmado se revisan dentro de sus partidas.
+  // Un marcador o enlace anterior no debe volver a mostrar el panel legado.
+  if (await obtenerPlanConfirmado(id)) {
+    redirect(`/panel/inspecciones/${id}/campo-v1`);
+  }
 
   const puedeCapturar =
     (esInspector && inspeccion.estado === EstadoInspeccion.EN_PROCESO) ||
