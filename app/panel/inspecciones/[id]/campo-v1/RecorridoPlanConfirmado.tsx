@@ -28,6 +28,10 @@ export default async function RecorridoPlanConfirmado({usuarioId,inspeccionId:id
     SELECT (SELECT COUNT(*)::int FROM "FotografiaArea" WHERE "areaId"=${seleccion.area.id}::uuid) AS "fotos",
       (SELECT COUNT(*)::int FROM "Hallazgo" WHERE "inspeccionId"=${id} AND ("areaId"=${seleccion.area.id}::uuid OR "area"=${seleccion.nombre})) AS "hallazgos"
   `;
+  const [control]=await prisma.$queryRaw<Array<{inspeccionTecnicaConcluidaEn:Date|null}>>`
+    SELECT "inspeccionTecnicaConcluidaEn" FROM "InspeccionControlV2" WHERE "inspeccionId"=${id} LIMIT 1
+  `;
+  const inspeccionConcluida=Boolean(control?.inspeccionTecnicaConcluidaEn);
   const previos=subs.slice(0,subs.indexOf(seleccion)).reduce((n,s)=>n+s.items.length,0);
   const base=`/panel/inspecciones/${id}/campo-v1`;
   const disabled=seleccion.area.resultado==="NO_APLICA";
@@ -47,7 +51,7 @@ export default async function RecorridoPlanConfirmado({usuarioId,inspeccionId:id
     <p className="mt-2 text-sm text-slate-400">El alcance corresponde a la vivienda cotizada. Los No aplica y las subpartidas deshabilitadas conservan su motivo; no se consideran pruebas realizadas.</p>
     {(query.ok||query.error)&&<p role="status" className={`mt-4 rounded-xl border p-4 ${query.error?"border-rose-300/30 text-rose-200":"border-emerald-300/30 text-emerald-200"}`}>{query.error??query.ok}</p>}
     <p className="mt-3 rounded-xl border border-amber-300/20 p-3 text-sm text-amber-200">Preparación sin conexión del nuevo catálogo pendiente de validación. Por ahora utiliza este recorrido con Internet; no descargues el recorrido anterior para este expediente.</p>
-    <div className="mt-4"><RetomarRecorrido usuarioId={usuarioId} inspeccionId={id}/></div>
+    <div className="mt-4 flex flex-wrap items-center gap-3"><RetomarRecorrido usuarioId={usuarioId} inspeccionId={id}/>{inspeccionConcluida&&<Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">VOLVER AL REPORTE</Link>}</div>
     <div className="mt-6 grid gap-5 lg:grid-cols-[310px_minmax(0,1fr)]">
       <nav aria-label="Partidas del plan confirmado" className="space-y-3">
         {partidas.map(p=><section key={p.orden} className="rounded-2xl border border-white/10 bg-slate-900 p-4">
@@ -73,6 +77,7 @@ export default async function RecorridoPlanConfirmado({usuarioId,inspeccionId:id
         </div>}
       </section>
     </div>
-    {puedeCapturar&&<form action={concluirInspeccionTecnicaV1} className="mt-8 rounded-2xl border border-cyan-300/20 p-5"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="retorno" value="campo"/><p>Para concluir deben estar cerradas todas las subpartidas y resueltos todos los conceptos del plan. Se comprobarán portada, hallazgos y sincronizaciones pendientes.</p><button disabled={cerradas!==subs.length || total!==resueltos} className="mt-4 rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:opacity-30">CONCLUIR INSPECCIÓN TÉCNICA</button></form>}
+    {inspeccionConcluida&&<section aria-label="Finalizar revisión" className="mt-8 rounded-2xl border border-emerald-300/30 bg-emerald-300/5 p-5"><h2 className="text-xl font-black">¿Terminaste la revisión y los ajustes?</h2><p className="mt-2 text-sm text-slate-300">Guarda los cambios de cada concepto antes de salir. Vuelve al reporte para revisar el resultado actualizado; el Inspector podrá regenerarlo y solicitar la autorización de Dirección cuando estén completas las firmas y los requisitos de la inspección.</p><Link href={`/panel/inspecciones/${id}/reporte-v1`} className="mt-4 inline-block rounded-xl bg-emerald-300 px-5 py-3 font-black text-slate-950">TERMINAR REVISIÓN Y VOLVER AL REPORTE</Link></section>}
+    {puedeCapturar&&!inspeccionConcluida&&<form action={concluirInspeccionTecnicaV1} className="mt-8 rounded-2xl border border-cyan-300/20 p-5"><input type="hidden" name="inspeccionId" value={id}/><input type="hidden" name="retorno" value="campo"/><p>Para concluir deben estar cerradas todas las subpartidas y resueltos todos los conceptos del plan. Se comprobarán portada, hallazgos y sincronizaciones pendientes.</p><button disabled={cerradas!==subs.length || total!==resueltos} className="mt-4 rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 disabled:opacity-30">CONCLUIR INSPECCIÓN TÉCNICA</button></form>}
   </div></main>;
 }
