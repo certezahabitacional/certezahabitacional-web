@@ -694,18 +694,18 @@ export default async function ReporteV1Page({ params, searchParams }: {
           ) : !firmasCompletasReporte ? (
             <>
               <h2 className="mt-2 text-xl font-black">Revisión con el cliente antes de firmas</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este REPORTE con el cliente. Si detectas una omisión o ajuste, vuelve al recorrido desde la Partida 1. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Revisa este REPORTE con el cliente. Si detectas una omisión o ajuste, abre el recorrido vigente y selecciona la partida o concepto que deseas corregir. Cuando ambos estén conformes con la revisión en sitio, registra las firmas antes de que el cliente se retire.</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR · DESDE PARTIDA 1</Link>
+                <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
                 <Link href={`/panel/inspecciones/${id}/firmas`} className="rounded-xl bg-cyan-800 px-5 py-4 text-center text-sm font-black text-white">PASAR A FIRMAS</Link>
               </div>
             </>
           ) : (
             <>
               <h2 className="mt-2 text-xl font-black">Firmas registradas · revisión final antes de Dirección</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes volver a recorrer la inspección desde la Partida 1. Después de cualquier ajuste, regenera el REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes revisar y corregir las partidas y conceptos en el recorrido vigente. Después de cualquier ajuste, regenera el REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                <Link href={`/panel/inspecciones/${id}/puntos-criticos/hermeticidad?fase=inicio`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
+                <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
                 {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR REPORTE</div>}
                 {esInspector ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white">SOLICITAR AUTORIZACIÓN DEL REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-500">La solicitud de autorización corresponde al Inspector</div>}
               </div>

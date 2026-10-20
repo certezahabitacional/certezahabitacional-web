@@ -34,8 +34,16 @@ export default async function RecorridoPlanConfirmado({usuarioId,inspeccionId:id
   return <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6"><div className="mx-auto max-w-7xl">
     <Link href={`/panel/inspecciones/${id}`} className="text-sm font-black text-cyan-300">← Expediente {folio}</Link>
     <p className="mt-5 text-xs font-black uppercase tracking-widest text-amber-300">Catálogo aprobado · plan confirmado</p>
-    <h1 className="mt-2 text-3xl font-black">Recorrido por partidas y conceptos</h1>
-    <p className="mt-3 text-slate-300">{completas}/{partidas.length} partidas cerradas · {cerradas}/{subs.length} subpartidas · {resueltos}/{total} conceptos resueltos</p>
+    <h1 className="mt-2 text-3xl font-black">Desarrollo de partidas y conceptos</h1>
+    <dl aria-label="Estadísticas del plan vigente" className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {[
+        {nombre:"Partidas",valor:partidas.length,detalle:`${completas} cerradas`},
+        {nombre:"Subpartidas",valor:subs.length,detalle:`${cerradas} cerradas`},
+        {nombre:"Conceptos",valor:total,detalle:`${resueltos} resueltos`},
+        {nombre:"Conceptos pendientes",valor:total-resueltos,detalle:"Por resolver"},
+        {nombre:"Avance de conceptos",valor:`${total?Math.round(resueltos/total*100):0}%`,detalle:`${resueltos} de ${total} resueltos`},
+      ].map(({nombre,valor,detalle})=><div key={nombre} className="rounded-2xl border border-white/10 bg-slate-900 p-4"><dt className="text-sm text-slate-300">{nombre}</dt><dd className="mt-2 text-3xl font-black text-cyan-300">{valor}</dd><dd className="mt-1 text-xs text-slate-400">{detalle}</dd></div>)}
+    </dl>
     <p className="mt-2 text-sm text-slate-400">El alcance corresponde a la vivienda cotizada. Los No aplica y las subpartidas deshabilitadas conservan su motivo; no se consideran pruebas realizadas.</p>
     {(query.ok||query.error)&&<p role="status" className={`mt-4 rounded-xl border p-4 ${query.error?"border-rose-300/30 text-rose-200":"border-emerald-300/30 text-emerald-200"}`}>{query.error??query.ok}</p>}
     <p className="mt-3 rounded-xl border border-amber-300/20 p-3 text-sm text-amber-200">Preparación sin conexión del nuevo catálogo pendiente de validación. Por ahora utiliza este recorrido con Internet; no descargues el recorrido anterior para este expediente.</p>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 
@@ -48,6 +49,12 @@ export default async function RevisionFinalInspectorPage({
     usuario.inspector?.id === inspeccion.inspectorId;
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   if (!esInspector && !esDirector) redirect("/acceso");
+
+  // La revisión del plan vigente usa el mismo recorrido de captura.
+  // No presentar un segundo panel con herramientas del catálogo anterior.
+  if (await obtenerPlanConfirmado(id)) {
+    redirect(`/panel/inspecciones/${id}/campo-v1`);
+  }
 
   const [control] = await prisma.$queryRaw<Control[]>`
     SELECT "inspeccionTecnicaConcluidaEn","campoFinalizadoEn","preReporteGeneradoEn","revisionInspectorFinalEn"
