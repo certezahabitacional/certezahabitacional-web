@@ -30,6 +30,7 @@ export default async function VisitasCotizacionPage({ searchParams }: { searchPa
   }
   const dinero = (n: unknown) => Number(n ?? 0).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
   const vinculos = contexto?.vinculos ?? [];
+  const folioOrigen = contexto?.origen.folio ?? "";
   const numero = (id: string) => vinculos.find(v => v.cotizacionVisitaId === id)?.numeroVisita ?? 1;
   return <main className="min-h-screen bg-slate-950 px-6 py-8 text-white"><div className="mx-auto max-w-5xl">
     <Link href="/panel/cotizaciones" className="text-cyan-300">Volver a cotizaciones</Link>
@@ -40,10 +41,10 @@ export default async function VisitasCotizacionPage({ searchParams }: { searchPa
     <p className="mt-2 text-xs text-slate-500">Se muestran hasta 50 coincidencias; busca el folio para localizar expedientes anteriores.</p>
     {error && <p role="alert" className="mt-5 text-rose-200">{error}</p>}
     {contexto && <>
-      <section className="mt-6 rounded-2xl border border-white/10 p-5"><h2 className="font-black text-cyan-200">{contexto.origen.folio}</h2><p>{contexto.origen.cliente.nombre} — {contexto.origen.inmueble?.alias}</p><p className="text-sm text-slate-400">{contexto.origen.inmueble?.direccion}</p></section>
+      <section className="mt-6 rounded-2xl border border-white/10 p-5"><h2 className="font-black text-cyan-200">{folioOrigen}</h2><p>{contexto.origen.cliente.nombre} — {contexto.origen.inmueble?.alias}</p><p className="text-sm text-slate-400">{contexto.origen.inmueble?.direccion}</p></section>
       <div className="mt-5 space-y-3">{[...contexto.visitas].sort((a, b) => numero(a.id) - numero(b.id)).map(v => {
         const financiero = calcularResumenFinancieroCaja({ importe: Number(v.total), pagado: Number(v.montoPagado) });
-        return <article key={v.id} className="rounded-2xl border border-white/10 p-4"><h3 className="font-bold">{contexto.origen.folio} — V{numero(v.id)}</h3><p className="mt-2 text-sm">Contratado: {dinero(v.total)} | Pagado: {dinero(v.montoPagado)} | Saldo: {dinero(financiero.saldo)}</p><div className="mt-3 flex flex-wrap gap-4 text-sm text-cyan-300"><Link href={`/panel/caja?q=${encodeURIComponent(v.folio)}`}>Abrir en Caja</Link>{v.inspeccion ? <Link href={`/panel/inspecciones/${v.inspeccion.id}`}>Ver inspección V{numero(v.id)} — {v.inspeccion.estado}</Link> : v.estado === EstadoCotizacion.AUTORIZADA && financiero.cumpleApertura50 ? <Link href={`/panel/inspecciones/nueva?cotizacionId=${v.id}`}>Agendar V{numero(v.id)}</Link> : <span className="text-amber-200">Pendiente de anticipo del 50%</span>}</div></article>;
+        return <article key={v.id} className="rounded-2xl border border-white/10 p-4"><h3 className="font-bold">{folioOrigen} — V{numero(v.id)}</h3><p className="mt-2 text-sm">Contratado: {dinero(v.total)} | Pagado: {dinero(v.montoPagado)} | Saldo: {dinero(financiero.saldo)}</p><div className="mt-3 flex flex-wrap gap-4 text-sm text-cyan-300"><Link href={`/panel/caja?q=${encodeURIComponent(v.folio)}`}>Abrir en Caja</Link>{v.inspeccion ? <Link href={`/panel/inspecciones/${v.inspeccion.id}`}>Ver inspección V{numero(v.id)} — {v.inspeccion.estado}</Link> : v.estado === EstadoCotizacion.AUTORIZADA && financiero.cumpleApertura50 ? <Link href={`/panel/inspecciones/nueva?cotizacionId=${v.id}`}>Agendar V{numero(v.id)}</Link> : <span className="text-amber-200">Pendiente de anticipo del 50%</span>}</div></article>;
       })}</div>
       {contexto.bloqueo ? <p className="mt-6 rounded-xl border border-amber-300/20 p-4 text-amber-200">{contexto.bloqueo}</p> : contexto.antecedente && <ImporteVisitaForm key={contexto.antecedente.id} cotizacionId={contexto.origen.id} inspeccionAnteriorId={contexto.antecedente.id} numeroVisita={contexto.numeroVisita} />}
     </>}

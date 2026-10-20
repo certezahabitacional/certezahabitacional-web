@@ -23,11 +23,18 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Invariante tambien en BD: ninguna accion heredada puede desviar el seguimiento.
 CREATE FUNCTION public.validar_inspeccion_visita_contratada() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp AS $$
 DECLARE vinculo record;
 BEGIN
+  -- No permitir que una accion heredada elimine la referencia financiera de V2.
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD."cotizacionId" IS DISTINCT FROM NEW."cotizacionId" AND EXISTS (
+      SELECT 1 FROM public."CotizacionVisita" WHERE "cotizacionVisitaId" = OLD."cotizacionId"
+    ) THEN
+      RAISE EXCEPTION 'No se puede desvincular la inspeccion de su visita contratada' USING ERRCODE = '23514';
+    END IF;
+  END IF;
   SELECT v."inspeccionAnteriorId", v."numeroVisita", c."clienteId", c."inmuebleId", c."zonaId"
     INTO vinculo FROM public."CotizacionVisita" v
     JOIN public."Cotizacion" c ON c."id" = v."cotizacionOrigenId"

@@ -44,6 +44,7 @@ jobs:
           cp tests/fixtures/visitas-cotizacion.sql "$RUNNER_TEMP/visitas-ci/tests/fixtures/"
           cp prisma/schema.prisma "$RUNNER_TEMP/visitas-ci/prisma/"
           cp tests/visitas-package.json "$RUNNER_TEMP/visitas-ci/package.json"
+          node tests/visitas-preparar-esquema.cjs "$RUNNER_TEMP/visitas-ci/prisma/schema.prisma"
           cd "$RUNNER_TEMP/visitas-ci"
           npm install --ignore-scripts --no-audit --no-fund
           npx prisma generate
