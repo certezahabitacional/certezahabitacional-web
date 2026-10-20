@@ -1,5 +1,6 @@
 import { RetomarRecorrido } from "@/components/inspecciones/RecorridoConceptos";
 import Link from "next/link";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import {
   EstadoInspeccion,
   EstadoPago,
@@ -388,6 +389,7 @@ export default async function ExpedientePage({
     rolActual === RolUsuario.GERENTE;
   const esDirector =
     rolActual === RolUsuario.DIRECTOR;
+  const usaPlanConfirmado=inspeccion.numeroInspeccion===1 && Boolean(await obtenerPlanConfirmado(id));
 
   const puedeAsignarInspector =
     esGerente || esDirector;
@@ -1276,7 +1278,7 @@ export default async function ExpedientePage({
           />
         </section>
 
-        <section className="mt-7 rounded-3xl border border-cyan-400/20 bg-slate-900 p-6">
+        {!usaPlanConfirmado&&<section className="mt-7 rounded-3xl border border-cyan-400/20 bg-slate-900 p-6">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">
@@ -1758,7 +1760,7 @@ export default async function ExpedientePage({
               </div>
             )}
           </div>
-        </section>
+        </section>}
 
         <div className="mt-7 grid gap-7 xl:grid-cols-[360px_1fr]">
           <aside className="space-y-7">
@@ -1785,7 +1787,12 @@ export default async function ExpedientePage({
               </div>
             </section>
 
-            <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
+            {usaPlanConfirmado&&<section className="rounded-3xl border border-white/10 bg-slate-900 p-6"><h2 className="text-xl font-black">Continuar inspección</h2><div className="mt-5 grid gap-3">
+              <Link href={`/panel/inspecciones/${id}/reporte-v1`} className="rounded-xl bg-cyan-300 px-4 py-3 text-center font-black text-slate-950">VER REPORTE</Link>
+              {inspeccion.estado===EstadoInspeccion.REPORTE_PENDIENTE&&esDirector&&<Link href={`/panel/inspecciones/${id}/revision`} className="rounded-xl bg-violet-300 px-4 py-3 text-center font-black text-slate-950">REVISAR Y AUTORIZAR REPORTE</Link>}
+              {!expedienteFinalizado&&!expedienteCancelado&&<Link href={`/panel/inspecciones/${id}/${inspeccion.estado===EstadoInspeccion.PROGRAMADA?"revision-inicial":"campo-v1"}`} className="rounded-xl border border-white/15 px-4 py-3 text-center font-black">{inspeccion.estado===EstadoInspeccion.PROGRAMADA?"REVISAR PREPARACIÓN":"VER PARTIDAS Y CONCEPTOS"}</Link>}
+            </div></section>}
+            {!usaPlanConfirmado&&<section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
               <h2 className="text-xl font-black">Acciones</h2>
               <div className="mt-5 grid gap-3">
                 {capturaSoloLectura ? (
@@ -1912,7 +1919,7 @@ export default async function ExpedientePage({
                   </button>
                 </form>
               )}
-            </section>
+            </section>}
           </aside>
 
           <div className="space-y-7">
@@ -2026,7 +2033,7 @@ export default async function ExpedientePage({
               )}
             </section>
 
-            <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
+            {!usaPlanConfirmado&&<section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
               <h2 className="text-2xl font-black">Hallazgo rápido</h2>
               {capturaSoloLectura ? (
                 <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -2074,7 +2081,7 @@ export default async function ExpedientePage({
                 </div>
               </form>
               )}
-            </section>
+            </section>}
           </div>
         </div>
       </div>

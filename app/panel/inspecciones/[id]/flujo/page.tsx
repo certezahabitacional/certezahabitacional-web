@@ -35,6 +35,10 @@ export default async function FlujoV1Page({
     redirect(`/panel/inspecciones/${id}/captura`);
   }
 
+  if ([EstadoInspeccion.REPORTE_PENDIENTE,EstadoInspeccion.FINALIZADA].some(e=>e===inspeccion.estado)) {
+    redirect(`/panel/inspecciones/${id}/reporte-v1`);
+  }
+
   const [control] = await prisma.$queryRaw<Array<{
     proyectoConfirmado: boolean;
     areasConfirmadas: boolean;
@@ -49,6 +53,10 @@ export default async function FlujoV1Page({
     LIMIT 1
   `;
 
+  if (await obtenerPlanConfirmado(id)) {
+    redirect(`/panel/inspecciones/${id}/${control?.inspeccionTecnicaConcluidaEn?"reporte-v1":"campo-v1"}`);
+  }
+
   if (control?.revisionInspectorFinalEn || control?.campoFinalizadoEn) {
     redirect(`/panel/inspecciones/${id}/cierre-v1`);
   }
@@ -59,7 +67,6 @@ export default async function FlujoV1Page({
     redirect(`/panel/inspecciones/${id}/reporte-v1`);
   }
 
-  if (await obtenerPlanConfirmado(id)) redirect(`/panel/inspecciones/${id}/campo-v1`);
 
   if (!control?.proyectoConfirmado) {
     redirect(`/panel/inspecciones/${id}/proyecto-v1`);

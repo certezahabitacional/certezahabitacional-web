@@ -46,7 +46,7 @@ function accion({rol=RolUsuario.DIRECTOR,asignado=true,firmas=true,activo=true}=
 for(const rol of [RolUsuario.DIRECTOR,RolUsuario.INSPECTOR]) {
   test(`servidor permite solicitar a ${rol} sin autorizar automáticamente`,async()=>{
     const {ejecutar,escrituras}=accion({rol});
-    await assert.rejects(ejecutar(),/REDIRECT:\/panel\/inspecciones\/prueba\?ok=/);
+    await assert.rejects(ejecutar(),new RegExp(`REDIRECT:/panel/inspecciones/prueba/${rol===RolUsuario.DIRECTOR?'revision':'reporte-v1'}\\?ok=`));
     assert.equal(escrituras.length,1);
     assert.equal(escrituras[0].data.estado,EstadoInspeccion.REPORTE_PENDIENTE);
   });
