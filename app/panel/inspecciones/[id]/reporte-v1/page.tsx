@@ -706,8 +706,8 @@ export default async function ReporteV1Page({ params, searchParams }: {
               <p className="mt-2 text-sm leading-6 text-slate-700">Antes de enviar a Dirección puedes revisar y corregir las partidas y conceptos en el recorrido vigente. Después de cualquier ajuste, regenera el REPORTE. La autorización se habilita cuando la versión vigente fue generada después de las firmas.</p>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 <Link href={`/panel/inspecciones/${id}/campo-v1`} className="rounded-xl bg-violet-700 px-5 py-4 text-center text-sm font-black text-white">REVISAR Y AJUSTAR</Link>
-                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-400">REGENERAR REPORTE</div>}
-                {esInspector ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white">SOLICITAR AUTORIZACIÓN DEL REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-500">La solicitud de autorización corresponde al Inspector</div>}
+                {esInspector ? <form action={confirmarPreReporteSitioV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl border-2 border-cyan-800 px-5 py-4 text-sm font-black text-cyan-900">REGENERAR REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-500">La versión vigente se genera al solicitar autorización.</div>}
+                {puedeOperarPreReporte ? <form action={enviarReporteDireccionV1}><input type="hidden" name="inspeccionId" value={id}/><button className="h-full w-full rounded-xl bg-cyan-800 px-5 py-4 text-sm font-black text-white">SOLICITAR AUTORIZACIÓN DEL REPORTE</button></form> : <div className="rounded-xl border-2 border-slate-300 px-5 py-4 text-center text-sm font-black text-slate-500">No tienes permiso para solicitar autorización</div>}
               </div>
               {!preReportePosteriorAFirmas && <p className="mt-3 text-xs font-bold text-amber-700">Al solicitar la autorización, el sistema generará automáticamente la versión vigente del REPORTE si hace falta y la enviará a Dirección.</p>}
             </>
@@ -729,7 +729,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       {esDirector && inspeccion.estado !== "REPORTE_PENDIENTE" && !autorizado && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-slate-300 bg-white p-4">
           <p className="text-sm font-bold text-slate-600">
-            Dirección podrá revisar y autorizar cuando el Inspector envíe el REPORTE mediante “AUTORIZACIÓN DEL REPORTE”.
+            Puedes enviar el reporte mediante “SOLICITAR AUTORIZACIÓN DEL REPORTE”. Después se habilitará la revisión y autorización de Dirección.
           </p>
         </section>
       )}
