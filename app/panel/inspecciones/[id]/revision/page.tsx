@@ -66,7 +66,7 @@ export default async function RevisionPage({ params, searchParams }: { params: P
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={`/panel/inspecciones/${id}`} className="text-sm font-bold text-cyan-300">← Volver al expediente</Link>
+          <Link href={esV1?`/panel/inspecciones/${id}/reporte-v1`:`/panel/inspecciones/${id}`} className="text-sm font-bold text-cyan-300">{esV1?"← Volver al reporte":"← Volver al expediente"}</Link>
           <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-slate-300">{inspeccion.folio} · V{inspeccion.numeroInspeccion}</span>
         </div>
 
@@ -88,8 +88,8 @@ export default async function RevisionPage({ params, searchParams }: { params: P
 
         <header className="mt-5 rounded-3xl border border-cyan-400/20 bg-slate-900 p-6">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">Control de revisión</p>
-          <h1 className="mt-2 text-3xl font-black">Revisión y liberación Método Certeza®</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Esta pantalla usa la validación real del Método Certeza. V1 puede quedar completa sin defectos si toda la vivienda fue documentada; V2+ se valida por el seguimiento de pendientes heredados y los nuevos hallazgos que realmente existan.</p>
+          <h1 className="mt-2 text-3xl font-black">{esV1?"Revisión y autorización del reporte":"Revisión y liberación Método Certeza®"}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-400">{esV1?"Revisa el reporte de la inspección y sus firmas antes de autorizarlo o devolverlo con observaciones.":"El seguimiento se valida por sus pendientes heredados y los nuevos hallazgos documentados."}</p>
         </header>
 
         <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

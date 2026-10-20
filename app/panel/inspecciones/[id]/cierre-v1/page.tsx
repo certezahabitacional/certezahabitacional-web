@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { obtenerPlanConfirmado } from "@/lib/recorrido-plan-confirmado";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 
@@ -78,6 +79,13 @@ export default async function CierreV1Page({ params, searchParams }: {
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
   const consulta = ([RolUsuario.DIRECTOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol);
   if (!esInspector && !consulta) redirect("/acceso");
+
+  if ([EstadoInspeccion.REPORTE_PENDIENTE].some(estado=>estado===inspeccion.estado) || await obtenerPlanConfirmado(id)) {
+    const retorno=new URLSearchParams();
+    if(query.ok) retorno.set("ok",query.ok);
+    if(query.error) retorno.set("error",query.error);
+    redirect(`/panel/inspecciones/${id}/reporte-v1${retorno.size?`?${retorno}`:""}`);
+  }
 
   const [estado] = await prisma.$queryRaw<Estado[]>`
     SELECT
