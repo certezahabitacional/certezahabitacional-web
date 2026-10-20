@@ -352,6 +352,9 @@ export async function confirmarRevisionFinalInspectorV1(formData: FormData) {
 
 export async function enviarReporteDireccionV1(formData: FormData) {
   const inspeccionId = texto(formData, "inspeccionId");
+  function volverAlReporte(id:string,tipo:"ok"|"error",mensaje:string):never {
+    redirect(`/panel/inspecciones/${id}/reporte-v1?${tipo}=${encodeURIComponent(mensaje)}`);
+  }
   if (!inspeccionId) redirect("/panel/inspecciones");
   const { usuario, inspeccion } = await exigirInspectorV1(inspeccionId);
 
@@ -414,7 +417,7 @@ export async function enviarReporteDireccionV1(formData: FormData) {
   const firmaInspector = firmasVigentes.some((firma) => firma.tipo.toLowerCase().includes("inspector"));
   const firmaCliente = firmasVigentes.some((firma) => firma.tipo.toLowerCase().includes("cliente"));
   if (!firmaInspector || !firmaCliente) {
-    volver(
+    volverAlReporte(
       inspeccionId,
       "error",
       reabiertaEn
@@ -453,7 +456,7 @@ export async function enviarReporteDireccionV1(formData: FormData) {
   } catch (e) {
     const mensaje = e instanceof Error ? e.message : "";
     const idx = mensaje.indexOf("No se puede finalizar");
-    volver(inspeccionId, "error", idx >= 0 ? mensaje.slice(idx).split("\n")[0] : "No fue posible solicitar la autorización del PRE REPORTE a Dirección. Revisa los requisitos pendientes.");
+    volverAlReporte(inspeccionId, "error", idx >= 0 ? mensaje.slice(idx).split("\n")[0] : "No fue posible solicitar la autorización del PRE REPORTE a Dirección. Revisa los requisitos pendientes.");
   }
 
   await registrarAuditoria({
@@ -470,7 +473,9 @@ export async function enviarReporteDireccionV1(formData: FormData) {
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}`);
   revalidatePath(`/panel/inspecciones/${inspeccionId}/revision`);
-  redirect(`/panel/inspecciones/${inspeccionId}?ok=${encodeURIComponent("PRE REPORTE enviado a Dirección. El Inspector queda en modo de solo lectura hasta autorización o devolución con observaciones.")}`);
+  revalidatePath(`/panel/inspecciones/${inspeccionId}/reporte-v1`);
+  const destino=usuario.rol===RolUsuario.DIRECTOR?"revision":"reporte-v1";
+  redirect(`/panel/inspecciones/${inspeccionId}/${destino}?ok=${encodeURIComponent("PRE REPORTE enviado a Dirección. El Inspector queda en modo de solo lectura hasta autorización o devolución con observaciones.")}`);
 }
 
 export async function devolverReporteInspectorV1(formData: FormData) {
