@@ -1558,6 +1558,8 @@ export async function actualizarHallazgo(formData: FormData) {
       id: true,
       folio: true,
       estado: true,
+      numeroInspeccion: true,
+      inspeccionAnteriorId: true,
       inspector: {
         select: {
           usuarioId: true,
@@ -1757,11 +1759,94 @@ export async function finalizarCaptura(formData: FormData) {
     );
   }
 
-  if (inspeccion.hallazgos.length === 0) {
+  const esSeguimiento =
+    inspeccion.numeroInspeccion > 1 && Boolean(inspeccion.inspeccionAnteriorId);
+
+  if (!esSeguimiento && inspeccion.hallazgos.length === 0) {
     redirigirError(
       inspeccionId,
       "Registra al menos un hallazgo antes de finalizar la captura.",
     );
+  }
+
+  if (esSeguimiento) {
+    const [pendientes] = await prisma.$queryRaw<Array<{
+      antecedentesSinSeguimiento: number;
+      seguimientosInvalidos: number;
+      primerasRevisionesIncompletas: number;
+    }>>`
+      SELECT
+        (
+          SELECT COUNT(*)::int
+          FROM "Hallazgo" h
+          WHERE h."inspeccionId"=${inspeccion.inspeccionAnteriorId}
+            AND COALESCE(h."resuelto",false)=false
+            AND COALESCE(h."estadoSeguimiento"::text,'') <> 'CORREGIDO'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "Hallazgo" s
+              WHERE s."inspeccionId"=${inspeccionId}
+                AND s."hallazgoAnteriorId"=h."id"
+            )
+        ) AS "antecedentesSinSeguimiento",
+        (
+          SELECT COUNT(*)::int
+          FROM "Hallazgo" s
+          WHERE s."inspeccionId"=${inspeccionId}
+            AND s."hallazgoAnteriorId" IS NOT NULL
+            AND (
+              s."estadoSeguimiento" IS NULL
+              OR s."estadoSeguimiento"::text NOT IN (
+                'CORREGIDO',
+                'PARCIALMENTE_CORREGIDO',
+                'NO_CORREGIDO',
+                'CORRECCION_NO_SATISFACTORIA',
+                'NO_VERIFICABLE'
+              )
+              OR NULLIF(BTRIM(COALESCE(s."observacionSeguimiento",'')),'') IS NULL
+            )
+        ) AS "seguimientosInvalidos",
+        (
+          SELECT COUNT(*)::int
+          FROM "GuiaInspeccionItem" g
+          WHERE g."inspeccionId"=${inspeccionId}
+            AND COALESCE(g."observacion",'') LIKE '%"tipo":"PRIMERA_REVISION_V2"%'
+            AND (
+              g."estadoV3"='PENDIENTE'
+              OR g."completado"=false
+              OR (
+                g."estadoV3"='CON_HALLAZGO'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM "Hallazgo" h
+                  WHERE h."inspeccionId"=${inspeccionId}
+                    AND h."guiaItemId"=g."id"
+                )
+              )
+            )
+        ) AS "primerasRevisionesIncompletas"
+    `;
+
+    if (Number(pendientes?.antecedentesSinSeguimiento ?? 0) > 0) {
+      redirigirError(
+        inspeccionId,
+        `Faltan por verificar ${pendientes.antecedentesSinSeguimiento} hallazgo(s) pendiente(s) de V${inspeccion.numeroInspeccion - 1}.`,
+      );
+    }
+
+    if (Number(pendientes?.seguimientosInvalidos ?? 0) > 0) {
+      redirigirError(
+        inspeccionId,
+        `Hay ${pendientes.seguimientosInvalidos} seguimiento(s) sin estado u observación final válida.`,
+      );
+    }
+
+    if (Number(pendientes?.primerasRevisionesIncompletas ?? 0) > 0) {
+      redirigirError(
+        inspeccionId,
+        `Hay ${pendientes.primerasRevisionesIncompletas} concepto(s) iniciados como primera revisión en V${inspeccion.numeroInspeccion} que todavía no están cerrados.`,
+      );
+    }
   }
 
   await validarPagoCompleto(inspeccionId);
