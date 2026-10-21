@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/visitas-ci/lib" "$RUNNER_TEMP/visitas-ci/tests/fixtures" "$RUNNER_TEMP/visitas-ci/prisma"
-          cp lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts lib/caja-operaciones.ts "$RUNNER_TEMP/visitas-ci/lib/"
+          cp lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts lib/caja-operaciones.ts lib/caja-validaciones.ts "$RUNNER_TEMP/visitas-ci/lib/"
           cp tests/visitas-contrato.test.cjs tests/visitas-integracion.test.cjs tests/visitas-caja.test.cjs tests/visitas-vinculo.test.cjs "$RUNNER_TEMP/visitas-ci/tests/"
           cp tests/fixtures/visitas-cotizacion.sql "$RUNNER_TEMP/visitas-ci/tests/fixtures/"
           cp prisma/schema.prisma "$RUNNER_TEMP/visitas-ci/prisma/"
@@ -98,7 +98,7 @@ jobs:
           psql -h localhost -U postgres -d visitas_migracion -v ON_ERROR_STOP=1             -f "$GITHUB_WORKSPACE/supabase/migrations/20261020192609_visitas_cotizacion_importe.sql"
 
           psql -h localhost -U postgres -d visitas_migracion -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
+          DO $$
           BEGIN
             IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public."CotizacionVisita"'::regclass) THEN
               RAISE EXCEPTION 'RLS no quedo habilitado en CotizacionVisita';
@@ -112,7 +112,7 @@ jobs:
               RAISE EXCEPTION 'anon/authenticated conservaron EXECUTE en validar_inspeccion_visita_contratada';
             END IF;
           END
-          $;
+          $$;
           SQL
 
   recorrido-aplicacion:
@@ -137,6 +137,11 @@ jobs:
 
       - name: Generar Prisma Client para pruebas de aplicacion
         run: npx prisma generate
+
+      - name: Preparar Chromium para recorrido guiado
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install chromium
 
       - name: Agenda y zona horaria
         run: node --test tests/agenda-zona-horaria.test.cjs
