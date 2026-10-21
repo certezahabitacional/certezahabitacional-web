@@ -21,7 +21,7 @@ ALTER TABLE "CotizacionVisita" ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON TABLE "CotizacionVisita" FROM PUBLIC;
 
-DO $
+DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'REVOKE ALL ON TABLE public."CotizacionVisita" FROM anon';
@@ -30,7 +30,7 @@ BEGIN
     EXECUTE 'REVOKE ALL ON TABLE public."CotizacionVisita" FROM authenticated';
   END IF;
 END
-$;
+$$;
 
 CREATE FUNCTION public.validar_inspeccion_visita_contratada()
 RETURNS trigger
@@ -81,7 +81,7 @@ $$;
 
 REVOKE ALL ON FUNCTION public.validar_inspeccion_visita_contratada() FROM PUBLIC;
 
-DO $
+DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'REVOKE ALL ON FUNCTION public.validar_inspeccion_visita_contratada() FROM anon';
@@ -90,7 +90,7 @@ BEGIN
     EXECUTE 'REVOKE ALL ON FUNCTION public.validar_inspeccion_visita_contratada() FROM authenticated';
   END IF;
 END
-$;
+$$;
 
 CREATE TRIGGER inspeccion_visita_contratada
 BEFORE INSERT OR UPDATE OF
