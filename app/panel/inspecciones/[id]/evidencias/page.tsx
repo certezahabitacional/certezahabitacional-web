@@ -4,32 +4,14 @@ import {
   RolUsuario,
 } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   eliminarEvidencia,
   registrarEvidencia,
 } from "./actions";
 import EvidenciaSelector from "./EvidenciaSelector";
-
-function obtenerSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceRoleKey) {
-    throw new Error(
-      "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local",
-    );
-  }
-
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
 
 export default async function EvidenciasPage({
   params,
@@ -179,7 +161,7 @@ export default async function EvidenciasPage({
       )
     : undefined;
 
-  const supabase = obtenerSupabase();
+  const supabase = obtenerSupabaseAdmin();
   const bucket =
     process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
 

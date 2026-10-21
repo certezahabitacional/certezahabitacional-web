@@ -8,34 +8,15 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 import { auth } from "@/auth";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { invalidarPreReportePorAjusteV1 } from "@/lib/revision-pre-reporte-v1";
 
 const texto = (formData: FormData, campo: string) =>
   String(formData.get(campo) ?? "").trim();
-
-function obtenerSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceRoleKey) {
-    throw new Error(
-      "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local",
-    );
-  }
-
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
 
 function urlEvidencias(
   inspeccionId: string,
@@ -386,7 +367,7 @@ export async function registrarEvidencia(
   );
 
   const supabase =
-    obtenerSupabase();
+    obtenerSupabaseAdmin();
 
   const bucket =
     process.env
@@ -580,7 +561,7 @@ export async function eliminarEvidencia(
     )
   ) {
     const supabase =
-      obtenerSupabase();
+      obtenerSupabaseAdmin();
 
     const bucket =
       process.env
