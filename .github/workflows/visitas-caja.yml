@@ -38,7 +38,7 @@ jobs:
       - name: Preparar pruebas aisladas sin credenciales productivas
         run: |
           mkdir -p "$RUNNER_TEMP/caja-ci/lib" "$RUNNER_TEMP/caja-ci/tests/fixtures" "$RUNNER_TEMP/caja-ci/prisma" "$RUNNER_TEMP/caja-ci/app/panel/caja"
-          cp lib/caja-operaciones.ts lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts "$RUNNER_TEMP/caja-ci/lib/"
+          cp lib/caja-operaciones.ts lib/caja-validaciones.ts lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts "$RUNNER_TEMP/caja-ci/lib/"
           cp tests/visitas-contrato.test.cjs tests/visitas-integracion.test.cjs tests/visitas-caja.test.cjs tests/visitas-caja-interfaz.test.cjs tests/visitas-vinculo.test.cjs "$RUNNER_TEMP/caja-ci/tests/"
           cp app/panel/caja/page.tsx app/panel/caja/actions.ts "$RUNNER_TEMP/caja-ci/app/panel/caja/"
           cp tests/fixtures/visitas-cotizacion.sql "$RUNNER_TEMP/caja-ci/tests/fixtures/"
@@ -53,7 +53,7 @@ jobs:
           psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 -c 'CREATE SEQUENCE "Cliente_folio_seq";'
           npx prisma db push --skip-generate
           psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 -f tests/fixtures/visitas-cotizacion.sql
-      - name: Pruebas de dinero, persistencia, concurrencia y vinculos V1-V2
+      - name: Pruebas de dinero, persistencia, agenda, inicio y vinculos V1-V2
         run: |
           cd "$RUNNER_TEMP/caja-ci"
           npx tsc lib/caja-operaciones.ts lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts --outDir .test-visitas --target es2020 --module commonjs --moduleResolution node --strict --skipLibCheck
