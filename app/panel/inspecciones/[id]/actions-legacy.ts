@@ -1334,56 +1334,86 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
     );
   }
 
-  const hallazgoAnterior = await prisma.hallazgo.findFirst({
-    where: {
-      id: hallazgoAnteriorId,
-      inspeccionId: inspeccion.inspeccionAnteriorId,
-    },
-  });
-
-  if (!hallazgoAnterior) {
+  if (observacionSeguimiento.length < 3) {
     redirigirError(
       inspeccionId,
-      "El hallazgo antecedente no pertenece a la inspección anterior.",
+      "Describe lo observado durante la verificación actual.",
     );
   }
 
-  const yaRegistrado = await prisma.hallazgo.findFirst({
-    where: {
-      inspeccionId,
-      hallazgoAnteriorId,
-    },
-    select: { id: true },
+  const resultadoSeguimiento = await prisma.$transaction(async (tx) => {
+    const bloqueados = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "Hallazgo"
+      WHERE "id"=${hallazgoAnteriorId}
+        AND "inspeccionId"=${inspeccion.inspeccionAnteriorId}
+        AND COALESCE("resuelto",false)=false
+        AND COALESCE("estadoSeguimiento"::text,'') <> 'CORREGIDO'
+      FOR UPDATE
+    `;
+
+    if (!bloqueados[0]) {
+      return {
+        error:
+          "El hallazgo antecedente no pertenece a la inspección anterior o ya fue corregido.",
+      } as const;
+    }
+
+    const hallazgoAnterior = await tx.hallazgo.findUnique({
+      where: { id: hallazgoAnteriorId },
+    });
+
+    if (!hallazgoAnterior) {
+      return {
+        error: "El hallazgo antecedente ya no está disponible.",
+      } as const;
+    }
+
+    const yaRegistrado = await tx.hallazgo.findFirst({
+      where: {
+        inspeccionId,
+        hallazgoAnteriorId,
+      },
+      select: { id: true },
+    });
+
+    if (yaRegistrado) {
+      return {
+        error:
+          "Este hallazgo antecedente ya tiene seguimiento en la inspección actual.",
+      } as const;
+    }
+
+    const nuevoHallazgo = await tx.hallazgo.create({
+      data: {
+        inspeccionId,
+        creadoPorId: session.user.id,
+        hallazgoAnteriorId,
+        estadoSeguimiento,
+        observacionSeguimiento,
+        area: hallazgoAnterior.area,
+        titulo: hallazgoAnterior.titulo,
+        descripcion: hallazgoAnterior.descripcion,
+        clasificacion: hallazgoAnterior.clasificacion,
+        prioridad: hallazgoAnterior.prioridad,
+        recomendacion: hallazgoAnterior.recomendacion,
+        ubicacion: hallazgoAnterior.ubicacion,
+        costoEstimado: hallazgoAnterior.costoEstimado,
+        tiempoReparacion: hallazgoAnterior.tiempoReparacion,
+        responsable: hallazgoAnterior.responsable,
+        resuelto:
+          estadoSeguimiento === EstadoSeguimientoHallazgo.CORREGIDO,
+      },
+    });
+
+    return { hallazgoAnterior, nuevoHallazgo } as const;
   });
 
-  if (yaRegistrado) {
-    redirigirError(
-      inspeccionId,
-      "Este hallazgo antecedente ya tiene seguimiento en la inspección actual.",
-    );
+  if ("error" in resultadoSeguimiento) {
+    redirigirError(inspeccionId, resultadoSeguimiento.error);
   }
 
-  const nuevoHallazgo = await prisma.hallazgo.create({
-    data: {
-      inspeccionId,
-      creadoPorId: session.user.id,
-      hallazgoAnteriorId,
-      estadoSeguimiento,
-      observacionSeguimiento: observacionSeguimiento || null,
-      area: hallazgoAnterior.area,
-      titulo: hallazgoAnterior.titulo,
-      descripcion: hallazgoAnterior.descripcion,
-      clasificacion: hallazgoAnterior.clasificacion,
-      prioridad: hallazgoAnterior.prioridad,
-      recomendacion: hallazgoAnterior.recomendacion,
-      ubicacion: hallazgoAnterior.ubicacion,
-      costoEstimado: hallazgoAnterior.costoEstimado,
-      tiempoReparacion: hallazgoAnterior.tiempoReparacion,
-      responsable: hallazgoAnterior.responsable,
-      resuelto:
-        estadoSeguimiento === EstadoSeguimientoHallazgo.CORREGIDO,
-    },
-  });
+  const { hallazgoAnterior, nuevoHallazgo } = resultadoSeguimiento;
 
   const hallazgos = await prisma.hallazgo.findMany({
     where: { inspeccionId },
