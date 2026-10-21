@@ -1388,6 +1388,7 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
 
     if (!bloqueados[0]) {
       return {
+        ok: false,
         error:
           "El hallazgo antecedente no pertenece a la inspección anterior o ya fue corregido.",
       } as const;
@@ -1399,6 +1400,7 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
 
     if (!hallazgoAnterior) {
       return {
+        ok: false,
         error: "El hallazgo antecedente ya no está disponible.",
       } as const;
     }
@@ -1413,6 +1415,7 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
 
     if (yaRegistrado) {
       return {
+        ok: false,
         error:
           "Este hallazgo antecedente ya tiene seguimiento en la inspección actual.",
       } as const;
@@ -1440,10 +1443,10 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
       },
     });
 
-    return { hallazgoAnterior, nuevoHallazgo } as const;
+    return { ok: true, hallazgoAnterior, nuevoHallazgo } as const;
   });
 
-  if ("error" in resultadoSeguimiento) {
+  if (!resultadoSeguimiento.ok) {
     redirigirError(inspeccionId, resultadoSeguimiento.error);
   }
 
