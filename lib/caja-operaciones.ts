@@ -1,5 +1,6 @@
 import { EstadoCotizacion, EstadoPago, Prisma, PrismaClient, RolUsuario, TipoEvento } from "@prisma/client";
-import { centavosAImporte, importeACentavos } from "./visitas-contrato";
+import { centavosAImporte, ErrorContratoVisita, importeACentavos } from "./visitas-contrato";
+import { consultarVinculoVisita } from "./visitas-cotizacion";
 
 export class ErrorOperacionCaja extends Error {
   constructor(message: string) { super(message); this.name = "ErrorOperacionCaja"; }
@@ -17,37 +18,31 @@ function textoOpcional(valor: string | null | undefined, maximo: number): string
 
 async function prepararOperacion(tx: Prisma.TransactionClient, entrada: Contexto, soloDirector = false) {
   const usuario = await tx.usuario.findUnique({ where: { id: entrada.usuarioId }, select: { id: true, activo: true, rol: true, zonaId: true } });
-  if (!usuario?.activo || (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)) {
-    throw new ErrorOperacionCaja("No tienes permiso vigente para operar Caja.");
-  }
+  if (!usuario?.activo || (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR)) throw new ErrorOperacionCaja("No tienes permiso vigente para operar Caja.");
   if (soloDirector && usuario.rol !== RolUsuario.DIRECTOR) throw new ErrorOperacionCaja("Solo Dirección puede autorizar excepciones de pago.");
   if (!entrada.cotizacionId.trim()) throw new ErrorOperacionCaja("Selecciona una cotización válida.");
-  // El candado es del registro financiero de la visita, NO de los pagos de V1.
-  // Leer el saldo DESPUES del candado impide perder abonos concurrentes.
   await tx.$queryRaw`SELECT "id" FROM "Cotizacion" WHERE "id" = ${entrada.cotizacionId} FOR UPDATE`;
   const cotizacion = await tx.cotizacion.findUnique({ where: { id: entrada.cotizacionId }, select: {
     id: true, folio: true, estado: true, zonaId: true, total: true, montoPagado: true,
     excepcionApertura: true, excepcionInicio: true, inspeccion: { select: { id: true } },
   } });
   if (!cotizacion) throw new ErrorOperacionCaja("La cotización no existe.");
-  if (usuario.rol !== RolUsuario.DIRECTOR && (!usuario.zonaId || usuario.zonaId !== cotizacion.zonaId)) {
-    throw new ErrorOperacionCaja("No tienes acceso para operar una cotización de otra zona.");
-  }
+  if (usuario.rol !== RolUsuario.DIRECTOR && (!usuario.zonaId || usuario.zonaId !== cotizacion.zonaId)) throw new ErrorOperacionCaja("No tienes acceso para operar una cotización de otra zona.");
   if (cotizacion.estado !== EstadoCotizacion.AUTORIZADA) throw new ErrorOperacionCaja("Caja solo permite operar cotizaciones autorizadas y activas.");
+  try { await consultarVinculoVisita(tx, cotizacion.id); }
+  catch (error) {
+    if (error instanceof ErrorContratoVisita) throw new ErrorOperacionCaja(error.message);
+    throw error;
+  }
   return { usuario, cotizacion };
 }
 
-/** La clave del formulario identifica un abono; un reintento no es otro pago.
- * Pago, saldo y auditoria se confirman o revierten juntos. No requiere migracion:
- * utiliza la clave primaria existente de PagoCotizacion con un prefijo reservado.
- */
+/** Pago, saldo y auditoria son atomicos. Una clave de formulario identifica un abono. */
 export async function registrarPagoCaja(db: PrismaClient, entrada: Pago) {
   let centavos: number;
   try { centavos = importeACentavos(entrada.monto); }
   catch { throw new ErrorOperacionCaja("Captura un pago positivo, sin separadores de miles y con hasta dos decimales."); }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entrada.operacionId)) {
-    throw new ErrorOperacionCaja("Actualiza Caja antes de registrar el pago; el formulario no tiene una clave válida.");
-  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entrada.operacionId)) throw new ErrorOperacionCaja("Actualiza Caja antes de registrar el pago; el formulario no tiene una clave válida.");
   const id = `caja-${entrada.operacionId.toLowerCase()}`;
   const monto = new Prisma.Decimal(centavosAImporte(centavos));
   const referencia = textoOpcional(entrada.referencia, 500);
@@ -58,9 +53,7 @@ export async function registrarPagoCaja(db: PrismaClient, entrada: Pago) {
       const { usuario, cotizacion } = await prepararOperacion(tx, entrada);
       const previo = await tx.pagoCotizacion.findUnique({ where: { id } });
       if (previo) {
-        if (previo.cotizacionId !== cotizacion.id || previo.registradoPorId !== usuario.id || !previo.monto.equals(monto) || previo.referencia !== referencia || previo.metodoPago !== metodoPago || previo.notas !== notas) {
-          throw new ErrorOperacionCaja("La clave de esta operación ya fue utilizada con otros datos. No se registró otro pago.");
-        }
+        if (previo.cotizacionId !== cotizacion.id || previo.registradoPorId !== usuario.id || !previo.monto.equals(monto) || previo.referencia !== referencia || previo.metodoPago !== metodoPago || previo.notas !== notas) throw new ErrorOperacionCaja("La clave de esta operación ya fue utilizada con otros datos. No se registró otro pago.");
         return { cotizacionId: cotizacion.id, inspeccionId: cotizacion.inspeccion?.id ?? null, pagoId: id, repetido: true };
       }
       const total = importeACentavos(cotizacion.total.toFixed(2));
@@ -85,9 +78,7 @@ export async function autorizarExcepcionCaja(db: PrismaClient, entrada: Contexto
   return db.$transaction(async tx => {
     const { usuario, cotizacion } = await prepararOperacion(tx, entrada, true);
     const apertura = entrada.tipo === "APERTURA";
-    if (apertura ? cotizacion.excepcionApertura : cotizacion.excepcionInicio) {
-      return { cotizacionId: cotizacion.id, inspeccionId: cotizacion.inspeccion?.id ?? null, repetido: true };
-    }
+    if (apertura ? cotizacion.excepcionApertura : cotizacion.excepcionInicio) return { cotizacionId: cotizacion.id, inspeccionId: cotizacion.inspeccion?.id ?? null, repetido: true };
     const ahora = new Date();
     await tx.cotizacion.update({ where: { id: cotizacion.id }, data: apertura ? {
       excepcionApertura: true, excepcionAperturaPorId: usuario.id, excepcionAperturaEn: ahora, motivoExcepcionApertura: motivo,
