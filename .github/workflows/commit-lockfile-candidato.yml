@@ -1,0 +1,47 @@
+name: Incorporar lockfile candidato validado
+
+on:
+  push:
+    branches:
+      - codex/visitas-importe-contratado
+    paths:
+      - '.github/workflows/commit-lockfile-candidato.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  commit-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: codex/visitas-importe-contratado
+          fetch-depth: 0
+
+      - name: Descargar artefacto exacto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GH_TOKEN}"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/12294797812/zip"             -o /tmp/lockfile.zip
+          rm -rf /tmp/lockfile-artifact
+          mkdir -p /tmp/lockfile-artifact
+          unzip -q /tmp/lockfile.zip -d /tmp/lockfile-artifact
+          candidate="$(find /tmp/lockfile-artifact -type f -name package-lock.json -print -quit)"
+          test -n "$candidate"
+          test "$(sha256sum "$candidate" | awk '{print $1}')" = "fa7447529e01e6305ac1608c4113f877a7f9430cf88536c757c003b060843308"
+          cp "$candidate" package-lock.json
+          test "$(sha256sum package-lock.json | awk '{print $1}')" = "fa7447529e01e6305ac1608c4113f877a7f9430cf88536c757c003b060843308"
+
+      - name: Commit solo del lockfile
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Incorporar package-lock validado para V2"
+          git push origin HEAD:codex/visitas-importe-contratado
