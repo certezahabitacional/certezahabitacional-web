@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { actualizarHallazgo, crearHallazgo, registrarSeguimientoHallazgo } from "../actions";
 import { registrarPrimeraRevisionV2 } from "./primera-revision-actions";
+import ConceptoAreaCard, { type PuntoArea } from "../campo-v1/ConceptoAreaCard";
 
 type SearchParams = Promise<{
   hallazgoId?: string;
@@ -21,24 +22,6 @@ type FotoComparativa = {
   descripcion: string | null;
   imagenUrl: string | null;
 };
-
-function obtenerSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceRoleKey) {
-    throw new Error(
-      "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local",
-    );
-  }
-
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
 
 export default async function CapturaPage({
   params,
@@ -213,8 +196,9 @@ export default async function CapturaPage({
           area: string;
           concepto: string;
           especificacion: string | null;
+          areaId: string | null;
         }>>`
-          SELECT "id","area","concepto","especificacion"
+          SELECT "id","area","concepto","especificacion","areaId"::text AS "areaId"
           FROM "GuiaInspeccionItem"
           WHERE "id"=${query.primeraRevisionItemId}
             AND "inspeccionId"=${inspeccion.id}
@@ -227,6 +211,30 @@ export default async function CapturaPage({
         `
       )[0] ?? null
     : null;
+
+  const conceptosModernosV2 = esSeguimiento
+    ? await prisma.$queryRaw<Array<PuntoArea & { areaId: string }>>`
+        SELECT
+          g."id",g."concepto",g."especificacion",
+          NULL::text AS "grupo",g."estadoV3",g."origenV3",g."obligatorio",
+          g."herramientaSugerida",g."motivoNoAplica",g."observacion",
+          g."requiereMedicion",g."requiereComparacionProyecto",
+          g."valorMedido",g."valorProyecto",g."unidadMedida",
+          g."areaId"::text AS "areaId"
+        FROM "GuiaInspeccionItem" g
+        WHERE g."inspeccionId"=${inspeccion.id}
+          AND g."areaId" IS NOT NULL
+          AND (
+            COALESCE(g."observacion",'') LIKE '%"tipo":"PRIMERA_REVISION_V2"%'
+            OR COALESCE(g."observacion",'') LIKE '%"tipo":"REVISION_CONCEPTO_V2"%'
+            OR EXISTS (
+              SELECT 1 FROM "FotografiaArea" fa
+              WHERE fa."guiaItemId"=g."id"
+            )
+          )
+        ORDER BY g."area",g."orden",g."creadoEn"
+      `
+    : [];
 
   const hallazgosAntecedentes =
     esSeguimiento && inspeccion.inspeccionAnteriorId
@@ -269,7 +277,7 @@ export default async function CapturaPage({
         })
       : [];
 
-  const supabase = hallazgosAntecedentes.length > 0 ? obtenerSupabase() : null;
+  const supabase = hallazgosAntecedentes.length > 0 ? obtenerSupabaseAdmin() : null;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
 
   async function resolverImagenUrl(url: string): Promise<string | null> {
@@ -662,9 +670,37 @@ export default async function CapturaPage({
           </section>
         )}
 
+        {conceptosModernosV2.length > 0 && (
+          <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
+              Captura de concepto · mismo flujo que V1
+            </p>
+            <h2 className="mt-2 text-2xl font-black">
+              Evidencia, interpretación IA y cierre
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Usa el mismo proceso de V1: 1–4 fotografías, interpretación de IA,
+              descripción final editable, clasificación y prioridad.
+            </p>
+            <div className="mt-6 space-y-5">
+              {conceptosModernosV2.map((punto, index) => (
+                <ConceptoAreaCard
+                  key={punto.id}
+                  inspeccionId={id}
+                  areaId={punto.areaId}
+                  punto={punto}
+                  numeroConcepto={index + 1}
+                  puedeCapturar={true}
+                  areaActiva={true}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         <section
           id="nuevo-hallazgo"
-          className={`mt-7 scroll-mt-6 rounded-3xl border bg-slate-900 p-5 sm:p-6 ${
+          className={`${primeraRevisionActual ? "hidden " : ""}mt-7 scroll-mt-6 rounded-3xl border bg-slate-900 p-5 sm:p-6 ${
             hallazgoEnEdicion
               ? "border-amber-300/30"
               : "border-cyan-400/20"
