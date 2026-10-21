@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { actualizarHallazgo, crearHallazgo, registrarSeguimientoHallazgo } from "../actions";
 import { registrarPrimeraRevisionV2 } from "./primera-revision-actions";
 
@@ -21,24 +21,6 @@ type FotoComparativa = {
   descripcion: string | null;
   imagenUrl: string | null;
 };
-
-function obtenerSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceRoleKey) {
-    throw new Error(
-      "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local",
-    );
-  }
-
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
 
 export default async function CapturaPage({
   params,
@@ -269,7 +251,7 @@ export default async function CapturaPage({
         })
       : [];
 
-  const supabase = hallazgosAntecedentes.length > 0 ? obtenerSupabase() : null;
+  const supabase = hallazgosAntecedentes.length > 0 ? obtenerSupabaseAdmin() : null;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
 
   async function resolverImagenUrl(url: string): Promise<string | null> {
