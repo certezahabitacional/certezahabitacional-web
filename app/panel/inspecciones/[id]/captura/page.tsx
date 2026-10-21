@@ -72,13 +72,16 @@ export default async function CapturaPage({
     },
   });
 
-  if (
-    !usuarioActual ||
-    !usuarioActual.activo ||
-    usuarioActual.rol !== RolUsuario.INSPECTOR ||
-    !usuarioActual.inspector ||
-    !usuarioActual.inspector.activo
-  ) {
+  if (!usuarioActual || !usuarioActual.activo) {
+    redirect("/acceso");
+  }
+
+  const esDirector = usuarioActual.rol === RolUsuario.DIRECTOR;
+  const esInspectorOperativo =
+    usuarioActual.rol === RolUsuario.INSPECTOR &&
+    Boolean(usuarioActual.inspector?.activo);
+
+  if (!esDirector && !esInspectorOperativo) {
     redirect("/acceso");
   }
 
@@ -103,8 +106,11 @@ export default async function CapturaPage({
   }
 
   if (
-    inspeccionAlcance.inspectorId !== usuarioActual.inspector.id ||
-    inspeccionAlcance.inspector?.usuarioId !== usuarioActual.id
+    usuarioActual.rol === RolUsuario.INSPECTOR &&
+    (
+      inspeccionAlcance.inspectorId !== usuarioActual.inspector?.id ||
+      inspeccionAlcance.inspector?.usuarioId !== usuarioActual.id
+    )
   ) {
     redirect("/acceso");
   }
