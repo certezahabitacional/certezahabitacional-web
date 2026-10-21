@@ -9,6 +9,7 @@ import { establecerAsignacionInspeccion } from "@/lib/asignaciones-inspeccion";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { validarLiberacionCampoDesdeCaja } from "@/lib/caja-validaciones";
 import { prisma } from "@/lib/prisma";
+import { consultarVinculoVisita } from "@/lib/visitas-cotizacion";
 import { validarCotizacionParaNuevaInspeccion } from "./validacion-cotizacion";
 
 function texto(formData:FormData,campo:string){return String(formData.get(campo)??"").trim();}
@@ -36,6 +37,16 @@ export async function crearInspeccion(formData:FormData){
 
   const validacion=await validarCotizacionParaNuevaInspeccion({cotizacionId,clienteId,inmuebleId});
   if(!validacion.ok)errorNuevaInspeccion(validacion.error,antecedenteId||undefined);
+  const vinculoVisita=await consultarVinculoVisita(prisma,cotizacionId);
+  if(vinculoVisita){
+    if(!antecedenteId)errorNuevaInspeccion(
+      `La cotización V${vinculoVisita.numeroVisita} debe conservar su antecedente contractual V${vinculoVisita.numeroVisita-1}.`,
+    );
+    if(antecedenteId!==vinculoVisita.inspeccionAnteriorId)errorNuevaInspeccion(
+      `La cotización V${vinculoVisita.numeroVisita} pertenece a otro antecedente. Debe continuar exactamente desde V${vinculoVisita.numeroVisita-1}.`,
+      vinculoVisita.inspeccionAnteriorId,
+    );
+  }
   if(iniciarAhora){const liberacion=await validarLiberacionCampoDesdeCaja(cotizacionId);if(!liberacion.ok)errorNuevaInspeccion(liberacion.error,antecedenteId||undefined);}
 
   const existente=validacion.modo==="RETOMAR"?validacion.inspeccionExistente:null;
@@ -74,6 +85,13 @@ export async function crearInspeccion(formData:FormData){
 
   if(existente){
     if(antecedenteId&&existente.inspeccionAnteriorId!==antecedenteId)errorNuevaInspeccion("La cotización seleccionada pertenece a otra programación.",antecedenteId);
+    if(vinculoVisita&&(
+      existente.inspeccionAnteriorId!==vinculoVisita.inspeccionAnteriorId||
+      existente.numeroInspeccion!==vinculoVisita.numeroVisita
+    ))errorNuevaInspeccion(
+      "La inspección programada no coincide con el número o antecedente de la visita contratada. No se modificó el expediente.",
+      vinculoVisita.inspeccionAnteriorId,
+    );
     const inspeccion=await prisma.inspeccion.update({where:{id:existente.id},data:{plantillaId:plantilla.id,requiereGerenteZona:plantilla.requiereGerenteZona,requiereCoordinador:plantilla.requiereCoordinador,zonaId:zona.id,inspectorId:inspectorSeleccionado?.id??null,agendadaPorId:usuarioActual.id,tipoServicio:plantilla.tipoServicio,tipoInmueble:inmueble.tipo,direccion:inmueble.direccion,ciudad:inmueble.ciudad,superficieM2:decimalANumero(inmueble.superficieConstruccionM2),fechaProgramada,zonaHoraria:zona.zonaHoraria,observaciones:observacionesFormulario||existente.observaciones||null,inicioLiberadoSinPago:validacion.cotizacion.excepcionInicio},select:{id:true,folio:true,numeroInspeccion:true}});
     await Promise.all([
       establecerAsignacionInspeccion(inspeccion.id,"GERENTE",gerente?.id??null),
@@ -97,7 +115,12 @@ export async function crearInspeccion(formData:FormData){
     if(a.zonaId!==zona.id)errorNuevaInspeccion("El seguimiento debe conservar la misma zona del antecedente.",a.id);
     const seguimientoExistente=await prisma.inspeccion.findFirst({where:{inspeccionAnteriorId:a.id},select:{id:true,folio:true,numeroInspeccion:true}});
     if(seguimientoExistente)redirect(`/panel/inspecciones/${seguimientoExistente.id}?ok=${encodeURIComponent(`Ya existe la inspección de seguimiento V${seguimientoExistente.numeroInspeccion} (${seguimientoExistente.folio}).`)}`);
-    inspeccionAnterior={id:a.id,folio:a.folio,numeroInspeccion:a.numeroInspeccion};numeroInspeccion=a.numeroInspeccion+1;
+    inspeccionAnterior={id:a.id,folio:a.folio,numeroInspeccion:a.numeroInspeccion};
+    numeroInspeccion=vinculoVisita?.numeroVisita??(a.numeroInspeccion+1);
+    if(vinculoVisita&&a.numeroInspeccion!==vinculoVisita.numeroVisita-1)errorNuevaInspeccion(
+      `El antecedente contractual de V${vinculoVisita.numeroVisita} debe ser V${vinculoVisita.numeroVisita-1}. La cadena requiere revisión administrativa.`,
+      a.id,
+    );
   }else{
     const max=await prisma.inspeccion.aggregate({where:{inmuebleId},_max:{numeroInspeccion:true}});numeroInspeccion=(max._max.numeroInspeccion??0)+1;
   }
