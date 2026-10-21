@@ -207,10 +207,22 @@ export async function GET(
     return acceso.error;
   }
 
+  const [controlReapertura] = await prisma.$queryRaw<Array<{
+    reabiertaEn: Date | null;
+  }>>`
+    SELECT "reabiertaEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${id}
+    LIMIT 1
+  `;
+
+  const reabiertaEn = controlReapertura?.reabiertaEn ?? null;
+
   const registros = await prisma.firma.findMany({
     where: {
       inspeccionId: id,
       tipo: { in: [...TIPOS] },
+      ...(reabiertaEn ? { firmadaEn: { gte: reabiertaEn } } : {}),
     },
     orderBy: { firmadaEn: "desc" },
   });
@@ -236,6 +248,7 @@ export async function GET(
     fechaCliente: cliente?.firmadaEn.toISOString() ?? "",
     puedeModificar: acceso.puedeModificar,
     motivoSoloLectura: acceso.motivoSoloLectura,
+    requiereNuevasFirmas: Boolean(reabiertaEn),
   });
 }
 

@@ -1,0 +1,77 @@
+name: V2 - compilacion con candidato verificado
+on:
+  push:
+    branches: [codex/visitas-importe-contratado]
+    paths:
+      - '.github/workflows/visitas-validar-candidato.yml'
+      - 'app/**'
+      - 'lib/**'
+      - 'components/**'
+      - 'tests/visitas-*'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'next.config.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: visitas-candidato-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compilacion:
+    if: github.repository == 'certezahabitacional/certezahabitacional-web' && github.ref == 'refs/heads/codex/visitas-importe-contratado'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitas_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/visitas_test?schema=public
+      CH_VISITAS_CONTRATADAS: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SUPABASE_URL: https://visitas-test.invalid
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-only-not-a-real-key
+      AUTH_SECRET: isolated-ci-test-only-not-a-production-secret
+      RESEND_API_KEY: re_test_only_invalid_key
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Descargar exclusivamente el candidato revisado
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '12294797812'
+          run-id: '39489741842'
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/lockfile-revisado
+      - name: Verificar identidad, manifiesto y huella antes de instalar
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const dir = path.join(process.env.RUNNER_TEMP, 'lockfile-revisado');
+          const lock = fs.readFileSync(path.join(dir, 'package-lock.json'));
+          const report = JSON.parse(fs.readFileSync(path.join(dir, 'revision.json'), 'utf8'));
+          const expected = 'fa7447529e01e6305ac1608c4113f877a7f9430cf88536c757c003b060843308';
+          if (report.baseCommit !== 'c280545a440e77c2a0208503c36f058a1d07198d' || report.sha256 !== expected || crypto.createHash('sha256').update(lock).digest('hex') !== expected) throw new Error('Candidato inesperado');
+          if (!fs.readFileSync('package.json').equals(fs.readFileSync(path.join(dir, 'package.json')))) throw new Error('Cambio el manifiesto: revisar otro candidato');
+          fs.writeFileSync('package-lock.json', lock);
+          console.log('Candidato verificado. Se usa SOLO en esta copia de trabajo; no se integra ni publica.');
+          NODE
+          rm -f .env .env.local .env.production .env.production.local .env.development .env.development.local .env.test .env.test.local
+          node --version
+          npm --version
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx --no-install prisma generate
+      - name: Compilar la aplicacion completa sin saltar TypeScript
+        run: npm run build
+      - name: Lint de los archivos nuevos de visitas
+        if: always() && !cancelled()
+        run: |
+          test -x node_modules/.bin/eslint
+          node_modules/.bin/eslint lib/visitas-contrato.ts lib/visitas-cotizacion.ts app/panel/cotizaciones/visitas app/panel/inspecciones/nueva/actions.ts app/panel/inspecciones/nueva/page.tsx
+      - name: Resumen de alcance de esta comprobacion
+        if: always() && !cancelled()
+        run: |
+          echo 'Esta ejecucion prueba el codigo de la rama con un lockfile candidato de huella fija. No reemplaza la compilacion del lockfile comprometido. No ejecuta migraciones ni valida el flujo autenticado. No publica a produccion.' >> "$GITHUB_STEP_SUMMARY"
