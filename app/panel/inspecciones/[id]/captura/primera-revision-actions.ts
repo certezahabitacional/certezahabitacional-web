@@ -15,6 +15,35 @@ function volver(inspeccionId: string, tipo: "ok" | "error", mensaje: string): ne
   redirect(`/panel/inspecciones/${inspeccionId}/captura?${tipo}=${encodeURIComponent(mensaje)}`);
 }
 
+async function asegurarAreaSeguimiento(
+  inspeccionId: string,
+  areaNombre: string,
+  orden: number,
+): Promise<string> {
+  const [existente] = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"::text
+    FROM "AreaInspeccion"
+    WHERE "inspeccionId"=${inspeccionId}
+      AND "nombre"=${areaNombre}
+      AND "tipo"='SEGUIMIENTO'
+    ORDER BY "creadoEn"
+    LIMIT 1
+  `;
+  if (existente?.id) return existente.id;
+
+  const areaId = randomUUID();
+  const codigo = `SEG_${String(Math.max(0, orden)).padStart(3, "0")}_${areaId.slice(0, 8)}`;
+  await prisma.$executeRaw`
+    INSERT INTO "AreaInspeccion"
+      ("id","inspeccionId","codigo","nombre","tipo","orden","origen","obligatoria",
+       "estado","creadoEn","actualizadoEn","excluirReporte")
+    VALUES
+      (${areaId}::uuid,${inspeccionId},${codigo},${areaNombre},'SEGUIMIENTO',${orden},
+       'INSPECTOR',false,'PENDIENTE',NOW(),NOW(),false)
+  `;
+  return areaId;
+}
+
 export async function registrarPrimeraRevisionV2(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -75,8 +104,14 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
     motivoNoAplica: string | null;
     estadoV3: string;
     tuvoHallazgo: boolean;
+    requiereMedicion: boolean;
+    requiereComparacionProyecto: boolean;
+    herramientaSugerida: string | null;
+    valorProyecto: string | null;
+    unidadMedida: string | null;
   }>>`
     SELECT g."id",g."area",g."concepto",g."especificacion",g."orden",g."motivoNoAplica",g."estadoV3",
+           g."requiereMedicion",g."requiereComparacionProyecto",g."herramientaSugerida",g."valorProyecto",g."unidadMedida",
            EXISTS (
              SELECT 1 FROM "Hallazgo" h
              WHERE h."inspeccionId"=g."inspeccionId"
@@ -96,8 +131,8 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
   }
 
   const patron = `%"antecedenteItemId":"${antecedenteItemId}"%`;
-  const existentes = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT "id"
+  const existentes = await prisma.$queryRaw<Array<{ id: string; areaId: string | null }>>`
+    SELECT "id","areaId"::text AS "areaId"
     FROM "GuiaInspeccionItem"
     WHERE "inspeccionId"=${inspeccionId}
       AND COALESCE("observacion",'') LIKE ${patron}
@@ -105,10 +140,27 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
   `;
 
   if (existentes[0]) {
-    volver(inspeccionId, "error", "Este concepto ya tiene una primera revisión registrada en la visita actual.");
+    if (resultado === "CON_HALLAZGO") {
+      const areaIdExistente =
+        existentes[0].areaId ??
+        await asegurarAreaSeguimiento(inspeccionId, antecedente.area, antecedente.orden);
+      if (!existentes[0].areaId) {
+        await prisma.$executeRaw`
+          UPDATE "GuiaInspeccionItem"
+          SET "areaId"=${areaIdExistente}::uuid,"actualizadoEn"=NOW()
+          WHERE "id"=${existentes[0].id} AND "inspeccionId"=${inspeccionId}
+        `;
+      }
+      redirect(`/panel/inspecciones/${inspeccionId}/captura?primeraRevisionItemId=${encodeURIComponent(existentes[0].id)}#item-${existentes[0].id}`);
+    }
+    volver(inspeccionId, "error", "Este concepto ya tiene una revisión registrada en la visita actual.");
   }
 
   const itemId = randomUUID();
+  const areaIdSeguimiento =
+    resultado === "CON_HALLAZGO"
+      ? await asegurarAreaSeguimiento(inspeccionId, antecedente.area, antecedente.orden)
+      : null;
   const metadata = JSON.stringify({
     tipo: antecedente.estadoV3 === "NO_APLICA" ? "PRIMERA_REVISION_V2" : "REVISION_CONCEPTO_V2",
     antecedenteItemId,
@@ -120,13 +172,18 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
   await prisma.$executeRaw`
     INSERT INTO "GuiaInspeccionItem"
       ("id","inspeccionId","origen","area","concepto","especificacion","orden","obligatorio",
-       "completado","creadoPorId","areaId","estadoV3","origenV3","observacion","cerradoEn","creadoEn","actualizadoEn")
+       "completado","creadoPorId","areaId","estadoV3","origenV3","observacion","cerradoEn",
+       "requiereMedicion","requiereComparacionProyecto","herramientaSugerida","valorProyecto","unidadMedida",
+       "creadoEn","actualizadoEn")
     VALUES
       (${itemId},${inspeccionId},'INSPECTOR',${antecedente.area},${antecedente.concepto},
        ${antecedente.especificacion},${antecedente.orden},true,
-       ${resultado === "SIN_HALLAZGO"},${usuario.id},NULL,
+       ${resultado === "SIN_HALLAZGO"},${usuario.id},${areaIdSeguimiento}::uuid,
        ${resultado === "SIN_HALLAZGO" ? "REVISADO" : "PENDIENTE"},
-       'INSPECTOR',${metadata},${resultado === "SIN_HALLAZGO" ? new Date() : null},NOW(),NOW())
+       'INSPECTOR',${metadata},${resultado === "SIN_HALLAZGO" ? new Date() : null},
+       ${antecedente.requiereMedicion},${antecedente.requiereComparacionProyecto},
+       ${antecedente.herramientaSugerida},${antecedente.valorProyecto},${antecedente.unidadMedida},
+       NOW(),NOW())
   `;
 
   await registrarAuditoria({
@@ -145,7 +202,7 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
 
   if (resultado === "CON_HALLAZGO") {
     redirect(
-      `/panel/inspecciones/${inspeccionId}/captura?primeraRevisionItemId=${encodeURIComponent(itemId)}#nuevo-hallazgo`,
+      `/panel/inspecciones/${inspeccionId}/captura?primeraRevisionItemId=${encodeURIComponent(itemId)}#item-${itemId}`,
     );
   }
 
