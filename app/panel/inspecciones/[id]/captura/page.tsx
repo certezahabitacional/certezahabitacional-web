@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { EstadoInspeccion, RolUsuario } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { actualizarHallazgo, crearHallazgo, registrarSeguimientoHallazgo } from "../actions";
 import { registrarPrimeraRevisionV2 } from "./primera-revision-actions";
 
@@ -21,6 +21,24 @@ type FotoComparativa = {
   descripcion: string | null;
   imagenUrl: string | null;
 };
+
+function obtenerSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error(
+      "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local",
+    );
+  }
+
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
 export default async function CapturaPage({
   params,
@@ -166,12 +184,17 @@ export default async function CapturaPage({
           concepto: string;
           especificacion: string | null;
           motivoNoAplica: string | null;
+          estadoV3: string;
         }>>`
-          SELECT g."id",g."area",g."concepto",g."especificacion",g."motivoNoAplica"
+          SELECT g."id",g."area",g."concepto",g."especificacion",g."motivoNoAplica",g."estadoV3"
           FROM "GuiaInspeccionItem" g
           WHERE g."inspeccionId"=${inspeccion.inspeccionAnteriorId}
-            AND g."estadoV3"='NO_APLICA'
-            AND COALESCE(g."motivoNoAplica",'') LIKE '[PARTIDA_COMPLETA:%'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "Hallazgo" h
+              WHERE h."inspeccionId"=g."inspeccionId"
+                AND h."guiaItemId"=g."id"
+            )
             AND NOT EXISTS (
               SELECT 1
               FROM "GuiaInspeccionItem" actual
@@ -196,7 +219,10 @@ export default async function CapturaPage({
           WHERE "id"=${query.primeraRevisionItemId}
             AND "inspeccionId"=${inspeccion.id}
             AND "estadoV3"='PENDIENTE'
-            AND COALESCE("observacion",'') LIKE '%"tipo":"PRIMERA_REVISION_V2"%'
+            AND (
+              COALESCE("observacion",'') LIKE '%"tipo":"PRIMERA_REVISION_V2"%'
+              OR COALESCE("observacion",'') LIKE '%"tipo":"REVISION_CONCEPTO_V2"%'
+            )
           LIMIT 1
         `
       )[0] ?? null
@@ -243,7 +269,7 @@ export default async function CapturaPage({
         })
       : [];
 
-  const supabase = hallazgosAntecedentes.length > 0 ? obtenerSupabaseAdmin() : null;
+  const supabase = hallazgosAntecedentes.length > 0 ? obtenerSupabase() : null;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
 
   async function resolverImagenUrl(url: string): Promise<string | null> {
@@ -577,12 +603,13 @@ export default async function CapturaPage({
         {esSeguimiento && conceptosPrimeraRevision.length > 0 && (
           <section className="mt-7 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5 sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">
-              Conceptos no inspeccionados en V{inspeccion.numeroInspeccion - 1}
+              Todos los conceptos de V{inspeccion.numeroInspeccion - 1}
             </p>
-            <h2 className="mt-2 text-2xl font-black">Primera revisión en V{inspeccion.numeroInspeccion}</h2>
+            <h2 className="mt-2 text-2xl font-black">Revisión completa de conceptos en V{inspeccion.numeroInspeccion}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Estos conceptos quedaron sin inspección efectiva en la visita anterior. No se consideran “Sin hallazgo”.
-              Puedes revisarlos por primera vez en esta visita y conservar la trazabilidad del motivo original.
+              Aquí aparecen todos los conceptos de la visita anterior que no tienen un hallazgo antecedente propio.
+              Incluye conceptos revisados, NO APLICA, sin acceso y partidas deshabilitadas. Puedes volver a revisarlos
+              si ahora existe acceso o si detectas una condición nueva, sin modificar el historial de V{inspeccion.numeroInspeccion - 1}.
             </p>
 
             <div className="mt-5 space-y-4">
@@ -596,7 +623,10 @@ export default async function CapturaPage({
                     <p className="mt-1 text-sm text-slate-400">{concepto.especificacion}</p>
                   )}
                   <p className="mt-2 text-xs text-slate-500">
-                    Antecedente: {concepto.motivoNoAplica?.replace(/^\[PARTIDA_COMPLETA:[^\]]+\]\s*/, "") || "No inspeccionado en la visita anterior."}
+                    Estado anterior: {concepto.estadoV3 === "NO_APLICA" ? "NO APLICA / NO INSPECCIONADO" : concepto.estadoV3}
+                    {concepto.motivoNoAplica
+                      ? ` · Motivo: ${concepto.motivoNoAplica.replace(/^\[PARTIDA_COMPLETA:[^\]]+\]\s*/, "")}`
+                      : ""}
                   </p>
 
                   <form action={registrarPrimeraRevisionV2} className="mt-4 grid gap-3">
@@ -615,14 +645,14 @@ export default async function CapturaPage({
                         value="SIN_HALLAZGO"
                         className="rounded-xl border border-emerald-300/30 px-4 py-2 text-sm font-black text-emerald-200"
                       >
-                        Primera revisión · sin hallazgo
+                        Revisado ahora · sin hallazgo
                       </button>
                       <button
                         name="resultado"
                         value="CON_HALLAZGO"
                         className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-black text-slate-950"
                       >
-                        Primera revisión · registrar hallazgo
+                        Revisado ahora · registrar hallazgo
                       </button>
                     </div>
                   </form>
