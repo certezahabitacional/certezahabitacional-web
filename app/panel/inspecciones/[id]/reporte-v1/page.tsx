@@ -254,13 +254,13 @@ export default async function ReporteV1Page({ params, searchParams }: {
   ]);
   if (!usuario?.activo) redirect("/acceso");
   if (!inspeccion) notFound();
-  if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${id}/reporte`);
+  const esSeguimiento = inspeccion.numeroInspeccion > 1;
   const esInspector = usuario.rol === RolUsuario.INSPECTOR && usuario.inspector?.id === inspeccion.inspectorId;
   const esDirector = usuario.rol === RolUsuario.DIRECTOR;
   const puedeOperarPreReporte = esInspector || esDirector;
   if (!esInspector && !([RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR] as RolUsuario[]).includes(usuario.rol)) redirect("/acceso");
 
-  const planConfirmado = await obtenerPlanConfirmado(id);
+  const planConfirmado = esSeguimiento ? null : await obtenerPlanConfirmado(id);
   const [areas, conceptosReporte, procesos] = await Promise.all([
     prisma.$queryRaw<Area[]>`
       SELECT a."id"::text,a."orden",a."codigo",a."tipo",a."nombre",a."resultado",a."comentarioFinal",
@@ -271,7 +271,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         (SELECT COUNT(*)::int FROM "Hallazgo" h WHERE h."inspeccionId"=a."inspeccionId" AND h."area"=a."nombre") "hallazgos"
       FROM "AreaInspeccion" a
       WHERE a."inspeccionId"=${id}
-        AND (a."obligatoria"=true OR a."tipo"='PUNTO_CRITICO')
+        AND (a."obligatoria"=true OR a."tipo" IN ('PUNTO_CRITICO','SEGUIMIENTO'))
         AND (${Boolean(planConfirmado)}=false OR a."origen"='PLAN_PREVIO')
       ORDER BY a."orden",a."nombre"
     `,
@@ -355,6 +355,21 @@ export default async function ReporteV1Page({ params, searchParams }: {
     SELECT f."url" FROM "AreaInspeccion" a JOIN "FotografiaArea" fa ON fa."areaId"=a."id" JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
     WHERE a."inspeccionId"=${id} AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL') AND fa."candidataPortada"=true LIMIT 1
   `;
+  const fachadaReporte = fachada?.url
+    ? fachada
+    : esSeguimiento && inspeccion.inspeccionAnteriorId
+      ? (await prisma.$queryRaw<Array<{url:string|null}>>`
+          SELECT f."url"
+          FROM "AreaInspeccion" a
+          JOIN "FotografiaArea" fa ON fa."areaId"=a."id"
+          JOIN "Fotografia" f ON f."id"=fa."fotografiaId"
+          WHERE a."inspeccionId"=${inspeccion.inspeccionAnteriorId}
+            AND a."codigo" IN ('FACHADA_FRONTAL','FACHADA_PRINCIPAL')
+            AND fa."candidataPortada"=true
+          ORDER BY fa."creadoEn" DESC
+          LIMIT 1
+        `)[0]
+      : undefined;
   const [controlReporte] = await prisma.$queryRaw<ControlReporte[]>`
     SELECT "campoFinalizadoEn","inspeccionTecnicaConcluidaEn","preReporteGeneradoEn","reabiertaEn"
     FROM "InspeccionControlV2"
@@ -380,7 +395,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
     ultimaVersionPreReporte?.generadoEn &&
     (!ultimaFirmaEn || new Date(ultimaVersionPreReporte.generadoEn) >= ultimaFirmaEn)
   );
-  const portada = await signedUrl(fachada?.url ?? null);
+  const portada = await signedUrl(fachadaReporte?.url ?? null);
 
   const evidenciasBase = await prisma.$queryRaw<EvidenciaCompleta[]>`
     SELECT
@@ -672,7 +687,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
       }`}</style>
       {query.print === "1" && <AutoPrintReport />}
       <div className="no-print mx-auto mb-4 flex max-w-5xl flex-wrap items-center justify-between gap-3">
-        <Link href={`/panel/inspecciones/${id}/campo-v1`} className="font-black text-slate-700">← Volver a la inspección</Link>
+        <Link href={esSeguimiento ? `/panel/inspecciones/${id}/captura` : `/panel/inspecciones/${id}/campo-v1`} className="font-black text-slate-700">← Volver a la inspección</Link>
         <Link href={`/panel/inspecciones/${id}/reporte-v1?print=1`} className="rounded-xl bg-cyan-800 px-5 py-3 text-sm font-black text-white">IMPRIMIR / GUARDAR COMO PDF</Link>
       </div>
       {esReporteParcial && (
@@ -682,7 +697,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
         </section>
       )}
       {(query.ok || query.error) && <div className={`no-print mx-auto mb-4 max-w-5xl rounded-2xl p-4 text-sm font-bold ${query.error ? "bg-rose-100 text-rose-900" : "bg-emerald-100 text-emerald-900"}`}>{query.error ?? query.ok}</div>}
-      {!autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
+      {!esSeguimiento && !autorizado && puedeOperarPreReporte && controlReporte?.inspeccionTecnicaConcluidaEn && inspeccion.estado === "EN_PROCESO" && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
           <p className="text-xs font-black uppercase tracking-wider text-cyan-800">REPORTE · REVISIÓN EN SITIO</p>
           {!controlReporte.preReporteGeneradoEn && !firmasCompletasReporte ? (
@@ -741,7 +756,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
           printUrl={`/reportes/verificar/${inspeccion.certificado.codigoValidacion}?print=1`}
         />
       )}
-      {esDirector && autorizado && inspeccion.certificado?.vigente && (
+      {!esSeguimiento && esDirector && autorizado && inspeccion.certificado?.vigente && (
         <section className="no-print mx-auto mb-4 max-w-5xl rounded-3xl border border-rose-300/30 bg-rose-50 p-5">
           <p className="text-xs font-black uppercase tracking-[.18em] text-rose-800">Dirección · control excepcional</p>
           <h2 className="mt-1 text-xl font-black text-slate-950">Revocar certificado</h2>
@@ -779,6 +794,7 @@ export default async function ReporteV1Page({ params, searchParams }: {
                 <Dato label="Fecha de inspección" value={fecha}/>
                 <Dato label="Inspector" value={inspeccion.inspector?.usuario.nombre ?? "Inspector asignado"}/>
                 <Dato label="Cotización de origen" value={inspeccion.cotizacion?.folio ?? "Sin folio"}/>
+                <Dato label="Visita" value={`V${inspeccion.numeroInspeccion}`}/>
               </div>
               <div className="mt-3 grid items-start gap-3 border-t border-amber-300/30 pt-3 sm:grid-cols-[1fr_110px]">
                 <div>
