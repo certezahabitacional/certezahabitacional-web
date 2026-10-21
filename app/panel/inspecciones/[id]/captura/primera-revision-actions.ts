@@ -73,18 +73,26 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
     especificacion: string | null;
     orden: number;
     motivoNoAplica: string | null;
+    estadoV3: string;
+    tuvoHallazgo: boolean;
   }>>`
-    SELECT "id","area","concepto","especificacion","orden","motivoNoAplica"
-    FROM "GuiaInspeccionItem"
-    WHERE "id"=${antecedenteItemId}
-      AND "inspeccionId"=${inspeccion.inspeccionAnteriorId}
-      AND "estadoV3"='NO_APLICA'
-      AND COALESCE("motivoNoAplica",'') LIKE '[PARTIDA_COMPLETA:%'
+    SELECT g."id",g."area",g."concepto",g."especificacion",g."orden",g."motivoNoAplica",g."estadoV3",
+           EXISTS (
+             SELECT 1 FROM "Hallazgo" h
+             WHERE h."inspeccionId"=g."inspeccionId"
+               AND h."guiaItemId"=g."id"
+           ) AS "tuvoHallazgo"
+    FROM "GuiaInspeccionItem" g
+    WHERE g."id"=${antecedenteItemId}
+      AND g."inspeccionId"=${inspeccion.inspeccionAnteriorId}
     LIMIT 1
   `;
 
   if (!antecedente) {
-    volver(inspeccionId, "error", "El concepto no corresponde a un punto pendiente de primera revisión.");
+    volver(inspeccionId, "error", "El concepto no pertenece a la inspección anterior.");
+  }
+  if (antecedente.tuvoHallazgo) {
+    volver(inspeccionId, "error", "Este concepto tiene un hallazgo antecedente. Atiéndelo desde Seguimiento de pendientes.");
   }
 
   const patron = `%"antecedenteItemId":"${antecedenteItemId}"%`;
@@ -102,7 +110,7 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
 
   const itemId = randomUUID();
   const metadata = JSON.stringify({
-    tipo: "PRIMERA_REVISION_V2",
+    tipo: antecedente.estadoV3 === "NO_APLICA" ? "PRIMERA_REVISION_V2" : "REVISION_CONCEPTO_V2",
     antecedenteItemId,
     visita: inspeccion.numeroInspeccion,
     resultado,
@@ -129,8 +137,8 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
     usuarioId: usuario.id,
     descripcion:
       resultado === "SIN_HALLAZGO"
-        ? `Primera revisión en V${inspeccion.numeroInspeccion} del concepto “${antecedente.concepto}”, no inspeccionado en la visita anterior. Resultado: sin hallazgo. Observación: ${observacion}`
-        : `Primera revisión en V${inspeccion.numeroInspeccion} del concepto “${antecedente.concepto}”, no inspeccionado en la visita anterior. Se requiere documentar hallazgo nuevo. Observación: ${observacion}`,
+        ? `${antecedente.estadoV3 === "NO_APLICA" ? "Primera revisión" : "Revisión"} en V${inspeccion.numeroInspeccion} del concepto “${antecedente.concepto}”. Resultado: sin hallazgo. Observación: ${observacion}`
+        : `${antecedente.estadoV3 === "NO_APLICA" ? "Primera revisión" : "Revisión"} en V${inspeccion.numeroInspeccion} del concepto “${antecedente.concepto}”. Se requiere documentar hallazgo nuevo. Observación: ${observacion}`,
   });
 
   revalidatePath(`/panel/inspecciones/${inspeccionId}/captura`);
