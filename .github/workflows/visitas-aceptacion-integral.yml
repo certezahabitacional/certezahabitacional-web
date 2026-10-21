@@ -80,18 +80,39 @@ jobs:
           cd "$RUNNER_TEMP/visitas-ci"
           node --test tests/visitas-contrato.test.cjs tests/visitas-integracion.test.cjs tests/visitas-caja.test.cjs
 
-      - name: Probar migracion final en base efimera
+      - name: Probar migracion final en base efimera limpia
         run: |
           set -euo pipefail
-          psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/migrations/20261020192609_visitas_cotizacion_importe.sql" || {
-            echo "La migracion ya puede estar representada por el fixture; verificando objetos finales."
-          }
-          psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT relrowsecurity
-          FROM pg_class
-          WHERE oid = 'public."CotizacionVisita"'::regclass;
-          SELECT has_table_privilege('PUBLIC', 'public."CotizacionVisita"', 'SELECT') AS public_select;
-          SELECT has_function_privilege('PUBLIC', 'public.validar_inspeccion_visita_contratada()', 'EXECUTE') AS public_execute;
+          createdb -h localhost -U postgres visitas_migracion
+          psql -h localhost -U postgres -d visitas_migracion -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;
+          CREATE SEQUENCE "Cliente_folio_seq";
+          SQL
+
+          cd "$RUNNER_TEMP/visitas-ci"
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/visitas_migracion?schema=public"           DIRECT_URL="postgresql://postgres:postgres@localhost:5432/visitas_migracion?schema=public"             npx prisma db push --skip-generate
+
+          psql -h localhost -U postgres -d visitas_migracion -v ON_ERROR_STOP=1             -f "$GITHUB_WORKSPACE/supabase/migrations/20261020192609_visitas_cotizacion_importe.sql"
+
+          psql -h localhost -U postgres -d visitas_migracion -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          BEGIN
+            IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public."CotizacionVisita"'::regclass) THEN
+              RAISE EXCEPTION 'RLS no quedo habilitado en CotizacionVisita';
+            END IF;
+            IF has_table_privilege('anon', 'public."CotizacionVisita"', 'SELECT')
+               OR has_table_privilege('authenticated', 'public."CotizacionVisita"', 'SELECT') THEN
+              RAISE EXCEPTION 'anon/authenticated conservaron SELECT en CotizacionVisita';
+            END IF;
+            IF has_function_privilege('anon', 'public.validar_inspeccion_visita_contratada()', 'EXECUTE')
+               OR has_function_privilege('authenticated', 'public.validar_inspeccion_visita_contratada()', 'EXECUTE') THEN
+              RAISE EXCEPTION 'anon/authenticated conservaron EXECUTE en validar_inspeccion_visita_contratada';
+            END IF;
+          END
+          $;
           SQL
 
   recorrido-aplicacion:
@@ -113,6 +134,9 @@ jobs:
 
       - name: Instalar dependencias reproducibles
         run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Generar Prisma Client para pruebas de aplicacion
+        run: npx prisma generate
 
       - name: Agenda y zona horaria
         run: node --test tests/agenda-zona-horaria.test.cjs
