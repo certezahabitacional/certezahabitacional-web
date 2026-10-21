@@ -75,6 +75,19 @@ function redirigirError(
   );
 }
 
+async function obtenerReapertura(inspeccionId: string) {
+  const [control] = await prisma.$queryRaw<Array<{
+    reabiertaEn: Date | null;
+  }>>`
+    SELECT "reabiertaEn"
+    FROM "InspeccionControlV2"
+    WHERE "inspeccionId"=${inspeccionId}
+    LIMIT 1
+  `;
+
+  return control?.reabiertaEn ?? null;
+}
+
 async function exigirPermisoEvidencias(
   inspeccionId: string,
   modo: "CONSULTAR" | "MODIFICAR",
@@ -272,6 +285,8 @@ export async function registrarEvidencia(
     "MODIFICAR",
   );
 
+  const reabiertaEn = await obtenerReapertura(inspeccionId);
+
   if (
     !(archivo instanceof File) ||
     archivo.size === 0
@@ -336,13 +351,19 @@ export async function registrarEvidencia(
     }
 
     const totalEvidencias = await prisma.fotografia.count({
-      where: { inspeccionId, hallazgoId },
+      where: {
+        inspeccionId,
+        hallazgoId,
+        ...(reabiertaEn ? { creadaEn: { gte: reabiertaEn } } : {}),
+      },
     });
     if (totalEvidencias >= 4) {
       redirigirError(
         inspeccionId,
         hallazgoId,
-        "Este hallazgo ya tiene el máximo de 4 fotografías.",
+        reabiertaEn
+          ? "Este hallazgo ya tiene el máximo de 4 fotografías nuevas para la corrección actual. La evidencia anterior se conserva como historial."
+          : "Este hallazgo ya tiene el máximo de 4 fotografías.",
       );
     }
   }
@@ -450,8 +471,6 @@ export async function registrarEvidencia(
 
   await invalidarPreReportePorAjusteV1(inspeccionId);
 
-  await invalidarPreReportePorAjusteV1(inspeccionId);
-
   revalidatePath(
     `/panel/inspecciones/${inspeccionId}`,
   );
@@ -518,6 +537,8 @@ export async function eliminarEvidencia(
     "MODIFICAR",
   );
 
+  const reabiertaEn = await obtenerReapertura(inspeccionId);
+
   const fotografia =
     await prisma.fotografia.findFirst({
       where: {
@@ -529,6 +550,7 @@ export async function eliminarEvidencia(
         url: true,
         hallazgoId: true,
         descripcion: true,
+        creadaEn: true,
       },
     });
 
@@ -538,6 +560,14 @@ export async function eliminarEvidencia(
       hallazgoIdContexto ||
         undefined,
       "Evidencia no encontrada.",
+    );
+  }
+
+  if (reabiertaEn && fotografia.creadaEn < reabiertaEn) {
+    redirigirError(
+      inspeccionId,
+      hallazgoIdContexto || fotografia.hallazgoId || undefined,
+      "Esta fotografía pertenece a una revisión anterior de V2 y se conserva como evidencia histórica. Puedes agregar evidencia nueva, pero no eliminar la ya revisada.",
     );
   }
 

@@ -1,0 +1,25 @@
+name: V2 - primera revision de conceptos
+on:
+  push:
+    branches: [codex/visitas-importe-contratado]
+    paths:
+      - 'app/panel/inspecciones/[id]/captura/**'
+      - 'app/panel/inspecciones/[id]/actions-legacy.ts'
+      - 'tests/visitas-primera-revision.test.cjs'
+      - '.github/workflows/visitas-primera-revision.yml'
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validar reglas puras
+        run: node --test tests/visitas-primera-revision.test.cjs
+      - name: Comprobar sintaxis TypeScript de cambios
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false

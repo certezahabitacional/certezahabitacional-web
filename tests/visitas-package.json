@@ -1,0 +1,11 @@
+{
+  "name": "certeza-visitas-isolated-tests",
+  "private": true,
+  "description": "Herramientas de prueba aisladas; no modifica dependencias de la aplicacion.",
+  "dependencies": {
+    "@prisma/client": "6.16.2",
+    "prisma": "6.16.2",
+    "typescript": "5.9.3",
+    "@types/node": "20.19.0"
+  }
+}

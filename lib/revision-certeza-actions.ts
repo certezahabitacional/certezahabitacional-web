@@ -59,6 +59,7 @@ async function cargarContexto(inspeccionId: string) {
       select: {
         id: true,
         folio: true,
+        numeroInspeccion: true,
         estado: true,
         liberacionBloqueada: true,
         requiereCoordinador: true,
@@ -79,6 +80,7 @@ async function cargarContexto(inspeccionId: string) {
   if (!control[0]?.existe) return null;
   if (!usuario?.activo) redirect("/acceso");
   if (!inspeccion) error(inspeccionId, "La inspección no existe.");
+  if (inspeccion.numeroInspeccion !== 1) return null;
 
   return { usuario, inspeccion };
 }

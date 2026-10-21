@@ -252,6 +252,22 @@ export default async function ReportePage({
   const esSeguimiento =
     inspeccion.numeroInspeccion > 1 && Boolean(inspeccion.inspeccionAnteriorId);
   const versionAnterior = Math.max(1, inspeccion.numeroInspeccion - 1);
+
+  const [controlReapertura] = esSeguimiento
+    ? await prisma.$queryRaw<Array<{
+        reabiertaEn: Date | null;
+        motivoReapertura: string | null;
+      }>>`
+        SELECT "reabiertaEn","motivoReapertura"
+        FROM "InspeccionControlV2"
+        WHERE "inspeccionId"=${inspeccion.id}
+        LIMIT 1
+      `
+    : [];
+
+  const reabiertaEn = controlReapertura?.reabiertaEn ?? null;
+  const motivoReapertura = controlReapertura?.motivoReapertura ?? null;
+
   const hallazgosConSeguimiento = inspeccion.hallazgos.filter(
     (hallazgo) => Boolean(hallazgo.hallazgoAnteriorId),
   );
@@ -259,13 +275,17 @@ export default async function ReportePage({
     (hallazgo) => !hallazgo.hallazgoAnteriorId,
   );
 
+  const firmasVigentesReporte = reabiertaEn
+    ? inspeccion.firmas.filter((firma) => firma.firmadaEn >= reabiertaEn)
+    : inspeccion.firmas;
+
   const firmaInspector =
-    inspeccion.firmas.find(
+    firmasVigentesReporte.find(
       (firma) => firma.tipo === "INSPECTOR",
     ) ?? null;
 
   const firmaCliente =
-    inspeccion.firmas.find(
+    firmasVigentesReporte.find(
       (firma) => firma.tipo === "CLIENTE",
     ) ?? null;
 
@@ -666,6 +686,15 @@ export default async function ReportePage({
                 <strong className="text-white">{nuevosHallazgos.length} hallazgo(s) nuevo(s)</strong>.
               </p>
             )}
+
+            {reabiertaEn && (
+              <div className="mt-5 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
+                <strong>Visita reabierta para corrección.</strong>{" "}
+                El reporte conserva la evidencia original de V{inspeccion.numeroInspeccion} y distingue
+                la evidencia agregada después de la devolución de Dirección
+                {motivoReapertura ? `: ${motivoReapertura}` : "."}
+              </div>
+            )}
           </div>
 
           <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
@@ -861,7 +890,14 @@ export default async function ReportePage({
             <div className="mt-5 space-y-5">
               {inspeccion.hallazgos.map(
                 (hallazgo, index) => {
-                  const fotografiasActuales = fotografiasReportePorHallazgo.get(hallazgo.id) ?? hallazgo.fotografias;
+                  const fotografiasActuales =
+                    fotografiasReportePorHallazgo.get(hallazgo.id) ?? hallazgo.fotografias;
+                  const fotografiasOriginalesV2 = reabiertaEn
+                    ? fotografiasActuales.filter((foto) => foto.creadaEn < reabiertaEn)
+                    : fotografiasActuales;
+                  const fotografiasCorreccionV2 = reabiertaEn
+                    ? fotografiasActuales.filter((foto) => foto.creadaEn >= reabiertaEn)
+                    : [];
                   return (
                   <article
                     key={hallazgo.id}
@@ -944,17 +980,37 @@ export default async function ReportePage({
                               vacio="Sin evidencia fotográfica antecedente"
                             />
 
-                            <ComparativoEvidencia
-                              titulo={`ACTUAL · V${inspeccion.numeroInspeccion}`}
-                              subtitulo="Evidencia de seguimiento"
-                              fotografias={fotografiasActuales.map((foto) => ({
-                                id: foto.id,
-                                descripcion: foto.descripcion,
-                                imagenUrl: urlPorFoto.get(foto.id) ?? null,
-                                notaEditorial: seleccionEditorial.notaPorFotografia.get(foto.id) ?? null,
-                              }))}
-                              vacio="Sin evidencia fotográfica actual seleccionada"
-                            />
+                            <div className="space-y-3">
+                              <ComparativoEvidencia
+                                titulo={reabiertaEn
+                                  ? `V${inspeccion.numeroInspeccion} · EVIDENCIA ORIGINAL`
+                                  : `ACTUAL · V${inspeccion.numeroInspeccion}`}
+                                subtitulo={reabiertaEn
+                                  ? "Registrada antes de la devolución de Dirección"
+                                  : "Evidencia de seguimiento"}
+                                fotografias={fotografiasOriginalesV2.map((foto) => ({
+                                  id: foto.id,
+                                  descripcion: foto.descripcion,
+                                  imagenUrl: urlPorFoto.get(foto.id) ?? null,
+                                  notaEditorial: seleccionEditorial.notaPorFotografia.get(foto.id) ?? null,
+                                }))}
+                                vacio="Sin evidencia fotográfica original seleccionada"
+                              />
+
+                              {reabiertaEn && (
+                                <ComparativoEvidencia
+                                  titulo={`V${inspeccion.numeroInspeccion} · CORRECCIÓN`}
+                                  subtitulo="Evidencia agregada después de la reapertura"
+                                  fotografias={fotografiasCorreccionV2.map((foto) => ({
+                                    id: foto.id,
+                                    descripcion: foto.descripcion,
+                                    imagenUrl: urlPorFoto.get(foto.id) ?? null,
+                                    notaEditorial: seleccionEditorial.notaPorFotografia.get(foto.id) ?? null,
+                                  }))}
+                                  vacio="Aún no hay evidencia nueva posterior a la reapertura"
+                                />
+                              )}
+                            </div>
                           </div>
                         </div>
                       ) : esSeguimiento ? (
@@ -992,8 +1048,14 @@ export default async function ReportePage({
                       </div>
 
                       {!hallazgo.hallazgoAnteriorId && fotografiasActuales.length > 0 && (
-                        <div className="mt-7 grid grid-cols-2 gap-4">
-                          {fotografiasActuales.map((foto, fotoIndex) => {
+                        <div className="mt-7 space-y-4">
+                          {reabiertaEn && fotografiasOriginalesV2.length > 0 && (
+                            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                              Evidencia original de V{inspeccion.numeroInspeccion}
+                            </p>
+                          )}
+                          <div className="grid grid-cols-2 gap-4">
+                          {(reabiertaEn ? fotografiasOriginalesV2 : fotografiasActuales).map((foto, fotoIndex) => {
                             const imagenUrl = urlPorFoto.get(foto.id);
                             const notaEditorial = seleccionEditorial.notaPorFotografia.get(foto.id) ?? null;
                             return (
@@ -1022,6 +1084,48 @@ export default async function ReportePage({
                               </figure>
                             );
                           })}
+                          </div>
+
+                          {reabiertaEn && fotografiasCorreccionV2.length > 0 && (
+                            <>
+                              <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                                Evidencia posterior a la corrección
+                              </p>
+                              <div className="grid grid-cols-2 gap-4">
+                                {fotografiasCorreccionV2.map((foto, fotoIndex) => {
+                                  const imagenUrl = urlPorFoto.get(foto.id);
+                                  const notaEditorial =
+                                    seleccionEditorial.notaPorFotografia.get(foto.id) ?? null;
+                                  return (
+                                    <figure key={foto.id} className="overflow-hidden rounded-3xl border border-amber-200">
+                                      {imagenUrl ? (
+                                        <img
+                                          src={imagenUrl}
+                                          alt={foto.descripcion ?? hallazgo.titulo}
+                                          className="h-56 w-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="grid h-56 place-items-center bg-slate-100 text-sm text-slate-400">
+                                          Imagen no disponible
+                                        </div>
+                                      )}
+                                      <figcaption className="p-4 text-sm">
+                                        <p className="font-black">Corrección {fotoIndex + 1}</p>
+                                        <p className="mt-1 text-slate-500">
+                                          {foto.descripcion ?? "Evidencia posterior a la reapertura"}
+                                        </p>
+                                        {notaEditorial && (
+                                          <p className="mt-2 rounded-xl bg-violet-50 p-2 text-xs font-bold text-violet-900">
+                                            {notaEditorial}
+                                          </p>
+                                        )}
+                                      </figcaption>
+                                    </figure>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

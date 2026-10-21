@@ -1,51 +1,50 @@
 "use server";
 
-import { EstadoCotizacion, EstadoPago, RolUsuario, TipoEvento } from "@prisma/client";
+import { RolUsuario } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { obtenerUsuarioConAlcanceZona, puedeAccederZona } from "@/lib/alcance-zona";
-import { registrarAuditoria } from "@/lib/auditoria";
+import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { ErrorOperacionCaja, autorizarExcepcionCaja, registrarPagoCaja } from "@/lib/caja-operaciones";
 import { prisma } from "@/lib/prisma";
 
 function texto(formData: FormData, campo: string) { return String(formData.get(campo) ?? "").trim(); }
 function volver(tipo: "ok" | "error", mensaje: string): never { redirect(`/panel/caja?${tipo}=${encodeURIComponent(mensaje)}`); }
-async function obtenerUsuarioCaja() { const usuario = await obtenerUsuarioConAlcanceZona("/panel/caja"); if (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR) redirect("/acceso"); return usuario; }
-function validarCotizacionActiva(estado: EstadoCotizacion) {
-  if (estado === EstadoCotizacion.CANCELADA) volver("error", "La cotización está cancelada. Caja histórica es solo consulta y no admite pagos ni excepciones.");
-  if (estado !== EstadoCotizacion.AUTORIZADA) volver("error", "Caja solo permite operar cotizaciones aceptadas y autorizadas que permanezcan activas.");
+async function obtenerUsuarioCaja() {
+  const usuario = await obtenerUsuarioConAlcanceZona("/panel/caja");
+  if (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR) redirect("/acceso");
+  return usuario;
 }
-function validarZonaCotizacion(usuario: Awaited<ReturnType<typeof obtenerUsuarioCaja>>, zonaId: string | null) {
-  if (!puedeAccederZona(usuario, zonaId)) volver("error", "No tienes acceso para operar una cotización de otra zona.");
+function actualizarPantallas(inspeccionId: string | null) {
+  for (const ruta of ["/panel/caja", "/panel/caja/historico", "/panel/cotizaciones", "/panel/cotizaciones/visitas", "/panel/inspecciones/nueva", "/panel/inspecciones", "/panel/agenda"]) revalidatePath(ruta);
+  if (inspeccionId) revalidatePath(`/panel/inspecciones/${inspeccionId}`);
 }
 
 export async function registrarPagoLibre(formData: FormData) {
-  const usuario = await obtenerUsuarioCaja(); const cotizacionId = texto(formData, "cotizacionId"); const monto = Number(texto(formData, "monto")); const referencia = texto(formData, "referencia") || null; const metodoPago = texto(formData, "metodoPago") || null; const notas = texto(formData, "notas") || null;
-  if (!cotizacionId) volver("error", "Cotización inválida."); if (!Number.isFinite(monto) || monto <= 0) volver("error", "Captura un importe de pago válido.");
-  const cotizacion = await prisma.cotizacion.findUnique({ where: { id: cotizacionId }, select: { id: true, folio: true, estado: true, total: true, montoPagado: true, zonaId: true } });
-  if (!cotizacion) volver("error", "La cotización no existe."); validarZonaCotizacion(usuario, cotizacion.zonaId); validarCotizacionActiva(cotizacion.estado);
-  const total = Number(cotizacion.total), pagadoActual = Number(cotizacion.montoPagado), nuevoPagado = pagadoActual + monto;
-  if (nuevoPagado > total + 0.001) volver("error", `El pago excede el saldo pendiente de ${(total - pagadoActual).toLocaleString("es-MX", { style: "currency", currency: "MXN" })}.`);
-  const nuevoEstado = nuevoPagado >= total - 0.001 ? EstadoPago.PAGADO : nuevoPagado > 0 ? EstadoPago.PARCIAL : EstadoPago.PENDIENTE;
-  await prisma.$transaction(async (tx) => { await tx.pagoCotizacion.create({ data: { cotizacionId, monto, fechaPago: new Date(), referencia, metodoPago, notas, registradoPorId: usuario.id } }); await tx.cotizacion.update({ where: { id: cotizacionId }, data: { montoPagado: nuevoPagado, estadoPago: nuevoEstado } }); });
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "PagoCotizacion", entidadId: cotizacionId, usuarioId: usuario.id, descripcion: `${usuario.rol} registró un pago de ${monto.toLocaleString("es-MX", { style: "currency", currency: "MXN" })} en ${cotizacion.folio}.` });
-  revalidatePath("/panel/caja"); revalidatePath("/panel/caja/historico"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/inspecciones/nueva"); volver("ok", "Pago registrado correctamente.");
+  const usuario = await obtenerUsuarioCaja();
+  let resultado;
+  try {
+    resultado = await registrarPagoCaja(prisma, { usuarioId: usuario.id, cotizacionId: texto(formData, "cotizacionId"), monto: texto(formData, "monto"), operacionId: texto(formData, "operacionId"), referencia: texto(formData, "referencia"), metodoPago: texto(formData, "metodoPago"), notas: texto(formData, "notas") });
+  } catch (error) {
+    if (error instanceof ErrorOperacionCaja) volver("error", error.message);
+    throw error;
+  }
+  actualizarPantallas(resultado.inspeccionId);
+  volver("ok", resultado.repetido ? "Este pago ya estaba registrado. No se duplicó el abono." : "Pago registrado correctamente.");
 }
 
-export async function autorizarExcepcionApertura(formData: FormData) {
-  const usuario = await obtenerUsuarioCaja(); const cotizacionId = texto(formData, "cotizacionId"), motivo = texto(formData, "motivo"); if (!motivo) volver("error", "Registra el motivo de la excepción.");
-  const cotizacion = await prisma.cotizacion.findUnique({ where: { id: cotizacionId }, select: { estado: true, zonaId: true } }); if (!cotizacion) volver("error", "La cotización no existe."); validarZonaCotizacion(usuario, cotizacion.zonaId); validarCotizacionActiva(cotizacion.estado);
-  await prisma.cotizacion.update({ where: { id: cotizacionId }, data: { excepcionApertura: true, excepcionAperturaPorId: usuario.id, excepcionAperturaEn: new Date(), motivoExcepcionApertura: motivo } });
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "Cotizacion", entidadId: cotizacionId, usuarioId: usuario.id, descripcion: `${usuario.rol} autorizó excepción de pago mínimo del 50% para apertura/agendamiento. Motivo: ${motivo}` });
-  revalidatePath("/panel/caja"); revalidatePath("/panel/caja/historico"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones/nueva"); volver("ok", "Excepción de apertura autorizada.");
+async function registrarExcepcion(formData: FormData, tipo: "APERTURA" | "INICIO") {
+  const usuario = await obtenerUsuarioCaja();
+  if (usuario.rol !== RolUsuario.DIRECTOR) volver("error", "Solo Dirección puede autorizar excepciones de pago.");
+  let resultado;
+  try {
+    resultado = await autorizarExcepcionCaja(prisma, { usuarioId: usuario.id, cotizacionId: texto(formData, "cotizacionId"), motivo: texto(formData, "motivo"), tipo });
+  } catch (error) {
+    if (error instanceof ErrorOperacionCaja) volver("error", error.message);
+    throw error;
+  }
+  actualizarPantallas(resultado.inspeccionId);
+  volver("ok", resultado.repetido ? "La excepción ya estaba autorizada; se conservó su registro original." : "Excepción autorizada y registrada correctamente.");
 }
 
-export async function autorizarExcepcionInicio(formData: FormData) {
-  const usuario = await obtenerUsuarioCaja(); const cotizacionId = texto(formData, "cotizacionId"), motivo = texto(formData, "motivo"); if (!motivo) volver("error", "Registra el motivo de la excepción.");
-  const cotizacion = await prisma.cotizacion.findUnique({ where: { id: cotizacionId }, select: { estado: true, zonaId: true, inspeccion: { select: { id: true } } } }); if (!cotizacion) volver("error", "La cotización no existe."); validarZonaCotizacion(usuario, cotizacion.zonaId); validarCotizacionActiva(cotizacion.estado);
-  await prisma.$transaction(async (tx) => {
-    await tx.cotizacion.update({ where: { id: cotizacionId }, data: { excepcionInicio: true, excepcionInicioPorId: usuario.id, excepcionInicioEn: new Date(), motivoExcepcionInicio: motivo } });
-    if (cotizacion.inspeccion) await tx.inspeccion.update({ where: { id: cotizacion.inspeccion.id }, data: { inicioLiberadoSinPago: true, inicioLiberadoPorId: usuario.id, inicioLiberadoEn: new Date(), motivoLiberacionPago: motivo } });
-  });
-  await registrarAuditoria({ tipo: TipoEvento.EDITAR, entidad: "Cotizacion", entidadId: cotizacionId, usuarioId: usuario.id, descripcion: `${usuario.rol} autorizó excepción de pago total para liberación/inicio de inspección en campo. Motivo: ${motivo}` });
-  revalidatePath("/panel/caja"); revalidatePath("/panel/caja/historico"); revalidatePath("/panel/cotizaciones"); revalidatePath("/panel/agenda"); revalidatePath("/panel/inspecciones"); revalidatePath("/panel/inspecciones/nueva"); if (cotizacion.inspeccion) revalidatePath(`/panel/inspecciones/${cotizacion.inspeccion.id}`); volver("ok", "Excepción de inicio autorizada y sincronizada con la inspección.");
-}
+export async function autorizarExcepcionApertura(formData: FormData) { await registrarExcepcion(formData, "APERTURA"); }
+export async function autorizarExcepcionInicio(formData: FormData) { await registrarExcepcion(formData, "INICIO"); }

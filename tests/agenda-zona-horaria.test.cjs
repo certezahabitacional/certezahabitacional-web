@@ -16,7 +16,7 @@ const enums = {
 };
 function fixture(zone, instant, options = {}) {
   const row = {
-    id: 'test-inspection', folio: 'TEST-001', estado: 'PROGRAMADA',
+    id: 'test-inspection', folio: 'TEST-001', numeroInspeccion: 1, estado: 'PROGRAMADA',
     fechaProgramada: new Date(instant), direccion: 'Test address',
     zonaId: 'test-zone', zonaHoraria: options.fallback || zone,
     zona: zone ? { nombre: 'Test zone', codigo: 'TEST', zonaHoraria: zone } : null,
@@ -47,6 +47,10 @@ function fixture(zone, instant, options = {}) {
       },
     } },
     '@/lib/auditoria': { registrarAuditoria: async (args) => audits.push(args) },
+    '@/lib/visitas-etiqueta': {
+      etiquetaVisita: (folio, numero = 1) =>
+        numero <= 1 ? `${folio} — V1 — Inspección inicial` : `${folio} — V${numero} — Seguimiento de V${numero - 1}`,
+    },
     './actions': { actualizarAgenda() {} },
   };
   function load(file) {

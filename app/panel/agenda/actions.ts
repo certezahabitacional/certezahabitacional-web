@@ -13,9 +13,8 @@ function volver(tipo: "ok" | "error", mensaje: string): never { redirect(`/panel
 async function gestorAgenda() { const usuario=await obtenerUsuarioConAlcanceZona("/panel/agenda"); if(usuario.rol!==RolUsuario.DIRECTOR&&usuario.rol!==RolUsuario.ADMINISTRADOR) redirect("/acceso"); return usuario; }
 
 export async function actualizarAgenda(formData: FormData) {
-  const usuario=await gestorAgenda(); const inspeccionId=texto(formData,"inspeccionId"),fechaTexto=texto(formData,"fechaProgramada"),estadoTexto=texto(formData,"estado");
-  const permitidos:EstadoInspeccion[]=[EstadoInspeccion.PROGRAMADA,EstadoInspeccion.EN_PROCESO,EstadoInspeccion.FINALIZADA];
-  if(!inspeccionId||!fechaTexto||!permitidos.includes(estadoTexto as EstadoInspeccion)) volver("error","Fecha o estatus inválidos.");
+  const usuario=await gestorAgenda(); const inspeccionId=texto(formData,"inspeccionId"),fechaTexto=texto(formData,"fechaProgramada");
+  if(!inspeccionId||!fechaTexto) volver("error","Fecha inválida.");
   const inspeccion=await prisma.inspeccion.findUnique({where:{id:inspeccionId},select:{id:true,folio:true,estado:true,fechaProgramada:true,cotizacionId:true,zonaId:true,zonaHoraria:true,zona:{select:{zonaHoraria:true}}}});
   if(!inspeccion) volver("error","La inspección no existe.");
   if(!puedeAccederZona(usuario,inspeccion.zonaId)) volver("error","No tienes acceso para modificar la agenda de otra zona.");
@@ -23,8 +22,11 @@ export async function actualizarAgenda(formData: FormData) {
   const zonaHoraria=inspeccion.zona?.zonaHoraria??inspeccion.zonaHoraria??"America/Ciudad_Juarez";
   const fechaProgramada=fromZonedTime(fechaTexto,zonaHoraria);
   if(Number.isNaN(fechaProgramada.getTime())) volver("error","La fecha agendada no es válida.");
-  await prisma.inspeccion.update({where:{id:inspeccionId},data:{fechaProgramada,estado:estadoTexto as EstadoInspeccion,agendadaPorId:usuario.id}});
-  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Inspeccion",entidadId:inspeccionId,usuarioId:usuario.id,descripcion:`${usuario.rol} actualizó Agenda de ${inspeccion.folio}: fecha ${inspeccion.fechaProgramada.toISOString()} → ${fechaProgramada.toISOString()}, estatus ${inspeccion.estado} → ${estadoTexto}.`});
+  if(inspeccion.estado!==EstadoInspeccion.PROGRAMADA) {
+    volver("error","Agenda solo permite reagendar inspecciones PROGRAMADAS. El inicio, revisión y cierre deben realizarse desde el flujo operativo correspondiente.");
+  }
+  await prisma.inspeccion.update({where:{id:inspeccionId},data:{fechaProgramada,agendadaPorId:usuario.id}});
+  await registrarAuditoria({tipo:TipoEvento.EDITAR,entidad:"Inspeccion",entidadId:inspeccionId,usuarioId:usuario.id,descripcion:`${usuario.rol} reagendó ${inspeccion.folio}: ${inspeccion.fechaProgramada.toISOString()} → ${fechaProgramada.toISOString()}.`});
   revalidatePath("/panel/agenda");revalidatePath("/panel/inspecciones");revalidatePath("/panel/cotizaciones");revalidatePath("/panel/caja");volver("ok","Agenda actualizada correctamente.");
 }
 

@@ -1169,11 +1169,32 @@ export async function crearHallazgo(formData: FormData) {
 
   const costoTexto = texto(formData, "costoEstimado");
   const costoEstimado = costoTexto ? Number(costoTexto) : null;
+  const guiaItemId = texto(formData, "guiaItemId") || null;
+
+  if (guiaItemId) {
+    const patron = '%"tipo":"PRIMERA_REVISION_V2"%';
+    const [guia] = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "GuiaInspeccionItem"
+      WHERE "id"=${guiaItemId}
+        AND "inspeccionId"=${inspeccionId}
+        AND "estadoV3"='PENDIENTE'
+        AND COALESCE("observacion",'') LIKE ${patron}
+      LIMIT 1
+    `;
+    if (!guia) {
+      redirigirError(
+        inspeccionId,
+        "El concepto de primera revisión no está disponible para registrar un hallazgo.",
+      );
+    }
+  }
 
   const nuevoHallazgo = await prisma.hallazgo.create({
     data: {
       inspeccionId,
       creadoPorId: session.user.id,
+      guiaItemId,
       area,
       titulo,
       descripcion,
@@ -1193,6 +1214,19 @@ export async function crearHallazgo(formData: FormData) {
           : null,
     },
   });
+
+  if (guiaItemId) {
+    await prisma.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='CON_HALLAZGO',
+          "completado"=true,
+          "cerradoEn"=NOW(),
+          "actualizadoEn"=NOW()
+      WHERE "id"=${guiaItemId}
+        AND "inspeccionId"=${inspeccionId}
+        AND "estadoV3"='PENDIENTE'
+    `;
+  }
 
   const hallazgos = await prisma.hallazgo.findMany({
     where: { inspeccionId },
@@ -1334,56 +1368,89 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
     );
   }
 
-  const hallazgoAnterior = await prisma.hallazgo.findFirst({
-    where: {
-      id: hallazgoAnteriorId,
-      inspeccionId: inspeccion.inspeccionAnteriorId,
-    },
-  });
-
-  if (!hallazgoAnterior) {
+  if (observacionSeguimiento.length < 3) {
     redirigirError(
       inspeccionId,
-      "El hallazgo antecedente no pertenece a la inspección anterior.",
+      "Describe lo observado durante la verificación actual.",
     );
   }
 
-  const yaRegistrado = await prisma.hallazgo.findFirst({
-    where: {
-      inspeccionId,
-      hallazgoAnteriorId,
-    },
-    select: { id: true },
+  const resultadoSeguimiento = await prisma.$transaction(async (tx) => {
+    const bloqueados = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "Hallazgo"
+      WHERE "id"=${hallazgoAnteriorId}
+        AND "inspeccionId"=${inspeccion.inspeccionAnteriorId}
+        AND COALESCE("resuelto",false)=false
+        AND COALESCE("estadoSeguimiento"::text,'') <> 'CORREGIDO'
+      FOR UPDATE
+    `;
+
+    if (!bloqueados[0]) {
+      return {
+        ok: false,
+        error:
+          "El hallazgo antecedente no pertenece a la inspección anterior o ya fue corregido.",
+      } as const;
+    }
+
+    const hallazgoAnterior = await tx.hallazgo.findUnique({
+      where: { id: hallazgoAnteriorId },
+    });
+
+    if (!hallazgoAnterior) {
+      return {
+        ok: false,
+        error: "El hallazgo antecedente ya no está disponible.",
+      } as const;
+    }
+
+    const yaRegistrado = await tx.hallazgo.findFirst({
+      where: {
+        inspeccionId,
+        hallazgoAnteriorId,
+      },
+      select: { id: true },
+    });
+
+    if (yaRegistrado) {
+      return {
+        ok: false,
+        error:
+          "Este hallazgo antecedente ya tiene seguimiento en la inspección actual.",
+      } as const;
+    }
+
+    const nuevoHallazgo = await tx.hallazgo.create({
+      data: {
+        inspeccionId,
+        creadoPorId: session.user.id,
+        hallazgoAnteriorId,
+        estadoSeguimiento,
+        observacionSeguimiento,
+        area: hallazgoAnterior.area,
+        titulo: hallazgoAnterior.titulo,
+        descripcion: hallazgoAnterior.descripcion,
+        clasificacion: hallazgoAnterior.clasificacion,
+        prioridad: hallazgoAnterior.prioridad,
+        recomendacion: hallazgoAnterior.recomendacion,
+        ubicacion: hallazgoAnterior.ubicacion,
+        costoEstimado: hallazgoAnterior.costoEstimado,
+        tiempoReparacion: hallazgoAnterior.tiempoReparacion,
+        responsable: hallazgoAnterior.responsable,
+        resuelto:
+          estadoSeguimiento === EstadoSeguimientoHallazgo.CORREGIDO,
+      },
+    });
+
+    return { ok: true, hallazgoAnterior, nuevoHallazgo } as const;
   });
 
-  if (yaRegistrado) {
-    redirigirError(
-      inspeccionId,
-      "Este hallazgo antecedente ya tiene seguimiento en la inspección actual.",
-    );
+  if (!resultadoSeguimiento.ok) {
+    redirigirError(inspeccionId, resultadoSeguimiento.error);
   }
 
-  const nuevoHallazgo = await prisma.hallazgo.create({
-    data: {
-      inspeccionId,
-      creadoPorId: session.user.id,
-      hallazgoAnteriorId,
-      estadoSeguimiento,
-      observacionSeguimiento: observacionSeguimiento || null,
-      area: hallazgoAnterior.area,
-      titulo: hallazgoAnterior.titulo,
-      descripcion: hallazgoAnterior.descripcion,
-      clasificacion: hallazgoAnterior.clasificacion,
-      prioridad: hallazgoAnterior.prioridad,
-      recomendacion: hallazgoAnterior.recomendacion,
-      ubicacion: hallazgoAnterior.ubicacion,
-      costoEstimado: hallazgoAnterior.costoEstimado,
-      tiempoReparacion: hallazgoAnterior.tiempoReparacion,
-      responsable: hallazgoAnterior.responsable,
-      resuelto:
-        estadoSeguimiento === EstadoSeguimientoHallazgo.CORREGIDO,
-    },
-  });
+  const { hallazgoAnterior, nuevoHallazgo } = resultadoSeguimiento;
 
   const hallazgos = await prisma.hallazgo.findMany({
     where: { inspeccionId },
@@ -1491,6 +1558,8 @@ export async function actualizarHallazgo(formData: FormData) {
       id: true,
       folio: true,
       estado: true,
+      numeroInspeccion: true,
+      inspeccionAnteriorId: true,
       inspector: {
         select: {
           usuarioId: true,
@@ -1650,6 +1719,8 @@ export async function finalizarCaptura(formData: FormData) {
       id: true,
       folio: true,
       estado: true,
+      numeroInspeccion: true,
+      inspeccionAnteriorId: true,
       inspector: {
         select: {
           usuarioId: true,
@@ -1690,11 +1761,94 @@ export async function finalizarCaptura(formData: FormData) {
     );
   }
 
-  if (inspeccion.hallazgos.length === 0) {
+  const esSeguimiento =
+    inspeccion.numeroInspeccion > 1 && Boolean(inspeccion.inspeccionAnteriorId);
+
+  if (!esSeguimiento && inspeccion.hallazgos.length === 0) {
     redirigirError(
       inspeccionId,
       "Registra al menos un hallazgo antes de finalizar la captura.",
     );
+  }
+
+  if (esSeguimiento) {
+    const [pendientes] = await prisma.$queryRaw<Array<{
+      antecedentesSinSeguimiento: number;
+      seguimientosInvalidos: number;
+      primerasRevisionesIncompletas: number;
+    }>>`
+      SELECT
+        (
+          SELECT COUNT(*)::int
+          FROM "Hallazgo" h
+          WHERE h."inspeccionId"=${inspeccion.inspeccionAnteriorId}
+            AND COALESCE(h."resuelto",false)=false
+            AND COALESCE(h."estadoSeguimiento"::text,'') <> 'CORREGIDO'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "Hallazgo" s
+              WHERE s."inspeccionId"=${inspeccionId}
+                AND s."hallazgoAnteriorId"=h."id"
+            )
+        ) AS "antecedentesSinSeguimiento",
+        (
+          SELECT COUNT(*)::int
+          FROM "Hallazgo" s
+          WHERE s."inspeccionId"=${inspeccionId}
+            AND s."hallazgoAnteriorId" IS NOT NULL
+            AND (
+              s."estadoSeguimiento" IS NULL
+              OR s."estadoSeguimiento"::text NOT IN (
+                'CORREGIDO',
+                'PARCIALMENTE_CORREGIDO',
+                'NO_CORREGIDO',
+                'CORRECCION_NO_SATISFACTORIA',
+                'NO_VERIFICABLE'
+              )
+              OR NULLIF(BTRIM(COALESCE(s."observacionSeguimiento",'')),'') IS NULL
+            )
+        ) AS "seguimientosInvalidos",
+        (
+          SELECT COUNT(*)::int
+          FROM "GuiaInspeccionItem" g
+          WHERE g."inspeccionId"=${inspeccionId}
+            AND COALESCE(g."observacion",'') LIKE '%"tipo":"PRIMERA_REVISION_V2"%'
+            AND (
+              g."estadoV3"='PENDIENTE'
+              OR g."completado"=false
+              OR (
+                g."estadoV3"='CON_HALLAZGO'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM "Hallazgo" h
+                  WHERE h."inspeccionId"=${inspeccionId}
+                    AND h."guiaItemId"=g."id"
+                )
+              )
+            )
+        ) AS "primerasRevisionesIncompletas"
+    `;
+
+    if (Number(pendientes?.antecedentesSinSeguimiento ?? 0) > 0) {
+      redirigirError(
+        inspeccionId,
+        `Faltan por verificar ${pendientes.antecedentesSinSeguimiento} hallazgo(s) pendiente(s) de V${inspeccion.numeroInspeccion - 1}.`,
+      );
+    }
+
+    if (Number(pendientes?.seguimientosInvalidos ?? 0) > 0) {
+      redirigirError(
+        inspeccionId,
+        `Hay ${pendientes.seguimientosInvalidos} seguimiento(s) sin estado u observación final válida.`,
+      );
+    }
+
+    if (Number(pendientes?.primerasRevisionesIncompletas ?? 0) > 0) {
+      redirigirError(
+        inspeccionId,
+        `Hay ${pendientes.primerasRevisionesIncompletas} concepto(s) iniciados como primera revisión en V${inspeccion.numeroInspeccion} que todavía no están cerrados.`,
+      );
+    }
   }
 
   await validarPagoCompleto(inspeccionId);
@@ -1710,6 +1864,17 @@ export async function finalizarCaptura(formData: FormData) {
         estado: EstadoInspeccion.REPORTE_PENDIENTE,
       },
     });
+
+    if (esSeguimiento) {
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "capturaCerrada"=true,
+            "capturaCerradaEn"=NOW(),
+            "capturaCerradaPorId"=${session.user.id},
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+    }
 
     await tx.revisionInspeccion.updateMany({
       where: {
@@ -1755,6 +1920,8 @@ async function validarExpedienteParaRevision(
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id: inspeccionId },
     select: {
+      numeroInspeccion: true,
+      inspeccionAnteriorId: true,
       hallazgos: {
         select: {
           id: true,
@@ -1778,7 +1945,10 @@ async function validarExpedienteParaRevision(
 
   const faltantes: string[] = [];
 
-  if (inspeccion.hallazgos.length === 0) {
+  const esSeguimiento =
+    inspeccion.numeroInspeccion > 1 && Boolean(inspeccion.inspeccionAnteriorId);
+
+  if (!esSeguimiento && inspeccion.hallazgos.length === 0) {
     faltantes.push("al menos un hallazgo registrado");
   }
 
@@ -2060,6 +2230,7 @@ export async function aprobarGerencia(formData: FormData) {
     select: {
       id: true,
       folio: true,
+      numeroInspeccion: true,
       estado: true,
       liberacionBloqueada: true,
       revisiones: {
@@ -2134,19 +2305,23 @@ export async function aprobarGerencia(formData: FormData) {
       },
     });
 
-    await tx.inspeccion.update({
-      where: { id: inspeccionId },
-      data: {
-        estado: EstadoInspeccion.FINALIZADA,
-      },
-    });
+    if (inspeccion.numeroInspeccion === 1) {
+      await tx.inspeccion.update({
+        where: { id: inspeccionId },
+        data: {
+          estado: EstadoInspeccion.FINALIZADA,
+        },
+      });
+    }
   });
 
   await registrarAuditoria({
     tipo: TipoEvento.REVISION_INSPECCION,
     entidad: "RevisionInspeccion",
     inspeccionId,
-    descripcion: `Gerencia aprobó y cerró la inspección ${inspeccion.folio}${
+    descripcion: inspeccion.numeroInspeccion > 1
+      ? `Gerencia aprobó la revisión de V${inspeccion.numeroInspeccion} ${inspeccion.folio}; el expediente permanece pendiente de autorización final de Dirección.`
+      : `Gerencia aprobó y cerró la inspección ${inspeccion.folio}${
       comentario ? `. Comentario: ${comentario}` : "."
     }`,
   });
@@ -2155,7 +2330,9 @@ export async function aprobarGerencia(formData: FormData) {
 
   redirigirOk(
     inspeccionId,
-    "Gerencia aprobó la inspección. El expediente quedó FINALIZADO, sujeto a cualquier auditoría o veto posterior de Dirección.",
+    inspeccion.numeroInspeccion > 1
+      ? `Gerencia aprobó la revisión de V${inspeccion.numeroInspeccion}. El reporte permanece pendiente de autorización final de Dirección.`
+      : "Gerencia aprobó la inspección. El expediente quedó FINALIZADO, sujeto a cualquier auditoría o veto posterior de Dirección.",
   );
 }
 
@@ -2315,8 +2492,11 @@ export async function aprobarDireccion(formData: FormData) {
     select: {
       id: true,
       folio: true,
+      numeroInspeccion: true,
       estado: true,
       liberacionBloqueada: true,
+      requiereCoordinador: true,
+      requiereGerenteZona: true,
     },
   });
 
@@ -2347,6 +2527,44 @@ export async function aprobarDireccion(formData: FormData) {
       inspeccionId,
       `Dirección no puede aprobar un expediente incompleto. Faltan: ${estadoExpediente.faltantes.join(", ")}.`,
     );
+  }
+
+  if (inspeccion.numeroInspeccion > 1) {
+    if (inspeccion.requiereCoordinador) {
+      const vistoBueno = await prisma.revisionInspeccion.findFirst({
+        where: {
+          inspeccionId,
+          rol: RolUsuario.COORDINADOR,
+          decision: TipoDecisionRevision.VISTO_BUENO,
+          estado: EstadoDecisionRevision.VIGENTE,
+        },
+        select: { id: true },
+      });
+      if (!vistoBueno) {
+        redirigirError(
+          inspeccionId,
+          "V2+ requiere el visto bueno vigente de Coordinación antes de la autorización final de Dirección.",
+        );
+      }
+    }
+
+    if (inspeccion.requiereGerenteZona) {
+      const aprobacionGerencia = await prisma.revisionInspeccion.findFirst({
+        where: {
+          inspeccionId,
+          rol: RolUsuario.GERENTE,
+          decision: TipoDecisionRevision.APROBADO,
+          estado: EstadoDecisionRevision.VIGENTE,
+        },
+        select: { id: true },
+      });
+      if (!aprobacionGerencia) {
+        redirigirError(
+          inspeccionId,
+          "V2+ requiere la aprobación vigente de Gerencia antes de la autorización final de Dirección.",
+        );
+      }
+    }
   }
 
   await validarPagoCompleto(inspeccionId);
@@ -2429,7 +2647,9 @@ export async function noAprobarDireccion(formData: FormData) {
     select: {
       id: true,
       folio: true,
+      numeroInspeccion: true,
       estado: true,
+      inspectorId: true,
     },
   });
 
@@ -2468,33 +2688,65 @@ export async function noAprobarDireccion(formData: FormData) {
       },
     });
 
-    await tx.inspeccion.update({
-      where: { id: inspeccionId },
-      data: {
-        estado: EstadoInspeccion.REPORTE_PENDIENTE,
-        liberacionBloqueada: true,
-        bloqueadaPorId: session.user.id,
-        bloqueadaEn: new Date(),
-        motivoBloqueoLiberacion: comentario,
-      },
-    });
+    if (inspeccion.numeroInspeccion > 1) {
+      if (!inspeccion.inspectorId) {
+        throw new Error("La visita de seguimiento no tiene Inspector asignado.");
+      }
+
+      await tx.inspeccion.update({
+        where: { id: inspeccionId },
+        data: {
+          estado: EstadoInspeccion.EN_PROCESO,
+          liberacionBloqueada: false,
+          bloqueadaPorId: null,
+          bloqueadaEn: null,
+          motivoBloqueoLiberacion: null,
+        },
+      });
+
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "capturaCerrada"=false,
+            "reabiertaEn"=NOW(),
+            "reabiertaPorId"=${session.user.id},
+            "motivoReapertura"=${comentario},
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+    } else {
+      await tx.inspeccion.update({
+        where: { id: inspeccionId },
+        data: {
+          estado: EstadoInspeccion.REPORTE_PENDIENTE,
+          liberacionBloqueada: true,
+          bloqueadaPorId: session.user.id,
+          bloqueadaEn: new Date(),
+          motivoBloqueoLiberacion: comentario,
+        },
+      });
+    }
   });
 
   await registrarAuditoria({
-    tipo: TipoEvento.BLOQUEAR_LIBERACION,
+    tipo: inspeccion.numeroInspeccion > 1
+      ? TipoEvento.REVISION_INSPECCION
+      : TipoEvento.BLOQUEAR_LIBERACION,
     entidad: "Inspeccion",
     entidadId: inspeccion.id,
     inspeccionId,
     descripcion:
-      `Dirección NO APROBÓ la inspección ${inspeccion.folio}. ` +
-      `Todas las aprobaciones vigentes anteriores quedaron invalidadas. Motivo: ${comentario}`,
+      inspeccion.numeroInspeccion > 1
+        ? `Dirección devolvió V${inspeccion.numeroInspeccion} ${inspeccion.folio} al Inspector para corrección. Solo las revisiones vigentes de esta visita quedaron invalidadas; V1 y visitas anteriores permanecen intactas. Motivo: ${comentario}`
+        : `Dirección NO APROBÓ la inspección ${inspeccion.folio}. Todas las aprobaciones vigentes anteriores de esta inspección quedaron invalidadas. Motivo: ${comentario}`,
   });
 
   revalidarInspeccion(inspeccionId);
 
   redirigirOk(
     inspeccionId,
-    "Dirección no aprobó la inspección. La liberación quedó bloqueada y las aprobaciones anteriores fueron invalidadas.",
+    inspeccion.numeroInspeccion > 1
+      ? `V${inspeccion.numeroInspeccion} fue devuelta al Inspector para corrección. La visita regresó a EN PROCESO sin modificar V1 ni visitas anteriores.`
+      : "Dirección no aprobó la inspección. La liberación quedó bloqueada y las aprobaciones anteriores fueron invalidadas.",
   );
 }
 

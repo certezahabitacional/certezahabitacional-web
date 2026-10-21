@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { actualizarHallazgo, crearHallazgo, registrarSeguimientoHallazgo } from "../actions";
+import { registrarPrimeraRevisionV2 } from "./primera-revision-actions";
 
 type SearchParams = Promise<{
   hallazgoId?: string;
@@ -12,6 +13,7 @@ type SearchParams = Promise<{
   area?: string;
   ok?: string;
   error?: string;
+  primeraRevisionItemId?: string;
 }>;
 
 type FotoComparativa = {
@@ -167,6 +169,50 @@ export default async function CapturaPage({
     !esSeguimiento && query.area && areasV1.some((area) => area.nombre === query.area)
       ? query.area
       : "";
+
+  const conceptosPrimeraRevision =
+    esSeguimiento && inspeccion.inspeccionAnteriorId
+      ? await prisma.$queryRaw<Array<{
+          id: string;
+          area: string;
+          concepto: string;
+          especificacion: string | null;
+          motivoNoAplica: string | null;
+        }>>`
+          SELECT g."id",g."area",g."concepto",g."especificacion",g."motivoNoAplica"
+          FROM "GuiaInspeccionItem" g
+          WHERE g."inspeccionId"=${inspeccion.inspeccionAnteriorId}
+            AND g."estadoV3"='NO_APLICA'
+            AND COALESCE(g."motivoNoAplica",'') LIKE '[PARTIDA_COMPLETA:%'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "GuiaInspeccionItem" actual
+              WHERE actual."inspeccionId"=${inspeccion.id}
+                AND COALESCE(actual."observacion",'') LIKE
+                  ('%"antecedenteItemId":"' || g."id" || '"%')
+            )
+          ORDER BY g."area",g."orden",g."concepto"
+        `
+      : [];
+
+  const primeraRevisionActual = query.primeraRevisionItemId
+    ? (
+        await prisma.$queryRaw<Array<{
+          id: string;
+          area: string;
+          concepto: string;
+          especificacion: string | null;
+        }>>`
+          SELECT "id","area","concepto","especificacion"
+          FROM "GuiaInspeccionItem"
+          WHERE "id"=${query.primeraRevisionItemId}
+            AND "inspeccionId"=${inspeccion.id}
+            AND "estadoV3"='PENDIENTE'
+            AND COALESCE("observacion",'') LIKE '%"tipo":"PRIMERA_REVISION_V2"%'
+          LIMIT 1
+        `
+      )[0] ?? null
+    : null;
 
   const hallazgosAntecedentes =
     esSeguimiento && inspeccion.inspeccionAnteriorId
@@ -540,6 +586,64 @@ export default async function CapturaPage({
           </section>
         )}
 
+        {esSeguimiento && conceptosPrimeraRevision.length > 0 && (
+          <section className="mt-7 rounded-3xl border border-amber-300/20 bg-amber-300/5 p-5 sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">
+              Conceptos no inspeccionados en V{inspeccion.numeroInspeccion - 1}
+            </p>
+            <h2 className="mt-2 text-2xl font-black">Primera revisión en V{inspeccion.numeroInspeccion}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Estos conceptos quedaron sin inspección efectiva en la visita anterior. No se consideran “Sin hallazgo”.
+              Puedes revisarlos por primera vez en esta visita y conservar la trazabilidad del motivo original.
+            </p>
+
+            <div className="mt-5 space-y-4">
+              {conceptosPrimeraRevision.map((concepto) => (
+                <article key={concepto.id} className="rounded-2xl border border-white/10 bg-slate-950 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-200">
+                    {concepto.area}
+                  </p>
+                  <h3 className="mt-2 font-black">{concepto.concepto}</h3>
+                  {concepto.especificacion && (
+                    <p className="mt-1 text-sm text-slate-400">{concepto.especificacion}</p>
+                  )}
+                  <p className="mt-2 text-xs text-slate-500">
+                    Antecedente: {concepto.motivoNoAplica?.replace(/^\[PARTIDA_COMPLETA:[^\]]+\]\s*/, "") || "No inspeccionado en la visita anterior."}
+                  </p>
+
+                  <form action={registrarPrimeraRevisionV2} className="mt-4 grid gap-3">
+                    <input type="hidden" name="inspeccionId" value={id} />
+                    <input type="hidden" name="antecedenteItemId" value={concepto.id} />
+                    <textarea
+                      name="observacion"
+                      required
+                      rows={2}
+                      placeholder="Describe lo observado durante esta primera revisión."
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm"
+                    />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        name="resultado"
+                        value="SIN_HALLAZGO"
+                        className="rounded-xl border border-emerald-300/30 px-4 py-2 text-sm font-black text-emerald-200"
+                      >
+                        Primera revisión · sin hallazgo
+                      </button>
+                      <button
+                        name="resultado"
+                        value="CON_HALLAZGO"
+                        className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-black text-slate-950"
+                      >
+                        Primera revisión · registrar hallazgo
+                      </button>
+                    </div>
+                  </form>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section
           id="nuevo-hallazgo"
           className={`mt-7 scroll-mt-6 rounded-3xl border bg-slate-900 p-5 sm:p-6 ${
@@ -567,9 +671,11 @@ export default async function CapturaPage({
                   ? "Editar seguimiento"
                   : hallazgoEnEdicion
                     ? "Editar hallazgo"
-                    : esSeguimiento
-                      ? "Nuevo hallazgo / solicitud especial"
-                      : "Nuevo hallazgo"}
+                    : primeraRevisionActual
+                      ? `Primera revisión en V${inspeccion.numeroInspeccion} · hallazgo`
+                      : esSeguimiento
+                        ? "Nuevo hallazgo / solicitud especial"
+                        : "Nuevo hallazgo"}
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -577,9 +683,11 @@ export default async function CapturaPage({
                   ? "Actualiza el resultado de la verificación y, si es necesario, corrige la información técnica del hallazgo. Las evidencias existentes se conservarán."
                   : hallazgoEnEdicion
                     ? "Corrige la información del hallazgo y guarda los cambios. Las evidencias existentes se conservarán."
-                    : esSeguimiento
-                      ? "Utiliza esta opción únicamente si durante la visita aparece una condición nueva o el cliente solicita una revisión especial fuera de los pendientes heredados."
-                      : "El área proviene del recorrido V1. Guarda el hallazgo y agrega inmediatamente sus cuatro evidencias iniciales."}
+                    : primeraRevisionActual
+                      ? "Este concepto no fue inspeccionado en la visita anterior. Documenta el hallazgo encontrado durante su primera revisión en la visita actual."
+                      : esSeguimiento
+                        ? "Utiliza esta opción únicamente si durante la visita aparece una condición nueva o el cliente solicita una revisión especial fuera de los pendientes heredados."
+                        : "El área proviene del recorrido V1. Guarda el hallazgo y agrega inmediatamente sus cuatro evidencias iniciales."}
               </p>
             </div>
 
@@ -606,6 +714,10 @@ export default async function CapturaPage({
               name="inspeccionId"
               value={id}
             />
+
+            {primeraRevisionActual && !hallazgoEnEdicion && (
+              <input type="hidden" name="guiaItemId" value={primeraRevisionActual.id} />
+            )}
 
             {hallazgoEnEdicion && (
               <input
@@ -683,7 +795,7 @@ export default async function CapturaPage({
                 name="area"
                 label="Área *"
                 placeholder="Instalación eléctrica"
-                defaultValue={hallazgoEnEdicion?.area ?? ""}
+                defaultValue={hallazgoEnEdicion?.area ?? primeraRevisionActual?.area ?? ""}
               />
             )}
 
@@ -691,7 +803,7 @@ export default async function CapturaPage({
               name="titulo"
               label="Título *"
               placeholder="Contacto sin tierra física"
-              defaultValue={hallazgoEnEdicion?.titulo ?? ""}
+              defaultValue={hallazgoEnEdicion?.titulo ?? primeraRevisionActual?.concepto ?? ""}
             />
 
             <Campo

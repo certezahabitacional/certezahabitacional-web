@@ -1,0 +1,60 @@
+name: V2 - pagos atomicos y excepciones de Direccion
+on:
+  push:
+    branches: [codex/visitas-importe-contratado]
+    paths:
+      - 'lib/caja-operaciones.ts'
+      - 'lib/caja-validaciones.ts'
+      - 'lib/visitas-*.ts'
+      - 'app/panel/caja/**'
+      - 'app/panel/inspecciones/nueva/**'
+      - 'tests/visitas-caja*.test.cjs'
+      - 'tests/visitas-vinculo.test.cjs'
+      - '.github/workflows/visitas-caja.yml'
+permissions:
+  contents: read
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16.10@sha256:21f6013073bc6b92830a2129570e2f5ec42a6c734b5a985a41e83aa58f54c3c1
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: visitas_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d visitas_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitas_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/visitas_test?schema=public
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Preparar pruebas aisladas sin credenciales productivas
+        run: |
+          mkdir -p "$RUNNER_TEMP/caja-ci/lib" "$RUNNER_TEMP/caja-ci/tests/fixtures" "$RUNNER_TEMP/caja-ci/prisma" "$RUNNER_TEMP/caja-ci/app/panel/caja"
+          cp lib/caja-operaciones.ts lib/caja-validaciones.ts lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts "$RUNNER_TEMP/caja-ci/lib/"
+          cp tests/visitas-contrato.test.cjs tests/visitas-integracion.test.cjs tests/visitas-caja.test.cjs tests/visitas-caja-interfaz.test.cjs tests/visitas-vinculo.test.cjs "$RUNNER_TEMP/caja-ci/tests/"
+          cp app/panel/caja/page.tsx app/panel/caja/actions.ts "$RUNNER_TEMP/caja-ci/app/panel/caja/"
+          cp tests/fixtures/visitas-cotizacion.sql "$RUNNER_TEMP/caja-ci/tests/fixtures/"
+          cp tests/visitas-package.json "$RUNNER_TEMP/caja-ci/package.json"
+          mkdir -p "$RUNNER_TEMP/visitas-ci/prisma"
+          cp prisma/schema.prisma "$RUNNER_TEMP/visitas-ci/prisma/schema.prisma"
+          node tests/visitas-preparar-esquema.cjs "$RUNNER_TEMP/visitas-ci/prisma/schema.prisma"
+          cp "$RUNNER_TEMP/visitas-ci/prisma/schema.prisma" "$RUNNER_TEMP/caja-ci/prisma/schema.prisma"
+          cd "$RUNNER_TEMP/caja-ci"
+          npm install --ignore-scripts --no-audit --no-fund
+          npx prisma generate
+          psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 -c 'CREATE SEQUENCE "Cliente_folio_seq";'
+          npx prisma db push --skip-generate
+          psql -h localhost -U postgres -d visitas_test -v ON_ERROR_STOP=1 -f tests/fixtures/visitas-cotizacion.sql
+      - name: Pruebas de dinero, persistencia, agenda, inicio y vinculos V1-V2
+        run: |
+          cd "$RUNNER_TEMP/caja-ci"
+          npx tsc lib/caja-operaciones.ts lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts --outDir .test-visitas --target es2020 --module commonjs --moduleResolution node --strict --skipLibCheck
+          node --test tests/visitas-contrato.test.cjs tests/visitas-integracion.test.cjs tests/visitas-caja.test.cjs tests/visitas-caja-interfaz.test.cjs tests/visitas-vinculo.test.cjs
