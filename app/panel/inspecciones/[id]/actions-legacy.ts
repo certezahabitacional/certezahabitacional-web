@@ -1719,6 +1719,8 @@ export async function finalizarCaptura(formData: FormData) {
       id: true,
       folio: true,
       estado: true,
+      numeroInspeccion: true,
+      inspeccionAnteriorId: true,
       inspector: {
         select: {
           usuarioId: true,
