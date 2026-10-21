@@ -87,10 +87,9 @@ async function exigirResponsable(inspeccionId: string) {
     inspeccion.inspectorId === usuario.inspector?.id;
   const director = usuario.rol === RolUsuario.DIRECTOR;
   if (!inspectorAsignado && !director) redirect("/acceso");
-  if (inspeccion.numeroInspeccion !== 1) redirect(`/panel/inspecciones/${inspeccionId}/flujo`);
   if (
     inspeccion.estado !== EstadoInspeccion.EN_PROCESO &&
-    !(director && inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE)
+    !(director && inspeccion.numeroInspeccion === 1 && inspeccion.estado === EstadoInspeccion.REPORTE_PENDIENTE)
   ) redirect(`/panel/inspecciones/${inspeccionId}`);
 
   return { usuario, responsable: director ? "Director" : "Inspector" };
@@ -101,7 +100,14 @@ async function exigirAreaActiva(inspeccionId: string, areaId: string) {
     SELECT "id"::text,"nombre","estado"
     FROM "AreaInspeccion"
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
-      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
+      AND (
+        "tipo"='SEGUIMIENTO'
+        OR "origen"='PLAN_PREVIO'
+        OR NOT EXISTS (
+          SELECT 1 FROM "PlanPrevioInspeccion" pp
+          WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL
+        )
+      )
     ORDER BY "orden","nombre"
   `;
   const indice = areas.findIndex((area) => area.id === areaId);
@@ -116,7 +122,14 @@ async function exigirAreaEditable(inspeccionId: string, areaId: string) {
     SELECT "id"::text,"nombre","estado"
     FROM "AreaInspeccion"
     WHERE "inspeccionId"=${inspeccionId} AND "tipo" <> 'PUNTO_CRITICO'
-      AND ("origen"='PLAN_PREVIO' OR NOT EXISTS (SELECT 1 FROM "PlanPrevioInspeccion" pp WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL))
+      AND (
+        "tipo"='SEGUIMIENTO'
+        OR "origen"='PLAN_PREVIO'
+        OR NOT EXISTS (
+          SELECT 1 FROM "PlanPrevioInspeccion" pp
+          WHERE pp."inspeccionId"=${inspeccionId} AND pp."confirmadoEn" IS NOT NULL
+        )
+      )
     ORDER BY "orden","nombre"
   `;
   const indice = areas.findIndex((area) => area.id === areaId);
