@@ -394,13 +394,6 @@ export default async function ExpedientePage({
   const puedeAsignarInspector =
     esGerente || esDirector;
 
-  const ultimaInspeccionDelHistorial = historialInspecciones.at(-1);
-  const esUltimaInspeccionDelInmueble =
-    ultimaInspeccionDelHistorial?.id === inspeccion.id;
-  const puedeCrearSeguimiento =
-    expedienteFinalizado &&
-    esUltimaInspeccionDelInmueble &&
-    (esDirector || esGerente);
 
   const inspectoresDisponibles = puedeAsignarInspector
     ? await prisma.inspector.findMany({
@@ -656,14 +649,6 @@ export default async function ExpedientePage({
                 </Link>
               )}
 
-              {puedeCrearSeguimiento && (
-                <Link
-                  href={`/panel/inspecciones/nueva?antecedenteId=${inspeccion.id}`}
-                  className="rounded-full bg-violet-300 px-5 py-3 font-black text-slate-950 transition hover:bg-violet-200"
-                >
-                  + Crear inspección de seguimiento · V{inspeccion.numeroInspeccion + 1}
-                </Link>
-              )}
               {expedienteFinalizado ? null : operacionBloqueada ? (
                 <span className="cursor-not-allowed rounded-full border border-amber-300/30 bg-amber-300/10 px-5 py-3 font-black text-amber-300">
                   Saldo pendiente — {dinero(saldoPendiente)}
@@ -1809,15 +1794,6 @@ export default async function ExpedientePage({
                     className="rounded-2xl bg-cyan-400 px-4 py-3 text-center font-black text-slate-950"
                   >
                     Capturar Método Certeza
-                  </Link>
-                )}
-
-                {puedeCrearSeguimiento && (
-                  <Link
-                    href={`/panel/inspecciones/nueva?antecedenteId=${inspeccion.id}`}
-                    className="rounded-2xl bg-violet-300 px-4 py-3 text-center font-black text-slate-950 transition hover:bg-violet-200"
-                  >
-                    + Crear seguimiento · V{inspeccion.numeroInspeccion + 1}
                   </Link>
                 )}
 
