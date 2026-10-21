@@ -1169,11 +1169,32 @@ export async function crearHallazgo(formData: FormData) {
 
   const costoTexto = texto(formData, "costoEstimado");
   const costoEstimado = costoTexto ? Number(costoTexto) : null;
+  const guiaItemId = texto(formData, "guiaItemId") || null;
+
+  if (guiaItemId) {
+    const patron = '%"tipo":"PRIMERA_REVISION_V2"%';
+    const [guia] = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "GuiaInspeccionItem"
+      WHERE "id"=${guiaItemId}
+        AND "inspeccionId"=${inspeccionId}
+        AND "estadoV3"='PENDIENTE'
+        AND COALESCE("observacion",'') LIKE ${patron}
+      LIMIT 1
+    `;
+    if (!guia) {
+      redirigirError(
+        inspeccionId,
+        "El concepto de primera revisión no está disponible para registrar un hallazgo.",
+      );
+    }
+  }
 
   const nuevoHallazgo = await prisma.hallazgo.create({
     data: {
       inspeccionId,
       creadoPorId: session.user.id,
+      guiaItemId,
       area,
       titulo,
       descripcion,
@@ -1193,6 +1214,19 @@ export async function crearHallazgo(formData: FormData) {
           : null,
     },
   });
+
+  if (guiaItemId) {
+    await prisma.$executeRaw`
+      UPDATE "GuiaInspeccionItem"
+      SET "estadoV3"='CON_HALLAZGO',
+          "completado"=true,
+          "cerradoEn"=NOW(),
+          "actualizadoEn"=NOW()
+      WHERE "id"=${guiaItemId}
+        AND "inspeccionId"=${inspeccionId}
+        AND "estadoV3"='PENDIENTE'
+    `;
+  }
 
   const hallazgos = await prisma.hallazgo.findMany({
     where: { inspeccionId },
