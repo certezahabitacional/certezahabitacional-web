@@ -1090,7 +1090,7 @@ export async function crearHallazgo(formData: FormData) {
 
   const rol = await exigirRolYAlcance(
     session,
-    [RolUsuario.INSPECTOR],
+    [RolUsuario.INSPECTOR, RolUsuario.DIRECTOR],
     inspeccionId,
   );
 
@@ -1314,7 +1314,7 @@ export async function registrarSeguimientoHallazgo(formData: FormData) {
 
   const rol = await exigirRolYAlcance(
     session,
-    [RolUsuario.INSPECTOR],
+    [RolUsuario.INSPECTOR, RolUsuario.DIRECTOR],
     inspeccionId,
   );
 
@@ -1548,7 +1548,7 @@ export async function actualizarHallazgo(formData: FormData) {
 
   const rol = await exigirRolYAlcance(
     session,
-    [RolUsuario.INSPECTOR],
+    [RolUsuario.INSPECTOR, RolUsuario.DIRECTOR],
     inspeccionId,
   );
 
@@ -1709,7 +1709,7 @@ export async function finalizarCaptura(formData: FormData) {
 
   const rol = await exigirRolYAlcance(
     session,
-    [RolUsuario.INSPECTOR],
+    [RolUsuario.INSPECTOR, RolUsuario.DIRECTOR],
     inspeccionId,
   );
 
