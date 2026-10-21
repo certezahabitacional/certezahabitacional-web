@@ -2481,8 +2481,11 @@ export async function aprobarDireccion(formData: FormData) {
     select: {
       id: true,
       folio: true,
+      numeroInspeccion: true,
       estado: true,
       liberacionBloqueada: true,
+      requiereCoordinador: true,
+      requiereGerenteZona: true,
     },
   });
 
@@ -2513,6 +2516,44 @@ export async function aprobarDireccion(formData: FormData) {
       inspeccionId,
       `Dirección no puede aprobar un expediente incompleto. Faltan: ${estadoExpediente.faltantes.join(", ")}.`,
     );
+  }
+
+  if (inspeccion.numeroInspeccion > 1) {
+    if (inspeccion.requiereCoordinador) {
+      const vistoBueno = await prisma.revisionInspeccion.findFirst({
+        where: {
+          inspeccionId,
+          rol: RolUsuario.COORDINADOR,
+          decision: TipoDecisionRevision.VISTO_BUENO,
+          estado: EstadoDecisionRevision.VIGENTE,
+        },
+        select: { id: true },
+      });
+      if (!vistoBueno) {
+        redirigirError(
+          inspeccionId,
+          "V2+ requiere el visto bueno vigente de Coordinación antes de la autorización final de Dirección.",
+        );
+      }
+    }
+
+    if (inspeccion.requiereGerenteZona) {
+      const aprobacionGerencia = await prisma.revisionInspeccion.findFirst({
+        where: {
+          inspeccionId,
+          rol: RolUsuario.GERENTE,
+          decision: TipoDecisionRevision.APROBADO,
+          estado: EstadoDecisionRevision.VIGENTE,
+        },
+        select: { id: true },
+      });
+      if (!aprobacionGerencia) {
+        redirigirError(
+          inspeccionId,
+          "V2+ requiere la aprobación vigente de Gerencia antes de la autorización final de Dirección.",
+        );
+      }
+    }
   }
 
   await validarPagoCompleto(inspeccionId);
