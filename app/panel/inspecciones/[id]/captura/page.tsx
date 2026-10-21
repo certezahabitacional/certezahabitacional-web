@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { obtenerSupabaseAdmin } from "@/lib/supabase-admin";
 import { actualizarHallazgo, crearHallazgo, registrarSeguimientoHallazgo } from "../actions";
 import { registrarPrimeraRevisionV2 } from "./primera-revision-actions";
+import ConceptoAreaCard, { type PuntoArea } from "../campo-v1/ConceptoAreaCard";
 
 type SearchParams = Promise<{
   hallazgoId?: string;
@@ -195,8 +196,9 @@ export default async function CapturaPage({
           area: string;
           concepto: string;
           especificacion: string | null;
+          areaId: string | null;
         }>>`
-          SELECT "id","area","concepto","especificacion"
+          SELECT "id","area","concepto","especificacion","areaId"::text AS "areaId"
           FROM "GuiaInspeccionItem"
           WHERE "id"=${query.primeraRevisionItemId}
             AND "inspeccionId"=${inspeccion.id}
@@ -209,6 +211,30 @@ export default async function CapturaPage({
         `
       )[0] ?? null
     : null;
+
+  const conceptosModernosV2 = esSeguimiento
+    ? await prisma.$queryRaw<Array<PuntoArea & { areaId: string }>>`
+        SELECT
+          g."id",g."concepto",g."especificacion",
+          NULL::text AS "grupo",g."estadoV3",g."origenV3",g."obligatorio",
+          g."herramientaSugerida",g."motivoNoAplica",g."observacion",
+          g."requiereMedicion",g."requiereComparacionProyecto",
+          g."valorMedido",g."valorProyecto",g."unidadMedida",
+          g."areaId"::text AS "areaId"
+        FROM "GuiaInspeccionItem" g
+        WHERE g."inspeccionId"=${inspeccion.id}
+          AND g."areaId" IS NOT NULL
+          AND (
+            COALESCE(g."observacion",'') LIKE '%"tipo":"PRIMERA_REVISION_V2"%'
+            OR COALESCE(g."observacion",'') LIKE '%"tipo":"REVISION_CONCEPTO_V2"%'
+            OR EXISTS (
+              SELECT 1 FROM "FotografiaArea" fa
+              WHERE fa."guiaItemId"=g."id"
+            )
+          )
+        ORDER BY g."area",g."orden",g."creadoEn"
+      `
+    : [];
 
   const hallazgosAntecedentes =
     esSeguimiento && inspeccion.inspeccionAnteriorId
@@ -644,9 +670,37 @@ export default async function CapturaPage({
           </section>
         )}
 
+        {conceptosModernosV2.length > 0 && (
+          <section className="mt-7 rounded-3xl border border-cyan-300/20 bg-slate-900 p-5 sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
+              Captura de concepto · mismo flujo que V1
+            </p>
+            <h2 className="mt-2 text-2xl font-black">
+              Evidencia, interpretación IA y cierre
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Usa el mismo proceso de V1: 1–4 fotografías, interpretación de IA,
+              descripción final editable, clasificación y prioridad.
+            </p>
+            <div className="mt-6 space-y-5">
+              {conceptosModernosV2.map((punto, index) => (
+                <ConceptoAreaCard
+                  key={punto.id}
+                  inspeccionId={id}
+                  areaId={punto.areaId}
+                  punto={punto}
+                  numeroConcepto={index + 1}
+                  puedeCapturar={true}
+                  areaActiva={true}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         <section
           id="nuevo-hallazgo"
-          className={`mt-7 scroll-mt-6 rounded-3xl border bg-slate-900 p-5 sm:p-6 ${
+          className={`${primeraRevisionActual ? "hidden " : ""}mt-7 scroll-mt-6 rounded-3xl border bg-slate-900 p-5 sm:p-6 ${
             hallazgoEnEdicion
               ? "border-amber-300/30"
               : "border-cyan-400/20"
