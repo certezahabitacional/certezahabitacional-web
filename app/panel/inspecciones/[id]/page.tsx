@@ -330,6 +330,8 @@ export default async function ExpedientePage({
       })
     : [];
 
+  const ultimaVisitaHistorial = historialInspecciones.at(-1) ?? null;
+
   const totalCotizacion = Number(inspeccion.cotizacion?.total ?? 0);
   const montoPagado = Number(inspeccion.cotizacion?.montoPagado ?? 0);
   const saldoPendiente = Math.max(0, totalCotizacion - montoPagado);
@@ -737,16 +739,23 @@ export default async function ExpedientePage({
 
             <div className="mt-6 grid gap-4 lg:grid-cols-2">
               {historialInspecciones.map((item) => {
-                const actual = item.id === inspeccion.id;
+                const seleccionada = item.id === inspeccion.id;
+                const ultimaVisita = item.id === ultimaVisitaHistorial?.id;
+                const tieneReporte =
+                  item.estado === EstadoInspeccion.REPORTE_PENDIENTE ||
+                  item.estado === EstadoInspeccion.FINALIZADA;
+                const hrefReporte =
+                  item.numeroInspeccion === 1
+                    ? `/panel/inspecciones/${item.id}/reporte-v1`
+                    : `/panel/inspecciones/${item.id}/reporte`;
 
                 return (
-                  <Link
+                  <article
                     key={item.id}
-                    href={`/panel/inspecciones/${item.id}`}
-                    className={`rounded-2xl border p-5 transition ${
-                      actual
+                    className={`rounded-2xl border p-5 ${
+                      seleccionada
                         ? "border-cyan-400/50 bg-cyan-400/10"
-                        : "border-white/10 bg-slate-950 hover:border-cyan-400/30 hover:bg-white/[0.03]"
+                        : "border-white/10 bg-slate-950"
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -757,9 +766,14 @@ export default async function ExpedientePage({
                         <span className="text-sm font-black">
                           Inspección {String(item.numeroInspeccion).padStart(2, "0")}
                         </span>
-                        {actual && (
+                        {seleccionada && (
+                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-200">
+                            SELECCIONADA
+                          </span>
+                        )}
+                        {ultimaVisita && (
                           <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
-                            ACTUAL
+                            ÚLTIMA VISITA
                           </span>
                         )}
                       </div>
@@ -785,10 +799,32 @@ export default async function ExpedientePage({
 
                     {item.numeroInspeccion > 1 && (
                       <p className="mt-3 text-xs font-bold text-cyan-300">
-                        Seguimiento de V{item.numeroInspeccion - 1}
+                        Antecedente directo: V{item.numeroInspeccion - 1}
                       </p>
                     )}
-                  </Link>
+
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                      <Link
+                        href={`/panel/inspecciones/${item.id}`}
+                        className="rounded-full border border-white/15 px-4 py-2 text-xs font-black text-slate-200 transition hover:border-cyan-300/50 hover:text-cyan-300"
+                      >
+                        Ver expediente V{item.numeroInspeccion}
+                      </Link>
+
+                      {tieneReporte ? (
+                        <Link
+                          href={hrefReporte}
+                          className="rounded-full border border-violet-300/30 px-4 py-2 text-xs font-black text-violet-300 transition hover:bg-violet-300 hover:text-slate-950"
+                        >
+                          Ver reporte V{item.numeroInspeccion}
+                        </Link>
+                      ) : (
+                        <span className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-slate-600">
+                          Reporte aún no disponible
+                        </span>
+                      )}
+                    </div>
+                  </article>
                 );
               })}
             </div>
