@@ -2692,6 +2692,16 @@ export async function noAprobarDireccion(formData: FormData) {
           motivoBloqueoLiberacion: null,
         },
       });
+
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "capturaCerrada"=false,
+            "reabiertaEn"=NOW(),
+            "reabiertaPorId"=${session.user.id},
+            "motivoReapertura"=${comentario},
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
     } else {
       await tx.inspeccion.update({
         where: { id: inspeccionId },
