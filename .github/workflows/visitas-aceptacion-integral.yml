@@ -141,6 +141,10 @@ jobs:
       - name: Agenda y zona horaria
         run: node --test tests/agenda-zona-horaria.test.cjs
 
+      - name: Compilar modulos requeridos por vinculo
+        run: |
+          npx tsc lib/visitas-contrato.ts lib/visitas-cotizacion.ts lib/caja-finanzas.ts lib/caja-operaciones.ts --outDir .test-visitas --target es2020 --module commonjs --moduleResolution node --strict --skipLibCheck
+
       - name: Cadena contractual V2 V3 V4
         run: node --test tests/visitas-vinculo.test.cjs
 
