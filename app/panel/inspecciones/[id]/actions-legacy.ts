@@ -2636,7 +2636,9 @@ export async function noAprobarDireccion(formData: FormData) {
     select: {
       id: true,
       folio: true,
+      numeroInspeccion: true,
       estado: true,
+      inspectorId: true,
     },
   });
 
@@ -2675,33 +2677,55 @@ export async function noAprobarDireccion(formData: FormData) {
       },
     });
 
-    await tx.inspeccion.update({
-      where: { id: inspeccionId },
-      data: {
-        estado: EstadoInspeccion.REPORTE_PENDIENTE,
-        liberacionBloqueada: true,
-        bloqueadaPorId: session.user.id,
-        bloqueadaEn: new Date(),
-        motivoBloqueoLiberacion: comentario,
-      },
-    });
+    if (inspeccion.numeroInspeccion > 1) {
+      if (!inspeccion.inspectorId) {
+        throw new Error("La visita de seguimiento no tiene Inspector asignado.");
+      }
+
+      await tx.inspeccion.update({
+        where: { id: inspeccionId },
+        data: {
+          estado: EstadoInspeccion.EN_PROCESO,
+          liberacionBloqueada: false,
+          bloqueadaPorId: null,
+          bloqueadaEn: null,
+          motivoBloqueoLiberacion: null,
+        },
+      });
+    } else {
+      await tx.inspeccion.update({
+        where: { id: inspeccionId },
+        data: {
+          estado: EstadoInspeccion.REPORTE_PENDIENTE,
+          liberacionBloqueada: true,
+          bloqueadaPorId: session.user.id,
+          bloqueadaEn: new Date(),
+          motivoBloqueoLiberacion: comentario,
+        },
+      });
+    }
   });
 
   await registrarAuditoria({
-    tipo: TipoEvento.BLOQUEAR_LIBERACION,
+    tipo: inspeccion.numeroInspeccion > 1
+      ? TipoEvento.REVISION_INSPECCION
+      : TipoEvento.BLOQUEAR_LIBERACION,
     entidad: "Inspeccion",
     entidadId: inspeccion.id,
     inspeccionId,
     descripcion:
-      `Dirección NO APROBÓ la inspección ${inspeccion.folio}. ` +
-      `Todas las aprobaciones vigentes anteriores quedaron invalidadas. Motivo: ${comentario}`,
+      inspeccion.numeroInspeccion > 1
+        ? `Dirección devolvió V${inspeccion.numeroInspeccion} ${inspeccion.folio} al Inspector para corrección. Solo las revisiones vigentes de esta visita quedaron invalidadas; V1 y visitas anteriores permanecen intactas. Motivo: ${comentario}`
+        : `Dirección NO APROBÓ la inspección ${inspeccion.folio}. Todas las aprobaciones vigentes anteriores de esta inspección quedaron invalidadas. Motivo: ${comentario}`,
   });
 
   revalidarInspeccion(inspeccionId);
 
   redirigirOk(
     inspeccionId,
-    "Dirección no aprobó la inspección. La liberación quedó bloqueada y las aprobaciones anteriores fueron invalidadas.",
+    inspeccion.numeroInspeccion > 1
+      ? `V${inspeccion.numeroInspeccion} fue devuelta al Inspector para corrección. La visita regresó a EN PROCESO sin modificar V1 ni visitas anteriores.`
+      : "Dirección no aprobó la inspección. La liberación quedó bloqueada y las aprobaciones anteriores fueron invalidadas.",
   );
 }
 
