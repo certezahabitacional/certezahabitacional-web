@@ -1865,6 +1865,17 @@ export async function finalizarCaptura(formData: FormData) {
       },
     });
 
+    if (esSeguimiento) {
+      await tx.$executeRaw`
+        UPDATE "InspeccionControlV2"
+        SET "capturaCerrada"=true,
+            "capturaCerradaEn"=NOW(),
+            "capturaCerradaPorId"=${session.user.id},
+            "actualizadoEn"=NOW()
+        WHERE "inspeccionId"=${inspeccionId}
+      `;
+    }
+
     await tx.revisionInspeccion.updateMany({
       where: {
         inspeccionId,
