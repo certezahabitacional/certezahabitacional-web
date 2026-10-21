@@ -1909,6 +1909,8 @@ async function validarExpedienteParaRevision(
   const inspeccion = await prisma.inspeccion.findUnique({
     where: { id: inspeccionId },
     select: {
+      numeroInspeccion: true,
+      inspeccionAnteriorId: true,
       hallazgos: {
         select: {
           id: true,
@@ -1932,7 +1934,10 @@ async function validarExpedienteParaRevision(
 
   const faltantes: string[] = [];
 
-  if (inspeccion.hallazgos.length === 0) {
+  const esSeguimiento =
+    inspeccion.numeroInspeccion > 1 && Boolean(inspeccion.inspeccionAnteriorId);
+
+  if (!esSeguimiento && inspeccion.hallazgos.length === 0) {
     faltantes.push("al menos un hallazgo registrado");
   }
 
@@ -2214,6 +2219,7 @@ export async function aprobarGerencia(formData: FormData) {
     select: {
       id: true,
       folio: true,
+      numeroInspeccion: true,
       estado: true,
       liberacionBloqueada: true,
       revisiones: {
@@ -2288,19 +2294,23 @@ export async function aprobarGerencia(formData: FormData) {
       },
     });
 
-    await tx.inspeccion.update({
-      where: { id: inspeccionId },
-      data: {
-        estado: EstadoInspeccion.FINALIZADA,
-      },
-    });
+    if (inspeccion.numeroInspeccion === 1) {
+      await tx.inspeccion.update({
+        where: { id: inspeccionId },
+        data: {
+          estado: EstadoInspeccion.FINALIZADA,
+        },
+      });
+    }
   });
 
   await registrarAuditoria({
     tipo: TipoEvento.REVISION_INSPECCION,
     entidad: "RevisionInspeccion",
     inspeccionId,
-    descripcion: `Gerencia aprobó y cerró la inspección ${inspeccion.folio}${
+    descripcion: inspeccion.numeroInspeccion > 1
+      ? `Gerencia aprobó la revisión de V${inspeccion.numeroInspeccion} ${inspeccion.folio}; el expediente permanece pendiente de autorización final de Dirección.`
+      : `Gerencia aprobó y cerró la inspección ${inspeccion.folio}${
       comentario ? `. Comentario: ${comentario}` : "."
     }`,
   });
@@ -2309,7 +2319,9 @@ export async function aprobarGerencia(formData: FormData) {
 
   redirigirOk(
     inspeccionId,
-    "Gerencia aprobó la inspección. El expediente quedó FINALIZADO, sujeto a cualquier auditoría o veto posterior de Dirección.",
+    inspeccion.numeroInspeccion > 1
+      ? `Gerencia aprobó la revisión de V${inspeccion.numeroInspeccion}. El reporte permanece pendiente de autorización final de Dirección.`
+      : "Gerencia aprobó la inspección. El expediente quedó FINALIZADO, sujeto a cualquier auditoría o veto posterior de Dirección.",
   );
 }
 
