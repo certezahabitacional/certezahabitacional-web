@@ -50,14 +50,21 @@ export async function registrarPrimeraRevisionV2(formData: FormData) {
     }),
   ]);
 
-  if (!usuario?.activo || usuario.rol !== RolUsuario.INSPECTOR || !usuario.inspector?.activo) redirect("/acceso");
+  if (!usuario?.activo) redirect("/acceso");
+  const esDirector = usuario.rol === RolUsuario.DIRECTOR;
+  const esInspectorOperativo =
+    usuario.rol === RolUsuario.INSPECTOR && Boolean(usuario.inspector?.activo);
+  if (!esDirector && !esInspectorOperativo) redirect("/acceso");
   if (!inspeccion || inspeccion.numeroInspeccion <= 1 || !inspeccion.inspeccionAnteriorId) {
     volver(inspeccionId, "error", "Esta opción solo está disponible en V2 y visitas posteriores.");
   }
   if (inspeccion.estado !== EstadoInspeccion.EN_PROCESO) {
     volver(inspeccionId, "error", "La primera revisión solo puede registrarse mientras la visita está EN PROCESO.");
   }
-  if (inspeccion.inspectorId !== usuario.inspector.id) redirect("/acceso");
+  if (
+    usuario.rol === RolUsuario.INSPECTOR &&
+    inspeccion.inspectorId !== usuario.inspector?.id
+  ) redirect("/acceso");
 
   const [antecedente] = await prisma.$queryRaw<Array<{
     id: string;
