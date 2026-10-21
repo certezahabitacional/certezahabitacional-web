@@ -1,0 +1,79 @@
+name: V2 V3 - aceptacion integral
+
+on:
+  push:
+    branches:
+      - codex/visitas-importe-contratado
+    paths:
+      - 'app/panel/cotizaciones/**'
+      - 'app/panel/caja/**'
+      - 'app/panel/agenda/**'
+      - 'app/panel/inspecciones/**'
+      - 'lib/visitas-*.ts'
+      - 'lib/caja-*.ts'
+      - 'tests/**'
+      - 'supabase/migrations/20261020192609_visitas_cotizacion_importe.sql'
+      - '.github/workflows/visitas-aceptacion-integral.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  aceptacion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: visitas_aceptacion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d visitas_aceptacion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/visitas_aceptacion
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Instalar dependencias reproducibles
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Preparar base efimera V2 V3
+        run: node tests/visitas-preparar-esquema.cjs
+
+      - name: Contratacion y finanzas independientes
+        run: |
+          node --test tests/visitas-contrato.test.cjs
+          node --test tests/visitas-integracion.test.cjs
+          node --test tests/visitas-caja.test.cjs
+          node --test tests/visitas-caja-interfaz.test.cjs
+
+      - name: Cadena contractual V2 V3 V4
+        run: node --test tests/visitas-vinculo.test.cjs
+
+      - name: Agenda y zona horaria
+        run: node --test tests/agenda-zona-horaria.test.cjs
+
+      - name: Primera revision y conceptos
+        run: |
+          node --test tests/visitas-primera-revision.test.cjs
+          node --test tests/recorrido-conceptos.test.cjs
+          node --test tests/descripcion-unica-concepto.test.cjs
+
+      - name: Revision y autorizacion
+        run: |
+          node --test tests/flujo-autorizacion-vigente.test.cjs
+          node --test tests/revision-recorrido-vigente.test.cjs
+          node --test tests/solicitar-autorizacion-reporte.test.cjs
+
+      - name: Compilacion final
+        run: npm run build
