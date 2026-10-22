@@ -76,7 +76,7 @@ export default async function UsuariosProjectManagerPage() {
                 <td style={{padding:12,borderBottom:"1px solid #d8e6f2"}}>
                   <form action={alternarEstadoUsuarioProjectManager}>
                     <input type="hidden" name="usuarioId" value={u.id}/>
-                    <button type="submit" disabled={u.id===currentId} style={{border:0,borderRadius:9,padding:"9px 12px",fontWeight:900,cursor:u.id===currentId?"not-allowed":"pointer",background:u.activo?"#fee4e2":"#dcfae6",color:u.activo?"#b42318":"#137a42",opacity:u.id===currentId?.55:1}}>
+                    <button type="submit" disabled={u.id===currentId} style={{border:0,borderRadius:9,padding:"9px 12px",fontWeight:900,cursor:u.id===currentId?"not-allowed":"pointer",background:u.activo?"#fee4e2":"#dcfae6",color:u.activo?"#b42318":"#137a42",opacity:u.id===currentId ? .55 : 1}}>
                       {u.id===currentId?"Sesión actual":u.activo?"Desactivar":"Activar"}
                     </button>
                   </form>
