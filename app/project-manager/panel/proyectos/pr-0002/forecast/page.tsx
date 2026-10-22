@@ -21,7 +21,7 @@ export default async function Page() {
             ["Fecha forecast","30/06/2027"],
             ["Salud",String(s.healthScore)+"/100"],
             ["Estado",s.healthStatus],
-          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#d7ecfb",fontSize:12}}>{k}</div><strong style={{fontSize:20,display:"block",marginTop:6}}>{v}</strong></div>)}
+          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#294f73",fontSize:12,fontWeight:800}}>{k}</div><strong style={{fontSize:20,display:"block",marginTop:6}}>{v}</strong></div>)}
         </div>
         <div style={{...card,marginTop:18,padding:24}}>
           <h2 style={{marginTop:0}}>Escenario actual: Base</h2>
