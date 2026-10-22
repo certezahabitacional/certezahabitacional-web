@@ -12,8 +12,8 @@ export default async function Page() {
       <section style={{maxWidth:1250,margin:"0 auto",padding:"0 22px 54px"}}>
         <div style={{...card,padding:26,display:"flex",justifyContent:"space-between",gap:20,alignItems:"center",flexWrap:"wrap"}}>
           <div>
-            <div style={{color:"#b9dbf5",fontSize:12}}>CERTEZA PROJECT HEALTH INDEX</div>
-            <div style={{fontSize:56,fontWeight:900,color:"#edcb71",lineHeight:1}}>{h.score}<span style={{fontSize:24}}>/100</span></div>
+            <div style={{color:"#294f73",fontSize:12}}>CERTEZA PROJECT HEALTH INDEX</div>
+            <div style={{fontSize:56,fontWeight:900,color:"#c86100",lineHeight:1}}>{h.score}<span style={{fontSize:24}}>/100</span></div>
           </div>
           <div style={{maxWidth:620}}>
             <h2 style={{margin:"0 0 6px"}}>{h.status}</h2>
@@ -26,7 +26,7 @@ export default async function Page() {
           {h.dimensions.map(([name,score,status,note])=><div key={String(name)} style={card}>
             <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
               <strong>{name}</strong>
-              <span style={{color:status==="VERDE"?"#9fe0b5":"#f4c86d",fontWeight:900}}>{score}/100</span>
+              <span style={{color:status==="VERDE"?"#137a42":"#8a5b00",fontWeight:900}}>{score}/100</span>
             </div>
             <div style={{height:8,background:"#06172c",borderRadius:999,margin:"12px 0"}}>
               <div style={{width:String(score)+"%",height:"100%",borderRadius:999,background:status==="VERDE"?"#4fb477":"#d6a746"}}/>
