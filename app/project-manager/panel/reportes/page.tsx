@@ -7,7 +7,7 @@ import { healthSnapshot as h } from "@/lib/project-manager/health-data";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 
 const ink="#082f64";
-const body="#365b7d";
+const body="#294f73";
 const orange="#d87300";
 const dark="#06172c";
 const lightOnDark="#c9e6fb";
