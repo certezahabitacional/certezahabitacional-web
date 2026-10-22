@@ -208,6 +208,8 @@ model Usuario {
   bloqueosLiberacion Inspeccion[] @relation("InspeccionBloqueadaPor")
   reasignacionesSolicitadas ReasignacionInspector[] @relation("ReasignacionSolicitadaPor")
   reasignacionesResueltas ReasignacionInspector[] @relation("ReasignacionResueltaPor")
+  proyectosPmCreados ProyectoPM[] @relation("ProyectoPMCreadoPor")
+  proyectosPmAsignados ProyectoPMUsuario[]
   @@index([bloqueadoHasta])
   @@index([zonaId])
   @@index([gerenteId])
@@ -637,4 +639,43 @@ model CotizacionVersion {
   @@unique([cotizacionId, version])
   @@index([cotizacionId])
   @@index([creadaEn])
+}
+
+
+model ProyectoPM {
+  id String @id @default(cuid())
+  codigo String @unique
+  nombre String
+  cliente String?
+  ubicacion String?
+  descripcion String?
+  fechaInicio DateTime? @db.Date
+  fechaFinPlan DateTime? @db.Date
+  presupuesto Decimal @default(0) @db.Decimal(14, 2)
+  estado String @default("PLANEACION")
+  activo Boolean @default(true)
+  creadoPorId String?
+  creadoPor Usuario? @relation("ProyectoPMCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  participantes ProyectoPMUsuario[]
+
+  @@index([activo])
+  @@index([estado])
+  @@index([creadoPorId])
+}
+
+model ProyectoPMUsuario {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  usuarioId String
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  rolEnProyecto String?
+  soloLectura Boolean @default(false)
+  asignadoEn DateTime @default(now())
+
+  @@unique([proyectoId, usuarioId])
+  @@index([usuarioId])
+  @@index([proyectoId])
 }
