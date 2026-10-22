@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -28,7 +28,35 @@ export async function requireProjectManagerAccess() {
   return {
     session,
     role,
+    userId,
     readOnly: PM_READ_ONLY_ROLES.includes(role as (typeof PM_READ_ONLY_ROLES)[number]),
+  };
+}
+
+export async function requireProjectAccess(codigo: string) {
+  const access = await requireProjectManagerAccess();
+  const code = codigo.toUpperCase();
+
+  const proyecto = await prisma.proyectoPM.findUnique({
+    where: { codigo: code },
+    include: {
+      participantes: {
+        where: { usuarioId: access.userId },
+        select: { id: true, rolEnProyecto: true, soloLectura: true },
+      },
+    },
+  });
+
+  if (!proyecto || !proyecto.activo) notFound();
+
+  const accesoGlobal = access.role === "DIRECTOR" || access.role === "ADMINISTRADOR";
+  if (!accesoGlobal && proyecto.participantes.length === 0) notFound();
+
+  return {
+    ...access,
+    proyecto,
+    participante: proyecto.participantes[0] ?? null,
+    projectReadOnly: access.readOnly || proyecto.participantes[0]?.soloLectura === true,
   };
 }
 
@@ -36,6 +64,14 @@ export async function requireProjectManagerWriteAccess() {
   const access = await requireProjectManagerAccess();
   if (access.readOnly) {
     redirect("/project-manager/panel?error=solo_lectura");
+  }
+  return access;
+}
+
+export async function requireProjectWriteAccess(codigo: string) {
+  const access = await requireProjectAccess(codigo);
+  if (access.projectReadOnly) {
+    redirect(`/project-manager/panel/proyectos/${codigo.toLowerCase()}?error=solo_lectura`);
   }
   return access;
 }
