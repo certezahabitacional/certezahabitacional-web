@@ -18,7 +18,7 @@ export default async function Page() {
       <PmHeader title="Portafolio" subtitle="Visibilidad ejecutiva de múltiples proyectos con una sola lógica de control." />
       <section style={{maxWidth:1300,margin:"0 auto",padding:"0 22px 54px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12}}>
-          {[["Proyectos","2"],["Presupuesto total",money(total)],["Con salud web","1"],["En migración","1"]].map(([k,v])=><div key={k} style={card}><div style={{color:"#d7ecfb",fontSize:12}}>{k}</div><strong style={{fontSize:24}}>{v}</strong></div>)}
+          {[["Proyectos","2"],["Presupuesto total",money(total)],["Con salud web","1"],["En migración","1"]].map(([k,v])=><div key={k} style={card}><div style={{color:"#294f73",fontSize:12,fontWeight:800}}>{k}</div><strong style={{fontSize:24}}>{v}</strong></div>)}
         </div>
         <div style={{display:"grid",gap:12,marginTop:18}}>
           {projects.map(p=><article key={p.code} style={{...card,padding:22}}>
