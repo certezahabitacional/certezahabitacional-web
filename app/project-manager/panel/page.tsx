@@ -4,7 +4,9 @@ import { auth } from "@/auth";
 
 const accesos = [
   ["🏗️", "Proyectos", "Proyecto, línea base, EDT, programa y presupuesto.", "/project-manager/panel/proyectos"],
-  ["🎯", "Resumen ejecutivo", "Estado general, salud, decisiones y prioridades.", "#"],
+  ["🎯", "Resumen ejecutivo", "Estado general, salud, decisiones y prioridades.", "/project-manager/panel/proyectos/pr-0002/resumen"],
+  ["🩺", "Salud del proyecto", "Índice integral y diagnóstico por dimensiones.", "/project-manager/panel/proyectos/pr-0002/salud"],
+  ["🔔", "Alertas tempranas", "Dato, tendencia, umbral, causa y acción.", "/project-manager/panel/proyectos/pr-0002/alertas"],
   ["📅", "Planeación", "Línea base, EDT, programa, Look Ahead e hitos.", "/project-manager/panel/proyectos/pr-0002"],
   ["🏗️", "Avance", "Avance físico y financiero contra la línea base.", "/project-manager/panel/proyectos/pr-0002/avance"],
   ["⚙️", "Productividad", "Rendimiento, HH por unidad, retrabajo e improductividad.", "/project-manager/panel/proyectos/pr-0002/productividad"],
@@ -36,7 +38,7 @@ export default async function ProjectManagerPanelPage() {
         <p style={{ margin: 0, color: "#edcb71", fontWeight: 900, letterSpacing: ".08em", fontSize: 12 }}>PANEL OPERATIVO WEB</p>
         <h1 style={{ margin: "7px 0 8px", fontSize: "clamp(34px, 5vw, 54px)" }}>Centro de Control</h1>
         <p style={{ margin: 0, color: "#aabaca", maxWidth: 900, lineHeight: 1.55 }}>
-          PR-0002 ya cuenta con núcleo de proyecto, línea base, EDT, programa, presupuesto, riesgos, restricciones, cambios, decisiones, avance, productividad, EVM y forecast. Los módulos ejecutivos y de inteligencia se habilitarán sobre esta misma arquitectura.
+          PR-0002 ya integra planeación, costo, riesgos, restricciones, decisiones, avance, productividad, EVM, forecast, salud y alertas tempranas. El siguiente nivel será reportes, portafolio e inteligencia Certeza.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14, marginTop: 28 }}>
