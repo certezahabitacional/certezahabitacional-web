@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import LogoCertezaTecnica from "@/components/branding/LogoCertezaTecnica";
 import { cambiarMiPasswordProjectManager } from "./actions";
 
 export default async function CambiarPasswordPage({searchParams}:{searchParams:Promise<{ok?:string;error?:string}>}) {
@@ -9,11 +10,14 @@ export default async function CambiarPasswordPage({searchParams}:{searchParams:P
   const q=await searchParams;
   const input={border:"1px solid #b7cadb",borderRadius:10,padding:"12px 13px",fontSize:15,color:"#082f64",background:"#fff",width:"100%",boxSizing:"border-box" as const};
 
-  return <main style={{minHeight:"100vh",background:"#eef6fb",display:"grid",placeItems:"center",padding:22,color:"#082f64"}}>
-    <section style={{width:"min(520px,100%)",background:"#fff",border:"1px solid #d8e6f2",borderRadius:18,padding:28,boxShadow:"0 12px 36px rgba(2,55,108,.12)"}}>
-      <div style={{fontSize:13,color:"#ff8500",fontWeight:950}}>CERTEZA PROJECT MANAGER</div>
+  return <main style={{minHeight:"100vh",background:"linear-gradient(145deg,#eef6fb 0%,#dcecf7 100%)",display:"grid",placeItems:"center",padding:22,color:"#082f64"}}>
+    <section style={{width:"min(560px,100%)",background:"#fff",border:"1px solid #cfdfea",borderRadius:18,padding:28,boxShadow:"0 12px 36px rgba(2,55,108,.14)"}}>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
+        <LogoCertezaTecnica href="/certeza-tecnica" height={82}/>
+      </div>
+      <div style={{fontSize:13,color:"#e87500",fontWeight:950,letterSpacing:".08em"}}>CERTEZA PROJECT MANAGER</div>
       <h1 style={{margin:"7px 0 6px"}}>Cambiar contraseña</h1>
-      <p style={{color:"#365b7d",fontWeight:600,lineHeight:1.55}}>La nueva contraseña debe tener al menos 8 caracteres.</p>
+      <p style={{color:"#294f73",fontWeight:650,lineHeight:1.55}}>La nueva contraseña debe tener al menos 8 caracteres.</p>
       {q.ok&&<div style={{background:"#dcfae6",color:"#137a42",padding:12,borderRadius:10,fontWeight:800}}>Contraseña actualizada correctamente.</div>}
       {q.error&&<div style={{background:"#fee4e2",color:"#b42318",padding:12,borderRadius:10,fontWeight:800}}>{q.error==="actual"?"La contraseña actual no coincide.":"Revisa la nueva contraseña y su confirmación."}</div>}
       <form action={cambiarMiPasswordProjectManager} style={{display:"grid",gap:14,marginTop:18}}>
