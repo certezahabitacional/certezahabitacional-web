@@ -15,21 +15,21 @@ export default async function ProjectsPage() {
         <article style={{...card, padding:24}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:18,flexWrap:"wrap",alignItems:"start"}}>
             <div>
-              <p style={{margin:0,color:"#edcb71",fontWeight:900}}>{p.code}</p>
+              <p style={{margin:0,color:"#c86100",fontWeight:900}}>{p.code}</p>
               <h2 style={{margin:"6px 0",fontSize:28}}>{p.name}</h2>
-              <p style={{margin:0,color:"#9fb2c6"}}>{p.client} · {p.location}</p>
+              <p style={{margin:0,color:"#294f73"}}>{p.client} · {p.location}</p>
             </div>
             <div style={{textAlign:"right"}}>
-              <div style={{fontSize:12,color:"#8fa5bb"}}>PRESUPUESTO</div>
+              <div style={{fontSize:12,color:"#294f73"}}>PRESUPUESTO</div>
               <strong style={{fontSize:24}}>{money(p.budget)}</strong>
-              <div style={{marginTop:6,color:"#f4c86d",fontWeight:800}}>{p.status}</div>
+              <div style={{marginTop:6,color:"#8a5b00",fontWeight:800}}>{p.status}</div>
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginTop:22}}>
-            {[["Inicio",p.startDate],["Término contractual",p.targetDate],["Responsable",p.manager],["Riesgo",p.riskLevel]].map(([k,v])=><div key={k} style={{background:"#06172c",padding:14,borderRadius:12}}><div style={{fontSize:12,color:"#8fa5bb"}}>{k}</div><strong>{v}</strong></div>)}
+            {[["Inicio",p.startDate],["Término contractual",p.targetDate],["Responsable",p.manager],["Riesgo",p.riskLevel]].map(([k,v])=><div key={k} style={{background:"#06172c",color:"#ffffff",padding:14,borderRadius:12}}><div style={{fontSize:12,color:"#294f73"}}>{k}</div><strong>{v}</strong></div>)}
           </div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:22}}>
-            <Link href="/project-manager/panel/proyectos/pr-0002" style={{background:"#edcb71",color:"#071d38",textDecoration:"none",fontWeight:900,padding:"12px 18px",borderRadius:10}}>Abrir proyecto →</Link>
+            <Link href="/project-manager/panel/proyectos/pr-0002" style={{background:"#c86100",color:"#071d38",textDecoration:"none",fontWeight:900,padding:"12px 18px",borderRadius:10}}>Abrir proyecto →</Link>
           </div>
         </article>
       </section>
