@@ -2,10 +2,13 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { pr0002, money } from "@/lib/project-manager/pr0002";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
+import CapturePreviewForm from "./CapturePreviewForm";
 
 export default async function Page() {
   const session=await auth();
   if(!session?.user) redirect("/project-manager/login");
+  const activities=pr0002.activities.map(([code,name,_start,_end,wbs])=>({code,name,control:wbs}));
+
   return (
     <main style={{minHeight:"100vh",background:"#06172c",color:"#fff"}}>
       <PmHeader title="Captura de Corte" subtitle="Avance, productividad, costos reales y evidencias en un solo flujo." />
@@ -13,7 +16,7 @@ export default async function Page() {
         <div style={{...card,padding:24,border:"1px solid rgba(237,203,113,.3)"}}>
           <div style={{color:"#edcb71",fontWeight:900,fontSize:12}}>MODO PREVIEW SEGURO</div>
           <h2 style={{margin:"7px 0 6px"}}>Flujo de captura preparado</h2>
-          <p style={{margin:0,color:"#aabaca",lineHeight:1.6}}>Las pantallas ya están listas para revisión. El botón Guardar permanecerá deshabilitado hasta completar la conexión de escritura contra Supabase DEV; producción no será utilizada para estas pruebas.</p>
+          <p style={{margin:0,color:"#aabaca",lineHeight:1.6}}>La captura ya puede probarse y calcular indicadores localmente. El guardado definitivo permanecerá bloqueado hasta completar el canal seguro contra Supabase DEV; producción no participa en estas pruebas.</p>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:14,marginTop:18}}>
@@ -25,6 +28,10 @@ export default async function Page() {
             ["5","Evidencias","Adjuntar notas, fotografías o documentos del corte."],
             ["6","Cerrar corte","Calcular EVM, Forecast, Salud y Alertas."],
           ].map(([n,t,d])=><div key={n} style={card}><div style={{color:"#edcb71",fontWeight:900}}>PASO {n}</div><h3 style={{margin:"8px 0 6px"}}>{t}</h3><p style={{margin:0,color:"#9fb2c6",lineHeight:1.5}}>{d}</p></div>)}
+        </div>
+
+        <div style={{marginTop:18}}>
+          <CapturePreviewForm activities={activities}/>
         </div>
 
         <section style={{...card,marginTop:18}}>
@@ -45,10 +52,6 @@ export default async function Page() {
             </table>
           </div>
         </section>
-
-        <div style={{display:"flex",justifyContent:"flex-end",marginTop:18}}>
-          <button disabled style={{border:0,borderRadius:12,padding:"14px 22px",fontWeight:900,background:"#8b94a0",color:"#d8dee6",cursor:"not-allowed"}}>Guardar corte (pendiente de conexión DEV)</button>
-        </div>
       </section>
     </main>
   );
