@@ -89,6 +89,8 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
     "AGENDA",
   ]),
   [RolUsuario.CLIENTE]: new Set<ModuloPanel>(),
+  [RolUsuario.SUPERVISOR]: new Set<ModuloPanel>(),
+  [RolUsuario.RESIDENTE]: new Set<ModuloPanel>(),
 };
 
 export function puedeVerModuloPanel(rol: RolUsuario, modulo: ModuloPanel): boolean {
