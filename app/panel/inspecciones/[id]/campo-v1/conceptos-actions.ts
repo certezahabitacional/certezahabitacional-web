@@ -391,15 +391,15 @@ export async function generarDescripcionIaConceptoAreaV1(formData: FormData) {
 
   const sb = obtenerSupabaseAdmin();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "evidencias";
-  const partes: Array<Record<string, unknown>> = [];
-  for (const foto of fotos) {
-    const { data, error } = await sb.storage.from(bucket).download(foto.url);
-    if (error || !data) volver(inspeccionId, areaId, "error", "No fue posible recuperar una de las fotografías.", itemId);
-    const mime = data.type || "image/jpeg";
-    const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
-    partes.push({ inlineData: { mimeType: mime, data: base64 } });
-  }
-
+  const partes: Array<Record<string, unknown>> = await Promise.all(
+    fotos.map(async (foto) => {
+      const { data, error } = await sb.storage.from(bucket).download(foto.url);
+      if (error || !data) throw new Error("No fue posible recuperar una de las fotografías.");
+      const mime = data.type || "image/jpeg";
+      const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+      return { inlineData: { mimeType: mime, data: base64 } };
+    }),
+  );
   partes.push({
     text: [
       "Actúa como asistente técnico de una inspección habitacional.",
@@ -426,7 +426,7 @@ export async function generarDescripcionIaConceptoAreaV1(formData: FormData) {
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts: partes }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 400 },
       }),
       cache: "no-store",
     },
