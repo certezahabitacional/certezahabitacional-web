@@ -8,6 +8,7 @@ const accesos = [
   ["🎯", "Resumen ejecutivo", "Estado general, salud, decisiones y prioridades.", "/project-manager/panel/proyectos/pr-0002/resumen"],
   ["🩺", "Salud del proyecto", "Índice integral y diagnóstico por dimensiones.", "/project-manager/panel/proyectos/pr-0002/salud"],
   ["🔔", "Alertas tempranas", "Dato, tendencia, umbral, causa y acción.", "/project-manager/panel/proyectos/pr-0002/alertas"],
+  ["✍️", "Captura de corte", "Avance, productividad, costos reales y evidencias.", "/project-manager/panel/proyectos/pr-0002/captura"],
   ["📅", "Planeación", "Línea base, EDT, programa, Look Ahead e hitos.", "/project-manager/panel/proyectos/pr-0002"],
   ["🏗️", "Avance", "Avance físico y financiero contra la línea base.", "/project-manager/panel/proyectos/pr-0002/avance"],
   ["⚙️", "Productividad", "Rendimiento, HH por unidad, retrabajo e improductividad.", "/project-manager/panel/proyectos/pr-0002/productividad"],
@@ -17,6 +18,8 @@ const accesos = [
   ["🚧", "Restricciones", "Pendientes que pueden impedir la ejecución.", "/project-manager/panel/proyectos/pr-0002/restricciones"],
   ["🔄", "Cambios", "Solicitudes, impactos, autorizaciones y trazabilidad.", "/project-manager/panel/proyectos/pr-0002/cambios"],
   ["✅", "Decisiones", "Asuntos que requieren resolución humana.", "/project-manager/panel/proyectos/pr-0002/decisiones"],
+  ["👥", "Accesos", "Permisos por proyecto y perfil externo.", "/project-manager/panel/accesos"],
+  ["🌐", "Portal del cliente", "Vista externa controlada de PR-0002.", "/project-manager/portal/pr-0002"],
   ["📑", "Reportes", "Reportes ejecutivos, snapshots y comparativos.", "/project-manager/panel/reportes"],
   ["🤖", "Inteligencia Certeza", "Alertas, análisis, agentes y recomendaciones.", "/project-manager/panel/inteligencia"],
 ];
@@ -38,8 +41,8 @@ export default async function ProjectManagerPanelPage() {
       <section style={{ maxWidth: 1440, margin: "0 auto", padding: "32px 22px 54px" }}>
         <p style={{ margin: 0, color: "#edcb71", fontWeight: 900, letterSpacing: ".08em", fontSize: 12 }}>PANEL OPERATIVO WEB</p>
         <h1 style={{ margin: "7px 0 8px", fontSize: "clamp(34px, 5vw, 54px)" }}>Centro de Control</h1>
-        <p style={{ margin: 0, color: "#aabaca", maxWidth: 930, lineHeight: 1.55 }}>
-          PR-0002 ya integra planeación, costo, riesgos, restricciones, decisiones, avance, productividad, EVM, forecast, salud, alertas tempranas, reportes, portafolio e inteligencia Certeza.
+        <p style={{ margin: 0, color: "#aabaca", maxWidth: 960, lineHeight: 1.55 }}>
+          PR-0002 ya integra planeación, captura de corte, costo, riesgos, restricciones, decisiones, avance, productividad, EVM, forecast, salud, alertas, reportes, portafolio, accesos, portal de cliente e inteligencia Certeza.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14, marginTop: 28 }}>
