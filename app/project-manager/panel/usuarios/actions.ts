@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireProjectManagerAdmin, PM_INTERNAL_ROLES } from "@/lib/project-manager/access";
+import { requireProjectManagerAdmin, requireProjectManagerDirector, PM_INTERNAL_ROLES } from "@/lib/project-manager/access";
 
 const crearSchema = z.object({
   nombre: z.string().trim().min(3).max(120),
@@ -38,6 +38,8 @@ export async function crearUsuarioProjectManager(formData: FormData) {
       passwordHash,
       rol: parsed.data.rol,
       activo: true,
+      projectManagerAutorizado: false,
+      projectManagerAutorizadoEn: null,
       requiereCambioPassword: true,
       intentosFallidos: 0,
       bloqueadoHasta: null,
@@ -87,5 +89,42 @@ export async function alternarEstadoUsuarioProjectManager(formData: FormData) {
       bloqueadoHasta: null,
     },
   });
+  revalidatePath("/project-manager/panel/usuarios");
+}
+
+
+export async function alternarAutorizacionProjectManager(formData: FormData) {
+  const { session } = await requireProjectManagerDirector();
+  const usuarioId = String(formData.get("usuarioId") ?? "");
+  const actualId = String((session.user as { id?: string }).id ?? "");
+
+  if (!usuarioId) return;
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: {
+      id: true,
+      rol: true,
+      activo: true,
+      projectManagerAutorizado: true,
+    },
+  });
+
+  if (!usuario || !usuario.activo) return;
+  if (!PM_INTERNAL_ROLES.includes(usuario.rol as (typeof PM_INTERNAL_ROLES)[number])) return;
+
+  // La cuenta del Director que está administrando su propio acceso no puede desautorizarse accidentalmente.
+  if (usuario.id === actualId && usuario.projectManagerAutorizado) return;
+
+  const nuevoEstado = !usuario.projectManagerAutorizado;
+
+  await prisma.usuario.update({
+    where: { id: usuarioId },
+    data: {
+      projectManagerAutorizado: nuevoEstado,
+      projectManagerAutorizadoEn: nuevoEstado ? new Date() : null,
+    },
+  });
+
   revalidatePath("/project-manager/panel/usuarios");
 }
