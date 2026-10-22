@@ -8,6 +8,7 @@ const modules = [
   ["🎯","Resumen ejecutivo","Estado, salud, alertas y prioridades.","resumen"],
   ["🩺","Salud del proyecto","Diagnóstico integral 0–100.","salud"],
   ["🔔","Alertas tempranas","Prioridades, causas y acciones.","alertas"],
+  ["✍️","Captura de corte","Avance, productividad, costos reales y evidencias.","captura"],
   ["📋","Línea base","Referencia aprobada de alcance, plazo y costo.","linea-base"],
   ["📐","EDT / WBS","Estructura de control del proyecto.","edt"],
   ["📅","Programa","Actividades, relaciones y ruta crítica.","programa"],
@@ -36,6 +37,10 @@ export default async function ProjectDetailPage() {
         {modules.map(([icon,title,desc,path])=><Link key={title} href={"/project-manager/panel/proyectos/pr-0002/"+path} style={{...card,textDecoration:"none",color:"#fff",display:"block"}}>
           <div style={{fontSize:30}}>{icon}</div><h2 style={{margin:"10px 0 6px",fontSize:20}}>{title}</h2><p style={{margin:0,color:"#9fb2c6"}}>{desc}</p>
         </Link>)}
+      </div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:20}}>
+        <Link href="/project-manager/portal/pr-0002" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Abrir vista del cliente →</Link>
+        <Link href="/project-manager/panel/accesos" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Administrar accesos →</Link>
       </div>
     </section>
   </main>
