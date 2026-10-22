@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 
-export const PM_INTERNAL_ROLES = ["DIRECTOR","ADMINISTRADOR","GERENTE","COORDINADOR","INSPECTOR"] as const;
+export const PM_INTERNAL_ROLES = ["DIRECTOR","ADMINISTRADOR","GERENTE","COORDINADOR","SUPERVISOR","RESIDENTE"] as const;
 export const PM_ADMIN_ROLES = ["DIRECTOR","ADMINISTRADOR"] as const;
 
 export async function requireProjectManagerAccess() {
