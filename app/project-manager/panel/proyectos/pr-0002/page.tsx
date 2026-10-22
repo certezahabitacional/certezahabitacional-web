@@ -9,6 +9,10 @@ const modules = [
   ["📐","EDT / WBS","Estructura de control del proyecto.","edt"],
   ["📅","Programa","Actividades, relaciones y ruta crítica.","programa"],
   ["💰","Presupuesto","Conceptos, cantidades, precios y forecast.","presupuesto"],
+  ["⚠️","Riesgos","Identificación, nivel, estrategia y respuesta.","riesgos"],
+  ["🚧","Restricciones","Pendientes que pueden impedir la ejecución.","restricciones"],
+  ["🔄","Cambios","Solicitudes, impactos y autorizaciones.","cambios"],
+  ["✅","Decisiones","Asuntos que requieren resolución humana.","decisiones"],
 ];
 
 export default async function ProjectDetailPage() {
