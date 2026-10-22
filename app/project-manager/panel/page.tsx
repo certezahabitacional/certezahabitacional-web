@@ -11,7 +11,7 @@ const orange="#ff8500";
 const green="#17a858";
 const red="#ec3030";
 const ink="#082f64";
-const muted="#365b7d";
+const muted="#294f73";
 const border="#d8e6f2";
 const canvas="#eef6fb";
 
