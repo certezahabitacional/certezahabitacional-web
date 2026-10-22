@@ -26,7 +26,7 @@ type AsignacionFila={inspeccionId:string;rol:"GERENTE"|"COORDINADOR"|"INSPECTOR"
 export default async function InspeccionesPage({ searchParams }: { searchParams: Promise<{ q?: string; estado?: string; inspector?: string; zonaId?: string }> }) {
   const usuario = await obtenerUsuarioConAlcanceZona("/panel/inspecciones");
   if (usuario.rol === RolUsuario.CLIENTE) redirect("/portal/inspecciones");
-  const rolesPermitidos = [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.VENDEDOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR, RolUsuario.INSPECTOR];
+  const rolesPermitidos: RolUsuario[] = [RolUsuario.DIRECTOR, RolUsuario.ADMINISTRADOR, RolUsuario.VENDEDOR, RolUsuario.GERENTE, RolUsuario.COORDINADOR, RolUsuario.INSPECTOR];
   if (!rolesPermitidos.includes(usuario.rol)) redirect("/acceso");
 
   const params = await searchParams;
