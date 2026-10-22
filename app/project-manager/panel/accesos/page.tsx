@@ -1,17 +1,15 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireProjectManagerAdmin } from "@/lib/project-manager/access";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 
 const roles=[
-  ["INTERNO_ADMIN","Administrador interno","Ver, capturar, comentar, descargar y aprobar."],
-  ["CLIENTE_CONSULTA","Cliente consulta","Ver información autorizada."],
-  ["CLIENTE_PARTICIPANTE","Cliente participante","Ver, descargar y comentar."],
-  ["CLIENTE_AUTORIZADOR","Cliente autorizador","Ver, descargar, comentar y aprobar/rechazar solicitudes."],
+  ["DIRECTOR","Director","Acceso total a todos los proyectos y funciones."],
+  ["ADMINISTRADOR","Administrador","Alimentación y retroalimentación administrativa, contable y de costos."],
+  ["GERENTE / COORDINADOR / SUPERVISOR / RESIDENTE","Equipo operativo","Acceso de trabajo únicamente a proyectos asignados."],
+  ["CLIENTE","Cliente · sólo lectura","Consulta total del proyecto asignado, desde indicadores ejecutivos hasta el detalle, sin facultad de modificar."],
 ];
 
 export default async function Page(){
- const session=await auth();
- if(!session?.user) redirect("/project-manager/login");
+ await requireProjectManagerAdmin();
  return <main style={{minHeight:"100vh",background:"#06172c",color:"#fff"}}>
   <PmHeader title="Accesos por Proyecto" subtitle="Cada usuario sólo debe ver los proyectos y funciones expresamente autorizados."/>
   <section style={{maxWidth:1200,margin:"0 auto",padding:"0 22px 54px"}}>
