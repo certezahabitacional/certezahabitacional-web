@@ -29,7 +29,7 @@ export default async function Page() {
             ["Salud",String(h.score)+"/100"],
             ["Estado","PLANEACIÓN"],
             ["Riesgo","MEDIO"],
-          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#d7ecfb",fontSize:12}}>{k}</div><strong style={{display:"block",fontSize:21,marginTop:5}}>{v}</strong></div>)}
+          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#294f73",fontSize:12,fontWeight:800}}>{k}</div><strong style={{display:"block",fontSize:21,marginTop:5}}>{v}</strong></div>)}
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14,marginTop:18}}>
