@@ -15,7 +15,7 @@ function estatusAgenda(estado: EstadoInspeccion) { return estado.replaceAll("_",
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ q?: string; estado?: string; vista?: string; zonaId?: string; ok?: string; error?: string }> }) {
   const usuario=await obtenerUsuarioConAlcanceZona("/panel/agenda");
   if(usuario.rol===RolUsuario.CLIENTE) redirect("/acceso");
-  const roles=[RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.VENDEDOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR,RolUsuario.INSPECTOR]; if(!roles.includes(usuario.rol)) redirect("/acceso");
+  const roles: RolUsuario[]=[RolUsuario.DIRECTOR,RolUsuario.ADMINISTRADOR,RolUsuario.VENDEDOR,RolUsuario.GERENTE,RolUsuario.COORDINADOR,RolUsuario.INSPECTOR]; if(!roles.includes(usuario.rol)) redirect("/acceso");
   const p=await searchParams,q=(p.q??"").trim(),filtro=(p.estado??"").trim(),historico=p.vista==="canceladas";
   const zonaId=zonaEfectivaId(usuario,p.zonaId);
   const zonas=usuario.rol===RolUsuario.DIRECTOR?await prisma.zona.findMany({where:{activa:true},select:{id:true,nombre:true,codigo:true},orderBy:{nombre:"asc"}}):[];
