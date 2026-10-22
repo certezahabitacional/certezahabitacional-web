@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireProjectManagerAccess } from "@/lib/project-manager/access";
 import { pr0002, money } from "@/lib/project-manager/pr0002";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 
@@ -8,7 +7,6 @@ const modules = [
   ["🎯","Resumen ejecutivo","Estado, salud, alertas y prioridades.","resumen"],
   ["🩺","Salud del proyecto","Diagnóstico integral 0–100.","salud"],
   ["🔔","Alertas tempranas","Prioridades, causas y acciones.","alertas"],
-  ["✍️","Captura de corte","Avance, productividad, costos reales y evidencias.","captura"],
   ["📋","Línea base","Referencia aprobada de alcance, plazo y costo.","linea-base"],
   ["📐","EDT / WBS","Estructura de control del proyecto.","edt"],
   ["📅","Programa","Actividades, relaciones y ruta crítica.","programa"],
@@ -24,8 +22,7 @@ const modules = [
 ];
 
 export default async function ProjectDetailPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/project-manager/login");
+  const { readOnly } = await requireProjectManagerAccess();
   const p=pr0002.project;
   return <main style={{minHeight:"100vh",background:"#06172c",color:"#fff"}}>
     <PmHeader title={p.name} subtitle={p.code+" · "+p.client} />
@@ -39,8 +36,16 @@ export default async function ProjectDetailPage() {
         </Link>)}
       </div>
       <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:20}}>
-        <Link href="/project-manager/portal/pr-0002" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Abrir vista del cliente →</Link>
-        <Link href="/project-manager/panel/accesos" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Administrar accesos →</Link>
+        {readOnly ? (
+          <div style={{background:"#e8f3fb",border:"1px solid #bcd7ea",color:"#082f64",padding:"12px 14px",borderRadius:10,fontWeight:850}}>
+            Modo CLIENTE · Sólo lectura · Puede consultar indicadores, reportes y detalle completo del proyecto.
+          </div>
+        ) : (
+          <>
+            <Link href="/project-manager/portal/pr-0002" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Abrir vista del cliente →</Link>
+            <Link href="/project-manager/panel/accesos" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Administrar accesos →</Link>
+          </>
+        )}
       </div>
     </section>
   </main>
