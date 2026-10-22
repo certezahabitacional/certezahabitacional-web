@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { requireProjectAccess, requireProjectManagerAccess } from "@/lib/project-manager/access";
 import { prisma } from "@/lib/prisma";
 import { pr0002, money } from "@/lib/project-manager/pr0002";
@@ -27,7 +28,7 @@ export default async function ProjectDetailPage() {
   const access=existente ? await requireProjectAccess("PR-0002") : await requireProjectManagerAccess();
   const { readOnly, role }=access;
   if(!existente && role!=="DIRECTOR" && role!=="ADMINISTRADOR") {
-    return null;
+    notFound();
   }
   const p=pr0002.project;
   return <main style={{minHeight:"100vh",background:"#06172c",color:"#fff"}}>
