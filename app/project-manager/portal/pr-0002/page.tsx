@@ -48,13 +48,13 @@ export default async function Page() {
           <section style={card}>
             <h2 style={{marginTop:0}}>📂 Documentos compartidos</h2>
             <p style={{color:"#365b7d",lineHeight:1.55}}>Los documentos serán internos por defecto y sólo aparecerán aquí cuando se autorice su publicación.</p>
-            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10,color:"#476987"}}>Sin documentos compartidos todavía.</div>
+            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10}}><span style={{color:"#c9e6fb",fontWeight:700}}>Sin documentos compartidos todavía.</span></div>
           </section>
 
           <section style={card}>
             <h2 style={{marginTop:0}}>✅ Solicitudes por aprobar</h2>
             <p style={{color:"#365b7d",lineHeight:1.55}}>Sólo visibles para CLIENTE_AUTORIZADOR.</p>
-            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10,color:"#476987"}}>Sin solicitudes externas activas.</div>
+            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10}}><span style={{color:"#c9e6fb",fontWeight:700}}>Sin solicitudes externas activas.</span></div>
           </section>
         </div>
 
