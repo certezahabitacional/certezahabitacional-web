@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireProjectManagerAdmin, PM_INTERNAL_ROLES } from "@/lib/project-manager/access";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
-import { crearUsuarioProjectManager, restablecerPasswordProjectManager, alternarEstadoUsuarioProjectManager } from "./actions";
+import { crearUsuarioProjectManager, restablecerPasswordProjectManager, alternarEstadoUsuarioProjectManager, alternarAutorizacionProjectManager } from "./actions";
 
 const roleNames: Record<string,string> = {
   DIRECTOR:"Director",
@@ -15,12 +15,13 @@ const roleNames: Record<string,string> = {
 };
 
 export default async function UsuariosProjectManagerPage() {
-  const { session } = await requireProjectManagerAdmin();
+  const { session, role } = await requireProjectManagerAdmin();
+  const esDirector = role === "DIRECTOR";
   const currentId = String((session.user as { id?: string }).id ?? "");
   const usuarios = await prisma.usuario.findMany({
     where: { rol: { in: [...PM_INTERNAL_ROLES] } },
     select: {
-      id:true,nombre:true,email:true,rol:true,activo:true,requiereCambioPassword:true,
+      id:true,nombre:true,email:true,rol:true,activo:true,projectManagerAutorizado:true,projectManagerAutorizadoEn:true,requiereCambioPassword:true,
       ultimoAcceso:true,intentosFallidos:true,bloqueadoHasta:true,
     },
     orderBy:[{activo:"desc"},{nombre:"asc"}],
@@ -57,12 +58,38 @@ export default async function UsuariosProjectManagerPage() {
         </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",minWidth:1150}}>
-            <thead><tr>{["Usuario","Rol","Estado","Seguridad","Último acceso","Restablecer contraseña","Acción"].map(h=><th key={h} style={{textAlign:"left",padding:12,color:"#082f64",background:"#e6f1f8",borderBottom:"1px solid #c8dbe9",fontSize:13}}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Usuario","Rol","Estado","Acceso Project Manager","Seguridad","Último acceso","Restablecer contraseña","Acción"].map(h=><th key={h} style={{textAlign:"left",padding:12,color:"#082f64",background:"#e6f1f8",borderBottom:"1px solid #c8dbe9",fontSize:13}}>{h}</th>)}</tr></thead>
             <tbody>
               {usuarios.map(u=><tr key={u.id}>
                 <td style={{padding:12,borderBottom:"1px solid #d8e6f2"}}><strong>{u.nombre}</strong><div style={{color:"#365b7d",fontSize:12,marginTop:3}}>{u.email}</div></td>
                 <td style={{padding:12,borderBottom:"1px solid #d8e6f2",fontWeight:800}}>{roleNames[u.rol] ?? u.rol}</td>
                 <td style={{padding:12,borderBottom:"1px solid #d8e6f2"}}><span style={{fontWeight:900,color:u.activo?"#137a42":"#b42318"}}>{u.activo?"ACTIVO":"INACTIVO"}</span></td>
+                <td style={{padding:12,borderBottom:"1px solid #d8e6f2"}}>
+                  <div style={{fontWeight:950,color:u.projectManagerAutorizado?"#137a42":"#b42318"}}>
+                    {u.projectManagerAutorizado ? "AUTORIZADO" : "NO AUTORIZADO"}
+                  </div>
+                  {u.projectManagerAutorizadoEn && <div style={{fontSize:11,color:"#365b7d",marginTop:4}}>
+                    Desde {u.projectManagerAutorizadoEn.toLocaleString("es-MX")}
+                  </div>}
+                  {esDirector && (
+                    <form action={alternarAutorizacionProjectManager} style={{marginTop:8}}>
+                      <input type="hidden" name="usuarioId" value={u.id}/>
+                      <button
+                        type="submit"
+                        disabled={u.id===currentId && u.projectManagerAutorizado}
+                        style={{
+                          border:0,borderRadius:9,padding:"8px 10px",fontWeight:900,
+                          cursor:u.id===currentId && u.projectManagerAutorizado?"not-allowed":"pointer",
+                          background:u.projectManagerAutorizado?"#fee4e2":"#dcfae6",
+                          color:u.projectManagerAutorizado?"#b42318":"#137a42",
+                          opacity:u.id===currentId && u.projectManagerAutorizado ? .55 : 1
+                        }}
+                      >
+                        {u.projectManagerAutorizado ? "Retirar acceso PM" : "Autorizar acceso PM"}
+                      </button>
+                    </form>
+                  )}
+                </td>
                 <td style={{padding:12,borderBottom:"1px solid #d8e6f2",fontSize:12,color:"#365b7d"}}>
                   {u.requiereCambioPassword?"Debe cambiar contraseña":"Contraseña vigente"}<br/>
                   Intentos fallidos: {u.intentosFallidos}{u.bloqueadoHasta?<><br/><b style={{color:"#b42318"}}>Bloqueado temporalmente</b></>:null}
@@ -92,7 +119,7 @@ export default async function UsuariosProjectManagerPage() {
       <div style={{...card,marginTop:18}}>
         <h3 style={{marginTop:0}}>Reglas de acceso</h3>
         <p style={{margin:0,color:"#365b7d",fontWeight:600,lineHeight:1.65}}>
-          DIRECTOR y ADMINISTRADOR administran usuarios y contraseñas. GERENTE, COORDINADOR, SUPERVISOR y RESIDENTE trabajan únicamente en proyectos asignados. CLIENTE accede a toda la información de sus proyectos en modo estrictamente de sólo lectura, sin facultad de capturar, editar, aprobar, responder ni modificar datos.
+          Tener cuenta en Certeza Habitacional no concede acceso automático a Project Manager. Sólo DIRECTOR puede autorizar o retirar el acceso específico a Project Manager. DIRECTOR y ADMINISTRADOR administran usuarios y contraseñas. GERENTE, COORDINADOR, SUPERVISOR y RESIDENTE trabajan únicamente en proyectos asignados. CLIENTE accede a toda la información de sus proyectos en modo estrictamente de sólo lectura, sin facultad de capturar, editar, aprobar, responder ni modificar datos.
         </p>
       </div>
     </section>
