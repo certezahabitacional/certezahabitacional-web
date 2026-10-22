@@ -21,6 +21,7 @@ const sidebar=[
   ["▧","Reportes","/project-manager/panel/reportes"],
   ["✦","Inteligencia Certeza","/project-manager/panel/inteligencia"],
   ["👥","Accesos","/project-manager/panel/accesos"],
+  ["🔐","Usuarios","/project-manager/panel/usuarios"],
   ["🤝","Portal del Cliente","/project-manager/portal/pr-0002"],
 ] as const;
 
@@ -44,6 +45,7 @@ const modules=[
   ["IA","Inteligencia Certeza","/project-manager/panel/inteligencia"],
   ["📁","Portafolio","/project-manager/panel/portafolio"],
   ["👤","Accesos","/project-manager/panel/accesos"],
+  ["🔐","Usuarios","/project-manager/panel/usuarios"],
   ["🤝","Portal del Cliente","/project-manager/portal/pr-0002"],
 ] as const;
 
