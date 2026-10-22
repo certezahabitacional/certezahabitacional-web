@@ -10,7 +10,7 @@ const orange="#ff8500";
 const green="#17a858";
 const red="#ec3030";
 const ink="#082f64";
-const muted="#69809b";
+const muted="#365b7d";
 const border="#d8e6f2";
 const canvas="#eef6fb";
 
@@ -107,13 +107,13 @@ export default async function ProjectManagerPanelPage() {
             <div style={{fontSize:"clamp(28px,4vw,48px)",fontWeight:950,letterSpacing:"-.03em",lineHeight:1}}>
               CERTEZA <span style={{color:orange}}>PROJECT MANAGER</span>
             </div>
-            <div style={{fontSize:20,color:"#d5e9f9",marginTop:6}}>Centro de Control de Proyectos</div>
+            <div style={{fontSize:20,color:"#f0f8ff",marginTop:6}}>Centro de Control de Proyectos</div>
           </div>
           <div style={{position:"relative",display:"flex",alignItems:"center",gap:14,textAlign:"right"}}>
             <div style={{width:42,height:42,borderRadius:"50%",background:"#fff",display:"grid",placeItems:"center",color:navy,fontWeight:950}}>CG</div>
             <div>
               <div style={{fontWeight:900}}>{user}</div>
-              <div style={{fontSize:12,color:"#d5e9f9"}}>Dirección de Proyectos</div>
+              <div style={{fontSize:12,color:"#f0f8ff"}}>Dirección de Proyectos</div>
             </div>
           </div>
         </header>
