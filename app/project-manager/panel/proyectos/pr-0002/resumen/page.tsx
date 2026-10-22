@@ -24,7 +24,7 @@ export default async function Page() {
       <PmHeader title="Resumen Ejecutivo" subtitle="Mucho análisis detrás, poca información al frente." />
       <section style={{maxWidth:1400,margin:"0 auto",padding:"0 22px 54px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
-          {kpis.map(([k,v])=><div key={k} style={card}><div style={{color:"#d7ecfb",fontSize:12}}>{k}</div><strong style={{fontSize:22,display:"block",marginTop:6}}>{v}</strong></div>)}
+          {kpis.map(([k,v])=><div key={k} style={card}><div style={{color:"#294f73",fontSize:12,fontWeight:800}}>{k}</div><strong style={{fontSize:22,display:"block",marginTop:6}}>{v}</strong></div>)}
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14,marginTop:18}}>
