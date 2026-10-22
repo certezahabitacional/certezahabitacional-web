@@ -24,7 +24,7 @@ export default async function Page() {
       <PmHeader title="Valor Ganado (EVM)" subtitle="Control integrado de avance, plazo y costo." />
       <section style={{maxWidth:1300,margin:"0 auto",padding:"0 22px 54px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
-          {metrics.map(([code,label,value])=><div key={code} style={card}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong style={{color:"#c86100"}}>{code}</strong><span style={{color:"#d7ecfb",fontSize:12}}>{label}</span></div><div style={{fontSize:24,fontWeight:900,marginTop:10}}>{value}</div></div>)}
+          {metrics.map(([code,label,value])=><div key={code} style={card}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong style={{color:"#c86100"}}>{code}</strong><span style={{color:"#294f73",fontSize:12,fontWeight:750}}>{label}</span></div><div style={{fontSize:24,fontWeight:900,marginTop:10}}>{value}</div></div>)}
         </div>
         <div style={{...card,marginTop:18,padding:24}}>
           <h2 style={{marginTop:0}}>Estado actual</h2>
