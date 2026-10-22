@@ -72,6 +72,7 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
 
       <div style={{display:"flex",gap:10,marginTop:18,flexWrap:"wrap"}}>
         <Link href="/project-manager/panel/proyectos" style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>← Volver a Proyectos</Link>
+        <Link href={`/project-manager/panel/proyectos/equipo?codigo=${proyecto.codigo}`} style={{background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Participantes / Equipo</Link>
         <Link href="/project-manager/panel" style={{border:"1px solid #b8cad9",color:"#294f73",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Centro de Control general</Link>
       </div>
     </section>
