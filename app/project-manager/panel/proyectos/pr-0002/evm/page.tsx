@@ -24,18 +24,18 @@ export default async function Page() {
       <PmHeader title="Valor Ganado (EVM)" subtitle="Control integrado de avance, plazo y costo." />
       <section style={{maxWidth:1300,margin:"0 auto",padding:"0 22px 54px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
-          {metrics.map(([code,label,value])=><div key={code} style={card}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong style={{color:"#edcb71"}}>{code}</strong><span style={{color:"#b9dbf5",fontSize:12}}>{label}</span></div><div style={{fontSize:24,fontWeight:900,marginTop:10}}>{value}</div></div>)}
+          {metrics.map(([code,label,value])=><div key={code} style={card}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong style={{color:"#c86100"}}>{code}</strong><span style={{color:"#d7ecfb",fontSize:12}}>{label}</span></div><div style={{fontSize:24,fontWeight:900,marginTop:10}}>{value}</div></div>)}
         </div>
         <div style={{...card,marginTop:18,padding:24}}>
           <h2 style={{marginTop:0}}>Estado actual</h2>
-          <p style={{color:"#365b7d",lineHeight:1.6}}>
+          <p style={{color:"#294f73",lineHeight:1.6}}>
             No se muestran SPI ni CPI porque todavía no existen PV, EV y AC de un corte real. Mostrar 0.00 sería técnicamente incorrecto y podría interpretarse como desempeño crítico.
           </p>
           <p style={{marginBottom:0,color:"#7a5d16"}}><b>Regla Certeza:</b> si no hay base suficiente para un indicador, el sistema debe mostrar “Sin corte” o “Datos insuficientes”, no inventar una conclusión.</p>
         </div>
         <div style={{...card,marginTop:18}}>
           <h2 style={{marginTop:0}}>Motor matemático</h2>
-          <p style={{color:"#365b7d",lineHeight:1.7,marginBottom:0}}>
+          <p style={{color:"#294f73",lineHeight:1.7,marginBottom:0}}>
             SPI = EV / PV · CPI = EV / AC · SV = EV − PV · CV = EV − AC · EAC = BAC / CPI cuando exista CPI válido.
           </p>
         </div>
