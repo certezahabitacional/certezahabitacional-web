@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import LogoCertezaTecnica from "@/components/branding/LogoCertezaTecnica";
 import Link from "next/link";
 import { auth } from "@/auth";
 
@@ -39,7 +40,7 @@ const botonAcceso = {
   justifyContent: "center",
   padding: "0 22px",
   borderRadius: 12,
-  background: "#edcb71",
+  background: "#ff9a2f",
   color: "#071d38",
   textDecoration: "none",
   fontWeight: 900,
@@ -80,9 +81,12 @@ export default async function ProjectManagerPage() {
         >
           ← Certeza Técnica
         </Link>
-        <span style={{ color: "#edcb71", fontWeight: 900 }}>
-          CERTEZA PROJECT MANAGER
-        </span>
+        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <LogoCertezaTecnica href="/certeza-tecnica" height={58}/>
+          <span style={{ color: "#ff9a2f", fontWeight: 950, letterSpacing: ".04em" }}>
+            CERTEZA PROJECT MANAGER
+          </span>
+        </div>
       </header>
 
       <section
@@ -101,17 +105,20 @@ export default async function ProjectManagerPage() {
               "linear-gradient(135deg, #0d315a 0%, #071d38 58%, #10263e 100%)",
           }}
         >
-          <p
-            style={{
-              margin: 0,
-              color: "#edcb71",
-              fontWeight: 900,
-              letterSpacing: ".09em",
-              fontSize: 13,
-            }}
-          >
-            CERTEZA TÉCNICA
-          </p>
+          <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+            <LogoCertezaTecnica height={78}/>
+            <p
+              style={{
+                margin: 0,
+                color: "#ff9a2f",
+                fontWeight: 950,
+                letterSpacing: ".09em",
+                fontSize: 13,
+              }}
+            >
+              CERTEZA TÉCNICA
+            </p>
+          </div>
           <h1
             style={{
               margin: "10px 0 10px",
@@ -197,7 +204,7 @@ export default async function ProjectManagerPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 border: "1px solid rgba(237,203,113,.26)",
-                color: "#edcb71",
+                color: "#ff9a2f",
                 textDecoration: "none",
                 fontWeight: 900,
                 background: "#0a223d",
@@ -244,7 +251,7 @@ export default async function ProjectManagerPage() {
               <div>
                 <div
                   style={{
-                    color: "#edcb71",
+                    color: "#ff9a2f",
                     fontSize: 12,
                     fontWeight: 900,
                     letterSpacing: ".08em",
@@ -257,7 +264,7 @@ export default async function ProjectManagerPage() {
               <a
                 href="#top"
                 style={{
-                  color: "#aabaca",
+                  color: "#d5e8f8",
                   textDecoration: "none",
                   fontSize: 14,
                   fontWeight: 700,
@@ -312,7 +319,7 @@ export default async function ProjectManagerPage() {
           <p
             style={{
               margin: 0,
-              color: "#edcb71",
+              color: "#ff9a2f",
               fontWeight: 900,
               letterSpacing: ".08em",
               fontSize: 12,
@@ -327,7 +334,7 @@ export default async function ProjectManagerPage() {
             style={{
               margin: "0 auto 20px",
               maxWidth: 700,
-              color: "#aabaca",
+              color: "#d5e8f8",
               lineHeight: 1.55,
             }}
           >
