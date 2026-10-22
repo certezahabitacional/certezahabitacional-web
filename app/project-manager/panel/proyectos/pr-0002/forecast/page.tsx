@@ -21,21 +21,21 @@ export default async function Page() {
             ["Fecha forecast","30/06/2027"],
             ["Salud",String(s.healthScore)+"/100"],
             ["Estado",s.healthStatus],
-          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#8fa5bb",fontSize:12}}>{k}</div><strong style={{fontSize:20,display:"block",marginTop:6}}>{v}</strong></div>)}
+          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#b9dbf5",fontSize:12}}>{k}</div><strong style={{fontSize:20,display:"block",marginTop:6}}>{v}</strong></div>)}
         </div>
         <div style={{...card,marginTop:18,padding:24}}>
           <h2 style={{marginTop:0}}>Escenario actual: Base</h2>
-          <p style={{color:"#aabaca",lineHeight:1.6}}>
+          <p style={{color:"#365b7d",lineHeight:1.6}}>
             Como el proyecto aún no inicia ejecución, el mejor pronóstico disponible es la propia línea base: EAC = $24.6 M y término previsto = 30/06/2027.
           </p>
-          <p style={{marginBottom:0,color:"#d6c99e"}}>En cuanto existan datos reales, Certeza generará escenarios <b>Base, Recuperación y Riesgo</b>.</p>
+          <p style={{marginBottom:0,color:"#7a5d16"}}>En cuanto existan datos reales, Certeza generará escenarios <b>Base, Recuperación y Riesgo</b>.</p>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12,marginTop:18}}>
           {[
             ["Recuperación","Qué pasaría si las acciones correctivas recuperan productividad y plazo."],
             ["Base","Qué pasaría si continúa la tendencia observada."],
             ["Riesgo","Qué pasaría si se materializan riesgos relevantes."],
-          ].map(([t,d])=><div key={t} style={card}><h3 style={{marginTop:0,color:"#edcb71"}}>{t}</h3><p style={{margin:0,color:"#9fb2c6",lineHeight:1.55}}>{d}</p></div>)}
+          ].map(([t,d])=><div key={t} style={card}><h3 style={{marginTop:0,color:"#edcb71"}}>{t}</h3><p style={{margin:0,color:"#365b7d",lineHeight:1.55}}>{d}</p></div>)}
         </div>
       </section>
     </main>
