@@ -3,14 +3,15 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 
 const accesos = [
-  ["🎯", "Resumen ejecutivo", "Estado general, salud, decisiones y prioridades."],
-  ["📅", "Planeación", "Línea base, EDT, programa, Look Ahead e hitos."],
-  ["💰", "Costos y EVM", "Presupuesto, costo, CPI, SPI y proyección al cierre."],
-  ["⚠️", "Riesgos", "Riesgos, tratamientos y exposición residual."],
-  ["🚧", "Restricciones", "Pendientes que pueden impedir la ejecución."],
-  ["🔄", "Cambios", "Solicitudes, impactos, autorizaciones y trazabilidad."],
-  ["📑", "Reportes", "Reportes ejecutivos, snapshots y comparativos."],
-  ["🤖", "Inteligencia Certeza", "Alertas, análisis, agentes y recomendaciones."],
+  ["🏗️", "Proyectos", "Proyecto, línea base, EDT, programa y presupuesto.", "/project-manager/panel/proyectos"],
+  ["🎯", "Resumen ejecutivo", "Estado general, salud, decisiones y prioridades.", "#"],
+  ["📅", "Planeación", "Línea base, EDT, programa, Look Ahead e hitos.", "/project-manager/panel/proyectos/pr-0002"],
+  ["💰", "Costos y EVM", "Presupuesto, costo, CPI, SPI y proyección al cierre.", "/project-manager/panel/proyectos/pr-0002/presupuesto"],
+  ["⚠️", "Riesgos", "Riesgos, tratamientos y exposición residual.", "#"],
+  ["🚧", "Restricciones", "Pendientes que pueden impedir la ejecución.", "#"],
+  ["🔄", "Cambios", "Solicitudes, impactos, autorizaciones y trazabilidad.", "#"],
+  ["📑", "Reportes", "Reportes ejecutivos, snapshots y comparativos.", "#"],
+  ["🤖", "Inteligencia Certeza", "Alertas, análisis, agentes y recomendaciones.", "#"],
 ];
 
 export default async function ProjectManagerPanelPage() {
@@ -30,17 +31,25 @@ export default async function ProjectManagerPanelPage() {
       <section style={{ maxWidth: 1440, margin: "0 auto", padding: "32px 22px 54px" }}>
         <p style={{ margin: 0, color: "#edcb71", fontWeight: 900, letterSpacing: ".08em", fontSize: 12 }}>PANEL OPERATIVO WEB</p>
         <h1 style={{ margin: "7px 0 8px", fontSize: "clamp(34px, 5vw, 54px)" }}>Centro de Control</h1>
-        <p style={{ margin: 0, color: "#aabaca", maxWidth: 820, lineHeight: 1.55 }}>
-          Esta es la estructura web de entrada. Los módulos se habilitarán con los datos migrados desde Certeza Project Manager v1.9.0, manteniendo permisos y trazabilidad por proyecto.
+        <p style={{ margin: 0, color: "#aabaca", maxWidth: 850, lineHeight: 1.55 }}>
+          El núcleo de migración ya puede revisarse con PR-0002: proyecto, línea base, EDT, programa y presupuesto. Los módulos restantes se habilitarán progresivamente sobre la misma arquitectura.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14, marginTop: 28 }}>
-          {accesos.map(([icono, titulo, descripcion]) => (
-            <article key={titulo} style={{ minHeight: 150, borderRadius: 16, border: "1px solid rgba(255,255,255,.10)", background: "#0a223d", padding: 20 }}>
-              <span style={{ fontSize: 30 }}>{icono}</span>
-              <h2 style={{ margin: "12px 0 6px", fontSize: 20 }}>{titulo}</h2>
-              <p style={{ margin: 0, color: "#9fb2c6", lineHeight: 1.5 }}>{descripcion}</p>
-            </article>
+          {accesos.map(([icono, titulo, descripcion, href]) => (
+            <Link
+              key={titulo}
+              href={href}
+              aria-disabled={href === "#"}
+              style={{ textDecoration: "none", color: "inherit", pointerEvents: href === "#" ? "none" : "auto", opacity: href === "#" ? 0.56 : 1 }}
+            >
+              <article style={{ minHeight: 150, borderRadius: 16, border: "1px solid rgba(255,255,255,.10)", background: "#0a223d", padding: 20 }}>
+                <span style={{ fontSize: 30 }}>{icono}</span>
+                <h2 style={{ margin: "12px 0 6px", fontSize: 20 }}>{titulo}</h2>
+                <p style={{ margin: 0, color: "#9fb2c6", lineHeight: 1.5 }}>{descripcion}</p>
+                {href !== "#" && <div style={{ marginTop: 14, color: "#edcb71", fontWeight: 800, fontSize: 14 }}>Abrir módulo →</div>}
+              </article>
+            </Link>
           ))}
         </div>
       </section>
