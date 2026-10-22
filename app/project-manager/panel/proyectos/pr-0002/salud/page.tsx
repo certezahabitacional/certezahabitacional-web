@@ -12,12 +12,12 @@ export default async function Page() {
       <section style={{maxWidth:1250,margin:"0 auto",padding:"0 22px 54px"}}>
         <div style={{...card,padding:26,display:"flex",justifyContent:"space-between",gap:20,alignItems:"center",flexWrap:"wrap"}}>
           <div>
-            <div style={{color:"#8fa5bb",fontSize:12}}>CERTEZA PROJECT HEALTH INDEX</div>
+            <div style={{color:"#b9dbf5",fontSize:12}}>CERTEZA PROJECT HEALTH INDEX</div>
             <div style={{fontSize:56,fontWeight:900,color:"#edcb71",lineHeight:1}}>{h.score}<span style={{fontSize:24}}>/100</span></div>
           </div>
           <div style={{maxWidth:620}}>
             <h2 style={{margin:"0 0 6px"}}>{h.status}</h2>
-            <p style={{margin:0,color:"#aabaca",lineHeight:1.6}}>
+            <p style={{margin:0,color:"#365b7d",lineHeight:1.6}}>
               La salud es favorable en alcance, costo y cronograma; la atención debe concentrarse en riesgos, restricciones y recursos/suministros antes del arranque.
             </p>
           </div>
@@ -31,7 +31,7 @@ export default async function Page() {
             <div style={{height:8,background:"#06172c",borderRadius:999,margin:"12px 0"}}>
               <div style={{width:String(score)+"%",height:"100%",borderRadius:999,background:status==="VERDE"?"#4fb477":"#d6a746"}}/>
             </div>
-            <p style={{margin:0,color:"#9fb2c6",lineHeight:1.5}}>{note}</p>
+            <p style={{margin:0,color:"#365b7d",lineHeight:1.5}}>{note}</p>
           </div>)}
         </div>
       </section>
