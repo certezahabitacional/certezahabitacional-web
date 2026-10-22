@@ -16,12 +16,12 @@ export default async function Page() {
             ["Avance físico","0.00%"],
             ["Avance financiero","0.00%"],
             ["Inicio contractual","02/11/2026"],
-          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#8fa5bb",fontSize:12}}>{k}</div><strong style={{fontSize:24}}>{v}</strong></div>)}
+          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#294f73",fontSize:12}}>{k}</div><strong style={{fontSize:24}}>{v}</strong></div>)}
         </div>
         <div style={{...card,marginTop:18,padding:26}}>
           <div style={{fontSize:44}}>🏗️</div>
           <h2 style={{margin:"10px 0 6px"}}>Proyecto en etapa preoperativa</h2>
-          <p style={{color:"#aabaca",lineHeight:1.6,margin:0}}>
+          <p style={{color:"#294f73",lineHeight:1.6,margin:0}}>
             PR-0002 todavía no tiene un corte de ejecución real. Por eso Certeza Project Manager no genera un porcentaje artificial.
             El primer avance se calculará cuando exista una fecha de corte posterior al arranque y se hayan capturado cantidades ejecutadas.
           </p>
@@ -29,7 +29,7 @@ export default async function Page() {
         <div style={{...card,marginTop:18}}>
           <h2 style={{marginTop:0}}>Qué alimentará este módulo</h2>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
-            {["Avance por actividad","Avance por EDT","Avance global ponderado","Avance plan vs real","Evidencias de campo","Tendencia de cumplimiento"].map(x=><div key={x} style={{background:"#06172c",borderRadius:10,padding:12}}>{x}</div>)}
+            {["Avance por actividad","Avance por EDT","Avance global ponderado","Avance plan vs real","Evidencias de campo","Tendencia de cumplimiento"].map(x=><div key={x} style={{background:"#06172c",color:"#ffffff",borderRadius:10,padding:12}}>{x}</div>)}
           </div>
         </div>
       </section>
