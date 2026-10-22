@@ -10,7 +10,7 @@ export function PmHeader({ title, subtitle }: { title: string; subtitle?: string
       <section style={{background:"#eef6fb",borderBottom:"1px solid #d8e6f2",padding:"22px clamp(18px,3vw,34px)"}}>
         <p style={{margin:0,color:"#ff8500",fontSize:12,fontWeight:950,letterSpacing:".08em"}}>CONTROL DE PROYECTOS</p>
         <h1 style={{margin:"6px 0 4px",fontSize:"clamp(30px,4vw,46px)",color:"#082f64"}}>{title}</h1>
-        {subtitle && <p style={{margin:0,color:"#69809b",lineHeight:1.5}}>{subtitle}</p>}
+        {subtitle && <p style={{margin:0,color:"#365b7d",lineHeight:1.5}}>{subtitle}</p>}
       </section>
     </>
   );
