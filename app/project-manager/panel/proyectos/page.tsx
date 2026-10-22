@@ -21,7 +21,8 @@ export default async function ProjectsPage() {
     orderBy:{creadoEn:"desc"},
   });
 
-  const mostrarLegacy=role==="DIRECTOR" || role==="ADMINISTRADOR";
+  const pr0002Db=proyectos.some(p=>p.codigo==="PR-0002");
+  const mostrarLegacy=(role==="DIRECTOR" || role==="ADMINISTRADOR") && !pr0002Db;
 
   return (
     <main style={{minHeight:"100vh",background:"#eef6fb",color:"#082f64"}}>
