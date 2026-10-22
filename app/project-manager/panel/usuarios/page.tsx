@@ -11,6 +11,7 @@ const roleNames: Record<string,string> = {
   COORDINADOR:"Coordinador",
   SUPERVISOR:"Supervisor",
   RESIDENTE:"Residente",
+  CLIENTE:"Cliente",
 };
 
 export default async function UsuariosProjectManagerPage() {
@@ -91,7 +92,7 @@ export default async function UsuariosProjectManagerPage() {
       <div style={{...card,marginTop:18}}>
         <h3 style={{marginTop:0}}>Reglas de acceso</h3>
         <p style={{margin:0,color:"#365b7d",fontWeight:600,lineHeight:1.65}}>
-          DIRECTOR y ADMINISTRADOR administran usuarios y contraseñas. GERENTE, COORDINADOR, SUPERVISOR y RESIDENTE pueden iniciar sesión en el Centro de Control. VENDEDOR y CLIENTE no pueden acceder al panel interno de Project Manager.
+          DIRECTOR y ADMINISTRADOR administran usuarios y contraseñas. GERENTE, COORDINADOR, SUPERVISOR y RESIDENTE trabajan únicamente en proyectos asignados. CLIENTE accede a toda la información de sus proyectos en modo estrictamente de sólo lectura, sin facultad de capturar, editar, aprobar, responder ni modificar datos.
         </p>
       </div>
     </section>
