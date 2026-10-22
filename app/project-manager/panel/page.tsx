@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { cerrarSesionProjectManager } from "./actions";
 
 const navy="#053f79";
 const navyDark="#032b58";
@@ -116,6 +117,9 @@ export default async function ProjectManagerPanelPage() {
             <div>
               <div style={{fontWeight:900}}>{user}</div>
               <div style={{fontSize:12,color:"#f0f8ff"}}>Dirección de Proyectos</div>
+              <form action={cerrarSesionProjectManager} style={{marginTop:5}}>
+                <button type="submit" style={{border:0,background:"transparent",color:"#ffd9b0",fontWeight:800,padding:0,cursor:"pointer",fontSize:12}}>Cerrar sesión</button>
+              </form>
             </div>
           </div>
         </header>
