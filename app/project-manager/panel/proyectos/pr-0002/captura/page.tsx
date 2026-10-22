@@ -1,12 +1,10 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireProjectManagerWriteAccess } from "@/lib/project-manager/access";
 import { pr0002, money } from "@/lib/project-manager/pr0002";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 import CapturePreviewForm from "./CapturePreviewForm";
 
 export default async function Page() {
-  const session=await auth();
-  if(!session?.user) redirect("/project-manager/login");
+  await requireProjectManagerWriteAccess();
   const activities=pr0002.activities.map(([code,name,_start,_end,wbs])=>({code,name,control:wbs}));
 
   return (
