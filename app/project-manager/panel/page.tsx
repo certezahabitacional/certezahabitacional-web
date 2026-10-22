@@ -7,9 +7,10 @@ const accesos = [
   ["🎯", "Resumen ejecutivo", "Estado general, salud, decisiones y prioridades.", "#"],
   ["📅", "Planeación", "Línea base, EDT, programa, Look Ahead e hitos.", "/project-manager/panel/proyectos/pr-0002"],
   ["💰", "Costos y EVM", "Presupuesto, costo, CPI, SPI y proyección al cierre.", "/project-manager/panel/proyectos/pr-0002/presupuesto"],
-  ["⚠️", "Riesgos", "Riesgos, tratamientos y exposición residual.", "#"],
-  ["🚧", "Restricciones", "Pendientes que pueden impedir la ejecución.", "#"],
-  ["🔄", "Cambios", "Solicitudes, impactos, autorizaciones y trazabilidad.", "#"],
+  ["⚠️", "Riesgos", "Riesgos, tratamientos y exposición residual.", "/project-manager/panel/proyectos/pr-0002/riesgos"],
+  ["🚧", "Restricciones", "Pendientes que pueden impedir la ejecución.", "/project-manager/panel/proyectos/pr-0002/restricciones"],
+  ["🔄", "Cambios", "Solicitudes, impactos, autorizaciones y trazabilidad.", "/project-manager/panel/proyectos/pr-0002/cambios"],
+  ["✅", "Decisiones", "Asuntos que requieren resolución humana.", "/project-manager/panel/proyectos/pr-0002/decisiones"],
   ["📑", "Reportes", "Reportes ejecutivos, snapshots y comparativos.", "#"],
   ["🤖", "Inteligencia Certeza", "Alertas, análisis, agentes y recomendaciones.", "#"],
 ];
@@ -31,8 +32,8 @@ export default async function ProjectManagerPanelPage() {
       <section style={{ maxWidth: 1440, margin: "0 auto", padding: "32px 22px 54px" }}>
         <p style={{ margin: 0, color: "#edcb71", fontWeight: 900, letterSpacing: ".08em", fontSize: 12 }}>PANEL OPERATIVO WEB</p>
         <h1 style={{ margin: "7px 0 8px", fontSize: "clamp(34px, 5vw, 54px)" }}>Centro de Control</h1>
-        <p style={{ margin: 0, color: "#aabaca", maxWidth: 850, lineHeight: 1.55 }}>
-          El núcleo de migración ya puede revisarse con PR-0002: proyecto, línea base, EDT, programa y presupuesto. Los módulos restantes se habilitarán progresivamente sobre la misma arquitectura.
+        <p style={{ margin: 0, color: "#aabaca", maxWidth: 900, lineHeight: 1.55 }}>
+          PR-0002 ya cuenta con núcleo de proyecto, línea base, EDT, programa, presupuesto, riesgos, restricciones, cambios y decisiones. Los módulos ejecutivos y de inteligencia se habilitarán sobre esta misma arquitectura.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14, marginTop: 28 }}>
