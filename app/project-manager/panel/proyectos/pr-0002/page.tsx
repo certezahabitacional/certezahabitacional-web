@@ -5,6 +5,9 @@ import { pr0002, money } from "@/lib/project-manager/pr0002";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 
 const modules = [
+  ["🎯","Resumen ejecutivo","Estado, salud, alertas y prioridades.","resumen"],
+  ["🩺","Salud del proyecto","Diagnóstico integral 0–100.","salud"],
+  ["🔔","Alertas tempranas","Prioridades, causas y acciones.","alertas"],
   ["📋","Línea base","Referencia aprobada de alcance, plazo y costo.","linea-base"],
   ["📐","EDT / WBS","Estructura de control del proyecto.","edt"],
   ["📅","Programa","Actividades, relaciones y ruta crítica.","programa"],
