@@ -1,8 +1,7 @@
 import Image from "next/image";
 import LogoCertezaTecnica from "@/components/branding/LogoCertezaTecnica";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireProjectManagerAccess } from "@/lib/project-manager/access";
 import { cerrarSesionProjectManager } from "./actions";
 
 const navy="#053f79";
@@ -69,9 +68,14 @@ function SectionHeader({title,icon}:{title:string;icon?:string}) {
 }
 
 export default async function ProjectManagerPanelPage() {
-  const session=await auth();
-  if(!session?.user) redirect("/project-manager/login");
+  const { session, role, readOnly } = await requireProjectManagerAccess();
   const user=session.user.name ?? session.user.email ?? "Usuario autorizado";
+  const sidebarVisible = readOnly
+    ? sidebar.filter(([,label]) => !["Accesos","Usuarios","Portal del Cliente"].includes(label))
+    : sidebar;
+  const modulesVisible = readOnly
+    ? modules.filter(([,label]) => !["Accesos","Usuarios","Portal del Cliente"].includes(label))
+    : modules;
 
   return <main style={{minHeight:"100vh",background:canvas,color:ink}}>
     <div style={{display:"grid",gridTemplateColumns:"220px minmax(0,1fr)",minHeight:"100vh"}}>
@@ -82,7 +86,7 @@ export default async function ProjectManagerPanelPage() {
         </div>
 
         <nav style={{padding:"14px 0"}}>
-          {sidebar.map(([icon,label,href],i)=><Link key={label} href={href} style={{
+          {sidebarVisible.map(([icon,label,href],i)=><Link key={label} href={href} style={{
             display:"flex",alignItems:"center",gap:12,padding:"14px 18px",textDecoration:"none",
             color:"#fff",fontWeight:i===0?900:700,fontSize:14,
             background:i===0?orange:"transparent",borderLeft:i===0?"4px solid #ffd29a":"4px solid transparent"
@@ -113,7 +117,7 @@ export default async function ProjectManagerPanelPage() {
             <div style={{width:42,height:42,borderRadius:"50%",background:"#fff",display:"grid",placeItems:"center",color:navy,fontWeight:950}}>CG</div>
             <div>
               <div style={{fontWeight:900}}>{user}</div>
-              <div style={{fontSize:12,color:"#f0f8ff"}}>Dirección de Proyectos</div>
+              <div style={{fontSize:12,color:"#f0f8ff"}}>{readOnly ? "CLIENTE · SÓLO LECTURA" : role}</div>
               <form action={cerrarSesionProjectManager} style={{marginTop:5}}>
                 <button type="submit" style={{border:0,background:"transparent",color:"#ffd9b0",fontWeight:800,padding:0,cursor:"pointer",fontSize:12}}>Cerrar sesión</button>
               </form>
@@ -135,7 +139,7 @@ export default async function ProjectManagerPanelPage() {
             <section style={{background:"#fff",border:`1px solid ${border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 4px 14px rgba(2,55,108,.08)"}}>
               <SectionHeader title="MÓDULOS PRINCIPALES" icon="▦"/>
               <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))"}}>
-                {modules.map(([icon,label,href])=><Link key={label} href={href} style={{minHeight:86,borderRight:`1px solid ${border}`,borderBottom:`1px solid ${border}`,textDecoration:"none",color:ink,padding:"12px 9px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",gap:6}}>
+                {modulesVisible.map(([icon,label,href])=><Link key={label} href={href} style={{minHeight:86,borderRight:`1px solid ${border}`,borderBottom:`1px solid ${border}`,textDecoration:"none",color:ink,padding:"12px 9px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",gap:6}}>
                   <span style={{fontSize:27,lineHeight:1}}>{icon}</span>
                   <strong style={{fontSize:12.5,lineHeight:1.15}}>{label}</strong>
                   <span style={{color:blue,fontSize:18,lineHeight:.8}}>›</span>
