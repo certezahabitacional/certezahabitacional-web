@@ -16,7 +16,7 @@ export default async function Page() {
         <div style={{...card,padding:24,border:"1px solid rgba(237,203,113,.28)"}}>
           <div style={{color:"#edcb71",fontSize:12,fontWeight:900}}>VISTA DE CLIENTE</div>
           <h2 style={{margin:"7px 0 6px"}}>Información autorizada únicamente</h2>
-          <p style={{margin:0,color:"#aabaca",lineHeight:1.6}}>
+          <p style={{margin:0,color:"#365b7d",lineHeight:1.6}}>
             Esta vista no expone información interna completa. Cada proyecto definirá qué secciones puede consultar el cliente y si puede comentar, descargar o aprobar.
           </p>
         </div>
@@ -29,32 +29,32 @@ export default async function Page() {
             ["Salud",String(h.score)+"/100"],
             ["Estado","PLANEACIÓN"],
             ["Riesgo","MEDIO"],
-          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#8fa5bb",fontSize:12}}>{k}</div><strong style={{display:"block",fontSize:21,marginTop:5}}>{v}</strong></div>)}
+          ].map(([k,v])=><div key={k} style={card}><div style={{color:"#b9dbf5",fontSize:12}}>{k}</div><strong style={{display:"block",fontSize:21,marginTop:5}}>{v}</strong></div>)}
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14,marginTop:18}}>
           <section style={card}>
             <h2 style={{marginTop:0}}>📅 Programa e hitos</h2>
-            <p style={{color:"#9fb2c6",lineHeight:1.55}}>Vista resumida de hitos contractuales y fecha de término proyectada.</p>
-            <div style={{background:"#06172c",padding:12,borderRadius:10}}>Término contractual: <b>30/06/2027</b></div>
+            <p style={{color:"#365b7d",lineHeight:1.55}}>Vista resumida de hitos contractuales y fecha de término proyectada.</p>
+            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10}}>Término contractual: <b>30/06/2027</b></div>
           </section>
 
           <section style={card}>
             <h2 style={{marginTop:0}}>⚠️ Riesgos relevantes</h2>
-            <p style={{color:"#9fb2c6",lineHeight:1.55}}>Sólo riesgos autorizados para comunicación externa.</p>
-            <div style={{background:"#06172c",padding:12,borderRadius:10}}>2 riesgos de atención prioritaria</div>
+            <p style={{color:"#365b7d",lineHeight:1.55}}>Sólo riesgos autorizados para comunicación externa.</p>
+            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10}}>2 riesgos de atención prioritaria</div>
           </section>
 
           <section style={card}>
             <h2 style={{marginTop:0}}>📂 Documentos compartidos</h2>
-            <p style={{color:"#9fb2c6",lineHeight:1.55}}>Los documentos serán internos por defecto y sólo aparecerán aquí cuando se autorice su publicación.</p>
-            <div style={{background:"#06172c",padding:12,borderRadius:10,color:"#8fa5bb"}}>Sin documentos compartidos todavía.</div>
+            <p style={{color:"#365b7d",lineHeight:1.55}}>Los documentos serán internos por defecto y sólo aparecerán aquí cuando se autorice su publicación.</p>
+            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10,color:"#476987"}}>Sin documentos compartidos todavía.</div>
           </section>
 
           <section style={card}>
             <h2 style={{marginTop:0}}>✅ Solicitudes por aprobar</h2>
-            <p style={{color:"#9fb2c6",lineHeight:1.55}}>Sólo visibles para CLIENTE_AUTORIZADOR.</p>
-            <div style={{background:"#06172c",padding:12,borderRadius:10,color:"#8fa5bb"}}>Sin solicitudes externas activas.</div>
+            <p style={{color:"#365b7d",lineHeight:1.55}}>Sólo visibles para CLIENTE_AUTORIZADOR.</p>
+            <div style={{background:"#06172c",color:"#ffffff",padding:12,borderRadius:10,color:"#476987"}}>Sin solicitudes externas activas.</div>
           </section>
         </div>
 
@@ -65,7 +65,7 @@ export default async function Page() {
               ["CLIENTE_CONSULTA","Ver"],
               ["CLIENTE_PARTICIPANTE","Ver · Descargar · Comentar"],
               ["CLIENTE_AUTORIZADOR","Ver · Descargar · Comentar · Aprobar/Rechazar"],
-            ].map(([role,perm])=><div key={role} style={{display:"flex",justifyContent:"space-between",gap:12,background:"#06172c",padding:12,borderRadius:10}}><strong>{role}</strong><span style={{color:"#edcb71"}}>{perm}</span></div>)}
+            ].map(([role,perm])=><div key={role} style={{display:"flex",justifyContent:"space-between",gap:12,background:"#06172c",color:"#ffffff",padding:12,borderRadius:10}}><strong>{role}</strong><span style={{color:"#edcb71"}}>{perm}</span></div>)}
           </div>
         </div>
 
