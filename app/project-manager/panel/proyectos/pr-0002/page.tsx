@@ -1,0 +1,31 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { pr0002, money } from "@/lib/project-manager/pr0002";
+import { PmHeader, card } from "@/app/project-manager/panel/_components";
+
+const modules = [
+  ["📋","Línea base","Referencia aprobada de alcance, plazo y costo.","linea-base"],
+  ["📐","EDT / WBS","Estructura de control del proyecto.","edt"],
+  ["📅","Programa","Actividades, relaciones y ruta crítica.","programa"],
+  ["💰","Presupuesto","Conceptos, cantidades, precios y forecast.","presupuesto"],
+];
+
+export default async function ProjectDetailPage() {
+  const session = await auth();
+  if (!session?.user) redirect("/project-manager/login");
+  const p=pr0002.project;
+  return <main style={{minHeight:"100vh",background:"#06172c",color:"#fff"}}>
+    <PmHeader title={p.name} subtitle={p.code+" · "+p.client} />
+    <section style={{maxWidth:1440,margin:"0 auto",padding:"0 22px 54px"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
+        {[["Presupuesto",money(p.budget)],["Inicio",p.startDate],["Término",p.targetDate],["Estado",p.status],["Riesgo",p.riskLevel]].map(([k,v])=><div key={k} style={card}><div style={{color:"#8fa5bb",fontSize:12}}>{k}</div><strong style={{fontSize:18}}>{v}</strong></div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:14,marginTop:20}}>
+        {modules.map(([icon,title,desc,path])=><Link key={title} href={"/project-manager/panel/proyectos/pr-0002/"+path} style={{...card,textDecoration:"none",color:"#fff",display:"block"}}>
+          <div style={{fontSize:30}}>{icon}</div><h2 style={{margin:"10px 0 6px",fontSize:20}}>{title}</h2><p style={{margin:0,color:"#9fb2c6"}}>{desc}</p>
+        </Link>)}
+      </div>
+    </section>
+  </main>
+}
