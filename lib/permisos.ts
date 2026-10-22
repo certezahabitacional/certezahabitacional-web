@@ -141,6 +141,8 @@ export const MATRIZ_PERMISOS: MatrizPermisos = {
     "USUARIO_RESTABLECER_PASSWORD_BASICO","NOTIFICACIONES_VER",
   ]),
   [RolUsuario.DIRECTOR]: new Set<AccionSistema>(accionesDirector),
+  [RolUsuario.SUPERVISOR]: new Set<AccionSistema>(),
+  [RolUsuario.RESIDENTE]: new Set<AccionSistema>(),
 };
 
 export function puede(rol: RolUsuario, accion: AccionSistema): boolean {
