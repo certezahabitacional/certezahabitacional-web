@@ -1,4 +1,5 @@
 import Image from "next/image";
+import LogoCertezaTecnica from "@/components/branding/LogoCertezaTecnica";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -75,16 +76,9 @@ export default async function ProjectManagerPanelPage() {
   return <main style={{minHeight:"100vh",background:canvas,color:ink}}>
     <div style={{display:"grid",gridTemplateColumns:"220px minmax(0,1fr)",minHeight:"100vh"}}>
       <aside style={{background:`linear-gradient(180deg,${navyDark} 0%,${navy} 55%,#074b86 100%)`,color:"#fff",display:"flex",flexDirection:"column",minHeight:"100vh",position:"sticky",top:0,alignSelf:"start"}}>
-        <div style={{padding:"22px 18px 16px",borderBottom:"1px solid rgba(255,255,255,.12)"}}>
-          <div style={{display:"flex",alignItems:"end",gap:10}}>
-            <div style={{display:"flex",gap:4,alignItems:"end",height:42}}>
-              {[18,28,38].map((h,i)=><span key={h} style={{display:"block",width:8,height:h,background:i===1?orange:"#fff",borderRadius:2}} />)}
-            </div>
-            <div>
-              <div style={{fontSize:21,fontWeight:950,lineHeight:1}}>CERTEZA</div>
-              <div style={{fontSize:12,color:"#ffb357",fontWeight:900,letterSpacing:".03em"}}>PROJECT MANAGER</div>
-            </div>
-          </div>
+        <div style={{padding:"18px 14px 16px",borderBottom:"1px solid rgba(255,255,255,.14)",display:"grid",gap:10}}>
+          <LogoCertezaTecnica href="/certeza-tecnica" height={58}/>
+          <div style={{fontSize:11,color:"#ffb357",fontWeight:950,letterSpacing:".08em"}}>PROJECT MANAGER</div>
         </div>
 
         <nav style={{padding:"14px 0"}}>
@@ -106,11 +100,14 @@ export default async function ProjectManagerPanelPage() {
       <div style={{minWidth:0}}>
         <header style={{background:`linear-gradient(100deg,${navyDark},${navy} 46%,#0d75bd)`,color:"#fff",minHeight:104,display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,padding:"14px 24px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",inset:0,opacity:.12,background:"linear-gradient(120deg,transparent 45%,#fff 46%,transparent 47%)"}}/>
-          <div style={{position:"relative"}}>
-            <div style={{fontSize:"clamp(28px,4vw,48px)",fontWeight:950,letterSpacing:"-.03em",lineHeight:1}}>
-              CERTEZA <span style={{color:orange}}>PROJECT MANAGER</span>
+          <div style={{position:"relative",display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+            <LogoCertezaTecnica href="/certeza-tecnica" height={70}/>
+            <div style={{borderLeft:"1px solid rgba(255,255,255,.28)",paddingLeft:18}}>
+              <div style={{fontSize:"clamp(24px,3vw,42px)",fontWeight:950,letterSpacing:"-.02em",lineHeight:1}}>
+                CERTEZA <span style={{color:orange}}>PROJECT MANAGER</span>
+              </div>
+              <div style={{fontSize:18,color:"#f0f8ff",marginTop:6}}>Centro de Control de Proyectos</div>
             </div>
-            <div style={{fontSize:20,color:"#f0f8ff",marginTop:6}}>Centro de Control de Proyectos</div>
           </div>
           <div style={{position:"relative",display:"flex",alignItems:"center",gap:14,textAlign:"right"}}>
             <div style={{width:42,height:42,borderRadius:"50%",background:"#fff",display:"grid",placeItems:"center",color:navy,fontWeight:950}}>CG</div>
