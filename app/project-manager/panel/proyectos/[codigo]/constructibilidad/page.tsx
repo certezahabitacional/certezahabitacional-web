@@ -104,7 +104,10 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
 
   const proyecto=await prisma.proyectoPM.findUnique({
     where:{codigo:code},
-    include:{participantes:{where:{usuarioId:userId},select:{id:true}}},
+    include:{
+      participantes:{where:{usuarioId:userId},select:{id:true}},
+      constructibilidad:true,
+    },
   });
 
   const legacy=code==="PR-0002" && !proyecto;
@@ -121,6 +124,26 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
   const cliente=proyecto?.cliente ?? pr0002.project.client;
   const presupuesto=Number(proyecto?.presupuesto ?? pr0002.project.budget);
   const money=new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(presupuesto);
+  const construct=proyecto?.constructibilidad;
+  const predioPct=construct?.progresoPaso1 ?? 0;
+  const predioStatus:Status=predioPct>=80?"ok":predioPct>=50?"risk":"late";
+  const predioDetail=construct?.estadoPaso1==="COMPLETO"?"Paso 1 completo":construct?"En integración":"Sin captura";
+  const dynamicKpis=[
+    ["Condición del predio",`${predioPct}%`,predioDetail,predioStatus],
+    ...kpis.slice(1),
+  ] as const;
+  const condicionLabel:Record<string,string>={
+    BRENA:"Tierra en breña",
+    MACROLOTE_URBANIZADO:"Macrolote urbanizado",
+    MACROLOTE_PARCIAL:"Macrolote parcialmente urbanizado",
+    LOTES_URBANIZADOS:"Lotes urbanizados",
+    LOTES_PARCIALES:"Lotes parcialmente urbanizados",
+    CONSTRUCCION_EXISTENTE:"Construcción existente",
+    REMODELACION:"Remodelación / ampliación",
+    MIXTO:"Condición mixta",
+  };
+  const riesgosGuardados=Array.isArray(construct?.riesgosPaso1)?construct.riesgosPaso1.map(String):[];
+  const modulosGuardados=Array.isArray(construct?.modulosSugeridos)?construct.modulosSugeridos.map(String):[];
 
   return <main style={{minHeight:"100vh",background:"#eef6fb",color:"#082f64"}}>
     <PmHeader title="CONSTRUCTIBILIDAD" subtitle={`${code} · ${nombre} · Configuración integral desde el predio hasta la entrega de la obra terminada.`}/>
@@ -153,7 +176,7 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(9,minmax(140px,1fr))",gap:10,marginTop:14,overflowX:"auto"}}>
-        {kpis.map(([title,value,detail,status])=><article key={title} style={{...card,padding:13,minWidth:140}}>
+        {dynamicKpis.map(([title,value,detail,status])=><article key={title} style={{...card,padding:13,minWidth:140}}>
           <div style={{fontSize:11,fontWeight:900,minHeight:30}}>{title}</div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginTop:8}}>
             <Ring value={value} status={status}/>
@@ -177,12 +200,12 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
             Constructibilidad define la estructura de módulos, entregables de arranque, liberaciones y seguimiento que utilizará Certeza Project Manager para este proyecto.
           </p>
           <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            {["Condición del predio por definir","Uso de suelo por validar","Esquema comercial por definir","Financiamiento por definir","Modalidad de ejecución por definir","Infraestructura por definir","Obras especiales por definir"].map((x,i)=><span key={x} style={{padding:"7px 9px",borderRadius:999,background:i%3===0?"#fff3dd":i%3===1?"#e7f5ed":"#e8f2ff",fontSize:11,fontWeight:850}}>{x}</span>)}
+            {[(construct?.condicionPredio&&condicionLabel[construct.condicionPredio])||"Condición del predio por definir","Uso de suelo por validar","Esquema comercial por definir","Financiamiento por definir","Modalidad de ejecución por definir","Infraestructura por definir","Obras especiales por definir"].map((x,i)=><span key={x} style={{padding:"7px 9px",borderRadius:999,background:i%3===0?"#fff3dd":i%3===1?"#e7f5ed":"#e8f2ff",fontSize:11,fontWeight:850}}>{x}</span>)}
           </div>
         </article>
 
         <article style={{...card,padding:0,overflow:"hidden"}}>
-          <div style={{padding:"15px 16px",borderBottom:"1px solid #d8e6f2",fontSize:20,fontWeight:950}}>Matriz de módulos y entregables</div>
+          <div style={{padding:"15px 16px",borderBottom:"1px solid #d8e6f2",fontSize:20,fontWeight:950}}>Matriz de módulos y entregables{modulosGuardados.length>0&&<span style={{display:"block",fontSize:11,color:"#5d758c",fontWeight:800,marginTop:4}}>Paso 1 ya sugiere {modulosGuardados.length} módulos para este proyecto.</span>}</div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:760}}>
               <thead><tr style={{background:"#f2f7fb",textAlign:"left"}}>
@@ -208,12 +231,12 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
           </div>
           <div style={{...card,padding:15}}>
             <h3 style={{margin:"0 0 10px"}}>Pendientes críticos</h3>
-            {[
+            {(riesgosGuardados.length?riesgosGuardados.slice(0,4).map(x=>[x,"late"]):[
               ["Mecánica de suelos","late"],
               ["Factibilidad de drenaje","late"],
               ["Licencia de construcción","risk"],
               ["Definición de obras especiales","risk"],
-            ].map(([x,s])=><div key={x} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:"1px solid #edf2f6",fontSize:12,fontWeight:800}}><span style={{width:9,height:9,borderRadius:"50%",background:colors[s as Status]}}/>{x}</div>)}
+            ]).map(([x,s])=><div key={x} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:"1px solid #edf2f6",fontSize:12,fontWeight:800}}><span style={{width:9,height:9,borderRadius:"50%",background:colors[s as Status]}}/>{x}</div>)}
           </div>
           <div style={{...card,padding:15}}>
             <h3 style={{margin:"0 0 10px"}}>Liberaciones</h3>
