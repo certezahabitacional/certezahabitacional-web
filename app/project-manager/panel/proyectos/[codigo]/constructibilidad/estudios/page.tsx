@@ -110,6 +110,7 @@ export default async function EstudiosConstructibilidadPage({params,searchParams
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 5 · Definición del producto y escala del desarrollo</h3>
         <p style={{margin:0,color:"#526c84"}}>Tipo de proyecto, número de viviendas o edificios, prototipos, etapas, frentes, manzanas y estructura física de control.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/producto`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 5 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
