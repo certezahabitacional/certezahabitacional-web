@@ -114,6 +114,7 @@ export default async function ProyectoConstructibilidadPage({params,searchParams
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 8 · Presupuesto, programa y estrategia de ejecución</h3>
         <p style={{margin:0,color:"#526c84"}}>El siguiente bloque deberá convertir el proyecto autorizado en línea base de costo/plazo y definir qué se ejecutará por administración directa, subcontrato o esquema mixto.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/ejecucion`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 8 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
