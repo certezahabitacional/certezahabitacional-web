@@ -115,6 +115,7 @@ export default async function MercadoConstructibilidadPage({params,searchParams}
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 7 · Proyecto ejecutivo y autorizaciones</h3>
         <p style={{margin:0,color:"#526c84"}}>Estado por disciplina, entregables de ingeniería, revisiones, permisos, licencias, dictámenes y condición de liberación para construir.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/proyecto`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 7 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
