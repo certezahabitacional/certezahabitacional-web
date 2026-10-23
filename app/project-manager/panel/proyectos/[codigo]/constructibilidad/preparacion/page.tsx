@@ -112,6 +112,7 @@ export default async function PreparacionConstructibilidadPage({params,searchPar
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 10 · Estructura de ejecución y seguimiento</h3>
         <p style={{margin:0,color:"#526c84"}}>Definiremos qué información se capturará durante la obra, con qué frecuencia, por quién, en qué módulo y qué reporte alimentará: avance, costo, calidad, seguridad, contratos, materiales, mano de obra, maquinaria y evidencias.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/seguimiento`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 10 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
