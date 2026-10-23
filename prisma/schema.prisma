@@ -716,12 +716,18 @@ model ConstructibilidadPM {
   entregablesPaso3 Json?
   riesgosPaso3 Json?
 
+  estudiosEspecializados Json?
+  entregablesPaso4 Json?
+  riesgosPaso4 Json?
+
   progresoPaso1 Int @default(0)
   estadoPaso1 String @default("BORRADOR")
   progresoPaso2 Int @default(0)
   estadoPaso2 String @default("BORRADOR")
   progresoPaso3 Int @default(0)
   estadoPaso3 String @default("BORRADOR")
+  progresoPaso4 Int @default(0)
+  estadoPaso4 String @default("BORRADOR")
   actualizadoPorId String?
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
