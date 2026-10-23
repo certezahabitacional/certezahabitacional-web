@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireProjectWriteAccess } from "@/lib/project-manager/access";
 
@@ -12,6 +13,10 @@ const asObj=(v:unknown)=>(v&&typeof v==="object"&&!Array.isArray(v)?v:{}) as Rec
 
 function hashPayload(payload:unknown){
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function toJson(value:unknown):Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
 }
 
 export async function generarLineaBase(formData:FormData){
@@ -28,46 +33,46 @@ export async function generarLineaBase(formData:FormData){
     redirect(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/constructibilidad/cierre?error=no_liberado`);
   }
 
-  const alcance={
-    tipoProyecto:asObj(c.productoEscala).tipoProyecto??null,
-    productoEscala:c.productoEscala,
+  const alcance=toJson({
+    tipoProyecto:String(asObj(c.productoEscala).tipoProyecto??""),
+    productoEscala:c.productoEscala ?? {},
     modulosActivos:asList(c.matrizMaestraConfiguracion),
-    alcanceObservado:asObj(c.productoEscala).observaciones??"",
-  };
-  const presupuesto={
-    base:c.presupuestoBase,
-    montoProyecto:proyecto.presupuesto,
-  };
-  const programa={
-    base:c.programaMaestro,
-    fechaInicioProyecto:proyecto.fechaInicio,
-    fechaFinPlanProyecto:proyecto.fechaFinPlan,
-  };
-  const estructuraFisica={
-    control:c.estructuraControl,
-    jerarquia:asObj(c.estructuraControl).jerarquia??[],
-  };
-  const contratos={
-    estrategia:c.estrategiaEjecucion,
-    contratacion:c.contratacionSuministros,
-  };
-  const expedienteResumen={
+    alcanceObservado:String(asObj(c.productoEscala).observaciones??""),
+  });
+  const presupuesto=toJson({
+    base:c.presupuestoBase ?? {},
+    montoProyecto:Number(proyecto.presupuesto),
+  });
+  const programa=toJson({
+    base:c.programaMaestro ?? {},
+    fechaInicioProyecto:proyecto.fechaInicio?.toISOString() ?? null,
+    fechaFinPlanProyecto:proyecto.fechaFinPlan?.toISOString() ?? null,
+  });
+  const estructuraFisica=toJson({
+    control:c.estructuraControl ?? {},
+    jerarquia:asList(asObj(c.estructuraControl).jerarquia),
+  });
+  const contratos=toJson({
+    estrategia:c.estrategiaEjecucion ?? {},
+    contratacion:c.contratacionSuministros ?? {},
+  });
+  const expedienteResumen=toJson({
     estado:c.estadoPaso11,
     progreso:c.progresoPaso11,
     entregables:asList(c.expedienteMaestroGenerado).length,
-  };
-  const liberaciones=c.liberacionesMaestras;
-  const indicadoresBase={
+  });
+  const liberaciones=toJson(c.liberacionesMaestras ?? []);
+  const indicadoresBase=toJson({
     avanceFisico:0,
     avanceFinanciero:0,
     costoOriginal:Number(proyecto.presupuesto),
     fechaCorte:null,
     avanceConstructibilidad:Number(cierre.avanceGlobal??c.progresoPaso12??0),
-  };
-  const riesgosBase=[
+  });
+  const riesgosBase=toJson([
     ...asList(c.riesgosPaso12),
     ...asList(c.riesgosPaso11),
-  ];
+  ]);
   const payload={alcance,presupuesto,programa,estructuraFisica,contratos,expedienteResumen,liberaciones,indicadoresBase,riesgosBase};
 
   await prisma.lineaBasePM.upsert({
@@ -77,7 +82,7 @@ export async function generarLineaBase(formData:FormData){
       version:1,
       estado:"BORRADOR",
       ...payload,
-      cambiosBase:[],
+      cambiosBase:toJson([]),
       hashReferencia:hashPayload(payload),
     },
     update:{
