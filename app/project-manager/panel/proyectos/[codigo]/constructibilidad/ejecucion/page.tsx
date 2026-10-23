@@ -157,6 +157,7 @@ export default async function EjecucionConstructibilidadPage({params,searchParam
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 9 · Contratación, suministros y preparación de obra</h3>
         <p style={{margin:0,color:"#526c84"}}>Contratos, compras, almacenes, movilización, campamento, accesos provisionales, personal técnico y condición de “Listo para inicio”.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/preparacion`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 9 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
