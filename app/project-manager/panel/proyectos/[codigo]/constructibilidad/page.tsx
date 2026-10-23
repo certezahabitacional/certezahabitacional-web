@@ -136,6 +136,7 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
   const preparacionPct=construct?.progresoPaso9 ?? 0;
   const seguimientoPct=construct?.progresoPaso10 ?? 0;
   const expedientePct=construct?.progresoPaso11 ?? 0;
+  const cierrePct=construct?.progresoPaso12 ?? 0;
   const statusFor=(pct:number):Status=>pct>=80?"ok":pct>=50?"risk":"late";
   const detailFor=(pct:number,complete:boolean)=>complete?"Completo":pct>0?"En integración":"Sin captura";
   const dynamicKpis=[
@@ -150,6 +151,7 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
     ["Preparación de obra",`${preparacionPct}%`,construct?.estadoPaso9==="LISTO_PARA_INICIO"?"Listo para inicio":detailFor(preparacionPct,false),statusFor(preparacionPct)],
     ["Seguimiento operativo",`${seguimientoPct}%`,detailFor(seguimientoPct,construct?.estadoPaso10==="COMPLETO"),statusFor(seguimientoPct)],
     ["Expediente Maestro",`${expedientePct}%`,construct?.estadoPaso11==="EXPEDIENTE_LISTO"?"Expediente listo":detailFor(expedientePct,construct?.estadoPaso11==="GENERADO"),statusFor(expedientePct)],
+    ["Cierre de Constructibilidad",`${cierrePct}%`,construct?.estadoPaso12 && construct.estadoPaso12!=="BORRADOR" ? construct.estadoPaso12.replaceAll("_"," ") : "Pendiente",statusFor(cierrePct)],
     ...kpis.slice(3),
   ] as const;
   const condicionLabel:Record<string,string>={
@@ -174,6 +176,7 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
     ...(Array.isArray(construct?.riesgosPaso9)?construct.riesgosPaso9.map(String):[]),
     ...(Array.isArray(construct?.riesgosPaso10)?construct.riesgosPaso10.map(String):[]),
     ...(Array.isArray(construct?.riesgosPaso11)?construct.riesgosPaso11.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso12)?construct.riesgosPaso12.map(String):[]),
   ];
   const modulosGuardados=Array.isArray(construct?.modulosSugeridos)?construct.modulosSugeridos.map(String):[];
   const obrasEspeciales=Array.isArray(construct?.obrasEspecialesSugeridas)?construct.obrasEspecialesSugeridas.map(String):[];
@@ -311,6 +314,7 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
         {!readOnly&&<Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/predio`} style={{background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 16px",borderRadius:10}}>Iniciar diagnóstico guiado →</Link>}
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/cierre`} style={{background:"#1f9d55",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 16px",borderRadius:10}}>Cierre de Constructibilidad →</Link>
         <Link href={code==="PR-0002"?"/project-manager/panel/proyectos/pr-0002":`/project-manager/panel/proyectos/${codigo}`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:900,padding:"12px 16px",borderRadius:10}}>← Volver al proyecto</Link>
         <Link href="/project-manager/panel/proyectos" style={{border:"1px solid #b8cad9",color:"#294f73",textDecoration:"none",fontWeight:900,padding:"12px 16px",borderRadius:10}}>Proyectos</Link>
       </div>
