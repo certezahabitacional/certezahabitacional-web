@@ -123,6 +123,7 @@ export default async function ServiciosConstructibilidadPage({params,searchParam
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 4 · Estudios especializados y restricciones</h3>
         <p style={{margin:0,color:"#526c84"}}>Topografía, mecánica de suelos, hidrología, hidráulica, impacto ambiental, impacto urbano, tránsito, riesgo y protección civil se activarán según lo detectado en los tres primeros pasos.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/estudios`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 4 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
