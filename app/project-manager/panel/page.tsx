@@ -42,12 +42,13 @@ export default async function ProjectManagerPanelPage() {
     ? {activo:true}
     : {activo:true,participantes:{some:{usuarioId:userId}}};
 
-  const [totalDb,planeacionDb]=await Promise.all([
+  const [totalDb,planeacionDb,pr0002Db]=await Promise.all([
     prisma.proyectoPM.count({where}),
     prisma.proyectoPM.count({where:{...where,estado:"PLANEACION"}}),
+    prisma.proyectoPM.findUnique({where:{codigo:"PR-0002"},select:{id:true}}),
   ]);
 
-  const legacyVisible=role==="DIRECTOR" || role==="ADMINISTRADOR";
+  const legacyVisible=(role==="DIRECTOR" || role==="ADMINISTRADOR") && !pr0002Db;
   const total=totalDb+(legacyVisible?1:0);
   const planeacion=planeacionDb+(legacyVisible?1:0);
 

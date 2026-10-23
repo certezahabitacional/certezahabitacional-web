@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { requireProjectManagerAccess } from "@/lib/project-manager/access";
+import { notFound } from "next/navigation";
+import { requireProjectAccess, requireProjectManagerAccess } from "@/lib/project-manager/access";
+import { prisma } from "@/lib/prisma";
 import { pr0002, money } from "@/lib/project-manager/pr0002";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 
 const modules = [
+  ["🏗️","Constructibilidad","Define módulos, entregables, liberaciones y seguimiento desde el predio hasta la entrega.","constructibilidad"],
   ["🎯","Resumen ejecutivo","Estado, salud, alertas y prioridades.","resumen"],
   ["🩺","Salud del proyecto","Diagnóstico integral 0–100.","salud"],
   ["🔔","Alertas tempranas","Prioridades, causas y acciones.","alertas"],
@@ -22,7 +25,12 @@ const modules = [
 ];
 
 export default async function ProjectDetailPage() {
-  const { readOnly } = await requireProjectManagerAccess();
+  const existente=await prisma.proyectoPM.findUnique({where:{codigo:"PR-0002"},select:{id:true}});
+  const access=existente ? await requireProjectAccess("PR-0002") : await requireProjectManagerAccess();
+  const { readOnly, role }=access;
+  if(!existente && role!=="DIRECTOR" && role!=="ADMINISTRADOR") {
+    notFound();
+  }
   const p=pr0002.project;
   return <main style={{minHeight:"100vh",background:"#06172c",color:"#fff"}}>
     <PmHeader title={p.name} subtitle={p.code+" · "+p.client} />
@@ -43,6 +51,7 @@ export default async function ProjectDetailPage() {
         ) : (
           <>
             <Link href="/project-manager/portal/pr-0002" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Abrir vista del cliente →</Link>
+            <Link href="/project-manager/panel/proyectos/equipo?codigo=PR-0002" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Participantes / Equipo →</Link>
             <Link href="/project-manager/panel/accesos" style={{color:"#edcb71",fontWeight:900,textDecoration:"none"}}>Administrar accesos →</Link>
           </>
         )}

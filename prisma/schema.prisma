@@ -659,6 +659,8 @@ model ProyectoPM {
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
   participantes ProyectoPMUsuario[]
+  constructibilidad ConstructibilidadPM?
+  lineaBase LineaBasePM?
 
   @@index([activo])
   @@index([estado])
@@ -678,4 +680,147 @@ model ProyectoPMUsuario {
   @@unique([proyectoId, usuarioId])
   @@index([usuarioId])
   @@index([proyectoId])
+}
+
+
+model ConstructibilidadPM {
+  id String @id @default(cuid())
+  proyectoId String @unique
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  condicionPredio String?
+  clasificacionDetalle String?
+  superficieM2 Decimal? @db.Decimal(14, 2)
+  numeroPredios Int?
+  disponibilidadFisica String?
+  zonasMixtas Json?
+
+  identificacion Json?
+  limitesAccesos Json?
+  topografiaSuelo Json?
+  aguaDrenajeNatural Json?
+  interferencias Json?
+  urbanizacionExistente Json?
+
+  entregablesPaso1 Json?
+  riesgosPaso1 Json?
+  modulosSugeridos Json?
+
+  situacionJuridica Json?
+  usoSuelo Json?
+  parametrosUrbanisticos Json?
+  entregablesPaso2 Json?
+  riesgosPaso2 Json?
+
+  serviciosInfraestructura Json?
+  obrasEspecialesSugeridas Json?
+  entregablesPaso3 Json?
+  riesgosPaso3 Json?
+
+  estudiosEspecializados Json?
+  entregablesPaso4 Json?
+  riesgosPaso4 Json?
+
+  productoEscala Json?
+  estructuraControl Json?
+  entregablesPaso5 Json?
+  riesgosPaso5 Json?
+
+  mercadoComercializacion Json?
+  financiamientoProyecto Json?
+  entregablesPaso6 Json?
+  riesgosPaso6 Json?
+
+  proyectoEjecutivo Json?
+  autorizacionesConstruccion Json?
+  entregablesPaso7 Json?
+  riesgosPaso7 Json?
+
+  presupuestoBase Json?
+  programaMaestro Json?
+  estrategiaEjecucion Json?
+  entregablesPaso8 Json?
+  riesgosPaso8 Json?
+
+  contratacionSuministros Json?
+  preparacionObra Json?
+  entregablesPaso9 Json?
+  riesgosPaso9 Json?
+
+  seguimientoOperativo Json?
+  matrizSeguimiento Json?
+  entregablesPaso10 Json?
+  riesgosPaso10 Json?
+
+  expedienteMaestroGenerado Json?
+  entregablesPaso11 Json?
+  riesgosPaso11 Json?
+
+  cierreConstructibilidad Json?
+  matrizMaestraConfiguracion Json?
+  liberacionesMaestras Json?
+  entregablesPaso12 Json?
+  riesgosPaso12 Json?
+
+  progresoPaso1 Int @default(0)
+  estadoPaso1 String @default("BORRADOR")
+  progresoPaso2 Int @default(0)
+  estadoPaso2 String @default("BORRADOR")
+  progresoPaso3 Int @default(0)
+  estadoPaso3 String @default("BORRADOR")
+  progresoPaso4 Int @default(0)
+  estadoPaso4 String @default("BORRADOR")
+  progresoPaso5 Int @default(0)
+  estadoPaso5 String @default("BORRADOR")
+  progresoPaso6 Int @default(0)
+  estadoPaso6 String @default("BORRADOR")
+  progresoPaso7 Int @default(0)
+  estadoPaso7 String @default("BORRADOR")
+  progresoPaso8 Int @default(0)
+  estadoPaso8 String @default("BORRADOR")
+  progresoPaso9 Int @default(0)
+  estadoPaso9 String @default("BORRADOR")
+  progresoPaso10 Int @default(0)
+  estadoPaso10 String @default("BORRADOR")
+  progresoPaso11 Int @default(0)
+  estadoPaso11 String @default("BORRADOR")
+  progresoPaso12 Int @default(0)
+  estadoPaso12 String @default("BORRADOR")
+  actualizadoPorId String?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([condicionPredio])
+  @@index([estadoPaso1])
+}
+
+
+model LineaBasePM {
+  id String @id @default(cuid())
+  proyectoId String @unique
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  version Int @default(1)
+  estado String @default("BORRADOR")
+  alcance Json?
+  presupuesto Json?
+  programa Json?
+  estructuraFisica Json?
+  contratos Json?
+  expedienteResumen Json?
+  liberaciones Json?
+  indicadoresBase Json?
+  riesgosBase Json?
+  cambiosBase Json?
+
+  aprobadoPorId String?
+  aprobadoEn DateTime?
+  motivoAprobacion String?
+  hashReferencia String?
+
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([estado])
+  @@index([version])
 }

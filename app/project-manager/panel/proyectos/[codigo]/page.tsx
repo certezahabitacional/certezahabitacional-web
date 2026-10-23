@@ -52,7 +52,9 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
           <h2 style={{marginTop:0}}>Configuración inicial</h2>
           <p style={{color:"#294f73",lineHeight:1.55}}>El siguiente paso es integrar la información base del proyecto antes de activar sus indicadores operativos.</p>
           <ol style={{paddingLeft:20,lineHeight:1.9,fontWeight:700}}>
+            <li>Completar Constructibilidad</li>
             <li>Definir alcance y expediente maestro</li>
+            <li>Aprobar Línea Base Definitiva</li>
             <li>Crear EDT</li>
             <li>Cargar programa</li>
             <li>Cargar presupuesto</li>
@@ -61,6 +63,28 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
           </ol>
         </aside>
       </div>
+
+      <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad`} style={{...card,marginTop:16,padding:24,display:"block",textDecoration:"none",color:"#082f64",border:"2px solid #ff8500",background:"linear-gradient(135deg,#fff8ef,#ffffff)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#c86100",letterSpacing:".08em"}}>PASO MAESTRO DE CONFIGURACIÓN</div>
+            <h2 style={{margin:"6px 0 6px"}}>🏗️ Constructibilidad</h2>
+            <p style={{margin:0,color:"#294f73",lineHeight:1.55,maxWidth:850}}>Define, desde la condición del predio hasta la entrega, qué módulos, entregables, liberaciones y controles necesita este proyecto antes de integrar su Expediente Maestro y seguimiento.</p>
+          </div>
+          <span style={{background:"#ff8500",color:"#fff",padding:"11px 15px",borderRadius:9,fontWeight:950}}>Abrir Constructibilidad →</span>
+        </div>
+      </Link>
+
+      <Link href={`/project-manager/panel/proyectos/${codigo}/linea-base`} style={{...card,marginTop:16,padding:24,display:"block",textDecoration:"none",color:"#082f64",border:"2px solid #1f9d55",background:"linear-gradient(135deg,#effaf3,#ffffff)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#187342",letterSpacing:".08em"}}>REFERENCIA OFICIAL DE CONTROL</div>
+            <h2 style={{margin:"6px 0 6px"}}>📌 Línea Base Definitiva</h2>
+            <p style={{margin:0,color:"#294f73",lineHeight:1.55,maxWidth:850}}>Congela alcance, presupuesto, programa, estructura y condiciones aprobadas para medir toda la ejecución y administrar cambios autorizados.</p>
+          </div>
+          <span style={{background:"#1f9d55",color:"#fff",padding:"11px 15px",borderRadius:9,fontWeight:950}}>Abrir Línea Base →</span>
+        </div>
+      </Link>
 
       <div style={{...card,marginTop:16,padding:24}}>
         <h2 style={{marginTop:0}}>Módulos del proyecto</h2>
@@ -72,6 +96,7 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
 
       <div style={{display:"flex",gap:10,marginTop:18,flexWrap:"wrap"}}>
         <Link href="/project-manager/panel/proyectos" style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>← Volver a Proyectos</Link>
+        <Link href={`/project-manager/panel/proyectos/equipo?codigo=${proyecto.codigo}`} style={{background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Participantes / Equipo</Link>
         <Link href="/project-manager/panel" style={{border:"1px solid #b8cad9",color:"#294f73",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Centro de Control general</Link>
       </div>
     </section>
