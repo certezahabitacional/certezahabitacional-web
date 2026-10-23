@@ -659,6 +659,7 @@ model ProyectoPM {
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
   participantes ProyectoPMUsuario[]
+  constructibilidad ConstructibilidadPM?
 
   @@index([activo])
   @@index([estado])
@@ -678,4 +679,38 @@ model ProyectoPMUsuario {
   @@unique([proyectoId, usuarioId])
   @@index([usuarioId])
   @@index([proyectoId])
+}
+
+
+model ConstructibilidadPM {
+  id String @id @default(cuid())
+  proyectoId String @unique
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  condicionPredio String?
+  clasificacionDetalle String?
+  superficieM2 Decimal? @db.Decimal(14, 2)
+  numeroPredios Int?
+  disponibilidadFisica String?
+  zonasMixtas Json?
+
+  identificacion Json?
+  limitesAccesos Json?
+  topografiaSuelo Json?
+  aguaDrenajeNatural Json?
+  interferencias Json?
+  urbanizacionExistente Json?
+
+  entregablesPaso1 Json?
+  riesgosPaso1 Json?
+  modulosSugeridos Json?
+
+  progresoPaso1 Int @default(0)
+  estadoPaso1 String @default("BORRADOR")
+  actualizadoPorId String?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([condicionPredio])
+  @@index([estadoPaso1])
 }
