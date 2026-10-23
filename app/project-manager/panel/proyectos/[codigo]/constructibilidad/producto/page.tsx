@@ -139,6 +139,7 @@ export default async function ProductoConstructibilidadPage({params,searchParams
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 6 · Mercado, esquema de venta y financiamiento</h3>
         <p style={{margin:0,color:"#526c84"}}>Definiremos si el proyecto se colocará por INFONAVIT, FOVISSSTE, banca, recursos propios o esquema mixto; y cómo se financiará la ejecución: crédito puente, recursos propios, inversionistas, preventas o fideicomiso.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/mercado`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 6 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
