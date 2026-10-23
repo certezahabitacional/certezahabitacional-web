@@ -131,6 +131,9 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
   const estudiosPct=construct?.progresoPaso4 ?? 0;
   const productoPct=construct?.progresoPaso5 ?? 0;
   const mercadoPct=construct?.progresoPaso6 ?? 0;
+  const proyectoPct=construct?.progresoPaso7 ?? 0;
+  const ejecucionPct=construct?.progresoPaso8 ?? 0;
+  const preparacionPct=construct?.progresoPaso9 ?? 0;
   const statusFor=(pct:number):Status=>pct>=80?"ok":pct>=50?"risk":"late";
   const detailFor=(pct:number,complete:boolean)=>complete?"Completo":pct>0?"En integración":"Sin captura";
   const dynamicKpis=[
@@ -140,6 +143,9 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
     ["Estudios",`${estudiosPct}%`,detailFor(estudiosPct,construct?.estadoPaso4==="COMPLETO"),statusFor(estudiosPct)],
     ["Producto / escala",`${productoPct}%`,detailFor(productoPct,construct?.estadoPaso5==="COMPLETO"),statusFor(productoPct)],
     ["Mercado / financiamiento",`${mercadoPct}%`,detailFor(mercadoPct,construct?.estadoPaso6==="COMPLETO"),statusFor(mercadoPct)],
+    ["Proyecto / permisos",`${proyectoPct}%`,detailFor(proyectoPct,construct?.estadoPaso7==="COMPLETO"),statusFor(proyectoPct)],
+    ["Presupuesto / programa",`${ejecucionPct}%`,detailFor(ejecucionPct,construct?.estadoPaso8==="COMPLETO"),statusFor(ejecucionPct)],
+    ["Preparación de obra",`${preparacionPct}%`,construct?.estadoPaso9==="LISTO_PARA_INICIO"?"Listo para inicio":detailFor(preparacionPct,false),statusFor(preparacionPct)],
     ...kpis.slice(3),
   ] as const;
   const condicionLabel:Record<string,string>={
@@ -159,6 +165,9 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
     ...(Array.isArray(construct?.riesgosPaso4)?construct.riesgosPaso4.map(String):[]),
     ...(Array.isArray(construct?.riesgosPaso5)?construct.riesgosPaso5.map(String):[]),
     ...(Array.isArray(construct?.riesgosPaso6)?construct.riesgosPaso6.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso7)?construct.riesgosPaso7.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso8)?construct.riesgosPaso8.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso9)?construct.riesgosPaso9.map(String):[]),
   ];
   const modulosGuardados=Array.isArray(construct?.modulosSugeridos)?construct.modulosSugeridos.map(String):[];
   const obrasEspeciales=Array.isArray(construct?.obrasEspecialesSugeridas)?construct.obrasEspecialesSugeridas.map(String):[];
