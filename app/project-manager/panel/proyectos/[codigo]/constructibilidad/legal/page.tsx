@@ -116,6 +116,7 @@ export default async function LegalConstructibilidadPage({params,searchParams}:{
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 3 · Factibilidad de servicios e infraestructura</h3>
         <p style={{margin:0,color:"#526c84"}}>Agua, drenaje, electricidad, pluvial, vialidades, gas y telecomunicaciones se evaluarán con base en el predio y los parámetros urbanísticos definidos.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/servicios`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 3 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
