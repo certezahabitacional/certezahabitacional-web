@@ -161,6 +161,7 @@ export default async function CierreConstructibilidadPage({params,searchParams}:
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SALIDA DE CONSTRUCTIBILIDAD</div>
         <h3 style={{margin:"5px 0"}}>El siguiente paso fuera de Constructibilidad es establecer las líneas base definitivas y comenzar la operación del proyecto.</h3>
         <p style={{margin:0,color:"#526c84"}}>El Expediente Maestro y la Matriz de Seguimiento serán las dos fuentes principales para alimentar Certeza Project Manager durante la ejecución.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/linea-base`} style={{display:"inline-block",marginTop:12,background:"#1f9d55",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar a Línea Base Definitiva →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
