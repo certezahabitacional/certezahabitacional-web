@@ -114,6 +114,7 @@ export default async function SeguimientoConstructibilidadPage({params,searchPar
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE ETAPA</div>
         <h3 style={{margin:"5px 0"}}>Paso 11 · Generación del Expediente Maestro de Arranque</h3>
         <p style={{margin:0,color:"#526c84"}}>Con Constructibilidad definida, el sistema podrá generar el listado exacto de documentos, líneas base, matrices, contratos, estudios y datos que debe contener el Expediente Maestro de este proyecto.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/expediente`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 11 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
