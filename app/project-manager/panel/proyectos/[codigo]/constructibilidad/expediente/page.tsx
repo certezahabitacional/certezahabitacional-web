@@ -99,6 +99,7 @@ export default async function ExpedienteConstructibilidadPage({params,searchPara
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>RESULTADO DE CONSTRUCTIBILIDAD</div>
         <h3 style={{margin:"5px 0"}}>Cuando este expediente esté listo, el proyecto podrá establecer formalmente sus líneas base y comenzar la operación.</h3>
         <p style={{margin:0,color:"#526c84"}}>A partir de aquí, el seguimiento operativo definido en el Paso 10 será el mecanismo de alimentación durante la ejecución.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/cierre`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Ir al cierre de Constructibilidad →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
