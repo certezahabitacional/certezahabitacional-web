@@ -175,7 +175,8 @@ export default async function PredioConstructibilidadPage({params,searchParams}:
       <div style={{...card,marginTop:16,padding:18,background:"#f8fbfd"}}>
         <div style={{fontSize:12,fontWeight:950,color:"#c86100"}}>SIGUIENTE BLOQUE LÓGICO</div>
         <h3 style={{margin:"5px 0 5px"}}>Paso 2 · Situación jurídica, uso de suelo y condiciones urbanísticas</h3>
-        <p style={{margin:0,color:"#526c84",lineHeight:1.5}}>Se activará como siguiente etapa del asistente y utilizará las conclusiones guardadas en este Paso 1.</p>
+        <p style={{margin:0,color:"#526c84",lineHeight:1.5}}>Utiliza las conclusiones guardadas en este Paso 1 para validar propiedad, situación registral, uso de suelo y parámetros urbanísticos.</p>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/legal`} style={{display:"inline-block",marginTop:12,background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"11px 15px",borderRadius:9}}>Continuar al Paso 2 →</Link>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
