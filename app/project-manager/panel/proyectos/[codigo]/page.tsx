@@ -52,6 +52,7 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
           <h2 style={{marginTop:0}}>Configuración inicial</h2>
           <p style={{color:"#294f73",lineHeight:1.55}}>El siguiente paso es integrar la información base del proyecto antes de activar sus indicadores operativos.</p>
           <ol style={{paddingLeft:20,lineHeight:1.9,fontWeight:700}}>
+            <li>Completar Constructibilidad</li>
             <li>Definir alcance y expediente maestro</li>
             <li>Crear EDT</li>
             <li>Cargar programa</li>
@@ -61,6 +62,17 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
           </ol>
         </aside>
       </div>
+
+      <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad`} style={{...card,marginTop:16,padding:24,display:"block",textDecoration:"none",color:"#082f64",border:"2px solid #ff8500",background:"linear-gradient(135deg,#fff8ef,#ffffff)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#c86100",letterSpacing:".08em"}}>PASO MAESTRO DE CONFIGURACIÓN</div>
+            <h2 style={{margin:"6px 0 6px"}}>🏗️ Constructibilidad</h2>
+            <p style={{margin:0,color:"#294f73",lineHeight:1.55,maxWidth:850}}>Define, desde la condición del predio hasta la entrega, qué módulos, entregables, liberaciones y controles necesita este proyecto antes de integrar su Expediente Maestro y seguimiento.</p>
+          </div>
+          <span style={{background:"#ff8500",color:"#fff",padding:"11px 15px",borderRadius:9,fontWeight:950}}>Abrir Constructibilidad →</span>
+        </div>
+      </Link>
 
       <div style={{...card,marginTop:16,padding:24}}>
         <h2 style={{marginTop:0}}>Módulos del proyecto</h2>
