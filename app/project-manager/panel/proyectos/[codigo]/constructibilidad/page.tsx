@@ -126,11 +126,15 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
   const money=new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(presupuesto);
   const construct=proyecto?.constructibilidad;
   const predioPct=construct?.progresoPaso1 ?? 0;
-  const predioStatus:Status=predioPct>=80?"ok":predioPct>=50?"risk":"late";
-  const predioDetail=construct?.estadoPaso1==="COMPLETO"?"Paso 1 completo":construct?"En integración":"Sin captura";
+  const legalPct=construct?.progresoPaso2 ?? 0;
+  const serviciosPct=construct?.progresoPaso3 ?? 0;
+  const statusFor=(pct:number):Status=>pct>=80?"ok":pct>=50?"risk":"late";
+  const detailFor=(pct:number,complete:boolean)=>complete?"Completo":pct>0?"En integración":"Sin captura";
   const dynamicKpis=[
-    ["Condición del predio",`${predioPct}%`,predioDetail,predioStatus],
-    ...kpis.slice(1),
+    ["Condición del predio",`${predioPct}%`,detailFor(predioPct,construct?.estadoPaso1==="COMPLETO"),statusFor(predioPct)],
+    ["Viabilidad urbanística",`${legalPct}%`,detailFor(legalPct,construct?.estadoPaso2==="COMPLETO"),statusFor(legalPct)],
+    ["Factibilidad de servicios",`${serviciosPct}%`,detailFor(serviciosPct,construct?.estadoPaso3==="COMPLETO"),statusFor(serviciosPct)],
+    ...kpis.slice(3),
   ] as const;
   const condicionLabel:Record<string,string>={
     BRENA:"Tierra en breña",
@@ -142,8 +146,13 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
     REMODELACION:"Remodelación / ampliación",
     MIXTO:"Condición mixta",
   };
-  const riesgosGuardados=Array.isArray(construct?.riesgosPaso1)?construct.riesgosPaso1.map(String):[];
+  const riesgosGuardados=[
+    ...(Array.isArray(construct?.riesgosPaso1)?construct.riesgosPaso1.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso2)?construct.riesgosPaso2.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso3)?construct.riesgosPaso3.map(String):[]),
+  ];
   const modulosGuardados=Array.isArray(construct?.modulosSugeridos)?construct.modulosSugeridos.map(String):[];
+  const obrasEspeciales=Array.isArray(construct?.obrasEspecialesSugeridas)?construct.obrasEspecialesSugeridas.map(String):[];
 
   return <main style={{minHeight:"100vh",background:"#eef6fb",color:"#082f64"}}>
     <PmHeader title="CONSTRUCTIBILIDAD" subtitle={`${code} · ${nombre} · Configuración integral desde el predio hasta la entrega de la obra terminada.`}/>
@@ -200,7 +209,7 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
             Constructibilidad define la estructura de módulos, entregables de arranque, liberaciones y seguimiento que utilizará Certeza Project Manager para este proyecto.
           </p>
           <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            {[(construct?.condicionPredio&&condicionLabel[construct.condicionPredio])||"Condición del predio por definir","Uso de suelo por validar","Esquema comercial por definir","Financiamiento por definir","Modalidad de ejecución por definir","Infraestructura por definir","Obras especiales por definir"].map((x,i)=><span key={x} style={{padding:"7px 9px",borderRadius:999,background:i%3===0?"#fff3dd":i%3===1?"#e7f5ed":"#e8f2ff",fontSize:11,fontWeight:850}}>{x}</span>)}
+            {[(construct?.condicionPredio&&condicionLabel[construct.condicionPredio])||"Condición del predio por definir",legalPct>0?"Legal / uso de suelo en integración":"Uso de suelo por validar","Esquema comercial por definir","Financiamiento por definir","Modalidad de ejecución por definir",serviciosPct>0?"Servicios e infraestructura evaluándose":"Infraestructura por definir",obrasEspeciales.length?`Obras especiales: ${obrasEspeciales.length}`:"Obras especiales por definir"].map((x,i)=><span key={x} style={{padding:"7px 9px",borderRadius:999,background:i%3===0?"#fff3dd":i%3===1?"#e7f5ed":"#e8f2ff",fontSize:11,fontWeight:850}}>{x}</span>)}
           </div>
         </article>
 
