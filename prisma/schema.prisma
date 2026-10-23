@@ -660,6 +660,7 @@ model ProyectoPM {
   actualizadoEn DateTime @updatedAt
   participantes ProyectoPMUsuario[]
   constructibilidad ConstructibilidadPM?
+  lineaBase LineaBasePM?
 
   @@index([activo])
   @@index([estado])
@@ -791,4 +792,35 @@ model ConstructibilidadPM {
 
   @@index([condicionPredio])
   @@index([estadoPaso1])
+}
+
+
+model LineaBasePM {
+  id String @id @default(cuid())
+  proyectoId String @unique
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  version Int @default(1)
+  estado String @default("BORRADOR")
+  alcance Json?
+  presupuesto Json?
+  programa Json?
+  estructuraFisica Json?
+  contratos Json?
+  expedienteResumen Json?
+  liberaciones Json?
+  indicadoresBase Json?
+  riesgosBase Json?
+  cambiosBase Json?
+
+  aprobadoPorId String?
+  aprobadoEn DateTime?
+  motivoAprobacion String?
+  hashReferencia String?
+
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([estado])
+  @@index([version])
 }
