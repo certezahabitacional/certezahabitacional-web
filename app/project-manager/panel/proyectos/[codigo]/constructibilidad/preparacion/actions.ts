@@ -54,10 +54,10 @@ export async function guardarPreparacionConstructibilidad(formData:FormData){
   const prepKeys=["campamento","seguridad","accesosProvisionales","energiaProvisional","aguaProvisional","trazoControl","personalTecnico","planSeguridad","bitacora"] as const;
 
   for(const k of contractKeys){
-    if(!(contratacionSuministros as Record<string,unknown>)[k]) risks.push(`Contratación/suministros pendiente: ${k}`);
+    if(!(contratacionSuministros as Record<string,unknown>)[k]) riesgos.push(`Contratación/suministros pendiente: ${k}`);
   }
   for(const k of prepKeys){
-    if(!(preparacionObra as Record<string,unknown>)[k]) risks.push(`Preparación de obra pendiente: ${k}`);
+    if(!(preparacionObra as Record<string,unknown>)[k]) riesgos.push(`Preparación de obra pendiente: ${k}`);
   }
 
   const total=contractKeys.length+prepKeys.length;
