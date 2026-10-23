@@ -128,12 +128,16 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
   const predioPct=construct?.progresoPaso1 ?? 0;
   const legalPct=construct?.progresoPaso2 ?? 0;
   const serviciosPct=construct?.progresoPaso3 ?? 0;
+  const estudiosPct=construct?.progresoPaso4 ?? 0;
+  const productoPct=construct?.progresoPaso5 ?? 0;
   const statusFor=(pct:number):Status=>pct>=80?"ok":pct>=50?"risk":"late";
   const detailFor=(pct:number,complete:boolean)=>complete?"Completo":pct>0?"En integración":"Sin captura";
   const dynamicKpis=[
     ["Condición del predio",`${predioPct}%`,detailFor(predioPct,construct?.estadoPaso1==="COMPLETO"),statusFor(predioPct)],
     ["Viabilidad urbanística",`${legalPct}%`,detailFor(legalPct,construct?.estadoPaso2==="COMPLETO"),statusFor(legalPct)],
     ["Factibilidad de servicios",`${serviciosPct}%`,detailFor(serviciosPct,construct?.estadoPaso3==="COMPLETO"),statusFor(serviciosPct)],
+    ["Estudios",`${estudiosPct}%`,detailFor(estudiosPct,construct?.estadoPaso4==="COMPLETO"),statusFor(estudiosPct)],
+    ["Producto / escala",`${productoPct}%`,detailFor(productoPct,construct?.estadoPaso5==="COMPLETO"),statusFor(productoPct)],
     ...kpis.slice(3),
   ] as const;
   const condicionLabel:Record<string,string>={
@@ -150,6 +154,8 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
     ...(Array.isArray(construct?.riesgosPaso1)?construct.riesgosPaso1.map(String):[]),
     ...(Array.isArray(construct?.riesgosPaso2)?construct.riesgosPaso2.map(String):[]),
     ...(Array.isArray(construct?.riesgosPaso3)?construct.riesgosPaso3.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso4)?construct.riesgosPaso4.map(String):[]),
+    ...(Array.isArray(construct?.riesgosPaso5)?construct.riesgosPaso5.map(String):[]),
   ];
   const modulosGuardados=Array.isArray(construct?.modulosSugeridos)?construct.modulosSugeridos.map(String):[];
   const obrasEspeciales=Array.isArray(construct?.obrasEspecialesSugeridas)?construct.obrasEspecialesSugeridas.map(String):[];
