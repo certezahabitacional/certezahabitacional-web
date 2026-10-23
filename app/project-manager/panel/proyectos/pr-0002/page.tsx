@@ -6,6 +6,7 @@ import { pr0002, money } from "@/lib/project-manager/pr0002";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 
 const modules = [
+  ["🏗️","Constructibilidad","Define módulos, entregables, liberaciones y seguimiento desde el predio hasta la entrega.","constructibilidad"],
   ["🎯","Resumen ejecutivo","Estado, salud, alertas y prioridades.","resumen"],
   ["🩺","Salud del proyecto","Diagnóstico integral 0–100.","salud"],
   ["🔔","Alertas tempranas","Prioridades, causas y acciones.","alertas"],
