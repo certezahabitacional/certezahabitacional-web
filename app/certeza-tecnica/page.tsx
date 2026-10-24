@@ -178,9 +178,15 @@ export default function CertezaTecnicaPage() {
                 <ul>
                   {service.items.map((item) => <li key={item}>{item}</li>)}
                 </ul>
-                <a href="mailto:contacto@certezahabitacional.com" className="ct-service-link">
-                  Ver más <span>→</span>
-                </a>
+                {service.number === "01" ? (
+                  <Link href="/certeza-tecnica/presupuestos-costos" className="ct-service-link">
+                    Ver Costos y Presupuestos <span>→</span>
+                  </Link>
+                ) : (
+                  <a href="mailto:contacto@certezahabitacional.com" className="ct-service-link">
+                    Ver más <span>→</span>
+                  </a>
+                )}
               </article>
             ))}
           </div>
