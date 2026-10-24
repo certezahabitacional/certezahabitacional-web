@@ -5,6 +5,7 @@ import { requireProjectManagerAccess } from "@/lib/project-manager/access";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 import { generarDocumentosMaestros } from "./actions";
 import { sincronizarDocumentosConModulos } from "./sync-actions";
+import { buildRecalculationPreview } from "@/lib/project-manager/master-document-recalculation";
 
 export default async function DocumentosMaestrosPage({params,searchParams}:{params:Promise<{codigo:string}>;searchParams:Promise<{generados?:string;sincronizados?:string;seguimientos?:string}>}) {
   const {session,role,readOnly}=await requireProjectManagerAccess();
@@ -18,20 +19,21 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
     include:{
       participantes:{where:{usuarioId:userId},select:{id:true}},
       documentosMaestros:{
-        where:{activo:true},
         include:{
-          actividades:{select:{origen:true}},
+          actividades:true,
           _count:{select:{actividades:true}}
         },
         orderBy:{codigo:"asc"}
-      }
+      },
+      constructibilidad:true
     }
   });
   if(!proyecto||!proyecto.activo) notFound();
   const ok=role==="DIRECTOR"||role==="ADMINISTRADOR"||proyecto.participantes.length>0;
   if(!ok) notFound();
 
-  const docs=proyecto.documentosMaestros;
+  const docs=proyecto.documentosMaestros.filter(d=>d.activo);
+  const preview=proyecto.constructibilidad?buildRecalculationPreview(proyecto.constructibilidad,proyecto.documentosMaestros):null;
   const completos=docs.filter(d=>d.estado==="COMPLETO").length;
   const pendientes=docs.filter(d=>d.estado==="PENDIENTE").length;
   const parciales=docs.filter(d=>d.estado==="EN_PROCESO"||d.estado==="PARCIAL").length;
@@ -53,6 +55,7 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
             <a href={`/api/project-manager/proyectos/${codigo}/documentos-maestros/descargar`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10}}>Descargar todos (.zip)</a>
             {!readOnly&&<>
+            <a href="#preview-recalculo" style={{background:"#fff5dd",color:"#8a5b00",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10,border:"1px solid #f0c36a"}}>Ver cambios antes de recalcular</a>
             <form action={generarDocumentosMaestros}>
               <input type="hidden" name="codigo" value={code}/>
               <button type="submit" style={{border:0,background:"#ff8500",color:"#fff",fontWeight:950,padding:"12px 17px",borderRadius:10,cursor:"pointer"}}>{docs.length?"Recalcular desde Constructibilidad":"Generar Documentos Maestros"}</button>
@@ -65,6 +68,60 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
           </div>
         </div>
       </div>
+
+
+      {preview&&<div id="preview-recalculo" style={{...card,marginTop:14,padding:18,border:"2px solid #0b73ba"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"flex-start",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:950,color:"#0b73ba",letterSpacing:".08em"}}>VISTA PREVIA DE RECÁLCULO</div>
+            <h2 style={{margin:"5px 0 7px"}}>Impacto de la Constructibilidad vigente</h2>
+            <p style={{margin:0,color:"#526c84",maxWidth:900}}>Este análisis no modifica información. Muestra qué Documentos Maestros y actividades cambiarían si aplicas el recálculo.</p>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8,minWidth:520}}>
+            {[
+              ["DM aplicables",preview.resumen.documentosAplicables],
+              ["Actividades esperadas",preview.resumen.actividadesEsperadas],
+              ["Cambios detectados",preview.resumen.cambiosTotales],
+              ["Protegidas",preview.resumen.protegidas]
+            ].map(([k,v])=><div key={String(k)} style={{background:"#f7fbfe",padding:10,borderRadius:8}}><div style={{fontSize:9,color:"#61788f"}}>{k}</div><strong style={{fontSize:20}}>{v}</strong></div>)}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginTop:14}}>
+          <article style={{background:"#e7f7ee",padding:12,borderRadius:9}}>
+            <strong>Documentos nuevos / reactivados</strong>
+            <div style={{fontSize:11,marginTop:6}}>{[...preview.documentosNuevos,...preview.documentosReactivados].length?[...preview.documentosNuevos,...preview.documentosReactivados].join(", "):"Ninguno"}</div>
+          </article>
+          <article style={{background:"#fff5dd",padding:12,borderRadius:9}}>
+            <strong>Documentos a desactivar</strong>
+            <div style={{fontSize:11,marginTop:6}}>{preview.documentosDesactivados.length?preview.documentosDesactivados.join(", "):"Ninguno"}</div>
+          </article>
+          <article style={{background:"#e8f3fb",padding:12,borderRadius:9}}>
+            <strong>Actividades protegidas</strong>
+            <div style={{fontSize:11,marginTop:6}}>{preview.actividadesObsoletasProtegidas.length} con ejecución o evidencia; no se eliminarán.</div>
+          </article>
+        </div>
+        <details style={{marginTop:12}}>
+          <summary style={{cursor:"pointer",fontWeight:950,color:"#0b73ba"}}>Ver detalle de actividades</summary>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+            <article style={{background:"#f7fbfe",padding:12,borderRadius:8}}>
+              <strong>Nuevas ({preview.actividadesNuevas.length})</strong>
+              {preview.actividadesNuevas.slice(0,30).map(a=><div key={a.documento+a.codigo} style={{fontSize:10,padding:"5px 0",borderBottom:"1px solid #e3ebf1"}}>{a.documento} · {a.codigo} · {a.actividad}</div>)}
+            </article>
+            <article style={{background:"#f7fbfe",padding:12,borderRadius:8}}>
+              <strong>Modificadas ({preview.actividadesModificadas.length})</strong>
+              {preview.actividadesModificadas.slice(0,30).map(a=><div key={a.documento+a.codigo} style={{fontSize:10,padding:"5px 0",borderBottom:"1px solid #e3ebf1"}}>{a.documento} · {a.codigo} · {a.cambios.join(", ")}</div>)}
+            </article>
+            <article style={{background:"#fff5dd",padding:12,borderRadius:8}}>
+              <strong>Obsoletas eliminables ({preview.actividadesObsoletasEliminables.length})</strong>
+              {preview.actividadesObsoletasEliminables.slice(0,30).map(a=><div key={a.documento+a.codigo} style={{fontSize:10,padding:"5px 0",borderBottom:"1px solid #f4dfad"}}>{a.documento} · {a.codigo} · {a.actividad}</div>)}
+            </article>
+            <article style={{background:"#fdecec",padding:12,borderRadius:8}}>
+              <strong>Protegidas ({preview.actividadesObsoletasProtegidas.length})</strong>
+              {preview.actividadesObsoletasProtegidas.slice(0,30).map(a=><div key={a.documento+a.codigo} style={{fontSize:10,padding:"5px 0",borderBottom:"1px solid #f1cccc"}}>{a.documento} · {a.codigo} · {a.actividad}</div>)}
+            </article>
+          </div>
+        </details>
+      </div>}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:10,marginTop:14}}>
         {[
