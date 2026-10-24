@@ -662,6 +662,8 @@ model ProyectoPM {
   constructibilidad ConstructibilidadPM?
   lineaBase LineaBasePM?
   documentosMaestros DocumentoMaestroPM[]
+  registrosModulo RegistroModuloPM[]
+  seguimientos SeguimientoActividadPM[]
 
   @@index([activo])
   @@index([estado])
@@ -894,9 +896,72 @@ model ActividadDocumentoMaestroPM {
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
+  registrosModulo RegistroModuloPM[]
+  seguimiento SeguimientoActividadPM?
+
   @@unique([documentoMaestroId, codigo])
   @@index([documentoMaestroId])
   @@index([estado])
   @@index([bloqueante])
   @@index([periodicidad])
+}
+
+
+model RegistroModuloPM {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  actividadOrigenId String
+  actividadOrigen ActividadDocumentoMaestroPM @relation(fields: [actividadOrigenId], references: [id], onDelete: Cascade)
+
+  modulo String
+  clave String
+  titulo String
+  descripcion String?
+  estado String @default("PENDIENTE")
+  responsable String?
+  fechaPlan DateTime? @db.Date
+  fechaReal DateTime? @db.Date
+  importePlan Decimal @default(0) @db.Decimal(14, 2)
+  importeReal Decimal @default(0) @db.Decimal(14, 2)
+  bloqueante Boolean @default(false)
+  entregable String?
+  fuenteDocumento String?
+  datos Json?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([actividadOrigenId, modulo])
+  @@index([proyectoId])
+  @@index([modulo])
+  @@index([estado])
+  @@index([fechaPlan])
+}
+
+model SeguimientoActividadPM {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  actividadOrigenId String @unique
+  actividadOrigen ActividadDocumentoMaestroPM @relation(fields: [actividadOrigenId], references: [id], onDelete: Cascade)
+
+  periodicidad String
+  responsable String?
+  proximaRevision DateTime? @db.Date
+  ultimaRevision DateTime? @db.Date
+  estado String @default("PENDIENTE")
+  requiereActualizacion Boolean @default(true)
+  valorActual String?
+  porcentajeAvance Decimal? @db.Decimal(5, 2)
+  comentario String?
+  evidenciaUrl String?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([proyectoId])
+  @@index([proximaRevision])
+  @@index([estado])
+  @@index([requiereActualizacion])
 }

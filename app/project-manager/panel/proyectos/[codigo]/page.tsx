@@ -98,6 +98,19 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
         </div>
       </Link>
 
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginTop:16}}>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/modulos`} style={{...card,padding:20,textDecoration:"none",color:"#082f64",border:"2px solid #1f9d55"}}>
+          <div style={{fontSize:12,fontWeight:950,color:"#187342"}}>OPERACIÓN</div>
+          <h2 style={{margin:"5px 0"}}>Módulos operativos</h2>
+          <p style={{margin:0,color:"#294f73"}}>Consulta cómo los Documentos Maestros alimentaron Programa, Costos, Riesgos, Liberaciones y demás módulos.</p>
+        </Link>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/seguimiento`} style={{...card,padding:20,textDecoration:"none",color:"#082f64",border:"2px solid #0b73ba"}}>
+          <div style={{fontSize:12,fontWeight:950,color:"#0b73ba"}}>SEGUIMIENTO</div>
+          <h2 style={{margin:"5px 0"}}>Qué actualizar</h2>
+          <p style={{margin:0,color:"#294f73"}}>Agenda automática de actualizaciones diarias, semanales, mensuales, por evento o por estimación.</p>
+        </Link>
+      </div>
+
       <div style={{...card,marginTop:16,padding:24}}>
         <h2 style={{marginTop:0}}>Módulos del proyecto</h2>
         <p style={{color:"#294f73"}}>Estos módulos se activarán con la configuración del proyecto. PR-0002 conserva los módulos completos de demostración.</p>

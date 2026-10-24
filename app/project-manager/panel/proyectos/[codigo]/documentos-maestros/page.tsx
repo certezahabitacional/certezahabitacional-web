@@ -4,8 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { requireProjectManagerAccess } from "@/lib/project-manager/access";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 import { generarDocumentosMaestros } from "./actions";
+import { sincronizarDocumentosConModulos } from "./sync-actions";
 
-export default async function DocumentosMaestrosPage({params,searchParams}:{params:Promise<{codigo:string}>;searchParams:Promise<{generados?:string}>}) {
+export default async function DocumentosMaestrosPage({params,searchParams}:{params:Promise<{codigo:string}>;searchParams:Promise<{generados?:string;sincronizados?:string;seguimientos?:string}>}) {
   const {session,role,readOnly}=await requireProjectManagerAccess();
   const {codigo}=await params;
   const q=await searchParams;
@@ -36,6 +37,7 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
     <PmHeader title="Documentos Maestros del Proyecto" subtitle={`${code} · ${proyecto.nombre} · Información estructurada que alimentará automáticamente los módulos de CPM`}/>
     <section style={{maxWidth:1450,margin:"0 auto",padding:"22px 20px 60px"}}>
       {q.generados&&<div style={{...card,background:"#e7f7ee",color:"#187342",padding:14,fontWeight:900,marginBottom:14}}>Documentos Maestros generados/actualizados desde Constructibilidad.</div>}
+      {q.sincronizados&&<div style={{...card,background:"#e8f3fb",color:"#0b4f87",padding:14,fontWeight:900,marginBottom:14}}>Sincronización operativa completada: {q.sincronizados} registros de módulo y {q.seguimientos||"0"} fichas de seguimiento procesadas.</div>}
       {readOnly&&<div style={{...card,background:"#e8f3fb",padding:14,fontWeight:900,marginBottom:14}}>CLIENTE · SÓLO LECTURA</div>}
 
       <div style={{...card,padding:20,border:"2px solid #ff8500"}}>
@@ -45,10 +47,16 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
             <h1 style={{margin:"5px 0 7px",fontSize:28}}>Documentos Maestros</h1>
             <p style={{margin:0,color:"#4a657d",lineHeight:1.55,maxWidth:900}}>Cada Documento Maestro contiene la estructura de actividades y datos que alimentará uno o varios módulos. Las actividades también pueden agregarse manualmente cuando la operación lo requiera.</p>
           </div>
-          {!readOnly&&<form action={generarDocumentosMaestros}>
-            <input type="hidden" name="codigo" value={code}/>
-            <button type="submit" style={{border:0,background:"#ff8500",color:"#fff",fontWeight:950,padding:"12px 17px",borderRadius:10,cursor:"pointer"}}>{docs.length?"Recalcular desde Constructibilidad":"Generar Documentos Maestros"}</button>
-          </form>}
+          {!readOnly&&<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <form action={generarDocumentosMaestros}>
+              <input type="hidden" name="codigo" value={code}/>
+              <button type="submit" style={{border:0,background:"#ff8500",color:"#fff",fontWeight:950,padding:"12px 17px",borderRadius:10,cursor:"pointer"}}>{docs.length?"Recalcular desde Constructibilidad":"Generar Documentos Maestros"}</button>
+            </form>
+            {docs.length>0&&<form action={sincronizarDocumentosConModulos}>
+              <input type="hidden" name="codigo" value={code}/>
+              <button type="submit" style={{border:0,background:"#1f9d55",color:"#fff",fontWeight:950,padding:"12px 17px",borderRadius:10,cursor:"pointer"}}>Sincronizar módulos →</button>
+            </form>}
+          </div>}
         </div>
       </div>
 
@@ -88,6 +96,8 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
         <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>← Constructibilidad</Link>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/modulos`} style={{background:"#1f9d55",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Módulos operativos</Link>
+        <Link href={`/project-manager/panel/proyectos/${codigo}/seguimiento`} style={{background:"#0b73ba",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Qué actualizar</Link>
         <Link href={`/project-manager/panel/proyectos/${codigo}`} style={{border:"1px solid #b8cad9",color:"#294f73",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Volver al proyecto</Link>
       </div>
     </section>
