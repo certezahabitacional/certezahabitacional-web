@@ -47,7 +47,9 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
             <h1 style={{margin:"5px 0 7px",fontSize:28}}>Documentos Maestros</h1>
             <p style={{margin:0,color:"#4a657d",lineHeight:1.55,maxWidth:900}}>Cada Documento Maestro contiene la estructura de actividades y datos que alimentará uno o varios módulos. Las actividades también pueden agregarse manualmente cuando la operación lo requiera.</p>
           </div>
-          {!readOnly&&<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <a href={`/api/project-manager/proyectos/${codigo}/documentos-maestros/descargar`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10}}>Descargar todos (.zip)</a>
+            {!readOnly&&<>
             <form action={generarDocumentosMaestros}>
               <input type="hidden" name="codigo" value={code}/>
               <button type="submit" style={{border:0,background:"#ff8500",color:"#fff",fontWeight:950,padding:"12px 17px",borderRadius:10,cursor:"pointer"}}>{docs.length?"Recalcular desde Constructibilidad":"Generar Documentos Maestros"}</button>
@@ -56,7 +58,8 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
               <input type="hidden" name="codigo" value={code}/>
               <button type="submit" style={{border:0,background:"#1f9d55",color:"#fff",fontWeight:950,padding:"12px 17px",borderRadius:10,cursor:"pointer"}}>Sincronizar módulos →</button>
             </form>}
-          </div>}
+            </>}
+          </div>
         </div>
       </div>
 
