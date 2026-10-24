@@ -2,102 +2,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireProjectManagerAccess } from "@/lib/project-manager/access";
-import { pr0002 } from "@/lib/project-manager/pr0002";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 
-type Status = "ok" | "risk" | "late" | "future";
-const colors:Record<Status,string>={ok:"#1f9d55",risk:"#e6a700",late:"#d63c3c",future:"#8fa2b5"};
-const fills:Record<Status,string>={ok:"#e8f7ef",risk:"#fff7dd",late:"#fdecec",future:"#eef2f6"};
+type CheckStatus="COMPLETO"|"PENDIENTE"|"PARCIAL"|"NO_APLICA";
+const statusStyle:Record<CheckStatus,{bg:string;color:string;label:string}>={
+  COMPLETO:{bg:"#e7f7ee",color:"#187342",label:"Completo"},
+  PARCIAL:{bg:"#fff5dd",color:"#8a5b00",label:"En integración"},
+  PENDIENTE:{bg:"#fff0f0",color:"#b53030",label:"Pendiente"},
+  NO_APLICA:{bg:"#edf2f6",color:"#60778d",label:"No aplica"},
+};
 
-const stages:{label:string;status:Status}[]=[
-  {label:"Tierra / Predio",status:"ok"},
-  {label:"Legal",status:"ok"},
-  {label:"Uso de suelo",status:"ok"},
-  {label:"Servicios",status:"risk"},
-  {label:"Estudios",status:"ok"},
-  {label:"Producto",status:"ok"},
-  {label:"Comercialización",status:"risk"},
-  {label:"Financiamiento",status:"ok"},
-  {label:"Proyecto",status:"ok"},
-  {label:"Permisos",status:"risk"},
-  {label:"Presupuesto",status:"ok"},
-  {label:"Programa",status:"ok"},
-  {label:"Estrategia de construcción",status:"ok"},
-  {label:"Contratos y suministros",status:"risk"},
-  {label:"Preparación de obra",status:"risk"},
-  {label:"Tierra y urbanización",status:"late"},
-  {label:"Infraestructura",status:"late"},
-  {label:"Obras especiales",status:"risk"},
-  {label:"Edificación",status:"risk"},
-  {label:"Control",status:"ok"},
-  {label:"Calidad",status:"ok"},
-  {label:"Preentrega",status:"future"},
-  {label:"Entrega",status:"future"},
-  {label:"Cierre",status:"future"},
-];
-
-const kpis=[
-  ["Condición del predio","85%","Apto con condiciones","ok"],
-  ["Viabilidad urbanística","70%","En proceso","risk"],
-  ["Factibilidad de servicios","60%","Requiere obras","risk"],
-  ["Proyecto ejecutivo","75%","En proceso","risk"],
-  ["Autorizaciones","40%","Pendiente","late"],
-  ["Presupuesto base","80%","En revisión","ok"],
-  ["Programa maestro","65%","En proceso","risk"],
-  ["Riesgos críticos","30%","Atención requerida","late"],
-  ["Liberación para construir","50%","En proceso","risk"],
-] as const;
-
-const moduleRows=[
-  ["Habilitación del predio","Completado","Escrituras, liberación, topografía","Desarrollo","Inicio de estudios","ok"],
-  ["Proyecto ejecutivo","En proceso","Planos, memorias, especificaciones","Proyectos","Completar ingenierías","risk"],
-  ["Autorizaciones","Pendiente","Uso de suelo, licencias, dictámenes","Gestión","Tramitar licencia","late"],
-  ["Presupuesto","En proceso","Costo directo, indirecto, contingencias","Costos","Validar con proveedores","risk"],
-  ["Programa","En proceso","Programa maestro, hitos, curva S","Planeación","Ajustar con contratistas","ok"],
-  ["Urbanización","Pendiente","Plataformas, vialidades, redes","Obra","Iniciar movimiento de tierras","late"],
-  ["Infraestructura","Pendiente","Agua, drenaje, electricidad, pluvial","Obra","Contratar y ejecutar","late"],
-  ["Vivienda / Edificación","En proceso","Cimentación, estructura, instalaciones, acabados","Obra","Liberar frentes de trabajo","risk"],
-  ["Obras especiales","En proceso","PTAR, cárcamo, equipamiento","Obra / Especialistas","Contratar y ejecutar","risk"],
-] as const;
-
-const services=[
-  ["Agua","Existe","Red o punto de conexión por confirmar","ok"],
-  ["Drenaje","Requiere definición","Capacidad, descarga y obras por validar","risk"],
-  ["Electricidad","Requiere definición","Capacidad y punto de conexión por validar","risk"],
-  ["Pluvial","Requiere definición","Solución de captación y descarga","risk"],
-  ["Vialidades","Requiere definición","Accesos y urbanización","risk"],
-  ["Acceso","Por validar","Acceso legal y físico","risk"],
-  ["Topografía","Por integrar","Levantamiento y bancos de nivel","risk"],
-  ["Mecánica de suelos","Por integrar","Estudio y recomendaciones geotécnicas","late"],
-] as const;
-
-const follow=[
-  ["📊","Avance físico","Avance por frente, hitos y entregables"],
-  ["💰","Avance financiero","Ejercido vs programado y proyección"],
-  ["📄","Contratos","Montos, anticipos, estimaciones y saldos"],
-  ["👷","Mano de obra","Personal, rendimientos y productividad"],
-  ["🧱","Materiales","Suministros, inventarios y consumos"],
-  ["🚜","Maquinaria","Equipos, utilización y rendimientos"],
-  ["🛡️","Calidad","Inspecciones, pruebas y no conformidades"],
-  ["⛑️","Seguridad","Incidentes, recorridos y acciones"],
-  ["🔁","Cambios","Impacto en alcance, costo y plazo"],
-  ["📷","Evidencias","Fotos, reportes y bitácora digital"],
-] as const;
-
-function Badge({status,label}:{status:Status;label:string}) {
-  return <span style={{display:"inline-flex",alignItems:"center",gap:6,borderRadius:999,padding:"5px 9px",fontSize:12,fontWeight:900,color:colors[status],background:fills[status],whiteSpace:"nowrap"}}>
-    <span style={{width:8,height:8,borderRadius:"50%",background:colors[status]}}/>{label}
-  </span>;
+function aggregate(values:number[]):CheckStatus{
+  if(values.every(v=>v>=80)) return "COMPLETO";
+  if(values.some(v=>v>0)) return "PARCIAL";
+  return "PENDIENTE";
 }
 
-function Ring({value,status}:{value:string;status:Status}) {
-  return <div style={{width:58,height:58,borderRadius:"50%",display:"grid",placeItems:"center",fontWeight:950,color:"#082f64",background:`conic-gradient(${colors[status]} ${value}, #e9eff4 0)`}}>
-    <div style={{width:43,height:43,borderRadius:"50%",display:"grid",placeItems:"center",background:"#fff",fontSize:13}}>{value}</div>
-  </div>;
-}
-
-export default async function ConstructibilidadPage({params}:{params:Promise<{codigo:string}>}) {
-  const { session, role, readOnly }=await requireProjectManagerAccess();
+export default async function ConstructibilidadChecklistPage({params}:{params:Promise<{codigo:string}>}) {
+  const {session,role,readOnly}=await requireProjectManagerAccess();
   const {codigo}=await params;
   const code=codigo.toUpperCase();
   const userId=String((session.user as {id?:string}).id ?? "");
@@ -107,232 +29,156 @@ export default async function ConstructibilidadPage({params}:{params:Promise<{co
     include:{
       participantes:{where:{usuarioId:userId},select:{id:true}},
       constructibilidad:true,
-    },
+      documentosMaestros:{where:{activo:true},select:{id:true,codigo:true,estado:true}}
+    }
   });
+  if(!proyecto||!proyecto.activo) notFound();
+  const ok=role==="DIRECTOR"||role==="ADMINISTRADOR"||proyecto.participantes.length>0;
+  if(!ok) notFound();
 
-  const legacy=code==="PR-0002" && !proyecto;
-  if(!proyecto && !legacy) notFound();
-  if(proyecto){
-    const tieneAcceso=role==="DIRECTOR" || role==="ADMINISTRADOR" || proyecto.participantes.length>0;
-    if(!tieneAcceso || !proyecto.activo) notFound();
-  } else if(role!=="DIRECTOR" && role!=="ADMINISTRADOR") {
-    notFound();
-  }
+  const c=proyecto.constructibilidad;
+  const p=(n:number)=>c ? Number((c as any)[`progresoPaso${n}`]??0) : 0;
 
-  const nombre=proyecto?.nombre ?? pr0002.project.name;
-  const ubicacion=proyecto?.ubicacion ?? pr0002.project.location;
-  const cliente=proyecto?.cliente ?? pr0002.project.client;
-  const presupuesto=Number(proyecto?.presupuesto ?? pr0002.project.budget);
-  const money=new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(presupuesto);
-  const construct=proyecto?.constructibilidad;
-  const predioPct=construct?.progresoPaso1 ?? 0;
-  const legalPct=construct?.progresoPaso2 ?? 0;
-  const serviciosPct=construct?.progresoPaso3 ?? 0;
-  const estudiosPct=construct?.progresoPaso4 ?? 0;
-  const productoPct=construct?.progresoPaso5 ?? 0;
-  const mercadoPct=construct?.progresoPaso6 ?? 0;
-  const proyectoPct=construct?.progresoPaso7 ?? 0;
-  const ejecucionPct=construct?.progresoPaso8 ?? 0;
-  const preparacionPct=construct?.progresoPaso9 ?? 0;
-  const seguimientoPct=construct?.progresoPaso10 ?? 0;
-  const expedientePct=construct?.progresoPaso11 ?? 0;
-  const cierrePct=construct?.progresoPaso12 ?? 0;
-  const statusFor=(pct:number):Status=>pct>=80?"ok":pct>=50?"risk":"late";
-  const detailFor=(pct:number,complete:boolean)=>complete?"Completo":pct>0?"En integración":"Sin captura";
-  const dynamicKpis=[
-    ["Condición del predio",`${predioPct}%`,detailFor(predioPct,construct?.estadoPaso1==="COMPLETO"),statusFor(predioPct)],
-    ["Viabilidad urbanística",`${legalPct}%`,detailFor(legalPct,construct?.estadoPaso2==="COMPLETO"),statusFor(legalPct)],
-    ["Factibilidad de servicios",`${serviciosPct}%`,detailFor(serviciosPct,construct?.estadoPaso3==="COMPLETO"),statusFor(serviciosPct)],
-    ["Estudios",`${estudiosPct}%`,detailFor(estudiosPct,construct?.estadoPaso4==="COMPLETO"),statusFor(estudiosPct)],
-    ["Producto / escala",`${productoPct}%`,detailFor(productoPct,construct?.estadoPaso5==="COMPLETO"),statusFor(productoPct)],
-    ["Mercado / financiamiento",`${mercadoPct}%`,detailFor(mercadoPct,construct?.estadoPaso6==="COMPLETO"),statusFor(mercadoPct)],
-    ["Proyecto / permisos",`${proyectoPct}%`,detailFor(proyectoPct,construct?.estadoPaso7==="COMPLETO"),statusFor(proyectoPct)],
-    ["Presupuesto / programa",`${ejecucionPct}%`,detailFor(ejecucionPct,construct?.estadoPaso8==="COMPLETO"),statusFor(ejecucionPct)],
-    ["Preparación de obra",`${preparacionPct}%`,construct?.estadoPaso9==="LISTO_PARA_INICIO"?"Listo para inicio":detailFor(preparacionPct,false),statusFor(preparacionPct)],
-    ["Seguimiento operativo",`${seguimientoPct}%`,detailFor(seguimientoPct,construct?.estadoPaso10==="COMPLETO"),statusFor(seguimientoPct)],
-    ["Expediente Maestro",`${expedientePct}%`,construct?.estadoPaso11==="EXPEDIENTE_LISTO"?"Expediente listo":detailFor(expedientePct,construct?.estadoPaso11==="GENERADO"),statusFor(expedientePct)],
-    ["Cierre de Constructibilidad",`${cierrePct}%`,construct?.estadoPaso12 && construct.estadoPaso12!=="BORRADOR" ? construct.estadoPaso12.replaceAll("_"," ") : "Pendiente",statusFor(cierrePct)],
-    ...kpis.slice(3),
+  const blocks=[
+    {
+      code:"A",title:"Predio y situación legal",
+      desc:"Condición del terreno, propiedad, accesos, uso de suelo, restricciones y disponibilidad.",
+      status:aggregate([p(1),p(2)]),links:[["Definir predio","predio"],["Legal / uso de suelo","legal"]],
+      items:["Predio","Accesos","Situación jurídica","Uso de suelo","Restricciones"]
+    },
+    {
+      code:"B",title:"Servicios y estudios",
+      desc:"Factibilidades, infraestructura existente y estudios técnicos que condicionan el proyecto.",
+      status:aggregate([p(3),p(4)]),links:[["Servicios","servicios"],["Estudios","estudios"]],
+      items:["Agua","Drenaje","Electricidad","Topografía","Mecánica de suelos","Estudios especiales"]
+    },
+    {
+      code:"C",title:"Producto y alcance",
+      desc:"Qué se construirá, escala, etapas, frentes, unidades, edificios y estructura física de control.",
+      status:aggregate([p(5)]),links:[["Definir producto","producto"]],
+      items:["Tipo de proyecto","Escala","Etapas","Frentes","Unidades / edificios"]
+    },
+    {
+      code:"D",title:"Proyecto y permisos",
+      desc:"Proyecto ejecutivo por disciplina, licencias, dictámenes y autorizaciones.",
+      status:aggregate([p(7)]),links:[["Proyecto / permisos","proyecto"]],
+      items:["Arquitectura","Ingenierías","Licencias","Autorizaciones","Liberaciones"]
+    },
+    {
+      code:"E",title:"Presupuesto y programa",
+      desc:"Costo base, catálogo, precios unitarios, programa maestro, hitos y ruta crítica.",
+      status:aggregate([p(8)]),links:[["Presupuesto / programa","ejecucion"]],
+      items:["Presupuesto","Catálogo","Programa","Hitos","Ruta crítica"]
+    },
+    {
+      code:"F",title:"Ejecución y contratación",
+      desc:"Administración directa, subcontratos, suministros, mano de obra, maquinaria y responsables.",
+      status:aggregate([p(8),p(9)]),links:[["Estrategia de ejecución","ejecucion"],["Contratación / preparación","preparacion"]],
+      items:["Modalidad","Contratos","Suministros","Mano de obra","Maquinaria"]
+    },
+    {
+      code:"G",title:"Organización y control",
+      desc:"Responsables, periodicidades, calidad, seguridad, riesgos, cambios y evidencias.",
+      status:aggregate([p(10)]),links:[["Configurar seguimiento","seguimiento"]],
+      items:["Responsables","Periodicidad","Calidad","Seguridad","Riesgos","Cambios"]
+    },
+    {
+      code:"H",title:"Preparación para iniciar",
+      desc:"Condiciones mínimas de arranque, instalaciones provisionales, personal, bitácora y liberaciones.",
+      status:aggregate([p(9)]),links:[["Preparación de obra","preparacion"]],
+      items:["Accesos","Instalaciones provisionales","Personal técnico","Seguridad","Bitácora"]
+    },
   ] as const;
-  const condicionLabel:Record<string,string>={
-    BRENA:"Tierra en breña",
-    MACROLOTE_URBANIZADO:"Macrolote urbanizado",
-    MACROLOTE_PARCIAL:"Macrolote parcialmente urbanizado",
-    LOTES_URBANIZADOS:"Lotes urbanizados",
-    LOTES_PARCIALES:"Lotes parcialmente urbanizados",
-    CONSTRUCCION_EXISTENTE:"Construcción existente",
-    REMODELACION:"Remodelación / ampliación",
-    MIXTO:"Condición mixta",
-  };
-  const riesgosGuardados=[
-    ...(Array.isArray(construct?.riesgosPaso1)?construct.riesgosPaso1.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso2)?construct.riesgosPaso2.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso3)?construct.riesgosPaso3.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso4)?construct.riesgosPaso4.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso5)?construct.riesgosPaso5.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso6)?construct.riesgosPaso6.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso7)?construct.riesgosPaso7.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso8)?construct.riesgosPaso8.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso9)?construct.riesgosPaso9.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso10)?construct.riesgosPaso10.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso11)?construct.riesgosPaso11.map(String):[]),
-    ...(Array.isArray(construct?.riesgosPaso12)?construct.riesgosPaso12.map(String):[]),
-  ];
-  const modulosGuardados=Array.isArray(construct?.modulosSugeridos)?construct.modulosSugeridos.map(String):[];
-  const obrasEspeciales=Array.isArray(construct?.obrasEspecialesSugeridas)?construct.obrasEspecialesSugeridas.map(String):[];
+
+  const completed=blocks.filter(b=>b.status==="COMPLETO").length;
+  const partial=blocks.filter(b=>b.status==="PARCIAL").length;
+  const pending=blocks.filter(b=>b.status==="PENDIENTE").length;
+  const overall=Math.round(blocks.reduce((a,b)=>{
+    const v=b.status==="COMPLETO"?100:b.status==="PARCIAL"?50:0; return a+v;
+  },0)/blocks.length);
+
+  const docs=proyecto.documentosMaestros.length;
+  const condition=overall>=85?"Configurado":overall>=40?"Configurado con pendientes":"Por configurar";
 
   return <main style={{minHeight:"100vh",background:"#eef6fb",color:"#082f64"}}>
-    <PmHeader title="CONSTRUCTIBILIDAD" subtitle={`${code} · ${nombre} · Configuración integral desde el predio hasta la entrega de la obra terminada.`}/>
-    <section style={{maxWidth:1650,margin:"0 auto",padding:"18px 18px 60px"}}>
-      {readOnly&&<div style={{...card,marginBottom:14,background:"#e8f3fb",fontWeight:900}}>CLIENTE · SÓLO LECTURA</div>}
+    <PmHeader title="Constructibilidad" subtitle={`${code} · ${proyecto.nombre} · Checklist maestro para definir la base del proyecto`}/>
+    <section style={{maxWidth:1450,margin:"0 auto",padding:"20px 20px 60px"}}>
+      {readOnly&&<div style={{...card,background:"#e8f3fb",padding:14,fontWeight:900,marginBottom:14}}>CLIENTE · SÓLO LECTURA</div>}
 
-      <div style={{...card,padding:0,overflow:"hidden"}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(140px,1fr))",gap:0}}>
-          {[
-            ["Proyecto",nombre],
-            ["Ubicación",ubicacion || "Por definir"],
-            ["Cliente",cliente || "Por definir"],
-            ["Presupuesto",money],
-            ["Estatus general","En configuración"],
-          ].map(([k,v])=><div key={k} style={{padding:"14px 16px",borderRight:"1px solid #d8e6f2"}}>
-            <div style={{fontSize:11,fontWeight:900,color:"#5f7690",textTransform:"uppercase"}}>{k}</div>
-            <div style={{fontWeight:950,marginTop:4}}>{v}</div>
-          </div>)}
-        </div>
-      </div>
-
-      <div style={{...card,marginTop:14,padding:"16px 14px",overflowX:"auto"}}>
-        <div style={{display:"flex",minWidth:1480,alignItems:"flex-start"}}>
-          {stages.map((s,i)=><div key={s.label} style={{flex:"1 0 58px",position:"relative",textAlign:"center"}}>
-            {i<stages.length-1&&<div style={{position:"absolute",top:12,left:"50%",right:"-50%",height:4,background:colors[s.status],zIndex:0}}/>}
-            <div style={{position:"relative",zIndex:1,width:26,height:26,borderRadius:"50%",margin:"0 auto",background:colors[s.status],color:"#fff",display:"grid",placeItems:"center",fontWeight:950,fontSize:12}}>{s.status==="ok"?"✓":s.status==="late"?"!":s.status==="future"?"•":"○"}</div>
-            <div style={{fontSize:10,fontWeight:850,lineHeight:1.2,marginTop:7,color:"#294f73"}}>{s.label}</div>
-          </div>)}
-        </div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(9,minmax(140px,1fr))",gap:10,marginTop:14,overflowX:"auto"}}>
-        {dynamicKpis.map(([title,value,detail,status])=><article key={title} style={{...card,padding:13,minWidth:140}}>
-          <div style={{fontSize:11,fontWeight:900,minHeight:30}}>{title}</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginTop:8}}>
-            <Ring value={value} status={status}/>
+      <div style={{...card,padding:20,border:"2px solid #ff8500"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:20,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#c86100",letterSpacing:".08em"}}>CHECKLIST MAESTRO DEL PROYECTO</div>
+            <h1 style={{margin:"5px 0 7px",fontSize:29}}>Define lo necesario; CPM genera lo demás</h1>
+            <p style={{margin:0,color:"#4a657d",lineHeight:1.55,maxWidth:900}}>Constructibilidad identifica qué aplica, qué falta y qué no aplica. Con esas respuestas CPM generará los Documentos Maestros necesarios para alimentar automáticamente cada módulo y definir su seguimiento.</p>
           </div>
-          <div style={{fontSize:11,color:"#5b7188",fontWeight:800,marginTop:8}}>{detail}</div>
+          <div style={{minWidth:210}}>
+            <div style={{fontSize:11,fontWeight:900}}>AVANCE DE DEFINICIÓN</div>
+            <div style={{height:13,borderRadius:99,background:"#e3ebf1",overflow:"hidden",marginTop:7}}><div style={{height:"100%",width:`${overall}%`,background:overall>=85?"#1f9d55":overall>=40?"#e6a700":"#d63c3c"}}/></div>
+            <div style={{fontSize:30,fontWeight:950,marginTop:4}}>{overall}%</div>
+            <div style={{fontSize:12,fontWeight:900,color:overall>=85?"#187342":"#8a5b00"}}>{condition}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:10,marginTop:14}}>
+        {[
+          ["Bloques completos",completed,"#187342"],
+          ["En integración",partial,"#8a5b00"],
+          ["Pendientes",pending,"#b53030"],
+          ["Documentos Maestros",docs,"#0b73ba"],
+        ].map(([label,value,color])=><article key={String(label)} style={{...card,padding:15}}>
+          <div style={{fontSize:11,fontWeight:900,color:"#61788f"}}>{label}</div>
+          <div style={{fontSize:28,fontWeight:950,marginTop:4,color:String(color)}}>{value}</div>
         </article>)}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1.05fr 1.45fr .75fr",gap:14,marginTop:14}}>
-        <article style={{...card,padding:18}}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}>
-            <h2 style={{margin:0,fontSize:20}}>Resumen de Constructibilidad</h2>
-            {!readOnly&&<button type="button" style={{border:"1px solid #c8d8e6",background:"#f7fbfe",color:"#053f79",borderRadius:8,padding:"7px 10px",fontWeight:900}}>Editar</button>}
-          </div>
-          <div style={{marginTop:14,padding:16,borderRadius:12,background:"linear-gradient(135deg,#0b3767,#0b73ba)",color:"#fff"}}>
-            <div style={{fontSize:12,color:"#bfe2ff",fontWeight:900}}>PROYECTO</div>
-            <div style={{fontSize:22,fontWeight:950,marginTop:3}}>{nombre}</div>
-            <div style={{marginTop:9,lineHeight:1.55,fontSize:13}}>{ubicacion || "Ubicación por definir"}<br/>{cliente || "Cliente por definir"}</div>
-          </div>
-          <p style={{color:"#405e78",lineHeight:1.55,fontSize:13}}>
-            Constructibilidad define la estructura de módulos, entregables de arranque, liberaciones y seguimiento que utilizará Certeza Project Manager para este proyecto.
-          </p>
-          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            {[(construct?.condicionPredio&&condicionLabel[construct.condicionPredio])||"Condición del predio por definir",legalPct>0?"Legal / uso de suelo en integración":"Uso de suelo por validar",mercadoPct>0?"Esquema comercial definido/en integración":"Esquema comercial por definir",mercadoPct>0?"Financiamiento definido/en integración":"Financiamiento por definir","Modalidad de ejecución por definir",serviciosPct>0?"Servicios e infraestructura evaluándose":"Infraestructura por definir",obrasEspeciales.length?`Obras especiales: ${obrasEspeciales.length}`:"Obras especiales por definir"].map((x,i)=><span key={x} style={{padding:"7px 9px",borderRadius:999,background:i%3===0?"#fff3dd":i%3===1?"#e7f5ed":"#e8f2ff",fontSize:11,fontWeight:850}}>{x}</span>)}
-          </div>
-        </article>
-
-        <article style={{...card,padding:0,overflow:"hidden"}}>
-          <div style={{padding:"15px 16px",borderBottom:"1px solid #d8e6f2",fontSize:20,fontWeight:950}}>Matriz de módulos y entregables{modulosGuardados.length>0&&<span style={{display:"block",fontSize:11,color:"#5d758c",fontWeight:800,marginTop:4}}>Paso 1 ya sugiere {modulosGuardados.length} módulos para este proyecto.</span>}</div>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:760}}>
-              <thead><tr style={{background:"#f2f7fb",textAlign:"left"}}>
-                {["Módulo","Estatus","Entregables principales","Responsable","Próximo paso"].map(h=><th key={h} style={{padding:"10px 9px",borderBottom:"1px solid #d8e6f2"}}>{h}</th>)}
-              </tr></thead>
-              <tbody>{moduleRows.map(([m,e,d,r,p,s])=><tr key={m}>
-                <td style={{padding:"10px 9px",borderBottom:"1px solid #edf2f6",fontWeight:900}}>{m}</td>
-                <td style={{padding:"10px 9px",borderBottom:"1px solid #edf2f6"}}><Badge status={s} label={e}/></td>
-                <td style={{padding:"10px 9px",borderBottom:"1px solid #edf2f6"}}>{d}</td>
-                <td style={{padding:"10px 9px",borderBottom:"1px solid #edf2f6"}}>{r}</td>
-                <td style={{padding:"10px 9px",borderBottom:"1px solid #edf2f6"}}>{p}</td>
-              </tr>)}</tbody>
-            </table>
-          </div>
-        </article>
-
-        <aside style={{display:"grid",gap:12}}>
-          <div style={{...card,padding:15}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><h3 style={{margin:0}}>Semáforo general</h3><span style={{fontSize:11,color:"#0b73ba",fontWeight:900}}>Ver detalle →</span></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginTop:12,textAlign:"center"}}>
-              {[["12","En tiempo","ok"],["8","En riesgo","risk"],["4","Atrasados","late"]].map(([n,l,s])=><div key={l} style={{padding:9,borderRadius:10,background:fills[s as Status]}}><strong style={{fontSize:22,color:colors[s as Status]}}>{n}</strong><div style={{fontSize:10,fontWeight:800}}>{l}</div></div>)}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginTop:14}}>
+        {blocks.map(b=>{
+          const s=statusStyle[b.status];
+          return <article key={b.code} style={{...card,padding:18}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+              <div style={{display:"grid",gridTemplateColumns:"34px 1fr",gap:10}}>
+                <div style={{width:32,height:32,borderRadius:"50%",display:"grid",placeItems:"center",background:"#053f79",color:"#fff",fontWeight:950}}>{b.code}</div>
+                <div>
+                  <h2 style={{margin:"0 0 5px",fontSize:18}}>{b.title}</h2>
+                  <p style={{margin:0,color:"#526c84",fontSize:12,lineHeight:1.5}}>{b.desc}</p>
+                </div>
+              </div>
+              <span style={{padding:"6px 9px",borderRadius:999,background:s.bg,color:s.color,fontSize:10,fontWeight:950,whiteSpace:"nowrap"}}>{s.label}</span>
             </div>
-          </div>
-          <div style={{...card,padding:15}}>
-            <h3 style={{margin:"0 0 10px"}}>Pendientes críticos</h3>
-            {(riesgosGuardados.length?riesgosGuardados.slice(0,4).map(x=>[x,"late"]):[
-              ["Mecánica de suelos","late"],
-              ["Factibilidad de drenaje","late"],
-              ["Licencia de construcción","risk"],
-              ["Definición de obras especiales","risk"],
-            ]).map(([x,s])=><div key={x} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 0",borderBottom:"1px solid #edf2f6",fontSize:12,fontWeight:800}}><span style={{width:9,height:9,borderRadius:"50%",background:colors[s as Status]}}/>{x}</div>)}
-          </div>
-          <div style={{...card,padding:15}}>
-            <h3 style={{margin:"0 0 10px"}}>Liberaciones</h3>
-            {["Predio liberado","Proyecto autorizado","Presupuesto validado","Inicio de obra","Preentrega","Entrega"].map((x,i)=><div key={x} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",fontSize:12,fontWeight:800}}><span style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${i===0?"#1f9d55":"#aab9c7"}`,display:"grid",placeItems:"center",fontSize:11,color:"#1f9d55"}}>{i===0?"✓":""}</span>{x}</div>)}
-          </div>
-        </aside>
+
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
+              {b.items.map(x=><span key={x} style={{padding:"5px 7px",borderRadius:999,background:"#f1f6fa",fontSize:10,fontWeight:850,color:"#405e78"}}>{x}</span>)}
+            </div>
+
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:13}}>
+              {b.links.map(([label,slug])=><Link key={slug} href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/${slug}`} style={{textDecoration:"none",fontSize:11,fontWeight:950,color:"#0b73ba",border:"1px solid #c8d8e6",borderRadius:8,padding:"7px 9px"}}>{label} →</Link>)}
+            </div>
+          </article>;
+        })}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1.25fr .75fr",gap:14,marginTop:14}}>
-        <article style={{...card,padding:0,overflow:"hidden"}}>
-          <div style={{padding:"14px 16px",fontWeight:950,fontSize:18,borderBottom:"1px solid #d8e6f2"}}>Condición del predio y servicios</div>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr style={{background:"#f2f7fb",textAlign:"left"}}><th style={{padding:9}}>Concepto</th><th style={{padding:9}}>Estatus</th><th style={{padding:9}}>Observaciones</th></tr></thead>
-            <tbody>{services.map(([x,e,o,s])=><tr key={x}><td style={{padding:9,borderBottom:"1px solid #edf2f6",fontWeight:900}}>{x}</td><td style={{padding:9,borderBottom:"1px solid #edf2f6"}}><Badge status={s} label={e}/></td><td style={{padding:9,borderBottom:"1px solid #edf2f6",color:"#49667f"}}>{o}</td></tr>)}</tbody>
-          </table>
-        </article>
-
-        <article style={{...card,padding:16}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><h2 style={{margin:0,fontSize:18}}>Estructura de seguimiento</h2><span style={{fontSize:11,color:"#0b73ba",fontWeight:900}}>Se alimentará durante la ejecución</span></div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(110px,1fr))",gap:8,marginTop:12}}>
-            {follow.map(([icon,title,desc])=><div key={title} style={{border:"1px solid #d8e6f2",borderRadius:10,padding:10,background:"#fbfdff"}}>
-              <div style={{fontSize:21}}>{icon}</div><div style={{fontWeight:950,fontSize:12,marginTop:4}}>{title}</div><div style={{fontSize:10,color:"#60778d",lineHeight:1.35,marginTop:3}}>{desc}</div>
-            </div>)}
+      <div style={{...card,marginTop:16,padding:20,background:"linear-gradient(135deg,#f4fbf7,#fff)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#187342"}}>RESULTADO DE CONSTRUCTIBILIDAD</div>
+            <h2 style={{margin:"5px 0 5px"}}>Documentos Maestros del Proyecto</h2>
+            <p style={{margin:0,color:"#526c84",lineHeight:1.5,maxWidth:850}}>Cuando el checklist tenga suficiente definición, genera los Documentos Maestros aplicables. Cada documento podrá alimentar varios módulos, contener su propio programa y admitir actividades manuales.</p>
           </div>
-        </article>
-
-        <article style={{...card,padding:16}}>
-          <h2 style={{margin:"0 0 12px",fontSize:18}}>Salida del panel</h2>
-          {[
-            ["1","Estructura de módulos del proyecto"],
-            ["2","Matriz de entregables de arranque"],
-            ["3","Matriz de seguimiento"],
-            ["4","Matriz de liberaciones y dependencias"],
-          ].map(([n,t])=><div key={n} style={{display:"grid",gridTemplateColumns:"28px 1fr",gap:9,alignItems:"center",padding:"10px 0",borderBottom:"1px solid #edf2f6"}}>
-            <div style={{width:26,height:26,borderRadius:"50%",display:"grid",placeItems:"center",background:"#053f79",color:"#fff",fontWeight:950,fontSize:12}}>{n}</div><div style={{fontSize:12,fontWeight:900}}>{t}</div>
-          </div>)}
-        </article>
+          <Link href={`/project-manager/panel/proyectos/${codigo}/documentos-maestros`} style={{background:"#1f9d55",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 16px",borderRadius:10}}>Abrir Documentos Maestros →</Link>
+        </div>
       </div>
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
-        {!readOnly&&<Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/predio`} style={{background:"#ff8500",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 16px",borderRadius:10}}>Iniciar diagnóstico guiado →</Link>}
-        <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad/cierre`} style={{background:"#1f9d55",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 16px",borderRadius:10}}>Cierre de Constructibilidad →</Link>
-        <Link href={code==="PR-0002"?"/project-manager/panel/proyectos/pr-0002":`/project-manager/panel/proyectos/${codigo}`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:900,padding:"12px 16px",borderRadius:10}}>← Volver al proyecto</Link>
-        <Link href="/project-manager/panel/proyectos" style={{border:"1px solid #b8cad9",color:"#294f73",textDecoration:"none",fontWeight:900,padding:"12px 16px",borderRadius:10}}>Proyectos</Link>
+        <Link href={`/project-manager/panel/proyectos/${codigo}`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>← Volver al proyecto</Link>
+        <Link href="/project-manager/panel/proyectos" style={{border:"1px solid #b8cad9",color:"#294f73",textDecoration:"none",fontWeight:900,padding:"11px 15px",borderRadius:9}}>Proyectos</Link>
       </div>
     </section>
 
     <style>{`
-      @media(max-width:1200px){
-        section > div[style*="1.05fr 1.45fr .75fr"], section > div[style*="1fr 1.25fr .75fr"]{grid-template-columns:1fr !important;}
-        div[style*="repeat(9"]{grid-template-columns:repeat(3,minmax(150px,1fr)) !important;}
-      }
-      @media(max-width:780px){
-        section > div:first-child > div{grid-template-columns:1fr !important;}
-        div[style*="repeat(5"]{grid-template-columns:repeat(2,minmax(120px,1fr)) !important;}
-        div[style*="repeat(9"]{grid-template-columns:repeat(2,minmax(150px,1fr)) !important;}
-      }
-      @media(max-width:520px){
-        div[style*="repeat(5"],div[style*="repeat(9"]{grid-template-columns:1fr !important;}
-      }
+      @media(max-width:900px){div[style*="repeat(4"],div[style*="repeat(2"]{grid-template-columns:1fr 1fr !important;}}
+      @media(max-width:620px){div[style*="repeat(4"],div[style*="repeat(2"]{grid-template-columns:1fr !important;}}
     `}</style>
   </main>;
 }
