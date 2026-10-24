@@ -46,7 +46,7 @@ export async function GET(_:Request,{params}:{params:Promise<{codigo:string}>}){
 
   for(const def of defs){
     const doc=existing.get(def.codigo);
-    let rows=doc?.actividades??[];
+    let rows: Parameters<typeof activityCsv>[0]=doc?.actividades??[];
     if(!rows.length&&def.codigo==="DM-01"){
       rows=actividadesBaseDM01().map(([codigoAct,actividad,tipo,etapa,dependencia,entregable,periodicidad,bloqueante])=>({
         codigo:String(codigoAct),actividad:String(actividad),descripcion:null,tipo:String(tipo),etapa:String(etapa),
