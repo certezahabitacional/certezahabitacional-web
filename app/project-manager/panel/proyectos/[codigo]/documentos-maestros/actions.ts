@@ -20,6 +20,11 @@ export async function generarDocumentosMaestros(formData:FormData){
   const c=await prisma.constructibilidadPM.findUnique({where:{proyectoId:proyecto.id}});
   if(!c) redirect(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/constructibilidad?error=sin_constructibilidad`);
 
+  const audit=await prepareMasterDocumentRecalculationAudit(proyecto.id,c,clean(formData.get("motivo")));
+  if(audit.posteriorLineaBase&&!audit.motivo){
+    redirect(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/documentos-maestros?error=motivo_requerido`);
+  }
+
   const docs=buildMasterDocumentDefinitions(c);
   for(const d of docs){
     const doc=await prisma.documentoMaestroPM.upsert({
@@ -90,6 +95,22 @@ export async function generarDocumentosMaestros(formData:FormData){
   await prisma.documentoMaestroPM.updateMany({
     where:{proyectoId:proyecto.id,codigo:{notIn:docs.map(d=>d.codigo)}},
     data:{activo:false}
+  });
+
+  await saveMasterDocumentRecalculationAudit({
+    proyectoId:proyecto.id,
+    userId,
+    constructibilidad:c,
+    motivo:audit.motivo,
+    nuevaVersion:audit.nuevaVersion,
+    preview:audit.preview,
+    lineaBase:audit.lineaBase,
+    posteriorLineaBase:audit.posteriorLineaBase
+  });
+
+  await prisma.documentoMaestroPM.updateMany({
+    where:{proyectoId:proyecto.id,activo:true},
+    data:{version:{increment:1}}
   });
 
   revalidatePath(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/documentos-maestros`);
