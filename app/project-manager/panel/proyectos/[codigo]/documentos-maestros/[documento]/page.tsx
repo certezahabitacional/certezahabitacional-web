@@ -46,7 +46,8 @@ export default async function DocumentoMaestroDetallePage({params,searchParams}:
             <h1 style={{margin:"4px 0 7px",fontSize:28}}>{doc.nombre}</h1>
             <p style={{margin:0,color:"#4a657d",lineHeight:1.55,maxWidth:950}}>{doc.descripcion}</p>
           </div>
-          <div style={{minWidth:220}}>
+          <div style={{minWidth:220,display:"grid",gap:10}}>
+            <a href={`/api/project-manager/proyectos/${codigo}/documentos-maestros/${doc.codigo.toLowerCase()}/descargar`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:950,padding:"10px 13px",borderRadius:9,textAlign:"center"}}>Descargar este Documento Maestro</a>
             <div style={{fontSize:11,fontWeight:900}}>AVANCE DEL DOCUMENTO</div>
             <div style={{height:12,borderRadius:99,background:"#e3ebf1",overflow:"hidden",marginTop:7}}><div style={{height:"100%",width:`${pct}%`,background:pct>=85?"#1f9d55":pct>=50?"#e6a700":"#d63c3c"}}/></div>
             <div style={{fontSize:26,fontWeight:950,marginTop:4}}>{pct}%</div>
