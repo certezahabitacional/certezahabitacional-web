@@ -64,6 +64,25 @@ export async function generarDocumentosMaestros(formData:FormData){
         }
       });
     }
+
+    const codigosVigentes=automaticas.map(a=>a.codigo);
+    const baseLimpieza={
+      documentoMaestroId:doc.id,
+      origen:"AUTOMATICO",
+      estado:"PENDIENTE",
+      fechaInicioReal:null,
+      fechaFinReal:null,
+      evidenciaUrl:null,
+      costoReal:0,
+      notas:null
+    };
+    if(codigosVigentes.length){
+      await prisma.actividadDocumentoMaestroPM.deleteMany({
+        where:{...baseLimpieza,codigo:{notIn:codigosVigentes}}
+      });
+    }else{
+      await prisma.actividadDocumentoMaestroPM.deleteMany({where:baseLimpieza});
+    }
   }
 
   await prisma.documentoMaestroPM.updateMany({
