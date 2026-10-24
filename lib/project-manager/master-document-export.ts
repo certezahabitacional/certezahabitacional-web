@@ -3,6 +3,7 @@ type ActivityLike = {
   dependencia:string|null; responsable:string|null; organismo:string|null;
   fechaInicioPlan:Date|null; fechaFinPlan:Date|null; entregable:string|null;
   periodicidad:string|null; bloqueante:boolean; prioridad:string; reglaAlerta:string|null; estado:string;
+  origen?:string;
 };
 
 const headers=[
