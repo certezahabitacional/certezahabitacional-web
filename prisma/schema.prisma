@@ -147,6 +147,14 @@ enum EstadoTarjetaAPU {
   OBSOLETA
 }
 
+enum EstadoPresupuestoCT {
+  BORRADOR
+  EN_REVISION
+  APROBADO
+  LINEA_BASE
+  CERRADO
+}
+
 enum EstadoProyectoGeneradores {
   NUEVO
   RECEPCION_DOCUMENTAL
@@ -734,6 +742,7 @@ model ProyectoGeneradores {
   generadores GeneradorObra[]
   tarjetasAPU TarjetaPrecioUnitario[]
   explosionesInsumos ExplosionInsumosProyecto[]
+  presupuestos PresupuestoProyectoCT[]
   solicitudes SolicitudInformacionGeneradores[]
   inconsistencias InconsistenciaProyectoGeneradores[]
   cambios CambioProyectoGeneradores[]
@@ -784,6 +793,7 @@ model ConceptoGeneradores {
   elementos ElementoConstructivoGeneradores[]
   generadores GeneradorObra[]
   tarjetasAPU TarjetaPrecioUnitario[]
+  partidasPresupuesto PresupuestoConceptoCT[]
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
   @@index([proyectoId])
@@ -989,6 +999,7 @@ model TarjetaPrecioUnitario {
   precioUnitario Decimal @default(0) @db.Decimal(18, 6)
   observaciones String?
   componentes TarjetaAPUInsumo[]
+  conceptosPresupuesto PresupuestoConceptoCT[]
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
@@ -1060,3 +1071,60 @@ model ExplosionInsumoDetalle {
   @@index([tipo])
 }
 
+
+model PresupuestoProyectoCT {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  version Int @default(1)
+  estado EstadoPresupuestoCT @default(BORRADOR)
+  nombre String
+  fechaCorte DateTime @default(now())
+  porcentajeIndirectos Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeFinanciamiento Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeUtilidad Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeCargosAdicionales Decimal @default(0) @db.Decimal(8, 4)
+  costoDirecto Decimal @default(0) @db.Decimal(18, 6)
+  indirectos Decimal @default(0) @db.Decimal(18, 6)
+  financiamiento Decimal @default(0) @db.Decimal(18, 6)
+  utilidad Decimal @default(0) @db.Decimal(18, 6)
+  cargosAdicionales Decimal @default(0) @db.Decimal(18, 6)
+  subtotal Decimal @default(0) @db.Decimal(18, 6)
+  impuestos Decimal @default(0) @db.Decimal(18, 6)
+  totalPresupuesto Decimal @default(0) @db.Decimal(18, 6)
+  observaciones String?
+  conceptos PresupuestoConceptoCT[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, version])
+  @@index([proyectoId])
+  @@index([estado])
+  @@index([fechaCorte])
+}
+
+model PresupuestoConceptoCT {
+  id String @id @default(cuid())
+  presupuestoId String
+  presupuesto PresupuestoProyectoCT @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+  conceptoId String
+  concepto ConceptoGeneradores @relation(fields: [conceptoId], references: [id], onDelete: Restrict)
+  tarjetaAPUId String?
+  tarjetaAPU TarjetaPrecioUnitario? @relation(fields: [tarjetaAPUId], references: [id], onDelete: SetNull)
+  partida String?
+  subpartida String?
+  clave String?
+  descripcion String
+  unidad String
+  cantidad Decimal @default(0) @db.Decimal(18, 6)
+  precioUnitario Decimal @default(0) @db.Decimal(18, 6)
+  importe Decimal @default(0) @db.Decimal(18, 6)
+  orden Int @default(0)
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([presupuestoId])
+  @@index([conceptoId])
+  @@index([tarjetaAPUId])
+  @@index([partida])
+}
