@@ -49,8 +49,8 @@ const systemModules = [
   {
     title: "Presupuestos",
     text: "Integración del presupuesto base, escenarios, control y actualización de costos.",
-    href: null,
-    status: "SIGUIENTE MÓDULO",
+    href: "/panel/certeza-tecnica/presupuestos",
+    status: "DISPONIBLE",
   },
 ];
 
