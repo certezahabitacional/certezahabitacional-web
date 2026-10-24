@@ -733,6 +733,7 @@ model ProyectoGeneradores {
   elementos ElementoConstructivoGeneradores[]
   generadores GeneradorObra[]
   tarjetasAPU TarjetaPrecioUnitario[]
+  explosionesInsumos ExplosionInsumosProyecto[]
   solicitudes SolicitudInformacionGeneradores[]
   inconsistencias InconsistenciaProyectoGeneradores[]
   cambios CambioProyectoGeneradores[]
@@ -1011,5 +1012,50 @@ model TarjetaAPUInsumo {
 
   @@index([tarjetaId])
   @@index([insumoId])
+}
+
+
+
+model ExplosionInsumosProyecto {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  version Int @default(1)
+  estado String @default("BORRADOR")
+  fechaCorte DateTime @default(now())
+  totalMateriales Decimal @default(0) @db.Decimal(18, 6)
+  totalManoObra Decimal @default(0) @db.Decimal(18, 6)
+  totalEquipo Decimal @default(0) @db.Decimal(18, 6)
+  totalHerramienta Decimal @default(0) @db.Decimal(18, 6)
+  totalSubcontratos Decimal @default(0) @db.Decimal(18, 6)
+  totalAuxiliares Decimal @default(0) @db.Decimal(18, 6)
+  totalGeneral Decimal @default(0) @db.Decimal(18, 6)
+  detalles ExplosionInsumoDetalle[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, version])
+  @@index([proyectoId])
+  @@index([estado])
+  @@index([fechaCorte])
+}
+
+model ExplosionInsumoDetalle {
+  id String @id @default(cuid())
+  explosionId String
+  explosion ExplosionInsumosProyecto @relation(fields: [explosionId], references: [id], onDelete: Cascade)
+  insumoId String
+  insumo InsumoAPU @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  tipo TipoInsumoAPU
+  unidad String
+  cantidadTotal Decimal @default(0) @db.Decimal(18, 6)
+  precioReferencia Decimal @default(0) @db.Decimal(18, 6)
+  importeTotal Decimal @default(0) @db.Decimal(18, 6)
+  fuenteCalculo String?
+  creadoEn DateTime @default(now())
+
+  @@index([explosionId])
+  @@index([insumoId])
+  @@index([tipo])
 }
 
