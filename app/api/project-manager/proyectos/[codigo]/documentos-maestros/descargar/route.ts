@@ -2,7 +2,8 @@ import JSZip from "jszip";
 import { NextResponse } from "next/server";
 import { getProjectDownloadAccess } from "@/lib/project-manager/download-access";
 import { activityCsv, constructibilidadSummaryCsv, safeFileName } from "@/lib/project-manager/master-document-export";
-import { buildMasterDocumentDefinitions, actividadesBaseDM01 } from "@/lib/project-manager/master-document-definitions";
+import { buildMasterDocumentDefinitions } from "@/lib/project-manager/master-document-definitions";
+import { buildDownloadRows } from "@/lib/project-manager/master-document-download";
 
 export const runtime="nodejs";
 
@@ -46,15 +47,7 @@ export async function GET(_:Request,{params}:{params:Promise<{codigo:string}>}){
 
   for(const def of defs){
     const doc=existing.get(def.codigo);
-    let rows: Parameters<typeof activityCsv>[0]=doc?.actividades??[];
-    if(!rows.length&&def.codigo==="DM-01"){
-      rows=actividadesBaseDM01().map(([codigoAct,actividad,tipo,etapa,dependencia,entregable,periodicidad,bloqueante])=>({
-        codigo:String(codigoAct),actividad:String(actividad),descripcion:null,tipo:String(tipo),etapa:String(etapa),
-        dependencia:String(dependencia),responsable:null,organismo:null,fechaInicioPlan:null,fechaFinPlan:null,
-        entregable:String(entregable),periodicidad:String(periodicidad),bloqueante:Boolean(bloqueante),
-        prioridad:"MEDIA",reglaAlerta:null,estado:"PENDIENTE"
-      }));
-    }
+    const rows=buildDownloadRows(c,def.codigo,doc?{codigo:doc.codigo,actividades:doc.actividades}:undefined);
     const name=safeFileName(`${def.codigo}_${def.nombre}.csv`);
     folder.file(name,activityCsv(rows));
   }
