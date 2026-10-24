@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireProjectManagerAccess } from "@/lib/project-manager/access";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
 import { agregarActividadManual } from "../actions";
+import { ImportadorDocumentoMaestro } from "./importador";
 
 export default async function DocumentoMaestroDetallePage({params,searchParams}:{params:Promise<{codigo:string;documento:string}>;searchParams:Promise<{agregada?:string}>}) {
   const {session,role,readOnly}=await requireProjectManagerAccess();
@@ -89,6 +90,7 @@ export default async function DocumentoMaestroDetallePage({params,searchParams}:
             </div>
           </div>
 
+          {!readOnly&&<ImportadorDocumentoMaestro codigoProyecto={code} documentoId={doc.id} documentoCodigo={doc.codigo}/>}
           {!readOnly&&<form action={agregarActividadManual} style={{...card,padding:16}}>
             <input type="hidden" name="codigoProyecto" value={code}/>
             <input type="hidden" name="documentoId" value={doc.id}/>
