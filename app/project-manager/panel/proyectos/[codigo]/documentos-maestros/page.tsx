@@ -7,7 +7,7 @@ import { generarDocumentosMaestros } from "./actions";
 import { sincronizarDocumentosConModulos } from "./sync-actions";
 import { buildRecalculationPreview } from "@/lib/project-manager/master-document-recalculation";
 
-export default async function DocumentosMaestrosPage({params,searchParams}:{params:Promise<{codigo:string}>;searchParams:Promise<{generados?:string;sincronizados?:string;seguimientos?:string}>}) {
+export default async function DocumentosMaestrosPage({params,searchParams}:{params:Promise<{codigo:string}>;searchParams:Promise<{generados?:string;sincronizados?:string;seguimientos?:string;error?:string}>}) {
   const {session,role,readOnly}=await requireProjectManagerAccess();
   const {codigo}=await params;
   const q=await searchParams;
@@ -25,7 +25,13 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
         },
         orderBy:{codigo:"asc"}
       },
-      constructibilidad:true
+      constructibilidad:true,
+      lineaBase:{select:{estado:true,version:true}},
+      recalculosDocumentosMaestros:{
+        include:{aplicadoPor:{select:{nombre:true}}},
+        orderBy:{version:"desc"},
+        take:10
+      }
     }
   });
   if(!proyecto||!proyecto.activo) notFound();
@@ -37,12 +43,15 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
   const completos=docs.filter(d=>d.estado==="COMPLETO").length;
   const pendientes=docs.filter(d=>d.estado==="PENDIENTE").length;
   const parciales=docs.filter(d=>d.estado==="EN_PROCESO"||d.estado==="PARCIAL").length;
+  const lineaBaseAprobada=proyecto.lineaBase?.estado==="APROBADA";
+  const historial=proyecto.recalculosDocumentosMaestros;
 
   return <main style={{minHeight:"100vh",background:"#eef6fb",color:"#082f64"}}>
     <PmHeader title="Documentos Maestros del Proyecto" subtitle={`${code} · ${proyecto.nombre} · Información estructurada que alimentará automáticamente los módulos de CPM`}/>
     <section style={{maxWidth:1450,margin:"0 auto",padding:"22px 20px 60px"}}>
       {q.generados&&<div style={{...card,background:"#e7f7ee",color:"#187342",padding:14,fontWeight:900,marginBottom:14}}>Documentos Maestros generados/actualizados desde Constructibilidad.</div>}
       {q.sincronizados&&<div style={{...card,background:"#e8f3fb",color:"#0b4f87",padding:14,fontWeight:900,marginBottom:14}}>Sincronización operativa completada: {q.sincronizados} registros de módulo y {q.seguimientos||"0"} fichas de seguimiento procesadas.</div>}
+      {q.error==="motivo_requerido"&&<div style={{...card,background:"#fdecec",color:"#a52a2a",padding:14,fontWeight:900,marginBottom:14}}>La Línea Base está aprobada. Debes indicar el motivo del recálculo para mantener la trazabilidad del proyecto.</div>}
       {readOnly&&<div style={{...card,background:"#e8f3fb",padding:14,fontWeight:900,marginBottom:14}}>CLIENTE · SÓLO LECTURA</div>}
 
       <div style={{...card,padding:20,border:"2px solid #ff8500"}}>
@@ -56,8 +65,14 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
             <a href={`/api/project-manager/proyectos/${codigo}/documentos-maestros/descargar`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10}}>Descargar todos (.zip)</a>
             {!readOnly&&<>
             <a href="#preview-recalculo" style={{background:"#fff5dd",color:"#8a5b00",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10,border:"1px solid #f0c36a"}}>Ver cambios antes de recalcular</a>
-            <form action={generarDocumentosMaestros}>
+            <form action={generarDocumentosMaestros} style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
               <input type="hidden" name="codigo" value={code}/>
+              <input
+                name="motivo"
+                required={lineaBaseAprobada}
+                placeholder={lineaBaseAprobada?"Motivo obligatorio por Línea Base aprobada":"Motivo del recálculo (opcional)"}
+                style={{minWidth:280,padding:"11px 12px",border:"1px solid #cbd9e5",borderRadius:9}}
+              />
               <button type="submit" style={{border:0,background:"#ff8500",color:"#fff",fontWeight:950,padding:"12px 17px",borderRadius:10,cursor:"pointer"}}>{docs.length?"Recalcular desde Constructibilidad":"Generar Documentos Maestros"}</button>
             </form>
             {docs.length>0&&<form action={sincronizarDocumentosConModulos}>
@@ -122,6 +137,33 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
           </div>
         </details>
       </div>}
+
+
+      <div style={{...card,marginTop:14,padding:18}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:950,color:"#0b73ba",letterSpacing:".08em"}}>BITÁCORA DE RECÁLCULOS</div>
+            <h2 style={{margin:"5px 0"}}>Historial de versiones de Documentos Maestros</h2>
+            <p style={{margin:0,color:"#526c84",fontSize:12}}>Cada recálculo conserva el contexto de Constructibilidad y la relación con la Línea Base vigente.</p>
+          </div>
+          {lineaBaseAprobada&&<span style={{background:"#fff5dd",color:"#8a5b00",fontWeight:950,padding:"8px 11px",borderRadius:999,fontSize:11}}>Línea Base v{proyecto.lineaBase?.version} APROBADA · motivo obligatorio</span>}
+        </div>
+        {!historial.length?<div style={{marginTop:12,fontSize:12,color:"#60778d"}}>Aún no existen recálculos versionados.</div>:<div style={{overflowX:"auto",marginTop:12}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:900,fontSize:11}}>
+            <thead><tr style={{background:"#f2f7fb",textAlign:"left"}}>
+              {["Versión","Fecha","Aplicado por","Motivo","Línea Base","Condición"].map(h=><th key={h} style={{padding:9,borderBottom:"1px solid #d8e6f2"}}>{h}</th>)}
+            </tr></thead>
+            <tbody>{historial.map(h=><tr key={h.id}>
+              <td style={{padding:8,borderBottom:"1px solid #edf2f6",fontWeight:950}}>v{h.version}</td>
+              <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.aplicadoEn.toISOString().slice(0,16).replace("T"," ")}</td>
+              <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.aplicadoPor?.nombre||"—"}</td>
+              <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.motivo||"—"}</td>
+              <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.lineaBaseEstado?\`${h.lineaBaseEstado} v${h.lineaBaseVersion??"—"}\`:"Sin Línea Base"}</td>
+              <td style={{padding:8,borderBottom:"1px solid #edf2f6",fontWeight:900,color:h.posteriorLineaBase?"#8a5b00":"#187342"}}>{h.posteriorLineaBase?"Posterior a Línea Base":"Configuración previa"}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>}
+      </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:10,marginTop:14}}>
         {[
