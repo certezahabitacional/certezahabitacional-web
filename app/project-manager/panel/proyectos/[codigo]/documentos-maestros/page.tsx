@@ -52,6 +52,7 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
       {q.generados&&<div style={{...card,background:"#e7f7ee",color:"#187342",padding:14,fontWeight:900,marginBottom:14}}>Documentos Maestros generados/actualizados desde Constructibilidad.</div>}
       {q.sincronizados&&<div style={{...card,background:"#e8f3fb",color:"#0b4f87",padding:14,fontWeight:900,marginBottom:14}}>Sincronización operativa completada: {q.sincronizados} registros de módulo y {q.seguimientos||"0"} fichas de seguimiento procesadas.</div>}
       {q.error==="motivo_requerido"&&<div style={{...card,background:"#fdecec",color:"#a52a2a",padding:14,fontWeight:900,marginBottom:14}}>La Línea Base está aprobada. Debes indicar el motivo del recálculo para mantener la trazabilidad del proyecto.</div>}
+      {q.error==="sin_constructibilidad"&&<div style={{...card,background:"#fff5dd",color:"#8a5b00",padding:14,fontWeight:900,marginBottom:14}}>Antes de descargar los Documentos Maestros debes configurar la Constructibilidad del proyecto. CPM generará los archivos según esa configuración.</div>}
       {readOnly&&<div style={{...card,background:"#e8f3fb",padding:14,fontWeight:900,marginBottom:14}}>CLIENTE · SÓLO LECTURA</div>}
 
       <div style={{...card,padding:20,border:"2px solid #ff8500"}}>
@@ -62,7 +63,9 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
             <p style={{margin:0,color:"#4a657d",lineHeight:1.55,maxWidth:900}}>Cada Documento Maestro contiene la estructura de actividades y datos que alimentará uno o varios módulos. Las actividades también pueden agregarse manualmente cuando la operación lo requiera.</p>
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-            <a href={`/api/project-manager/proyectos/${codigo}/documentos-maestros/descargar`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10}}>Descargar todos (.zip)</a>
+            {proyecto.constructibilidad
+              ? <a href={`/api/project-manager/proyectos/${codigo}/documentos-maestros/descargar`} style={{background:"#053f79",color:"#fff",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10}}>Descargar todos (.zip)</a>
+              : <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad?error=sin_constructibilidad`} style={{background:"#fff5dd",color:"#8a5b00",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10,border:"1px solid #f0c36a"}}>Configurar Constructibilidad para descargar</Link>}
             {!readOnly&&<>
             <a href="#preview-recalculo" style={{background:"#fff5dd",color:"#8a5b00",textDecoration:"none",fontWeight:950,padding:"12px 17px",borderRadius:10,border:"1px solid #f0c36a"}}>Ver cambios antes de recalcular</a>
             <form action={generarDocumentosMaestros} style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
