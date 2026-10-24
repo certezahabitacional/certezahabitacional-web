@@ -6,10 +6,9 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireProjectWriteAccess } from "@/lib/project-manager/access";
 import { buildMasterDocumentDefinitions, actividadesBaseDM01 } from "@/lib/project-manager/master-document-definitions";
+import { buildMasterDocumentActivities } from "@/lib/project-manager/master-document-activities";
 
 const clean=(v:FormDataEntryValue|null)=>String(v??"").trim();
-const asObj=(v:unknown)=>(v&&typeof v==="object"&&!Array.isArray(v)?v:{}) as Record<string,unknown>;
-const asList=(v:unknown)=>Array.isArray(v)?v.map(String):[];
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v??null)) as Prisma.InputJsonValue;
 
 export async function generarDocumentosMaestros(formData:FormData){
@@ -35,23 +34,35 @@ export async function generarDocumentosMaestros(formData:FormData){
       }
     });
 
-    if(d.codigo==="DM-01"){
-      for(const [codigoAct,actividad,tipo,etapa,dependencia,entregable,periodicidad,bloqueante] of actividadesBaseDM01()){
-        await prisma.actividadDocumentoMaestroPM.upsert({
-          where:{documentoMaestroId_codigo:{documentoMaestroId:doc.id,codigo:String(codigoAct)}},
-          create:{
-            documentoMaestroId:doc.id,codigo:String(codigoAct),actividad:String(actividad),tipo:String(tipo),
-            etapa:String(etapa),dependencia:String(dependencia),entregable:String(entregable),
-            periodicidad:String(periodicidad),bloqueante:Boolean(bloqueante),
-            modulosDestino:json(["Programa","Documentación","Riesgos","Liberaciones","Costos"]),
-            origen:"AUTOMATICO"
-          },
-          update:{
-            actividad:String(actividad),tipo:String(tipo),etapa:String(etapa),dependencia:String(dependencia),
-            entregable:String(entregable),periodicidad:String(periodicidad),bloqueante:Boolean(bloqueante)
-          }
-        });
-      }
+    const automaticas=d.codigo==="DM-01"
+      ? actividadesBaseDM01().map(([codigoAct,actividad,tipo,etapa,dependencia,entregable,periodicidad,bloqueante])=>({
+          codigo:String(codigoAct),actividad:String(actividad),descripcion:undefined,tipo:String(tipo),etapa:String(etapa),
+          dependencia:String(dependencia),responsable:undefined,organismo:undefined,fechaInicioPlan:undefined,fechaFinPlan:undefined,
+          entregable:String(entregable),periodicidad:String(periodicidad),bloqueante:Boolean(bloqueante),prioridad:"MEDIA" as const,
+          modulosDestino:["Programa","Documentación","Riesgos","Liberaciones","Costos"],reglaAlerta:undefined
+        }))
+      : buildMasterDocumentActivities(c,d.codigo);
+
+    for(const a of automaticas){
+      await prisma.actividadDocumentoMaestroPM.upsert({
+        where:{documentoMaestroId_codigo:{documentoMaestroId:doc.id,codigo:a.codigo}},
+        create:{
+          documentoMaestroId:doc.id,codigo:a.codigo,actividad:a.actividad,descripcion:a.descripcion??null,tipo:a.tipo,
+          etapa:a.etapa,dependencia:a.dependencia??null,responsable:a.responsable??null,organismo:a.organismo??null,
+          fechaInicioPlan:a.fechaInicioPlan?new Date(a.fechaInicioPlan):null,
+          fechaFinPlan:a.fechaFinPlan?new Date(a.fechaFinPlan):null,
+          entregable:a.entregable,periodicidad:a.periodicidad,bloqueante:a.bloqueante,prioridad:a.prioridad,
+          modulosDestino:json(a.modulosDestino),reglaAlerta:a.reglaAlerta??null,origen:"AUTOMATICO"
+        },
+        update:{
+          actividad:a.actividad,descripcion:a.descripcion??null,tipo:a.tipo,etapa:a.etapa,dependencia:a.dependencia??null,
+          responsable:a.responsable??undefined,organismo:a.organismo??undefined,
+          fechaInicioPlan:a.fechaInicioPlan?new Date(a.fechaInicioPlan):undefined,
+          fechaFinPlan:a.fechaFinPlan?new Date(a.fechaFinPlan):undefined,
+          entregable:a.entregable,periodicidad:a.periodicidad,bloqueante:a.bloqueante,prioridad:a.prioridad,
+          modulosDestino:json(a.modulosDestino),reglaAlerta:a.reglaAlerta??null
+        }
+      });
     }
   }
 
