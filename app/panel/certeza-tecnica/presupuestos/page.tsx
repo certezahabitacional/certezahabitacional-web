@@ -4,20 +4,27 @@ import { redirect } from "next/navigation";
 
 import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
 import { prisma } from "@/lib/prisma";
+import { recalcularCostosProyecto } from "@/app/panel/certeza-tecnica/costos/actions";
 
 export default async function PresupuestosCTPage() {
   const usuarioActual = await obtenerUsuarioConAlcanceZona("/panel/certeza-tecnica/presupuestos");
   const puedeEntrar = usuarioActual.rol === RolUsuario.DIRECTOR || usuarioActual.rol === RolUsuario.ADMINISTRADOR;
   if (!puedeEntrar) redirect("/acceso");
 
-  const presupuestos = await prisma.presupuestoProyectoCT.findMany({
+  const [presupuestos, proyectosCosteables] = await Promise.all([prisma.presupuestoProyectoCT.findMany({
     include: {
       proyecto: { select: { codigo: true, nombre: true, clienteNombre: true } },
       _count: { select: { conceptos: true } },
     },
     orderBy: [{ actualizadoEn: "desc" }],
     take: 50,
-  });
+  }),
+    prisma.proyectoGeneradores.findMany({
+      select: { id: true, codigo: true, nombre: true },
+      orderBy: [{ actualizadoEn: "desc" }],
+      take: 100,
+    }),
+  ]);
 
   const money = (value: number) => "$" + value.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
   const totalGeneral = presupuestos.reduce((s, p) => s + Number(p.totalPresupuesto), 0);
@@ -41,6 +48,33 @@ export default async function PresupuestosCTPage() {
             <Link href="/certeza-tecnica/presupuestos-costos" className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Costos y Presupuestos</Link>
           </div>
         </div>
+
+        <section className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/5 p-6">
+          <h2 className="text-xl font-black text-cyan-200">Recálculo automático del sistema de costos</h2>
+          <p className="mt-2 text-sm text-slate-300">
+            Genera o actualiza automáticamente la explosión de insumos y el presupuesto usando generadores aprobados y Tarjetas APU aprobadas.
+          </p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {proyectosCosteables.map((proyecto) => (
+              <form
+                key={proyecto.id}
+                action={async () => {
+                  "use server";
+                  await recalcularCostosProyecto(proyecto.id);
+                }}
+                className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/70 p-4"
+              >
+                <div>
+                  <div className="font-mono text-xs font-black text-amber-300">{proyecto.codigo}</div>
+                  <div className="mt-1 font-bold">{proyecto.nombre}</div>
+                </div>
+                <button type="submit" className="rounded-xl bg-cyan-300 px-4 py-2 text-xs font-black text-slate-950 hover:bg-cyan-200">
+                  Recalcular
+                </button>
+              </form>
+            ))}
+          </div>
+        </section>
 
         <section className="mt-8 grid gap-4 md:grid-cols-4">
           {[
