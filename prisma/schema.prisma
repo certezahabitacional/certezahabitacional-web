@@ -131,6 +131,22 @@ enum TipoEvento {
 }
 
 
+enum TipoInsumoAPU {
+  MATERIAL
+  MANO_OBRA
+  EQUIPO
+  HERRAMIENTA
+  SUBCONTRATO
+  AUXILIAR
+}
+
+enum EstadoTarjetaAPU {
+  BORRADOR
+  EN_REVISION
+  APROBADA
+  OBSOLETA
+}
+
 enum EstadoProyectoGeneradores {
   NUEVO
   RECEPCION_DOCUMENTAL
@@ -716,6 +732,7 @@ model ProyectoGeneradores {
   conceptos ConceptoGeneradores[]
   elementos ElementoConstructivoGeneradores[]
   generadores GeneradorObra[]
+  tarjetasAPU TarjetaPrecioUnitario[]
   solicitudes SolicitudInformacionGeneradores[]
   inconsistencias InconsistenciaProyectoGeneradores[]
   cambios CambioProyectoGeneradores[]
@@ -765,6 +782,7 @@ model ConceptoGeneradores {
   observaciones String?
   elementos ElementoConstructivoGeneradores[]
   generadores GeneradorObra[]
+  tarjetasAPU TarjetaPrecioUnitario[]
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
   @@index([proyectoId])
@@ -928,5 +946,70 @@ model ReporteProyectoGeneradores {
   @@unique([proyectoId, tipo, version])
   @@index([proyectoId])
   @@index([tipo])
+}
+
+
+
+model InsumoAPU {
+  id String @id @default(cuid())
+  clave String @unique
+  descripcion String
+  unidad String
+  tipo TipoInsumoAPU
+  precioBase Decimal @default(0) @db.Decimal(18, 6)
+  fechaPrecio DateTime @default(now())
+  fuente String?
+  ubicacionReferencia String?
+  activo Boolean @default(true)
+  componentes TarjetaAPUInsumo[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([tipo])
+  @@index([activo])
+  @@index([descripcion])
+}
+
+model TarjetaPrecioUnitario {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  conceptoId String
+  concepto ConceptoGeneradores @relation(fields: [conceptoId], references: [id], onDelete: Restrict)
+  version Int @default(1)
+  estado EstadoTarjetaAPU @default(BORRADOR)
+  rendimiento Decimal? @db.Decimal(18, 6)
+  costoDirecto Decimal @default(0) @db.Decimal(18, 6)
+  porcentajeIndirectos Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeFinanciamiento Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeUtilidad Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeCargosAdicionales Decimal @default(0) @db.Decimal(8, 4)
+  precioUnitario Decimal @default(0) @db.Decimal(18, 6)
+  observaciones String?
+  componentes TarjetaAPUInsumo[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([conceptoId, version])
+  @@index([proyectoId])
+  @@index([conceptoId])
+  @@index([estado])
+}
+
+model TarjetaAPUInsumo {
+  id String @id @default(cuid())
+  tarjetaId String
+  tarjeta TarjetaPrecioUnitario @relation(fields: [tarjetaId], references: [id], onDelete: Cascade)
+  insumoId String
+  insumo InsumoAPU @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  cantidad Decimal @db.Decimal(18, 6)
+  desperdicioPct Decimal @default(0) @db.Decimal(8, 4)
+  precioAplicado Decimal @db.Decimal(18, 6)
+  importe Decimal @db.Decimal(18, 6)
+  observaciones String?
+  creadoEn DateTime @default(now())
+
+  @@index([tarjetaId])
+  @@index([insumoId])
 }
 
