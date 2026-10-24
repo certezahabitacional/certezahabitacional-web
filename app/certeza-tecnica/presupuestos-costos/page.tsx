@@ -37,8 +37,8 @@ const systemModules = [
   {
     title: "Tarjetas de Precios Unitarios",
     text: "Integración de materiales, mano de obra, equipo, herramienta y rendimientos.",
-    href: null,
-    status: "SIGUIENTE MÓDULO",
+    href: "/panel/certeza-tecnica/apu",
+    status: "DISPONIBLE",
   },
   {
     title: "Explosión de Insumos",
