@@ -963,6 +963,7 @@ model InsumoAPU {
   ubicacionReferencia String?
   activo Boolean @default(true)
   componentes TarjetaAPUInsumo[]
+  explosiones ExplosionInsumoDetalle[]
   creadoEn DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
