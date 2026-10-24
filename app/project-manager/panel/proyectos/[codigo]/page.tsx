@@ -53,7 +53,8 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
           <p style={{color:"#294f73",lineHeight:1.55}}>El siguiente paso es integrar la información base del proyecto antes de activar sus indicadores operativos.</p>
           <ol style={{paddingLeft:20,lineHeight:1.9,fontWeight:700}}>
             <li>Completar Constructibilidad</li>
-            <li>Definir alcance y expediente maestro</li>
+            <li>Generar Documentos Maestros</li>
+            <li>Integrar información inicial</li>
             <li>Aprobar Línea Base Definitiva</li>
             <li>Crear EDT</li>
             <li>Cargar programa</li>
@@ -72,6 +73,17 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
             <p style={{margin:0,color:"#294f73",lineHeight:1.55,maxWidth:850}}>Define, desde la condición del predio hasta la entrega, qué módulos, entregables, liberaciones y controles necesita este proyecto antes de integrar su Expediente Maestro y seguimiento.</p>
           </div>
           <span style={{background:"#ff8500",color:"#fff",padding:"11px 15px",borderRadius:9,fontWeight:950}}>Abrir Constructibilidad →</span>
+        </div>
+      </Link>
+
+      <Link href={`/project-manager/panel/proyectos/${codigo}/documentos-maestros`} style={{...card,marginTop:16,padding:24,display:"block",textDecoration:"none",color:"#082f64",border:"2px solid #0b73ba",background:"linear-gradient(135deg,#eef8ff,#ffffff)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#0b73ba",letterSpacing:".08em"}}>ALIMENTACIÓN AUTOMÁTICA DEL PROYECTO</div>
+            <h2 style={{margin:"6px 0 6px"}}>📚 Documentos Maestros</h2>
+            <p style={{margin:0,color:"#294f73",lineHeight:1.55,maxWidth:850}}>Programas, matrices y documentos estructurados generados desde Constructibilidad. Alimentan automáticamente los módulos y permiten agregar actividades manualmente.</p>
+          </div>
+          <span style={{background:"#0b73ba",color:"#fff",padding:"11px 15px",borderRadius:9,fontWeight:950}}>Abrir Documentos Maestros →</span>
         </div>
       </Link>
 

@@ -661,6 +661,7 @@ model ProyectoPM {
   participantes ProyectoPMUsuario[]
   constructibilidad ConstructibilidadPM?
   lineaBase LineaBasePM?
+  documentosMaestros DocumentoMaestroPM[]
 
   @@index([activo])
   @@index([estado])
@@ -823,4 +824,79 @@ model LineaBasePM {
 
   @@index([estado])
   @@index([version])
+}
+
+
+model DocumentoMaestroPM {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoPM @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  codigo String
+  nombre String
+  descripcion String?
+  tipo String
+  obligatorio Boolean @default(true)
+  activo Boolean @default(true)
+  estado String @default("PENDIENTE")
+  version Int @default(1)
+  origen String @default("CONSTRUCTIBILIDAD")
+  moduloPrincipal String?
+  modulosDestino Json?
+  periodicidadDefault String?
+  reglasConfiguracion Json?
+  archivoReferenciaUrl String?
+  archivoReferenciaNombre String?
+  generadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  actividades ActividadDocumentoMaestroPM[]
+
+  @@unique([proyectoId, codigo])
+  @@index([proyectoId])
+  @@index([estado])
+  @@index([tipo])
+}
+
+model ActividadDocumentoMaestroPM {
+  id String @id @default(cuid())
+  documentoMaestroId String
+  documentoMaestro DocumentoMaestroPM @relation(fields: [documentoMaestroId], references: [id], onDelete: Cascade)
+
+  codigo String
+  actividad String
+  descripcion String?
+  tipo String?
+  etapa String?
+  predecesoras Json?
+  dependencia String?
+  responsable String?
+  organismo String?
+  fechaInicioPlan DateTime? @db.Date
+  fechaFinPlan DateTime? @db.Date
+  fechaInicioReal DateTime? @db.Date
+  fechaFinReal DateTime? @db.Date
+  duracionDias Int?
+  estado String @default("PENDIENTE")
+  prioridad String @default("MEDIA")
+  entregable String?
+  evidenciaUrl String?
+  costoPresupuestado Decimal @default(0) @db.Decimal(14, 2)
+  costoReal Decimal @default(0) @db.Decimal(14, 2)
+  criterioAceptacion String?
+  bloqueante Boolean @default(false)
+  modulosDestino Json?
+  indicador String?
+  periodicidad String?
+  reglaAlerta String?
+  origen String @default("AUTOMATICO")
+  notas String?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([documentoMaestroId, codigo])
+  @@index([documentoMaestroId])
+  @@index([estado])
+  @@index([bloqueante])
+  @@index([periodicidad])
 }
