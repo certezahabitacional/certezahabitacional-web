@@ -19,7 +19,10 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
       participantes:{where:{usuarioId:userId},select:{id:true}},
       documentosMaestros:{
         where:{activo:true},
-        include:{_count:{select:{actividades:true}}},
+        include:{
+          actividades:{select:{origen:true}},
+          _count:{select:{actividades:true}}
+        },
         orderBy:{codigo:"asc"}
       }
     }
@@ -89,7 +92,13 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
             <span style={{padding:"6px 9px",borderRadius:999,background:d.estado==="COMPLETO"?"#e7f7ee":d.estado==="EN_PROCESO"?"#fff5dd":"#edf2f6",fontSize:10,fontWeight:900}}>{d.estado.replaceAll("_"," ")}</span>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:14}}>
-            <div style={{background:"#f7fbfe",padding:9,borderRadius:8}}><div style={{fontSize:10,color:"#61788f"}}>ACTIVIDADES</div><strong>{d._count.actividades}</strong></div>
+            <div style={{background:"#f7fbfe",padding:9,borderRadius:8}}>
+              <div style={{fontSize:10,color:"#61788f"}}>ACTIVIDADES</div>
+              <strong>{d._count.actividades}</strong>
+              <div style={{fontSize:9,color:"#61788f",marginTop:2}}>
+                {d.actividades.filter(a=>a.origen==="AUTOMATICO").length} automáticas · {d.actividades.filter(a=>a.origen!=="AUTOMATICO").length} manual/importadas
+              </div>
+            </div>
             <div style={{background:"#f7fbfe",padding:9,borderRadius:8}}><div style={{fontSize:10,color:"#61788f"}}>SEGUIMIENTO</div><strong style={{fontSize:11}}>{d.periodicidadDefault||"Por definir"}</strong></div>
             <div style={{background:"#f7fbfe",padding:9,borderRadius:8}}><div style={{fontSize:10,color:"#61788f"}}>MÓDULO</div><strong style={{fontSize:11}}>{d.moduloPrincipal||"—"}</strong></div>
           </div>
