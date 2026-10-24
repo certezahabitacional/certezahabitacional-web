@@ -16,7 +16,7 @@ export async function GET(_:Request,{params}:{params:Promise<{codigo:string;docu
   if(!def) return NextResponse.json({error:"Este Documento Maestro no aplica según la Constructibilidad vigente."},{status:404});
 
   const existing=access.proyecto.documentosMaestros.find(d=>d.codigo===docCode);
-  let rows=existing?.actividades??[];
+  let rows: Parameters<typeof activityCsv>[0]=existing?.actividades??[];
   if(!rows.length&&docCode==="DM-01"){
     rows=actividadesBaseDM01().map(([codigoAct,actividad,tipo,etapa,dependencia,entregable,periodicidad,bloqueante])=>({
       codigo:String(codigoAct),actividad:String(actividad),descripcion:null,tipo:String(tipo),etapa:String(etapa),
