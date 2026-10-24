@@ -28,10 +28,30 @@ const method = [
 ];
 
 const systemModules = [
-  ["Generadores", "Cuantificaciones trazables por concepto y partida."],
-  ["Tarjetas de Precios Unitarios", "Integración de materiales, mano de obra, equipo, herramienta y rendimientos."],
-  ["Explosión de Insumos", "Concentrado de materiales, mano de obra, equipo, maquinaria y subcontratos."],
-  ["Presupuestos", "Integración del presupuesto base, escenarios, control y actualización de costos."],
+  {
+    title: "Generadores",
+    text: "Cuantificaciones trazables por concepto y partida.",
+    href: "/panel/certeza-tecnica/generadores",
+    status: "DISPONIBLE",
+  },
+  {
+    title: "Tarjetas de Precios Unitarios",
+    text: "Integración de materiales, mano de obra, equipo, herramienta y rendimientos.",
+    href: null,
+    status: "SIGUIENTE MÓDULO",
+  },
+  {
+    title: "Explosión de Insumos",
+    text: "Concentrado de materiales, mano de obra, equipo, maquinaria y subcontratos.",
+    href: null,
+    status: "SIGUIENTE MÓDULO",
+  },
+  {
+    title: "Presupuestos",
+    text: "Integración del presupuesto base, escenarios, control y actualización de costos.",
+    href: null,
+    status: "SIGUIENTE MÓDULO",
+  },
 ];
 
 export default function PresupuestosCostosPage() {
@@ -191,12 +211,18 @@ export default function PresupuestosCostosPage() {
           </div>
 
           <div className={styles.systemGrid}>
-            {systemModules.map(([title, text]) => (
-              <article key={title} className={styles.systemCard}>
+            {systemModules.map((module) => (
+              <article key={module.title} className={styles.systemCard}>
                 <div className={styles.systemIcon}>▦</div>
-                <h3>{title}</h3>
-                <p>{text}</p>
-                <span className={styles.coming}>ENLACE PENDIENTE</span>
+                <h3>{module.title}</h3>
+                <p>{module.text}</p>
+                {module.href ? (
+                  <Link href={module.href} className={styles.systemLink}>
+                    Entrar al sistema <span>→</span>
+                  </Link>
+                ) : (
+                  <span className={styles.coming}>{module.status}</span>
+                )}
               </article>
             ))}
           </div>
