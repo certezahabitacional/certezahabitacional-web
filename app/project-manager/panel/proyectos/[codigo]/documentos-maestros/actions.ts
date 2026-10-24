@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireProjectWriteAccess } from "@/lib/project-manager/access";
 import { buildMasterDocumentDefinitions, actividadesBaseDM01 } from "@/lib/project-manager/master-document-definitions";
 import { buildMasterDocumentActivities } from "@/lib/project-manager/master-document-activities";
+import { prepareMasterDocumentRecalculationAudit, saveMasterDocumentRecalculationAudit } from "@/lib/project-manager/master-document-recalculation-audit";
 
 const clean=(v:FormDataEntryValue|null)=>String(v??"").trim();
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v??null)) as Prisma.InputJsonValue;
@@ -14,9 +15,14 @@ const json=(v:unknown)=>JSON.parse(JSON.stringify(v??null)) as Prisma.InputJsonV
 export async function generarDocumentosMaestros(formData:FormData){
   const codigo=clean(formData.get("codigo")).toUpperCase();
   if(!codigo) return;
-  const {proyecto}=await requireProjectWriteAccess(codigo);
+  const {proyecto,userId}=await requireProjectWriteAccess(codigo);
   const c=await prisma.constructibilidadPM.findUnique({where:{proyectoId:proyecto.id}});
   if(!c) redirect(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/constructibilidad?error=sin_constructibilidad`);
+
+  const audit=await prepareMasterDocumentRecalculationAudit(proyecto.id,c,clean(formData.get("motivo")));
+  if(audit.posteriorLineaBase&&!audit.motivo){
+    redirect(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/documentos-maestros?error=motivo_requerido`);
+  }
 
   const docs=buildMasterDocumentDefinitions(c);
   for(const d of docs){
@@ -88,6 +94,22 @@ export async function generarDocumentosMaestros(formData:FormData){
   await prisma.documentoMaestroPM.updateMany({
     where:{proyectoId:proyecto.id,codigo:{notIn:docs.map(d=>d.codigo)}},
     data:{activo:false}
+  });
+
+  await saveMasterDocumentRecalculationAudit({
+    proyectoId:proyecto.id,
+    userId,
+    constructibilidad:c,
+    motivo:audit.motivo,
+    nuevaVersion:audit.nuevaVersion,
+    preview:audit.preview,
+    lineaBase:audit.lineaBase,
+    posteriorLineaBase:audit.posteriorLineaBase
+  });
+
+  await prisma.documentoMaestroPM.updateMany({
+    where:{proyectoId:proyecto.id,activo:true},
+    data:{version:{increment:1}}
   });
 
   revalidatePath(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/documentos-maestros`);
