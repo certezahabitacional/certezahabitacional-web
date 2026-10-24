@@ -9,7 +9,7 @@ export async function GET(_:Request,{params}:{params:Promise<{codigo:string;docu
   const access=await getProjectDownloadAccess(codigo);
   if(!access) return NextResponse.json({error:"No autorizado"},{status:401});
   const c=access.proyecto.constructibilidad;
-  if(!c) return NextResponse.json({error:"El proyecto no tiene Constructibilidad configurada."},{status:409});
+  if(!c) return NextResponse.redirect(new URL(`/project-manager/panel/proyectos/${codigo}/documentos-maestros?error=sin_constructibilidad`,_.url));
 
   const defs=buildMasterDocumentDefinitions(c);
   const docCode=documento.toUpperCase();
