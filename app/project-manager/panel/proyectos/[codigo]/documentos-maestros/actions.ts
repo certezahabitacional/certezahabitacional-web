@@ -15,7 +15,7 @@ const json=(v:unknown)=>JSON.parse(JSON.stringify(v??null)) as Prisma.InputJsonV
 export async function generarDocumentosMaestros(formData:FormData){
   const codigo=clean(formData.get("codigo")).toUpperCase();
   if(!codigo) return;
-  const {proyecto}=await requireProjectWriteAccess(codigo);
+  const {proyecto,userId}=await requireProjectWriteAccess(codigo);
   const c=await prisma.constructibilidadPM.findUnique({where:{proyectoId:proyecto.id}});
   if(!c) redirect(`/project-manager/panel/proyectos/${codigo.toLowerCase()}/constructibilidad?error=sin_constructibilidad`);
 
