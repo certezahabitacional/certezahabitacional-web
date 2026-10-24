@@ -158,7 +158,7 @@ export default async function DocumentosMaestrosPage({params,searchParams}:{para
               <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.aplicadoEn.toISOString().slice(0,16).replace("T"," ")}</td>
               <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.aplicadoPor?.nombre||"—"}</td>
               <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.motivo||"—"}</td>
-              <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.lineaBaseEstado?\`${h.lineaBaseEstado} v${h.lineaBaseVersion??"—"}\`:"Sin Línea Base"}</td>
+              <td style={{padding:8,borderBottom:"1px solid #edf2f6"}}>{h.lineaBaseEstado?`${h.lineaBaseEstado} v${h.lineaBaseVersion??"—"}`:"Sin Línea Base"}</td>
               <td style={{padding:8,borderBottom:"1px solid #edf2f6",fontWeight:900,color:h.posteriorLineaBase?"#8a5b00":"#187342"}}>{h.posteriorLineaBase?"Posterior a Línea Base":"Configuración previa"}</td>
             </tr>)}</tbody>
           </table>
