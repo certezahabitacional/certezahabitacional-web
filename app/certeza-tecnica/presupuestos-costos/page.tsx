@@ -43,8 +43,8 @@ const systemModules = [
   {
     title: "Explosión de Insumos",
     text: "Concentrado de materiales, mano de obra, equipo, maquinaria y subcontratos.",
-    href: null,
-    status: "SIGUIENTE MÓDULO",
+    href: "/panel/certeza-tecnica/explosion-insumos",
+    status: "DISPONIBLE",
   },
   {
     title: "Presupuestos",
