@@ -60,8 +60,9 @@ export async function GET(_:Request,{params}:{params:Promise<{codigo:string}>}){
   }
 
   const bytes=await zip.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:6}});
+  const body=Buffer.from(bytes);
   const filename=safeFileName(`${access.proyecto.codigo}_Documentos_Maestros_CPM.zip`);
-  return new NextResponse(bytes,{
+  return new NextResponse(body,{
     status:200,
     headers:{
       "content-type":"application/zip",
