@@ -1221,6 +1221,9 @@ model GeneradorObra {
   @@index([proyectoId])
   @@index([conceptoId])
   @@index([estado])
+  @@index([elaboradoPorId])
+  @@index([revisadoPorId])
+  @@index([autorizadoPorId])
 }
 
 model DetalleGeneradorObra {
