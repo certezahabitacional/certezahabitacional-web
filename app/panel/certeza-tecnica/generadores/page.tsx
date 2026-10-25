@@ -130,7 +130,10 @@ export default async function GeneradoresCertezaTecnicaPage() {
                       </td>
                       <td className="px-4 py-4">{proyecto.responsable?.nombre ?? proyecto.responsable?.email ?? "Sin asignar"}</td>
                       <td className="px-4 py-4 text-sm text-slate-300">
-                        {proyecto._count.documentos} doc. · {proyecto._count.conceptos} conceptos · {proyecto._count.generadores} gen.
+                        <div>{proyecto._count.documentos} doc. · {proyecto._count.conceptos} conceptos · {proyecto._count.generadores} gen.</div>
+                        <Link href={"/panel/certeza-tecnica/generadores/" + proyecto.id} className="mt-2 inline-flex rounded-xl bg-amber-300 px-3 py-2 text-xs font-black text-slate-950">
+                          Abrir flujo de costos
+                        </Link>
                       </td>
                     </tr>
                   ))}
