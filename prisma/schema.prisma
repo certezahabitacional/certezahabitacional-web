@@ -132,6 +132,81 @@ enum TipoEvento {
   DESBLOQUEAR_LIBERACION
 }
 
+enum TipoInsumoAPU {
+  MATERIAL
+  MANO_OBRA
+  EQUIPO
+  HERRAMIENTA
+  SUBCONTRATO
+  AUXILIAR
+}
+
+enum EstadoTarjetaAPU {
+  BORRADOR
+  EN_REVISION
+  APROBADA
+  OBSOLETA
+}
+
+enum EstadoPresupuestoCT {
+  BORRADOR
+  EN_REVISION
+  APROBADO
+  LINEA_BASE
+  CERRADO
+}
+
+enum EstadoProyectoGeneradores {
+  NUEVO
+  RECEPCION_DOCUMENTAL
+  EN_ANALISIS
+  CATALOGO_EN_REVISION
+  EN_CUANTIFICACION
+  EN_REVISION_TECNICA
+  LISTO_ENTREGA
+  CERRADO
+  INFORMACION_INCOMPLETA
+  SUSPENDIDO
+  EN_ESPERA_CLIENTE
+  PROYECTO_MODIFICADO
+}
+
+enum OrigenConceptoGeneradores {
+  CLIENTE
+  CERTEZA_TECNICA
+  PROYECTO
+  MODIFICACION
+}
+
+enum EstadoConceptoGeneradores {
+  PROPUESTO_PENDIENTE_APROBACION
+  APROBADO_PARA_CUANTIFICACION
+  EN_CUANTIFICACION
+  REQUIERE_REVISION
+  REVISADO
+  APROBADO
+  CERRADO
+  INFORMACION_INSUFICIENTE
+  CAMBIO_PROYECTO
+}
+
+enum EstadoGeneradorObra {
+  BORRADOR
+  EN_REVISION
+  OBSERVADO
+  APROBADO
+  AUTORIZADO
+  CERRADO
+}
+
+enum EstadoSolicitudInformacion {
+  BORRADOR
+  PENDIENTE
+  RESPONDIDA
+  CERRADA
+  CANCELADA
+}
+
 model PlantillaInspeccion {
   id String @id @default(cuid())
   nombre String
@@ -211,6 +286,11 @@ model Usuario {
   proyectosPmCreados ProyectoPM[] @relation("ProyectoPMCreadoPor")
   proyectosPmAsignados ProyectoPMUsuario[]
   recalculosDmAplicados RecalculoDocumentoMaestroPM[] @relation("RecalculoDMAplicadoPor")
+  proyectosGeneradoresCreados ProyectoGeneradores[] @relation("ProyectoGeneradoresCreadoPor")
+  proyectosGeneradoresResponsable ProyectoGeneradores[] @relation("ProyectoGeneradoresResponsable")
+  generadoresElaborados GeneradorObra[] @relation("GeneradorElaboradoPor")
+  generadoresRevisados GeneradorObra[] @relation("GeneradorRevisadoPor")
+  generadoresAutorizados GeneradorObra[] @relation("GeneradorAutorizadoPor")
   @@index([bloqueadoHasta])
   @@index([zonaId])
   @@index([gerenteId])
@@ -990,4 +1070,411 @@ model RecalculoDocumentoMaestroPM {
   @@index([proyectoId])
   @@index([aplicadoEn])
   @@index([posteriorLineaBase])
+}
+
+
+model ProyectoGeneradores {
+  id String @id @default(cuid())
+  codigo String @unique
+  nombre String
+  clienteNombre String
+  ubicacion String?
+  tipoEdificacion String?
+  superficieM2 Decimal? @db.Decimal(14, 2)
+  niveles Int?
+  alcance String?
+  estado EstadoProyectoGeneradores @default(NUEVO)
+  fechaInicio DateTime @default(now())
+  fechaObjetivo DateTime?
+  observaciones String?
+  creadoPorId String
+  creadoPor Usuario @relation("ProyectoGeneradoresCreadoPor", fields: [creadoPorId], references: [id], onDelete: Restrict)
+  responsableId String?
+  responsable Usuario? @relation("ProyectoGeneradoresResponsable", fields: [responsableId], references: [id], onDelete: SetNull)
+  documentos DocumentoProyectoGeneradores[]
+  conceptos ConceptoGeneradores[]
+  elementos ElementoConstructivoGeneradores[]
+  generadores GeneradorObra[]
+  tarjetasAPU TarjetaPrecioUnitario[]
+  explosionesInsumos ExplosionInsumosProyecto[]
+  presupuestos PresupuestoProyectoCT[]
+  solicitudes SolicitudInformacionGeneradores[]
+  inconsistencias InconsistenciaProyectoGeneradores[]
+  cambios CambioProyectoGeneradores[]
+  reportes ReporteProyectoGeneradores[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@index([estado])
+  @@index([creadoPorId])
+  @@index([responsableId])
+  @@index([fechaObjetivo])
+}
+
+model DocumentoProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  nombreArchivo String
+  rutaArchivo String?
+  tipoDocumento String
+  especialidad String?
+  clave String?
+  titulo String?
+  revision String?
+  fechaDocumento DateTime?
+  fechaRecepcion DateTime @default(now())
+  vigente Boolean @default(true)
+  observaciones String?
+  elementos ElementoConstructivoGeneradores[]
+  detallesGenerador DetalleGeneradorObra[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@index([proyectoId])
+  @@index([clave])
+  @@index([vigente])
+}
+
+model ConceptoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  clave String?
+  partida String?
+  descripcion String
+  unidad String
+  origen OrigenConceptoGeneradores
+  estado EstadoConceptoGeneradores @default(PROPUESTO_PENDIENTE_APROBACION)
+  observaciones String?
+  elementos ElementoConstructivoGeneradores[]
+  generadores GeneradorObra[]
+  tarjetasAPU TarjetaPrecioUnitario[]
+  partidasPresupuesto PresupuestoConceptoCT[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@index([proyectoId])
+  @@index([estado])
+  @@index([partida])
+}
+
+model ElementoConstructivoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  documentoId String?
+  documento DocumentoProyectoGeneradores? @relation(fields: [documentoId], references: [id], onDelete: SetNull)
+  conceptoId String?
+  concepto ConceptoGeneradores? @relation(fields: [conceptoId], references: [id], onDelete: SetNull)
+  clave String?
+  tipo String
+  nivel String?
+  eje String?
+  tramo String?
+  descripcion String?
+  datosGeometricos Json?
+  confianza Decimal? @db.Decimal(5, 2)
+  requiereRevision Boolean @default(true)
+  mediciones MedicionElementoGeneradores[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@index([proyectoId])
+  @@index([documentoId])
+  @@index([conceptoId])
+  @@index([tipo])
+}
+
+model MedicionElementoGeneradores {
+  id String @id @default(cuid())
+  elementoId String
+  elemento ElementoConstructivoGeneradores @relation(fields: [elementoId], references: [id], onDelete: Cascade)
+  magnitud String
+  unidad String
+  formula String?
+  datos Json?
+  valor Decimal @db.Decimal(18, 6)
+  creadoEn DateTime @default(now())
+  @@index([elementoId])
+  @@index([magnitud])
+}
+
+model GeneradorObra {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  conceptoId String
+  concepto ConceptoGeneradores @relation(fields: [conceptoId], references: [id], onDelete: Restrict)
+  folio String
+  estado EstadoGeneradorObra @default(BORRADOR)
+  total Decimal @default(0) @db.Decimal(18, 6)
+  elaboradoPorId String
+  elaboradoPor Usuario @relation("GeneradorElaboradoPor", fields: [elaboradoPorId], references: [id], onDelete: Restrict)
+  revisadoPorId String?
+  revisadoPor Usuario? @relation("GeneradorRevisadoPor", fields: [revisadoPorId], references: [id], onDelete: SetNull)
+  revisadoEn DateTime?
+  autorizadoPorId String?
+  autorizadoPor Usuario? @relation("GeneradorAutorizadoPor", fields: [autorizadoPorId], references: [id], onDelete: SetNull)
+  autorizadoEn DateTime?
+  observaciones String?
+  detalles DetalleGeneradorObra[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@unique([proyectoId, folio])
+  @@index([proyectoId])
+  @@index([conceptoId])
+  @@index([estado])
+}
+
+model DetalleGeneradorObra {
+  id String @id @default(cuid())
+  generadorId String
+  generador GeneradorObra @relation(fields: [generadorId], references: [id], onDelete: Cascade)
+  documentoId String?
+  documento DocumentoProyectoGeneradores? @relation(fields: [documentoId], references: [id], onDelete: SetNull)
+  eje String?
+  tramo String?
+  elemento String?
+  largo Decimal? @db.Decimal(18, 6)
+  ancho Decimal? @db.Decimal(18, 6)
+  alto Decimal? @db.Decimal(18, 6)
+  piezas Decimal? @db.Decimal(18, 6)
+  factor Decimal? @db.Decimal(18, 6)
+  subtotal Decimal @db.Decimal(18, 6)
+  comentarios String?
+  creadoEn DateTime @default(now())
+  @@index([generadorId])
+  @@index([documentoId])
+}
+
+model SolicitudInformacionGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  folio String
+  documentoReferencia String?
+  ubicacionReferencia String?
+  elementoReferencia String?
+  situacion String
+  informacionRequerida String
+  respuesta String?
+  estado EstadoSolicitudInformacion @default(BORRADOR)
+  fechaRespuesta DateTime?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@unique([proyectoId, folio])
+  @@index([proyectoId])
+  @@index([estado])
+}
+
+model InconsistenciaProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  tipo String?
+  descripcion String
+  referenciaA String?
+  referenciaB String?
+  severidad String?
+  resuelta Boolean @default(false)
+  resolucion String?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@index([proyectoId])
+  @@index([resuelta])
+}
+
+model CambioProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  conceptoId String?
+  descripcion String
+  valorAnterior Decimal? @db.Decimal(18, 6)
+  valorNuevo Decimal? @db.Decimal(18, 6)
+  unidad String?
+  documentoAnterior String?
+  documentoNuevo String?
+  motivo String?
+  creadoEn DateTime @default(now())
+  @@index([proyectoId])
+  @@index([conceptoId])
+}
+
+model ReporteProyectoGeneradores {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  tipo String
+  version Int @default(1)
+  rutaArchivo String?
+  estado String @default("BORRADOR")
+  datos Json?
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  @@unique([proyectoId, tipo, version])
+  @@index([proyectoId])
+  @@index([tipo])
+}
+
+model InsumoAPU {
+  id String @id @default(cuid())
+  clave String @unique
+  descripcion String
+  unidad String
+  tipo TipoInsumoAPU
+  precioBase Decimal @default(0) @db.Decimal(18, 6)
+  fechaPrecio DateTime @default(now())
+  fuente String?
+  ubicacionReferencia String?
+  activo Boolean @default(true)
+  componentes TarjetaAPUInsumo[]
+  explosiones ExplosionInsumoDetalle[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([tipo])
+  @@index([activo])
+  @@index([descripcion])
+}
+
+model TarjetaPrecioUnitario {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  conceptoId String
+  concepto ConceptoGeneradores @relation(fields: [conceptoId], references: [id], onDelete: Restrict)
+  version Int @default(1)
+  estado EstadoTarjetaAPU @default(BORRADOR)
+  rendimiento Decimal? @db.Decimal(18, 6)
+  costoDirecto Decimal @default(0) @db.Decimal(18, 6)
+  porcentajeIndirectos Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeFinanciamiento Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeUtilidad Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeCargosAdicionales Decimal @default(0) @db.Decimal(8, 4)
+  precioUnitario Decimal @default(0) @db.Decimal(18, 6)
+  observaciones String?
+  componentes TarjetaAPUInsumo[]
+  conceptosPresupuesto PresupuestoConceptoCT[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([conceptoId, version])
+  @@index([proyectoId])
+  @@index([conceptoId])
+  @@index([estado])
+}
+
+model TarjetaAPUInsumo {
+  id String @id @default(cuid())
+  tarjetaId String
+  tarjeta TarjetaPrecioUnitario @relation(fields: [tarjetaId], references: [id], onDelete: Cascade)
+  insumoId String
+  insumo InsumoAPU @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  cantidad Decimal @db.Decimal(18, 6)
+  desperdicioPct Decimal @default(0) @db.Decimal(8, 4)
+  precioAplicado Decimal @db.Decimal(18, 6)
+  importe Decimal @db.Decimal(18, 6)
+  observaciones String?
+  creadoEn DateTime @default(now())
+
+  @@index([tarjetaId])
+  @@index([insumoId])
+}
+
+model ExplosionInsumosProyecto {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  version Int @default(1)
+  estado String @default("BORRADOR")
+  fechaCorte DateTime @default(now())
+  totalMateriales Decimal @default(0) @db.Decimal(18, 6)
+  totalManoObra Decimal @default(0) @db.Decimal(18, 6)
+  totalEquipo Decimal @default(0) @db.Decimal(18, 6)
+  totalHerramienta Decimal @default(0) @db.Decimal(18, 6)
+  totalSubcontratos Decimal @default(0) @db.Decimal(18, 6)
+  totalAuxiliares Decimal @default(0) @db.Decimal(18, 6)
+  totalGeneral Decimal @default(0) @db.Decimal(18, 6)
+  detalles ExplosionInsumoDetalle[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, version])
+  @@index([proyectoId])
+  @@index([estado])
+  @@index([fechaCorte])
+}
+
+model ExplosionInsumoDetalle {
+  id String @id @default(cuid())
+  explosionId String
+  explosion ExplosionInsumosProyecto @relation(fields: [explosionId], references: [id], onDelete: Cascade)
+  insumoId String
+  insumo InsumoAPU @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  tipo TipoInsumoAPU
+  unidad String
+  cantidadTotal Decimal @default(0) @db.Decimal(18, 6)
+  precioReferencia Decimal @default(0) @db.Decimal(18, 6)
+  importeTotal Decimal @default(0) @db.Decimal(18, 6)
+  fuenteCalculo String?
+  creadoEn DateTime @default(now())
+
+  @@index([explosionId])
+  @@index([insumoId])
+  @@index([tipo])
+}
+
+model PresupuestoProyectoCT {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto ProyectoGeneradores @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  version Int @default(1)
+  estado EstadoPresupuestoCT @default(BORRADOR)
+  nombre String
+  fechaCorte DateTime @default(now())
+  porcentajeIndirectos Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeFinanciamiento Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeUtilidad Decimal @default(0) @db.Decimal(8, 4)
+  porcentajeCargosAdicionales Decimal @default(0) @db.Decimal(8, 4)
+  costoDirecto Decimal @default(0) @db.Decimal(18, 6)
+  indirectos Decimal @default(0) @db.Decimal(18, 6)
+  financiamiento Decimal @default(0) @db.Decimal(18, 6)
+  utilidad Decimal @default(0) @db.Decimal(18, 6)
+  cargosAdicionales Decimal @default(0) @db.Decimal(18, 6)
+  subtotal Decimal @default(0) @db.Decimal(18, 6)
+  impuestos Decimal @default(0) @db.Decimal(18, 6)
+  totalPresupuesto Decimal @default(0) @db.Decimal(18, 6)
+  observaciones String?
+  conceptos PresupuestoConceptoCT[]
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, version])
+  @@index([proyectoId])
+  @@index([estado])
+  @@index([fechaCorte])
+}
+
+model PresupuestoConceptoCT {
+  id String @id @default(cuid())
+  presupuestoId String
+  presupuesto PresupuestoProyectoCT @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+  conceptoId String
+  concepto ConceptoGeneradores @relation(fields: [conceptoId], references: [id], onDelete: Restrict)
+  tarjetaAPUId String?
+  tarjetaAPU TarjetaPrecioUnitario? @relation(fields: [tarjetaAPUId], references: [id], onDelete: SetNull)
+  partida String?
+  subpartida String?
+  clave String?
+  descripcion String
+  unidad String
+  cantidad Decimal @default(0) @db.Decimal(18, 6)
+  precioUnitario Decimal @default(0) @db.Decimal(18, 6)
+  importe Decimal @default(0) @db.Decimal(18, 6)
+  orden Int @default(0)
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([presupuestoId])
+  @@index([conceptoId])
+  @@index([tarjetaAPUId])
+  @@index([partida])
 }
