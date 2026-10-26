@@ -29,6 +29,56 @@ export default function CertezaTecnicaPage() {
         />
       </section>
 
+
+      <section
+        aria-label="Acceso a Certeza Técnica 360"
+        style={{
+          maxWidth: 1254,
+          margin: "22px auto 0",
+          padding: "0 12px",
+        }}
+      >
+        <div
+          style={{
+            border: "1px solid rgba(237,203,113,.55)",
+            borderRadius: 18,
+            background: "linear-gradient(135deg, #071d38 0%, #0b355b 55%, #0b5a84 100%)",
+            padding: "28px",
+            boxShadow: "0 22px 50px rgba(0,0,0,.24)",
+          }}
+        >
+          <p style={{ margin: 0, color: "#edcb71", fontWeight: 900, letterSpacing: ".1em", fontSize: 13 }}>
+            PLATAFORMA INTEGRAL
+          </p>
+          <h2 style={{ margin: "8px 0 8px", fontSize: "clamp(30px, 4vw, 46px)", lineHeight: 1.05 }}>
+            Certeza Técnica 360
+          </h2>
+          <p style={{ margin: 0, maxWidth: 930, color: "#dbe8f3", fontSize: 17, lineHeight: 1.65 }}>
+            Un solo sistema para Dirección y Desarrollo, Planeación y Administración, Presupuestos y Costos,
+            Supervisión y Auditoría, con expediente maestro, reportes e inteligencia del proyecto.
+          </p>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 22 }}>
+            <Link
+              href="/certeza-tecnica/login?callbackUrl=%2Fcerteza-tecnica%2Fapp"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 50,
+                padding: "0 24px",
+                borderRadius: 12,
+                background: "#edcb71",
+                color: "#071d38",
+                textDecoration: "none",
+                fontWeight: 950,
+              }}
+            >
+              Entrar a Certeza Técnica 360 →
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section
         aria-label="Acceso a Certeza Cost"
         style={{
