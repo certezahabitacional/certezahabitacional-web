@@ -18,10 +18,10 @@ export default function CertezaTecnicaPage() {
       <section aria-label="Portafolio de servicios de Certeza Técnica" style={{ padding: "0 12px", margin: "0 auto", maxWidth: 1400, height: "auto", overflow: "visible" }}>
         {/* Servir el PNG autorizado completo sin modificar sus pixeles. */}
         <Image
-          src="/branding/portafolio-servicios-certeza-tecnica.png?v=0d7528594def"
-          alt="Infografía del portafolio de Certeza Técnica: Presupuestos y Costos; Planeación y Administración; Supervisión y Auditoría; Dirección y Desarrollo. Sitio www.certezahabitacional.com."
-          width={1254}
-          height={1254}
+          src="/branding/ruta-integral-certeza-tecnica.svg?v=c3b53c13427e"
+          alt="Ruta integral de Certeza Técnica que conecta Dirección y Desarrollo, Planeación y Administración, Presupuestos y Costos, y Supervisión y Auditoría alrededor del proyecto."
+          width={1600}
+          height={1067}
           unoptimized
           priority
           sizes="(max-width: 1400px) 100vw, 1400px"
