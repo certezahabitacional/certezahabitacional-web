@@ -59,7 +59,10 @@ export async function obtenerUsuarioConAlcanceZona(
   const { autenticado, usuario } = await cargarUsuarioConAlcanceZona();
 
   if (!autenticado) {
-    redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    const loginPath = callbackUrl.startsWith("/panel/certeza-tecnica/")
+      ? "/certeza-tecnica/login"
+      : "/login";
+    redirect(`${loginPath}?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   }
 
   if (!usuario?.activo) redirect("/acceso");

@@ -31,25 +31,25 @@ const systemModules = [
   {
     title: "Generadores",
     text: "Cuantificaciones trazables por concepto y partida.",
-    href: "/panel/certeza-tecnica/generadores",
+    href: "/certeza-tecnica/login?callbackUrl=%2Fpanel%2Fcerteza-tecnica%2Fgeneradores",
     status: "DISPONIBLE",
   },
   {
     title: "Tarjetas de Precios Unitarios",
     text: "Integración de materiales, mano de obra, equipo, herramienta y rendimientos.",
-    href: "/panel/certeza-tecnica/apu",
+    href: "/certeza-tecnica/login?callbackUrl=%2Fpanel%2Fcerteza-tecnica%2Fapu",
     status: "DISPONIBLE",
   },
   {
     title: "Explosión de Insumos",
     text: "Concentrado de materiales, mano de obra, equipo, maquinaria y subcontratos.",
-    href: "/panel/certeza-tecnica/explosion-insumos",
+    href: "/certeza-tecnica/login?callbackUrl=%2Fpanel%2Fcerteza-tecnica%2Fexplosion-insumos",
     status: "DISPONIBLE",
   },
   {
     title: "Presupuestos",
     text: "Integración del presupuesto base, escenarios, control y actualización de costos.",
-    href: "/panel/certeza-tecnica/presupuestos",
+    href: "/certeza-tecnica/login?callbackUrl=%2Fpanel%2Fcerteza-tecnica%2Fpresupuestos",
     status: "DISPONIBLE",
   },
 ];
