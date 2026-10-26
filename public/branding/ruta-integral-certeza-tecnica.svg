@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1067" viewBox="0 0 1600 1067">
+  <defs>
+    <linearGradient id="head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#06264a"/><stop offset=".58" stop-color="#0b4f8f"/><stop offset="1" stop-color="#061d38"/>
+    </linearGradient>
+    <linearGradient id="navy" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#0b4f8f"/><stop offset="1" stop-color="#06264a"/></linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff8c00"/><stop offset="1" stop-color="#e85d00"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1689ff"/><stop offset="1" stop-color="#0757ad"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#75bf29"/><stop offset="1" stop-color="#3c8218"/></linearGradient>
+    <linearGradient id="purple" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8546dd"/><stop offset="1" stop-color="#5426a3"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="8" flood-color="#00172f" flood-opacity=".28"/></filter>
+    <style>
+      .t{font-family:Arial,Helvetica,sans-serif}.white{fill:#fff}.nav{fill:#082a54}.gold{fill:#f5b321}.muted{fill:#5f6f82}
+      .h1{font-size:63px;font-weight:900}.h2{font-size:46px;font-weight:900}.sub{font-size:24px;font-weight:700}
+      .cardTitle{font-size:28px;font-weight:900}.cardSub{font-size:18px;font-weight:700}.item{font-size:17px}.result{font-size:16px;font-weight:700}
+      .circleTitle{font-size:24px;font-weight:900}.circleSub{font-size:16px;font-weight:700}.small{font-size:15px;font-weight:700}
+    </style>
+  </defs>
+
+  <!-- header -->
+  <rect width="1600" height="210" fill="url(#head)"/>
+  <image href="/branding/nosotros-plataforma-aprobada.png" x="655" y="0" width="610" height="210" preserveAspectRatio="xMidYMid slice" opacity=".36"/>
+  <rect x="0" y="0" width="1600" height="210" fill="url(#head)" opacity=".38"/>
+  <text class="t white h1" x="28" y="78">LA RUTA INTEGRAL</text>
+  <text class="t gold h2" x="28" y="134">DE TU PROYECTO CON CERTEZA TÉCNICA</text>
+  <text class="t white sub" x="32" y="170">Nuestras 4 áreas de servicio se conectan para llevar tu proyecto</text>
+  <text class="t white sub" x="32" y="198">desde la estrategia hasta el cierre, con control, calidad y resultados.</text>
+  <image href="/branding/logo-autorizado.png" x="1190" y="-12" width="250" height="250" preserveAspectRatio="xMidYMid meet"/>
+  <text class="t white" x="1432" y="62" font-size="20" font-weight="900">MÁS PLANEACIÓN</text>
+  <text class="t white" x="1432" y="88" font-size="20" font-weight="900">MÁS CONTROL</text>
+  <text class="t white" x="1432" y="114" font-size="20" font-weight="900">MÁS CUMPLIMIENTO</text>
+  <text class="t white" x="1432" y="140" font-size="20" font-weight="900">MÁS CALIDAD</text>
+  <text class="t white" x="1432" y="166" font-size="20" font-weight="900">MÁS VALOR</text>
+  <line x1="1430" y1="184" x2="1538" y2="172" stroke="#ff9800" stroke-width="7"/>
+
+  <!-- side cards -->
+  <g filter="url(#shadow)">
+    <rect x="22" y="228" rx="18" ry="18" width="438" height="322" fill="#fff" stroke="#dfe9f3"/>
+    <rect x="22" y="228" rx="18" ry="18" width="438" height="72" fill="url(#orange)"/>
+    <text class="t white" x="52" y="279" font-size="42" font-weight="900">1</text>
+    <text class="t white cardTitle" x="112" y="268">DIRECCIÓN Y DESARROLLO</text>
+    <text class="t white cardSub" x="112" y="292">Define el rumbo y genera valor.</text>
+    <g class="t nav item">
+      <text x="67" y="335">• Estrategia y visión del proyecto</text>
+      <text x="67" y="371">• Gobierno del proyecto</text>
+      <text x="67" y="407">• Gestión de stakeholders</text>
+      <text x="67" y="443">• Desarrollo de equipos y capacidades</text>
+      <text x="67" y="479">• Toma de decisiones y seguimiento</text>
+    </g>
+    <rect x="42" y="494" rx="12" width="398" height="42" fill="#fff1dd"/>
+    <text class="t" x="65" y="521" font-size="16" font-weight="900" fill="#d65c00">RESULTADO: proyectos alineados a la estrategia.</text>
+
+    <rect x="1140" y="228" rx="18" ry="18" width="438" height="322" fill="#fff" stroke="#dfe9f3"/>
+    <rect x="1140" y="228" rx="18" ry="18" width="438" height="72" fill="url(#blue)"/>
+    <text class="t white" x="1170" y="279" font-size="42" font-weight="900">2</text>
+    <text class="t white cardTitle" x="1230" y="268">PLANEACIÓN Y ADMINISTRACIÓN</text>
+    <text class="t white cardSub" x="1230" y="292">Organiza recursos y procesos para el control.</text>
+    <g class="t nav item">
+      <text x="1185" y="335">• Planeación integral (alcance, plazo, costo, recursos)</text>
+      <text x="1185" y="371">• Programación y control de avance</text>
+      <text x="1185" y="407">• Administración de contratos, compras y cambios</text>
+      <text x="1185" y="443">• Control documental y administrativo</text>
+      <text x="1185" y="479">• Integración de información (Certeza Project Manager)</text>
+    </g>
+    <rect x="1160" y="494" rx="12" width="398" height="42" fill="#eaf5ff"/>
+    <text class="t" x="1183" y="521" font-size="16" font-weight="900" fill="#0757ad">RESULTADO: procesos claros y control integral.</text>
+
+    <rect x="22" y="568" rx="18" ry="18" width="438" height="352" fill="#fff" stroke="#dfe9f3"/>
+    <rect x="22" y="568" rx="18" ry="18" width="438" height="72" fill="url(#purple)"/>
+    <text class="t white" x="52" y="619" font-size="42" font-weight="900">4</text>
+    <text class="t white cardTitle" x="112" y="608">SUPERVISIÓN Y AUDITORÍA</text>
+    <text class="t white cardSub" x="112" y="632">Verifica, asegura y da cumplimiento.</text>
+    <g class="t nav item">
+      <text x="67" y="675">• Supervisión técnica de obra</text>
+      <text x="67" y="711">• Verificación de calidad y procesos</text>
+      <text x="67" y="747">• Auditoría de avance físico y financiero</text>
+      <text x="67" y="783">• Revisión documental y contractual</text>
+      <text x="67" y="819">• Detección de desviaciones y riesgos</text>
+      <text x="67" y="855">• Reportes e indicadores de desempeño</text>
+      <text x="67" y="891">• Recomendaciones correctivas y preventivas</text>
+    </g>
+
+    <rect x="1140" y="568" rx="18" ry="18" width="438" height="352" fill="#fff" stroke="#dfe9f3"/>
+    <rect x="1140" y="568" rx="18" ry="18" width="438" height="72" fill="url(#green)"/>
+    <text class="t white" x="1170" y="619" font-size="42" font-weight="900">3</text>
+    <text class="t white cardTitle" x="1230" y="608">PRESUPUESTOS Y COSTOS</text>
+    <text class="t white cardSub" x="1230" y="632">Determina, analiza y controla el costo.</text>
+    <g class="t nav item">
+      <text x="1185" y="675">• Estimación y cuantificación de costos</text>
+      <text x="1185" y="711">• Catálogo de conceptos</text>
+      <text x="1185" y="747">• Análisis de precios unitarios y tarjetas</text>
+      <text x="1185" y="783">• Presupuestos y explosión de insumos</text>
+      <text x="1185" y="819">• Revisión y auditoría de presupuestos</text>
+      <text x="1185" y="855">• Control de costos y análisis de variaciones</text>
+      <text x="1185" y="891">• Ingeniería de valor y optimización</text>
+    </g>
+  </g>
+
+  <!-- central route -->
+  <g filter="url(#shadow)">
+    <circle cx="800" cy="570" r="295" fill="#f7fbff" stroke="#d8e6f4" stroke-width="7"/>
+    <image href="/branding/nosotros-plataforma-aprobada.png" x="528" y="332" width="544" height="476" preserveAspectRatio="xMidYMid slice" opacity=".20"/>
+    <circle cx="800" cy="570" r="105" fill="#fff" stroke="#dce8f2" stroke-width="5"/>
+    <text class="t nav" x="800" y="552" text-anchor="middle" font-size="26" font-weight="900">TU PROYECTO</text>
+    <text class="t nav" x="800" y="584" text-anchor="middle" font-size="22" font-weight="800">EN EL CENTRO</text>
+
+    <!-- curved connectors -->
+    <path d="M675 340 C760 285 860 282 950 338" fill="none" stroke="#ff8500" stroke-width="22" stroke-linecap="round"/>
+    <polygon points="947,318 985,343 944,360" fill="#ff8500"/>
+    <path d="M1002 410 C1060 490 1060 585 1013 658" fill="none" stroke="#1689ff" stroke-width="22" stroke-linecap="round"/>
+    <polygon points="1000,650 1012,695 1040,659" fill="#1689ff"/>
+    <path d="M936 777 C845 838 744 839 655 785" fill="none" stroke="#5ca71e" stroke-width="22" stroke-linecap="round"/>
+    <polygon points="663,764 620,789 661,808" fill="#5ca71e"/>
+    <path d="M590 687 C538 605 540 505 590 430" fill="none" stroke="#7137c3" stroke-width="22" stroke-linecap="round"/>
+    <polygon points="570,436 594,396 612,438" fill="#7137c3"/>
+
+    <circle cx="625" cy="403" r="108" fill="url(#orange)" stroke="#fff" stroke-width="8"/>
+    <text class="t white circleTitle" x="625" y="390" text-anchor="middle">DIRECCIÓN</text>
+    <text class="t white circleTitle" x="625" y="420" text-anchor="middle">Y DESARROLLO</text>
+    <text class="t white circleSub" x="625" y="450" text-anchor="middle">Define, alinea y lidera.</text>
+
+    <circle cx="975" cy="403" r="108" fill="url(#blue)" stroke="#fff" stroke-width="8"/>
+    <text class="t white circleTitle" x="975" y="390" text-anchor="middle">PLANEACIÓN</text>
+    <text class="t white circleTitle" x="975" y="420" text-anchor="middle">Y ADMINISTRACIÓN</text>
+    <text class="t white circleSub" x="975" y="450" text-anchor="middle">Organiza, programa y controla.</text>
+
+    <circle cx="975" cy="737" r="108" fill="url(#green)" stroke="#fff" stroke-width="8"/>
+    <text class="t white circleTitle" x="975" y="724" text-anchor="middle">PRESUPUESTOS</text>
+    <text class="t white circleTitle" x="975" y="754" text-anchor="middle">Y COSTOS</text>
+    <text class="t white circleSub" x="975" y="784" text-anchor="middle">Cuantifica, analiza y optimiza.</text>
+
+    <circle cx="625" cy="737" r="108" fill="url(#purple)" stroke="#fff" stroke-width="8"/>
+    <text class="t white circleTitle" x="625" y="724" text-anchor="middle">SUPERVISIÓN</text>
+    <text class="t white circleTitle" x="625" y="754" text-anchor="middle">Y AUDITORÍA</text>
+    <text class="t white circleSub" x="625" y="784" text-anchor="middle">Verifica y asegura.</text>
+  </g>
+
+  <!-- phase labels -->
+  <g class="t">
+    <rect x="508" y="244" rx="22" width="235" height="52" fill="url(#orange)"/>
+    <text class="white small" x="625" y="276" text-anchor="middle">ESTRATEGIA · qué queremos lograr</text>
+    <rect x="858" y="244" rx="22" width="235" height="52" fill="url(#blue)"/>
+    <text class="white small" x="975" y="276" text-anchor="middle">PLANEACIÓN · cómo lo haremos</text>
+    <rect x="858" y="860" rx="22" width="235" height="52" fill="url(#green)"/>
+    <text class="white small" x="975" y="892" text-anchor="middle">CONTROL Y MEJORA · medimos y corregimos</text>
+    <rect x="508" y="860" rx="22" width="235" height="52" fill="url(#purple)"/>
+    <text class="white small" x="625" y="892" text-anchor="middle">EJECUCIÓN · hacemos que suceda</text>
+  </g>
+
+  <!-- footer -->
+  <rect x="0" y="944" width="1600" height="123" fill="#06264a"/>
+  <rect x="0" y="944" width="338" height="123" fill="#ff8500"/>
+  <text class="t white" x="36" y="989" font-size="26" font-weight="900">UN PROCESO CONECTADO,</text>
+  <text class="t white" x="36" y="1020" font-size="26" font-weight="900">MEJORES RESULTADOS</text>
+  <g class="t white" font-size="20" font-weight="800">
+    <text x="390" y="985">1  De la estrategia a la planeación</text>
+    <text x="390" y="1020">2  De la planeación a la presupuestación</text>
+    <text x="850" y="985">3  De la presupuestación a la ejecución</text>
+    <text x="850" y="1020">4  De la ejecución a la verificación</text>
+  </g>
+  <text class="t gold" x="1325" y="998" font-size="23" font-weight="900">RESULTADO INTEGRAL</text>
+  <text class="t white" x="1325" y="1028" font-size="17" font-weight="700">planeación + control + calidad + valor</text>
+</svg>
