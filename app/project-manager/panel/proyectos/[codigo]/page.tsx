@@ -65,6 +65,17 @@ export default async function GenericProjectPage({params,searchParams}:{params:P
         </aside>
       </div>
 
+      <Link href={`/certeza-tecnica/app/proyectos/${codigo}/costos`} style={{...card,marginTop:16,padding:24,display:"block",textDecoration:"none",color:"#082f64",border:"2px solid #268c10",background:"linear-gradient(135deg,#f0faee,#ffffff)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#268c10",letterSpacing:".08em"}}>COSTOS VINCULADOS AL PROYECTO</div>
+            <h2 style={{margin:"6px 0 6px"}}>💰 Certeza Cost</h2>
+            <p style={{margin:0,color:"#294f73",lineHeight:1.55,maxWidth:850}}>Generadores, APU, explosión de insumos y presupuesto conectados con este mismo proyecto.</p>
+          </div>
+          <span style={{background:"#268c10",color:"#fff",padding:"11px 15px",borderRadius:9,fontWeight:950}}>Abrir Certeza Cost →</span>
+        </div>
+      </Link>
+
       <Link href={`/project-manager/panel/proyectos/${codigo}/constructibilidad`} style={{...card,marginTop:16,padding:24,display:"block",textDecoration:"none",color:"#082f64",border:"2px solid #ff8500",background:"linear-gradient(135deg,#fff8ef,#ffffff)"}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:16,alignItems:"center",flexWrap:"wrap"}}>
           <div>
