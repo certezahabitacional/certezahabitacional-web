@@ -16,12 +16,12 @@ export default function CertezaTecnicaPage() {
       </header>
 
       <section aria-label="Portafolio de servicios de Certeza Técnica" style={{ padding: "0 12px", margin: "0 auto", maxWidth: 1400, height: "auto", overflow: "visible" }}>
-        {/* Servir el PNG autorizado completo sin modificar sus pixeles. */}
+        {/* Imagen final aprobada de La Ruta Integral, mostrada completa y sin deformación. */}
         <Image
-          src="/branding/ruta-integral-certeza-tecnica.svg?v=1176c941e641"
+          src="/branding/ruta-integral-certeza-tecnica.jpg?v=20261026"
           alt="Ruta integral de Certeza Técnica que conecta Dirección y Desarrollo, Planeación y Administración, Presupuestos y Costos, y Supervisión y Auditoría alrededor del proyecto."
-          width={1672}
-          height={941}
+          width={1448}
+          height={1086}
           unoptimized
           priority
           sizes="(max-width: 1400px) 100vw, 1400px"
