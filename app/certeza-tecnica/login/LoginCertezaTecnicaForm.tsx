@@ -16,10 +16,12 @@ type RespuestaSignIn = {
 
 export default function LoginCertezaTecnicaForm() {
   const searchParams = useSearchParams();
-  const callbackParam = searchParams.get("callbackUrl") || "/panel/certeza-tecnica/generadores";
-  const callbackUrl = callbackParam.startsWith("/panel/certeza-tecnica/")
-    ? callbackParam
-    : "/panel/certeza-tecnica/generadores";
+  const callbackParam = searchParams.get("callbackUrl") || "/certeza-tecnica/app";
+  const callbackUrl =
+    callbackParam.startsWith("/panel/certeza-tecnica/") ||
+    callbackParam.startsWith("/certeza-tecnica/app")
+      ? callbackParam
+      : "/certeza-tecnica/app";
 
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -92,7 +94,7 @@ export default function LoginCertezaTecnicaForm() {
           </p>
 
           <h1 className="mt-3 text-center text-3xl font-black">
-            Acceso a Certeza Cost
+            Acceso a Certeza Técnica 360
           </h1>
 
           <p className="mt-2 text-center text-sm text-slate-300">
@@ -155,13 +157,13 @@ export default function LoginCertezaTecnicaForm() {
               disabled={enviando}
               className="w-full rounded-xl bg-[#edcb71] px-5 py-3 font-black text-[#06172b] transition hover:bg-[#f6d989] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {enviando ? "Verificando..." : "Entrar a Certeza Cost"}
+              {enviando ? "Verificando..." : "Entrar a Certeza Técnica 360"}
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <Link href="/certeza-tecnica/presupuestos-costos" className="text-sm font-bold text-slate-300 hover:text-white">
-              ← Regresar a Costos y Presupuestos
+            <Link href="/certeza-tecnica" className="text-sm font-bold text-slate-300 hover:text-white">
+              ← Regresar a Certeza Técnica
             </Link>
           </div>
         </section>
