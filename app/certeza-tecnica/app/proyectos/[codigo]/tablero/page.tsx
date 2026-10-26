@@ -20,7 +20,7 @@ export default async function TableroEjecutivoProyecto({params}:{params:Promise<
   const access=await requireProjectAccess(codigo);
   const p=access.proyecto;
 
-  const [registros,docs,constructibilidad,lineaBase]=await Promise.all([
+  const [registros,docs,constructibilidad,lineaBase,costProject]=await Promise.all([
     prisma.registroModuloPM.findMany({where:{proyectoId:p.id},orderBy:{creadoEn:"desc"}}),
     prisma.documentoMaestroPM.findMany({
       where:{proyectoId:p.id,activo:true},
@@ -29,6 +29,14 @@ export default async function TableroEjecutivoProyecto({params}:{params:Promise<
     }),
     prisma.constructibilidadPM.findUnique({where:{proyectoId:p.id}}),
     prisma.lineaBasePM.findUnique({where:{proyectoId:p.id}}),
+    prisma.proyectoGeneradores.findUnique({
+      where:{codigo:p.codigo},
+      include:{
+        presupuestos:{orderBy:{version:"desc"},take:1},
+        explosionesInsumos:{orderBy:{version:"desc"},take:1},
+        _count:{select:{conceptos:true,generadores:true,tarjetasAPU:true}},
+      },
+    }),
   ]);
 
   const evaluation=registros.find(r=>r.modulo==="DIRECCION_EVALUACION");
@@ -65,6 +73,11 @@ export default async function TableroEjecutivoProyecto({params}:{params:Promise<
   const pmDone=pmOperational.filter(r=>["COMPLETADA","CERRADO","CERRADA","MITIGADO"].includes(r.estado)).length;
   const pmProgress=pmOperational.length?Math.round((pmDone/pmOperational.length)*100):docProgress;
 
+  const latestCostBudget=costProject?.presupuestos[0] ?? null;
+  const latestExplosion=costProject?.explosionesInsumos[0] ?? null;
+  const budgetValue=latestCostBudget?Number(latestCostBudget.totalPresupuesto):Number(p.presupuesto);
+  const budgetSource=latestCostBudget?"Certeza Cost":"Proyecto PM";
+
   const healthParts=[
     evalScore||50,
     Math.max(0,100-decisionsOpen*8),
@@ -100,7 +113,7 @@ export default async function TableroEjecutivoProyecto({params}:{params:Promise<
     <div style={{maxWidth:1480,margin:"0 auto",padding:22}}>
       <section style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:12}}>
         <Kpi title="Salud integral" value={health+"/100"} detail={healthState} color={stateColor(healthState)}/>
-        <Kpi title="Presupuesto" value={money(p.presupuesto)} detail={p.estado} color="#0d5e96"/>
+        <Kpi title="Presupuesto" value={money(budgetValue)} detail={budgetSource} color="#0d5e96"/>
         <Kpi title="Línea base" value={lineaBase?.estado||"SIN APROBAR"} detail={lineaBase?`Versión ${lineaBase.version}`:"Pendiente"} color={stateColor(lineaBase?.estado||"PENDIENTE")}/>
         <Kpi title="Documentación" value={pct(docProgress)} detail={`${docComplete}/${docActivities.length} actividades`} color="#0874d9"/>
         <Kpi title="Constructibilidad" value={pct(constructProgress)} detail={constructibilidad?"12 pasos configurables":"Sin iniciar"} color="#d56a17"/>
@@ -129,12 +142,12 @@ export default async function TableroEjecutivoProyecto({params}:{params:Promise<
         />
         <AreaCard
           n="3" title="Presupuestos y Costos" color="#268c10"
-          href="/certeza-tecnica/presupuestos-costos"
+          href={`/certeza-tecnica/app/proyectos/${p.codigo.toLowerCase()}/costos`}
           metrics={[
-            ["Presupuesto proyecto",money(p.presupuesto)],
-            ["Desviación auditada",money(auditedDeviation)],
-            ["Auditorías de costos",String(audits.filter(r=>r.modulo==="AUDITORIA_COSTOS").length)],
-            ["Estado",auditedDeviation>0?"Revisar variación":"Sin desviación registrada"],
+            ["Presupuesto Certeza Cost",latestCostBudget?money(latestCostBudget.totalPresupuesto):"Sin vincular"],
+            ["Conceptos",String(costProject?._count.conceptos ?? 0)],
+            ["Generadores",String(costProject?._count.generadores ?? 0)],
+            ["Tarjetas APU",String(costProject?._count.tarjetasAPU ?? 0)],
           ]}
         />
         <AreaCard
@@ -187,7 +200,7 @@ export default async function TableroEjecutivoProyecto({params}:{params:Promise<
       <section style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:12,marginTop:16}}>
         <Quick href={`/certeza-tecnica/app/direccion-desarrollo/${p.codigo.toLowerCase()}`} title="Dirección y Desarrollo" text="Evaluación, decisiones y riesgos"/>
         <Quick href={`/project-manager/panel/proyectos/${p.codigo.toLowerCase()}/seguimiento`} title="Seguimiento" text="Actualizaciones y control operativo"/>
-        <Quick href="/certeza-tecnica/presupuestos-costos" title="Certeza Cost" text="Presupuestos y costos"/>
+        <Quick href={`/certeza-tecnica/app/proyectos/${p.codigo.toLowerCase()}/costos`} title="Certeza Cost" text={latestCostBudget?`Presupuesto ${money(latestCostBudget.totalPresupuesto)}`:"Inicializar costos del proyecto"}/>
         <Quick href={`/certeza-tecnica/app/supervision-auditoria/${p.codigo.toLowerCase()}`} title="Supervisión y Auditoría" text="Hallazgos, calidad y auditorías"/>
       </section>
     </div>
