@@ -13,8 +13,8 @@
     <style>
       .t{font-family:Arial,Helvetica,sans-serif}.white{fill:#fff}.nav{fill:#082a54}.gold{fill:#f5b321}.muted{fill:#5f6f82}
       .h1{font-size:63px;font-weight:900}.h2{font-size:46px;font-weight:900}.sub{font-size:24px;font-weight:700}
-      .cardTitle{font-size:28px;font-weight:900}.cardSub{font-size:18px;font-weight:700}.item{font-size:17px}.result{font-size:16px;font-weight:700}
-      .circleTitle{font-size:24px;font-weight:900}.circleSub{font-size:16px;font-weight:700}.small{font-size:15px;font-weight:700}
+      .cardTitle{font-size:22px;font-weight:900}.cardSub{font-size:16px;font-weight:700}.item{font-size:15px}.result{font-size:16px;font-weight:700}
+      .circleTitle{font-size:24px;font-weight:900}.circleSub{font-size:16px;font-weight:700}.small{font-size:12px;font-weight:700}
     </style>
   </defs>
 
@@ -27,11 +27,11 @@
   <text class="t white sub" x="32" y="170">Nuestras 4 áreas de servicio se conectan para llevar tu proyecto</text>
   <text class="t white sub" x="32" y="198">desde la estrategia hasta el cierre, con control, calidad y resultados.</text>
   <image href="/branding/logo-autorizado.png" x="1190" y="-12" width="250" height="250" preserveAspectRatio="xMidYMid meet"/>
-  <text class="t white" x="1432" y="62" font-size="20" font-weight="900">MÁS PLANEACIÓN</text>
-  <text class="t white" x="1432" y="88" font-size="20" font-weight="900">MÁS CONTROL</text>
-  <text class="t white" x="1432" y="114" font-size="20" font-weight="900">MÁS CUMPLIMIENTO</text>
-  <text class="t white" x="1432" y="140" font-size="20" font-weight="900">MÁS CALIDAD</text>
-  <text class="t white" x="1432" y="166" font-size="20" font-weight="900">MÁS VALOR</text>
+  <text class="t white" x="1422" y="62" font-size="15" font-weight="900">MÁS PLANEACIÓN</text>
+  <text class="t white" x="1422" y="88" font-size="15" font-weight="900">MÁS CONTROL</text>
+  <text class="t white" x="1422" y="114" font-size="15" font-weight="900">MÁS CUMPLIMIENTO</text>
+  <text class="t white" x="1422" y="140" font-size="15" font-weight="900">MÁS CALIDAD</text>
+  <text class="t white" x="1422" y="166" font-size="15" font-weight="900">MÁS VALOR</text>
   <line x1="1430" y1="184" x2="1538" y2="172" stroke="#ff9800" stroke-width="7"/>
 
   <!-- side cards -->
@@ -39,8 +39,8 @@
     <rect x="22" y="228" rx="18" ry="18" width="438" height="322" fill="#fff" stroke="#dfe9f3"/>
     <rect x="22" y="228" rx="18" ry="18" width="438" height="72" fill="url(#orange)"/>
     <text class="t white" x="52" y="279" font-size="42" font-weight="900">1</text>
-    <text class="t white cardTitle" x="112" y="268">DIRECCIÓN Y DESARROLLO</text>
-    <text class="t white cardSub" x="112" y="292">Define el rumbo y genera valor.</text>
+    <text class="t white cardTitle" x="112" y="262">DIRECCIÓN Y</text><text class="t white cardTitle" x="112" y="286">DESARROLLO</text>
+    <text class="t white cardSub" x="255" y="286">Define el rumbo y genera valor.</text>
     <g class="t nav item">
       <text x="67" y="335">• Estrategia y visión del proyecto</text>
       <text x="67" y="371">• Gobierno del proyecto</text>
@@ -54,8 +54,8 @@
     <rect x="1140" y="228" rx="18" ry="18" width="438" height="322" fill="#fff" stroke="#dfe9f3"/>
     <rect x="1140" y="228" rx="18" ry="18" width="438" height="72" fill="url(#blue)"/>
     <text class="t white" x="1170" y="279" font-size="42" font-weight="900">2</text>
-    <text class="t white cardTitle" x="1230" y="268">PLANEACIÓN Y ADMINISTRACIÓN</text>
-    <text class="t white cardSub" x="1230" y="292">Organiza recursos y procesos para el control.</text>
+    <text class="t white cardTitle" x="1230" y="262">PLANEACIÓN Y</text><text class="t white cardTitle" x="1230" y="286">ADMINISTRACIÓN</text>
+    <text class="t white cardSub" x="1230" y="314">Organiza recursos y procesos para el control.</text>
     <g class="t nav item">
       <text x="1185" y="335">• Planeación integral (alcance, plazo, costo, recursos)</text>
       <text x="1185" y="371">• Programación y control de avance</text>
@@ -69,31 +69,31 @@
     <rect x="22" y="568" rx="18" ry="18" width="438" height="352" fill="#fff" stroke="#dfe9f3"/>
     <rect x="22" y="568" rx="18" ry="18" width="438" height="72" fill="url(#purple)"/>
     <text class="t white" x="52" y="619" font-size="42" font-weight="900">4</text>
-    <text class="t white cardTitle" x="112" y="608">SUPERVISIÓN Y AUDITORÍA</text>
-    <text class="t white cardSub" x="112" y="632">Verifica, asegura y da cumplimiento.</text>
+    <text class="t white cardTitle" x="112" y="602">SUPERVISIÓN Y</text><text class="t white cardTitle" x="112" y="626">AUDITORÍA</text>
+    <text class="t white cardSub" x="112" y="654">Verifica, asegura y da cumplimiento.</text>
     <g class="t nav item">
-      <text x="67" y="675">• Supervisión técnica de obra</text>
-      <text x="67" y="711">• Verificación de calidad y procesos</text>
-      <text x="67" y="747">• Auditoría de avance físico y financiero</text>
-      <text x="67" y="783">• Revisión documental y contractual</text>
-      <text x="67" y="819">• Detección de desviaciones y riesgos</text>
-      <text x="67" y="855">• Reportes e indicadores de desempeño</text>
-      <text x="67" y="891">• Recomendaciones correctivas y preventivas</text>
+      <text x="67" y="690">• Supervisión técnica de obra</text>
+      <text x="67" y="724">• Verificación de calidad y procesos</text>
+      <text x="67" y="758">• Auditoría de avance físico y financiero</text>
+      <text x="67" y="792">• Revisión documental y contractual</text>
+      <text x="67" y="826">• Detección de desviaciones y riesgos</text>
+      <text x="67" y="860">• Reportes e indicadores de desempeño</text>
+      <text x="67" y="894">• Recomendaciones correctivas y preventivas</text>
     </g>
 
     <rect x="1140" y="568" rx="18" ry="18" width="438" height="352" fill="#fff" stroke="#dfe9f3"/>
     <rect x="1140" y="568" rx="18" ry="18" width="438" height="72" fill="url(#green)"/>
     <text class="t white" x="1170" y="619" font-size="42" font-weight="900">3</text>
-    <text class="t white cardTitle" x="1230" y="608">PRESUPUESTOS Y COSTOS</text>
-    <text class="t white cardSub" x="1230" y="632">Determina, analiza y controla el costo.</text>
+    <text class="t white cardTitle" x="1230" y="602">PRESUPUESTOS</text><text class="t white cardTitle" x="1230" y="626">Y COSTOS</text>
+    <text class="t white cardSub" x="1230" y="654">Determina, analiza y controla el costo.</text>
     <g class="t nav item">
-      <text x="1185" y="675">• Estimación y cuantificación de costos</text>
-      <text x="1185" y="711">• Catálogo de conceptos</text>
-      <text x="1185" y="747">• Análisis de precios unitarios y tarjetas</text>
-      <text x="1185" y="783">• Presupuestos y explosión de insumos</text>
-      <text x="1185" y="819">• Revisión y auditoría de presupuestos</text>
-      <text x="1185" y="855">• Control de costos y análisis de variaciones</text>
-      <text x="1185" y="891">• Ingeniería de valor y optimización</text>
+      <text x="1185" y="690">• Estimación y cuantificación de costos</text>
+      <text x="1185" y="724">• Catálogo de conceptos</text>
+      <text x="1185" y="758">• Análisis de precios unitarios y tarjetas</text>
+      <text x="1185" y="792">• Presupuestos y explosión de insumos</text>
+      <text x="1185" y="826">• Revisión y auditoría de presupuestos</text>
+      <text x="1185" y="860">• Control de costos y análisis de variaciones</text>
+      <text x="1185" y="894">• Ingeniería de valor y optimización</text>
     </g>
   </g>
 
