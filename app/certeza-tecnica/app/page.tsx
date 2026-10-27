@@ -4,45 +4,13 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireProjectManagerAccess } from "@/lib/project-manager/access";
+import { CERTEZA_TECNICA_AREAS } from "@/lib/certeza-tecnica/portafolio";
 
 const navy="#071d38";
 const gold="#edcb71";
 const border="rgba(237,203,113,.28)";
 
-const areas=[
-  {
-    n:"1",
-    title:"Dirección y Desarrollo",
-    subtitle:"Define el rumbo y genera valor.",
-    color:"#e85a13",
-    href:"/certeza-tecnica/app/direccion-desarrollo",
-    items:["Evaluación técnico-económica","Estrategia y toma de decisiones","Ingeniería de valor","Gestión de riesgos","Capacitación técnica y consultoría"],
-  },
-  {
-    n:"2",
-    title:"Planeación y Administración",
-    subtitle:"Organiza, programa y controla.",
-    color:"#0874d9",
-    href:"/project-manager/panel",
-    items:["Certeza Project Manager","Programa y línea base","Contratos, cambios y restricciones","Valor ganado y pronóstico","Reportes e inteligencia"],
-  },
-  {
-    n:"3",
-    title:"Presupuestos y Costos",
-    subtitle:"Cuantifica, analiza y optimiza.",
-    color:"#268c10",
-    href:"/certeza-tecnica/presupuestos-costos",
-    items:["Generadores y cuantificaciones","APU y tarjetas","Explosión de insumos","Presupuestos","Control y variaciones"],
-  },
-  {
-    n:"4",
-    title:"Supervisión y Auditoría",
-    subtitle:"Verifica, asegura y da cumplimiento.",
-    color:"#6a22ba",
-    href:"/certeza-tecnica/app/supervision-auditoria",
-    items:["Supervisión técnica y calidad","Auditoría de obra","Estimaciones y generadores","Avance físico-financiero","Cierre y recepción"],
-  },
-] as const;
+const areas=CERTEZA_TECNICA_AREAS;
 
 export default async function CertezaTecnica360Page(){
   const session=await auth();
