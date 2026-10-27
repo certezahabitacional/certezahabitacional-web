@@ -1,12 +1,13 @@
 import Link from "next/link";
 
-import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
+import { getAuthorizedCostProjectCodes } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 export default async function ExplosionInsumosPage() {
-  await requireCertezaCostAccess("/certeza-tecnica/app/costos/explosion-insumos");
+  const { codigos } = await getAuthorizedCostProjectCodes("/certeza-tecnica/app/costos/explosion-insumos");
 
   const explosiones = await prisma.explosionInsumosProyecto.findMany({
+    where: { proyecto: { codigo: { in: codigos } } },
     include: {
       proyecto: { select: { codigo: true, nombre: true, clienteNombre: true } },
       _count: { select: { detalles: true } },
