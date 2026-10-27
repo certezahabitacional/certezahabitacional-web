@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { EstadoProyectoGeneradores, RolUsuario } from "@prisma/client";
 
-import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
+import { getAuthorizedCostProjectCodes } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 const etiquetasEstado: Record<EstadoProyectoGeneradores, string> = {
@@ -20,9 +20,10 @@ const etiquetasEstado: Record<EstadoProyectoGeneradores, string> = {
 };
 
 export default async function GeneradoresCertezaTecnicaPage() {
-  await requireCertezaCostAccess("/certeza-tecnica/app/costos/generadores");
+  const { codigos } = await getAuthorizedCostProjectCodes("/certeza-tecnica/app/costos/generadores");
 
   const proyectos = await prisma.proyectoGeneradores.findMany({
+    where: { codigo: { in: codigos } },
     select: {
       id: true,
       codigo: true,
