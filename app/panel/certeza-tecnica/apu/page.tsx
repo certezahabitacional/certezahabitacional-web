@@ -35,8 +35,8 @@ export default async function APUPage() {
             </p>
           </div>
           <div className="flex gap-3">
-            <Link href="/panel/certeza-tecnica/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Generadores</Link>
-            <Link href="/certeza-tecnica/presupuestos-costos" className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Costos y Presupuestos</Link>
+            <Link href="/certeza-tecnica/app/costos/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Generadores</Link>
+            <Link href="/certeza-tecnica/app/costos/presupuestos" className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Costos y Presupuestos</Link>
           </div>
         </div>
 
