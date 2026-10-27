@@ -17,12 +17,12 @@ function numeroOpcional(valor: string): number | null {
 }
 
 export async function crearProyectoGeneradores(formData: FormData) {
-  const usuarioActual = await requireCertezaCostAccess("/panel/certeza-tecnica/generadores/nuevo");
+  const usuarioActual = await requireCertezaCostAccess("/certeza-tecnica/app/costos/generadores/nuevo");
 
   const nombre = texto(formData, "nombre");
   const clienteNombre = texto(formData, "clienteNombre");
   if (!nombre || !clienteNombre) {
-    redirect("/panel/certeza-tecnica/generadores/nuevo?error=Nombre%20del%20proyecto%20y%20cliente%20son%20obligatorios");
+    redirect("/certeza-tecnica/app/costos/generadores/nuevo?error=Nombre%20del%20proyecto%20y%20cliente%20son%20obligatorios");
   }
 
   const ahora = new Date();
@@ -46,6 +46,6 @@ export async function crearProyectoGeneradores(formData: FormData) {
     },
   });
 
-  revalidatePath("/panel/certeza-tecnica/generadores");
-  redirect("/panel/certeza-tecnica/generadores");
+  revalidatePath("/certeza-tecnica/app/costos/generadores");
+  redirect("/certeza-tecnica/app/costos/generadores");
 }
