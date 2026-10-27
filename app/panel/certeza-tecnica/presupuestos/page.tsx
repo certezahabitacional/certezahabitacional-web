@@ -1,13 +1,14 @@
 import Link from "next/link";
 
-import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
+import { getAuthorizedCostProjectCodes } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 import { recalcularCostosProyecto } from "@/app/panel/certeza-tecnica/costos/actions";
 
 export default async function PresupuestosCTPage() {
-  await requireCertezaCostAccess("/certeza-tecnica/app/costos/presupuestos");
+  const { codigos } = await getAuthorizedCostProjectCodes("/certeza-tecnica/app/costos/presupuestos");
 
   const [presupuestos, proyectosCosteables] = await Promise.all([prisma.presupuestoProyectoCT.findMany({
+    where: { proyecto: { codigo: { in: codigos } } },
     include: {
       proyecto: { select: { codigo: true, nombre: true, clienteNombre: true } },
       _count: { select: { conceptos: true } },
@@ -16,6 +17,7 @@ export default async function PresupuestosCTPage() {
     take: 50,
   }),
     prisma.proyectoGeneradores.findMany({
+      where: { codigo: { in: codigos } },
       select: { id: true, codigo: true, nombre: true },
       orderBy: [{ actualizadoEn: "desc" }],
       take: 100,
