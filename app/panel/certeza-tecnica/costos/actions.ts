@@ -1,9 +1,9 @@
 "use server";
 
-import { EstadoGeneradorObra, EstadoTarjetaAPU, RolUsuario, TipoInsumoAPU } from "@prisma/client";
+import { EstadoGeneradorObra, EstadoTarjetaAPU, TipoInsumoAPU } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 const ESTADOS_GENERADOR_VALIDOS: EstadoGeneradorObra[] = [
@@ -30,14 +30,7 @@ function ceroTotales(): TotalesExplosion {
 }
 
 export async function recalcularCostosProyecto(proyectoId: string) {
-  const usuarioActual = await obtenerUsuarioConAlcanceZona("/panel/certeza-tecnica/presupuestos");
-  const puedeOperar =
-    usuarioActual.rol === RolUsuario.DIRECTOR ||
-    usuarioActual.rol === RolUsuario.ADMINISTRADOR;
-
-  if (!puedeOperar) {
-    throw new Error("No cuenta con permisos para recalcular costos.");
-  }
+  await requireCertezaCostAccess("/panel/certeza-tecnica/presupuestos");
 
   const proyecto = await prisma.proyectoGeneradores.findUnique({
     where: { id: proyectoId },
