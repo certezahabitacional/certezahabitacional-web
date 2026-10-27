@@ -5,11 +5,10 @@ import {
   EstadoGeneradorObra,
   EstadoTarjetaAPU,
   OrigenConceptoGeneradores,
-  RolUsuario,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 import { recalcularCostosProyecto } from "@/app/panel/certeza-tecnica/costos/actions";
 
@@ -24,11 +23,7 @@ function numero(fd: FormData, campo: string, defecto = 0) {
 }
 
 async function autorizar(ruta: string) {
-  const usuario = await obtenerUsuarioConAlcanceZona(ruta);
-  if (usuario.rol !== RolUsuario.DIRECTOR && usuario.rol !== RolUsuario.ADMINISTRADOR) {
-    throw new Error("No cuenta con permisos para esta operación.");
-  }
-  return usuario;
+  return requireCertezaCostAccess(ruta);
 }
 
 export async function crearConcepto(proyectoId: string, fd: FormData) {
