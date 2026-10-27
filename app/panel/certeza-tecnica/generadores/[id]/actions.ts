@@ -27,7 +27,7 @@ async function autorizar(ruta: string) {
 }
 
 export async function crearConcepto(proyectoId: string, fd: FormData) {
-  await autorizar(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  await autorizar(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
   const descripcion = texto(fd, "descripcion");
   const unidad = texto(fd, "unidad");
   if (!descripcion || !unidad) throw new Error("Descripción y unidad son obligatorias.");
@@ -44,11 +44,11 @@ export async function crearConcepto(proyectoId: string, fd: FormData) {
       observaciones: texto(fd, "observaciones") || null,
     },
   });
-  revalidatePath(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  revalidatePath(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
 }
 
 export async function crearGenerador(proyectoId: string, fd: FormData) {
-  const usuario = await autorizar(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  const usuario = await autorizar(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
   const conceptoId = texto(fd, "conceptoId");
   const total = numero(fd, "total");
   if (!conceptoId || total <= 0) throw new Error("Concepto y cantidad son obligatorios.");
@@ -71,11 +71,11 @@ export async function crearGenerador(proyectoId: string, fd: FormData) {
       observaciones: texto(fd, "observaciones") || null,
     },
   });
-  revalidatePath(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  revalidatePath(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
 }
 
 export async function crearTarjetaAPU(proyectoId: string, fd: FormData) {
-  await autorizar(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  await autorizar(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
   const conceptoId = texto(fd, "conceptoId");
   if (!conceptoId) throw new Error("Seleccione un concepto.");
 
@@ -113,11 +113,11 @@ export async function crearTarjetaAPU(proyectoId: string, fd: FormData) {
       observaciones: texto(fd, "observaciones") || null,
     },
   });
-  revalidatePath(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  revalidatePath(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
 }
 
 export async function agregarComponenteAPU(proyectoId: string, fd: FormData) {
-  await autorizar(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  await autorizar(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
   const tarjetaId = texto(fd, "tarjetaId");
   const insumoId = texto(fd, "insumoId");
   const cantidad = numero(fd, "cantidad");
@@ -159,11 +159,11 @@ export async function agregarComponenteAPU(proyectoId: string, fd: FormData) {
     });
   }
 
-  revalidatePath(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  revalidatePath(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
 }
 
 export async function aprobarTarjetaAPU(proyectoId: string, tarjetaId: string) {
-  await autorizar(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  await autorizar(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
   const count = await prisma.tarjetaAPUInsumo.count({ where: { tarjetaId } });
   if (count === 0) throw new Error("No se puede aprobar una APU sin insumos.");
 
@@ -171,11 +171,11 @@ export async function aprobarTarjetaAPU(proyectoId: string, tarjetaId: string) {
     where: { id: tarjetaId },
     data: { estado: EstadoTarjetaAPU.APROBADA },
   });
-  revalidatePath(`/panel/certeza-tecnica/generadores/${proyectoId}`);
-  revalidatePath("/panel/certeza-tecnica/apu");
+  revalidatePath(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
+  revalidatePath("/certeza-tecnica/app/costos/apu");
 }
 
 export async function recalcularProyectoDesdeFicha(proyectoId: string) {
   await recalcularCostosProyecto(proyectoId);
-  revalidatePath(`/panel/certeza-tecnica/generadores/${proyectoId}`);
+  revalidatePath(`/certeza-tecnica/app/costos/generadores/${proyectoId}`);
 }
