@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { RolUsuario } from "@prisma/client";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 import {
   agregarComponenteAPU,
@@ -15,9 +14,7 @@ import {
 
 export default async function ProyectoCostosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const usuarioActual = await obtenerUsuarioConAlcanceZona(`/panel/certeza-tecnica/generadores/${id}`);
-  const puedeEntrar = usuarioActual.rol === RolUsuario.DIRECTOR || usuarioActual.rol === RolUsuario.ADMINISTRADOR;
-  if (!puedeEntrar) redirect("/acceso");
+  await requireCertezaCostAccess(`/panel/certeza-tecnica/generadores/${id}`);
 
   const [proyecto, insumos] = await Promise.all([
     prisma.proyectoGeneradores.findUnique({
