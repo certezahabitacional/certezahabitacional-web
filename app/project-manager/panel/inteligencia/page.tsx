@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
 import { healthSnapshot as h } from "@/lib/project-manager/health-data";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
+import { requireProjectAccess } from "@/lib/project-manager/access";
 
 const agents=[
   ["📅","Planeación","Cronograma, ruta crítica y restricciones."],
@@ -14,8 +13,7 @@ const agents=[
 ];
 
 export default async function Page() {
-  const session=await auth();
-  if(!session?.user) redirect("/project-manager/login");
+  await requireProjectAccess("PR-0002");
   return (
     <main style={{minHeight:"100vh",background:"#06172c",color:"#fff"}}>
       <PmHeader title="Inteligencia Certeza" subtitle="El sistema analiza y recomienda; la persona responsable decide." />
