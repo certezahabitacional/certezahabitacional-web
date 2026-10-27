@@ -38,10 +38,10 @@ export default async function PresupuestosCTPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/panel/certeza-tecnica/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Generadores</Link>
-            <Link href="/panel/certeza-tecnica/apu" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Tarjetas APU</Link>
-            <Link href="/panel/certeza-tecnica/explosion-insumos" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Explosión de Insumos</Link>
-            <Link href="/certeza-tecnica/presupuestos-costos" className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Costos y Presupuestos</Link>
+            <Link href="/certeza-tecnica/app/costos/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Generadores</Link>
+            <Link href="/certeza-tecnica/app/costos/apu" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Tarjetas APU</Link>
+            <Link href="/certeza-tecnica/app/costos/explosion-insumos" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Explosión de Insumos</Link>
+            <Link href="/certeza-tecnica/app" className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Costos y Presupuestos</Link>
           </div>
         </div>
 
