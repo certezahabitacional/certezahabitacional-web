@@ -14,7 +14,7 @@ import {
 
 export default async function ProyectoCostosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireCertezaCostAccess(`/panel/certeza-tecnica/generadores/${id}`);
+  await requireCertezaCostAccess(`/certeza-tecnica/app/costos/generadores/${id}`);
 
   const [proyecto, insumos] = await Promise.all([
     prisma.proyectoGeneradores.findUnique({
