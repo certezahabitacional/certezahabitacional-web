@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
+import { requireCertezaCostProjectAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 import {
   agregarComponenteAPU,
@@ -14,7 +14,7 @@ import {
 
 export default async function ProyectoCostosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireCertezaCostAccess(`/certeza-tecnica/app/costos/generadores/${id}`);
+  await requireCertezaCostProjectAccess(id,`/certeza-tecnica/app/costos/generadores/${id}`);
 
   const [proyecto, insumos] = await Promise.all([
     prisma.proyectoGeneradores.findUnique({
