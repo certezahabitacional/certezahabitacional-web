@@ -12,8 +12,7 @@ const dark="#06172c";
 const lightOnDark="#c9e6fb";
 
 export default async function Page() {
-  const session = await auth();
-  if (!session?.user) redirect("/project-manager/login");
+  await requireProjectAccess("PR-0002");
   return (
     <main style={{minHeight:"100vh",background:dark,color:"#fff"}}>
       <PmHeader title="Reportes Ejecutivos" subtitle="Seguimiento → medición → análisis → pronóstico → informe." />
