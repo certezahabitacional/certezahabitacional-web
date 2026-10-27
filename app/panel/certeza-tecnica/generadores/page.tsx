@@ -61,7 +61,7 @@ export default async function GeneradoresCertezaTecnicaPage() {
           </div>
 
           <Link
-            href="/panel/certeza-tecnica/generadores/nuevo"
+            href="/certeza-tecnica/app/costos/generadores/nuevo"
             className="inline-flex items-center justify-center rounded-2xl bg-amber-300 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-200"
           >
             Nuevo proyecto
@@ -125,7 +125,7 @@ export default async function GeneradoresCertezaTecnicaPage() {
                       <td className="px-4 py-4">{proyecto.responsable?.nombre ?? proyecto.responsable?.email ?? "Sin asignar"}</td>
                       <td className="px-4 py-4 text-sm text-slate-300">
                         <div>{proyecto._count.documentos} doc. · {proyecto._count.conceptos} conceptos · {proyecto._count.generadores} gen.</div>
-                        <Link href={"/panel/certeza-tecnica/generadores/" + proyecto.id} className="mt-2 inline-flex rounded-xl bg-amber-300 px-3 py-2 text-xs font-black text-slate-950">
+                        <Link href={"/certeza-tecnica/app/costos/generadores/" + proyecto.id} className="mt-2 inline-flex rounded-xl bg-amber-300 px-3 py-2 text-xs font-black text-slate-950">
                           Abrir flujo de costos
                         </Link>
                       </td>
