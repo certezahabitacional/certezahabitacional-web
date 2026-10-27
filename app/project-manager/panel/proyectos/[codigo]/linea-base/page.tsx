@@ -23,6 +23,7 @@ export default async function LineaBasePage({params,searchParams}:{params:Promis
       participantes:{where:{usuarioId:userId},select:{id:true}},
       constructibilidad:true,
       lineaBase:true,
+      registrosModulo:{orderBy:{actualizadoEn:"desc"}},
     },
   });
 
@@ -45,6 +46,34 @@ export default async function LineaBasePage({params,searchParams}:{params:Promis
   const indicadores=asObj(lb?.indicadoresBase);
   const riesgos=Array.isArray(lb?.riesgosBase)?lb?.riesgosBase.map(String):[];
   const approved=lb?.estado==="APROBADA";
+  const costSource=String(presupuesto.fuente??"")==="CERTEZA_COST";
+  const costConcepts=asRows(presupuesto.conceptos);
+  const costPartidas=asRows(presupuesto.partidas);
+  const costBase=Number(presupuesto.totalPresupuesto??asObj(presupuesto.base).montoTotal??presupuesto.montoProyecto??0);
+
+  const economicKeywords=["COST","FINAN","CONTRAT","COMPRA","SUBCONTRAT","ESTIM"];
+  const economicRecords=(proyecto?.registrosModulo??[]).filter(r=>economicKeywords.some(k=>r.modulo.toUpperCase().includes(k)));
+  const comprometido=economicRecords.reduce((s,r)=>s+Number(r.importePlan||0),0);
+  const ejercido=economicRecords.reduce((s,r)=>s+Number(r.importeReal||0),0);
+  const progressValues=(proyecto?.registrosModulo??[]).map(r=>{
+    const d=asObj(r.datos);
+    for(const key of ["avanceFisico","porcentajeAvance","avance"]){
+      const n=Number(d[key]);
+      if(Number.isFinite(n)&&n>=0&&n<=100) return n;
+    }
+    return null;
+  }).filter((n):n is number=>n!==null);
+  const avanceFisicoActual=progressValues.length?Math.round(progressValues.reduce((a,b)=>a+b,0)/progressValues.length):Number(indicadores.avanceFisico??0);
+  let forecast:number|null=null;
+  for(const r of (proyecto?.registrosModulo??[])){
+    const d=asObj(r.datos);
+    for(const key of ["proyeccionFinal","forecastCosto","costoFinalPronosticado"]){
+      const n=Number(d[key]);
+      if(Number.isFinite(n)&&n>0){forecast=n;break;}
+    }
+    if(forecast!==null) break;
+  }
+  const proyeccionFinal=forecast??costBase;
 
   return <main style={{minHeight:"100vh",background:"#eef6fb",color:"#082f64"}}>
     <PmHeader title="Línea Base Definitiva" subtitle={`${code} · ${nombre} · Referencia oficial de alcance, costo, plazo y condiciones de ejecución`}/>
@@ -83,7 +112,7 @@ export default async function LineaBasePage({params,searchParams}:{params:Promis
 
       {lb && <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:10,marginTop:14}}>
         {[
-          ["Costo base",money(asObj(presupuesto.base).montoTotal??presupuesto.montoProyecto)],
+          ["Costo base",money(costBase)],
           ["Inicio",String(asObj(programa.base).fechaInicio??"Por definir")],
           ["Término",String(asObj(programa.base).fechaFin??"Por definir")],
           ["Avance inicial","0%"],
@@ -128,6 +157,68 @@ export default async function LineaBasePage({params,searchParams}:{params:Promis
         </article>
       </div>}
 
+      {lb && costSource && <article style={{...card,marginTop:14,padding:18,border:"2px solid #268c10"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:950,color:"#268c10",letterSpacing:".08em"}}>LÍNEA BASE DE COSTOS · CERTEZA COST</div>
+            <h2 style={{margin:"5px 0 4px"}}>Presupuesto económico congelado</h2>
+            <div style={{fontSize:12,color:"#4a657d"}}>Versión {String(presupuesto.version??"—")} · {costPartidas.length} partidas · {costConcepts.length} conceptos · fuente única de control económico.</div>
+          </div>
+          <div style={{fontSize:28,fontWeight:950,color:"#187342"}}>{money(costBase)}</div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:9,marginTop:14}}>
+          {[
+            ["Línea base",money(costBase)],
+            ["Comprometido",money(comprometido)],
+            ["Ejercido",money(ejercido)],
+            ["Avance físico",avanceFisicoActual+"%"],
+            ["Proyección final",money(proyeccionFinal)],
+          ].map(([k,v])=><div key={k} style={{border:"1px solid #dbe8da",borderRadius:10,padding:11,background:"#f9fdf8"}}>
+            <div style={{fontSize:10,fontWeight:900,color:"#6d836d",textTransform:"uppercase"}}>{k}</div>
+            <div style={{fontSize:18,fontWeight:950,marginTop:4}}>{v}</div>
+          </div>)}
+        </div>
+        <div style={{fontSize:11,color:"#718171",marginTop:8}}>
+          {forecast===null?"Proyección final: todavía no existe forecast capturado; se muestra la Línea Base como referencia.":"Proyección final obtenida del último forecast económico registrado."}
+        </div>
+
+        <div style={{overflowX:"auto",marginTop:16}}>
+          <table style={{width:"100%",minWidth:900,borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{background:"#eef7ec",textAlign:"left"}}>
+              <th style={{padding:9}}>Partida</th><th style={{padding:9}}>Conceptos</th><th style={{padding:9,textAlign:"right"}}>Importe base</th>
+            </tr></thead>
+            <tbody>{costPartidas.map((row,i)=>{
+              const conceptos=asRows(row.conceptos);
+              return <tr key={i} style={{borderTop:"1px solid #e2ebe0"}}>
+                <td style={{padding:9,fontWeight:900}}>{String(row.partida??"SIN PARTIDA")}</td>
+                <td style={{padding:9}}>{conceptos.length}</td>
+                <td style={{padding:9,textAlign:"right",fontWeight:900}}>{money(row.importe)}</td>
+              </tr>
+            })}</tbody>
+          </table>
+        </div>
+        <details style={{marginTop:12}}>
+          <summary style={{cursor:"pointer",fontWeight:900,color:"#187342"}}>Ver detalle de conceptos de la Línea Base</summary>
+          <div style={{overflowX:"auto",marginTop:10}}>
+            <table style={{width:"100%",minWidth:1100,borderCollapse:"collapse",fontSize:11}}>
+              <thead><tr style={{background:"#f2f7f1",textAlign:"left"}}>
+                {["Partida","Clave","Descripción","Unidad","Cantidad","P.U.","Importe"].map(x=><th key={x} style={{padding:8}}>{x}</th>)}
+              </tr></thead>
+              <tbody>{costConcepts.map((row,i)=><tr key={i} style={{borderTop:"1px solid #e5ece3"}}>
+                <td style={{padding:8}}>{String(row.partida??"—")}</td>
+                <td style={{padding:8,fontWeight:800}}>{String(row.clave??"—")}</td>
+                <td style={{padding:8}}>{String(row.descripcion??"")}</td>
+                <td style={{padding:8}}>{String(row.unidad??"")}</td>
+                <td style={{padding:8,textAlign:"right"}}>{Number(row.cantidad??0).toLocaleString("es-MX",{maximumFractionDigits:3})}</td>
+                <td style={{padding:8,textAlign:"right"}}>{money(row.precioUnitario)}</td>
+                <td style={{padding:8,textAlign:"right",fontWeight:900}}>{money(row.importe)}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        </details>
+      </article>}
+
       {lb && <div style={{display:"grid",gridTemplateColumns:"1.1fr .9fr",gap:14,marginTop:14}}>
         <article style={{...card,padding:0,overflow:"hidden"}}>
           <div style={{padding:"14px 16px",fontSize:19,fontWeight:950,borderBottom:"1px solid #d8e6f2"}}>Liberaciones incorporadas a la Línea Base</div>
@@ -171,8 +262,8 @@ export default async function LineaBasePage({params,searchParams}:{params:Promis
     </section>
 
     <style>{`
-      @media(max-width:1000px){div[style*="repeat(4"],div[style*="1fr 1fr"],div[style*="1.1fr .9fr"]{grid-template-columns:1fr 1fr !important;}}
-      @media(max-width:700px){div[style*="repeat(4"],div[style*="1fr 1fr"],div[style*="1.1fr .9fr"],div[style*="repeat(2"]{grid-template-columns:1fr !important;}}
+      @media(max-width:1000px){div[style*="repeat(5"],div[style*="repeat(4"],div[style*="1fr 1fr"],div[style*="1.1fr .9fr"]{grid-template-columns:1fr 1fr !important;}}
+      @media(max-width:700px){div[style*="repeat(5"],div[style*="repeat(4"],div[style*="1fr 1fr"],div[style*="1.1fr .9fr"],div[style*="repeat(2"]{grid-template-columns:1fr !important;}}
     `}</style>
   </main>;
 }
