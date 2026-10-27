@@ -4,7 +4,7 @@ import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 export default async function APUPage() {
-  await requireCertezaCostAccess("/panel/certeza-tecnica/apu");
+  await requireCertezaCostAccess("/certeza-tecnica/app/costos/apu");
 
   const [tarjetas, insumos] = await Promise.all([
     prisma.tarjetaPrecioUnitario.findMany({
