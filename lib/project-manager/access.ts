@@ -49,11 +49,7 @@ export async function requireProjectAccess(codigo: string) {
 
   if (!proyecto || !proyecto.activo) notFound();
 
-  const accesoAutorizado =
-    proyecto.participantes.length > 0 ||
-    proyecto.creadoPorId === access.userId;
-
-  if (!accesoAutorizado) notFound();
+  if (proyecto.participantes.length === 0) notFound();
 
   return {
     ...access,
@@ -100,10 +96,7 @@ export async function getAuthorizedProjectCodes(userId: string) {
   const proyectos = await prisma.proyectoPM.findMany({
     where: {
       activo: true,
-      OR: [
-        { participantes: { some: { usuarioId: userId } } },
-        { creadoPorId: userId },
-      ],
+      participantes: { some: { usuarioId: userId } },
     },
     select: { codigo: true },
   });
