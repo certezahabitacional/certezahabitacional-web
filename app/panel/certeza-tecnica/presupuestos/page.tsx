@@ -1,15 +1,11 @@
 import Link from "next/link";
-import { RolUsuario } from "@prisma/client";
-import { redirect } from "next/navigation";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 import { recalcularCostosProyecto } from "@/app/panel/certeza-tecnica/costos/actions";
 
 export default async function PresupuestosCTPage() {
-  const usuarioActual = await obtenerUsuarioConAlcanceZona("/panel/certeza-tecnica/presupuestos");
-  const puedeEntrar = usuarioActual.rol === RolUsuario.DIRECTOR || usuarioActual.rol === RolUsuario.ADMINISTRADOR;
-  if (!puedeEntrar) redirect("/acceso");
+  await requireCertezaCostAccess("/panel/certeza-tecnica/presupuestos");
 
   const [presupuestos, proyectosCosteables] = await Promise.all([prisma.presupuestoProyectoCT.findMany({
     include: {
