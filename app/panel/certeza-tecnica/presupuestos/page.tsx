@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { recalcularCostosProyecto } from "@/app/panel/certeza-tecnica/costos/actions";
 
 export default async function PresupuestosCTPage() {
-  await requireCertezaCostAccess("/panel/certeza-tecnica/presupuestos");
+  await requireCertezaCostAccess("/certeza-tecnica/app/costos/presupuestos");
 
   const [presupuestos, proyectosCosteables] = await Promise.all([prisma.presupuestoProyectoCT.findMany({
     include: {
