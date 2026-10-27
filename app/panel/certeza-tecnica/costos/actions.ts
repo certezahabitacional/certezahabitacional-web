@@ -30,7 +30,7 @@ function ceroTotales(): TotalesExplosion {
 }
 
 export async function recalcularCostosProyecto(proyectoId: string) {
-  await requireCertezaCostAccess("/panel/certeza-tecnica/presupuestos");
+  await requireCertezaCostAccess("/certeza-tecnica/app/costos/presupuestos");
 
   const proyecto = await prisma.proyectoGeneradores.findUnique({
     where: { id: proyectoId },
@@ -289,10 +289,10 @@ export async function recalcularCostosProyecto(proyectoId: string) {
     }
   });
 
-  revalidatePath("/panel/certeza-tecnica/generadores");
-  revalidatePath("/panel/certeza-tecnica/apu");
-  revalidatePath("/panel/certeza-tecnica/explosion-insumos");
-  revalidatePath("/panel/certeza-tecnica/presupuestos");
+  revalidatePath("/certeza-tecnica/app/costos/generadores");
+  revalidatePath("/certeza-tecnica/app/costos/apu");
+  revalidatePath("/certeza-tecnica/app/costos/explosion-insumos");
+  revalidatePath("/certeza-tecnica/app/costos/presupuestos");
 
   return {
     conceptos: conceptosPresupuesto.length,
