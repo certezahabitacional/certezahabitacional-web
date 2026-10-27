@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { EstadoProyectoGeneradores, RolUsuario } from "@prisma/client";
-import { redirect } from "next/navigation";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 const etiquetasEstado: Record<EstadoProyectoGeneradores, string> = {
@@ -21,12 +20,7 @@ const etiquetasEstado: Record<EstadoProyectoGeneradores, string> = {
 };
 
 export default async function GeneradoresCertezaTecnicaPage() {
-  const usuarioActual = await obtenerUsuarioConAlcanceZona("/panel/certeza-tecnica/generadores");
-  const puedeEntrar =
-    usuarioActual.rol === RolUsuario.DIRECTOR ||
-    usuarioActual.rol === RolUsuario.ADMINISTRADOR;
-
-  if (!puedeEntrar) redirect("/acceso");
+  await requireCertezaCostAccess("/panel/certeza-tecnica/generadores");
 
   const proyectos = await prisma.proyectoGeneradores.findMany({
     select: {
