@@ -35,9 +35,9 @@ export default async function ExplosionInsumosPage() {
             <p className="mt-3 max-w-4xl text-sm text-slate-400 sm:text-base">Consolida automáticamente los insumos de las tarjetas APU para conocer cantidades y costos globales del proyecto.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/panel/certeza-tecnica/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Generadores</Link>
-            <Link href="/panel/certeza-tecnica/apu" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Tarjetas APU</Link>
-            <Link href="/certeza-tecnica/presupuestos-costos" className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Costos y Presupuestos</Link>
+            <Link href="/certeza-tecnica/app/costos/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Generadores</Link>
+            <Link href="/certeza-tecnica/app/costos/apu" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Tarjetas APU</Link>
+            <Link href="/certeza-tecnica/app/costos/presupuestos" className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-black text-slate-950">Costos y Presupuestos</Link>
           </div>
         </div>
 
