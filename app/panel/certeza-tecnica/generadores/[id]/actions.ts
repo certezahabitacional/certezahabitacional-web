@@ -51,7 +51,7 @@ export async function crearConcepto(proyectoId: string, fd: FormData) {
 }
 
 export async function crearGenerador(proyectoId: string, fd: FormData) {
-  const usuario = await autorizar(proyectoId);
+  const { usuario } = await autorizar(proyectoId);
   const conceptoId = texto(fd, "conceptoId");
   const total = numero(fd, "total");
   if (!conceptoId || total <= 0) throw new Error("Concepto y cantidad son obligatorios.");
