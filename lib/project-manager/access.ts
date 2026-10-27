@@ -94,3 +94,18 @@ export async function requireProjectManagerDirector() {
   }
   return access;
 }
+
+
+export async function getAuthorizedProjectCodes(userId: string) {
+  const proyectos = await prisma.proyectoPM.findMany({
+    where: {
+      activo: true,
+      OR: [
+        { participantes: { some: { usuarioId: userId } } },
+        { creadoPorId: userId },
+      ],
+    },
+    select: { codigo: true },
+  });
+  return proyectos.map((p) => p.codigo);
+}
