@@ -3,7 +3,7 @@
 import { EstadoGeneradorObra, EstadoTarjetaAPU, TipoInsumoAPU } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
+import { requireCertezaCostProjectAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 const ESTADOS_GENERADOR_VALIDOS: EstadoGeneradorObra[] = [
@@ -30,7 +30,7 @@ function ceroTotales(): TotalesExplosion {
 }
 
 export async function recalcularCostosProyecto(proyectoId: string) {
-  await requireCertezaCostAccess("/certeza-tecnica/app/costos/presupuestos");
+  await requireCertezaCostProjectAccess(proyectoId,"/certeza-tecnica/app/costos/presupuestos");
 
   const proyecto = await prisma.proyectoGeneradores.findUnique({
     where: { id: proyectoId },
