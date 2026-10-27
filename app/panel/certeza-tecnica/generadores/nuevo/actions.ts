@@ -1,10 +1,8 @@
 "use server";
 
-import { RolUsuario } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 function texto(formData: FormData, campo: string): string {
@@ -18,12 +16,7 @@ function numeroOpcional(valor: string): number | null {
 }
 
 export async function crearProyectoGeneradores(formData: FormData) {
-  const usuarioActual = await obtenerUsuarioConAlcanceZona("/panel/certeza-tecnica/generadores/nuevo");
-  const puedeCrear =
-    usuarioActual.rol === RolUsuario.DIRECTOR ||
-    usuarioActual.rol === RolUsuario.ADMINISTRADOR;
-
-  if (!puedeCrear) redirect("/acceso");
+  const usuarioActual = await requireCertezaCostAccess("/panel/certeza-tecnica/generadores/nuevo");
 
   const nombre = texto(formData, "nombre");
   const clienteNombre = texto(formData, "clienteNombre");
