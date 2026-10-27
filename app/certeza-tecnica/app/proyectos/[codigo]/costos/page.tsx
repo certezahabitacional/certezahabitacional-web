@@ -70,10 +70,10 @@ export default async function CostosProyecto360({params}:{params:Promise<{codigo
               Trabaja conceptos, generadores, tarjetas de precio unitario, insumos y presupuesto. Los resultados se reflejan directamente en el Tablero Ejecutivo y en Project Manager.
             </p>
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:14}}>
-              <Link href={`/panel/certeza-tecnica/generadores/${cost.id}`} style={navCard}><b>1. Generadores y cuantificación</b><span>Conceptos, cantidades y generadores.</span></Link>
-              <Link href="/panel/certeza-tecnica/apu" style={navCard}><b>2. Tarjetas APU</b><span>Análisis de precios unitarios.</span></Link>
-              <Link href="/panel/certeza-tecnica/explosion-insumos" style={navCard}><b>3. Explosión de insumos</b><span>Materiales, mano de obra y equipo.</span></Link>
-              <Link href="/panel/certeza-tecnica/presupuestos" style={navCard}><b>4. Presupuestos</b><span>Versiones y línea base de costos.</span></Link>
+              <Link href={`/certeza-tecnica/app/costos/generadores/${cost.id}`} style={navCard}><b>1. Generadores y cuantificación</b><span>Conceptos, cantidades y generadores.</span></Link>
+              <Link href="/certeza-tecnica/app/costos/apu" style={navCard}><b>2. Tarjetas APU</b><span>Análisis de precios unitarios.</span></Link>
+              <Link href="/certeza-tecnica/app/costos/explosion-insumos" style={navCard}><b>3. Explosión de insumos</b><span>Materiales, mano de obra y equipo.</span></Link>
+              <Link href="/certeza-tecnica/app/costos/presupuestos" style={navCard}><b>4. Presupuestos</b><span>Versiones y línea base de costos.</span></Link>
             </div>
           </article>
 
