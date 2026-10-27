@@ -27,33 +27,6 @@ const method = [
   ["07", "Cierre y lecciones aprendidas", "Resultados y mejora continua."],
 ];
 
-const systemModules = [
-  {
-    title: "Generadores",
-    text: "Cuantificaciones trazables por concepto y partida.",
-    href: "/certeza-tecnica/app/costos/generadores",
-    status: "DISPONIBLE",
-  },
-  {
-    title: "Tarjetas de Precios Unitarios",
-    text: "Integración de materiales, mano de obra, equipo, herramienta y rendimientos.",
-    href: "/certeza-tecnica/app/costos/apu",
-    status: "DISPONIBLE",
-  },
-  {
-    title: "Explosión de Insumos",
-    text: "Concentrado de materiales, mano de obra, equipo, maquinaria y subcontratos.",
-    href: "/certeza-tecnica/app/costos/explosion-insumos",
-    status: "DISPONIBLE",
-  },
-  {
-    title: "Presupuestos",
-    text: "Integración del presupuesto base, escenarios, control y actualización de costos.",
-    href: "/certeza-tecnica/app/costos/presupuestos",
-    status: "DISPONIBLE",
-  },
-];
-
 export default function PresupuestosCostosPage() {
   return (
     <main className={styles.page}>
@@ -202,34 +175,18 @@ export default function PresupuestosCostosPage() {
       <section className={styles.system}>
         <div className={styles.shell}>
           <div className={styles.systemHead}>
-            <span className={styles.kicker}>PRÓXIMA INTEGRACIÓN</span>
-            <h2>Sistema Certeza de Generación y Presupuestación</h2>
+            <span className={styles.kicker}>PLATAFORMA INTEGRAL</span>
+            <h2>Certeza Técnica 360</h2>
             <p>
-              Esta sección queda preparada para conectar directamente las herramientas operativas
-              de costos y presupuestos desde el mismo punto.
+              Accede desde un solo punto al sistema integral que conecta las cuatro áreas
+              del portafolio de Certeza Técnica.
             </p>
           </div>
 
-          <div className={styles.systemGrid}>
-            {systemModules.map((module) => (
-              <article key={module.title} className={styles.systemCard}>
-                <div className={styles.systemIcon}>▦</div>
-                <h3>{module.title}</h3>
-                <p>{module.text}</p>
-                {module.href ? (
-                  <Link href={module.href} className={styles.systemLink}>
-                    Entrar al sistema <span>→</span>
-                  </Link>
-                ) : (
-                  <span className={styles.coming}>{module.status}</span>
-                )}
-              </article>
-            ))}
-          </div>
-
-          <div className={styles.systemNote}>
-            <strong>Ruta prevista:</strong>
-            <span>Generadores → Tarjetas APU → Explosión de Insumos → Presupuesto</span>
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 24 }}>
+            <Link href="/certeza-tecnica/app" className={styles.systemLink}>
+              Entrar a Certeza Técnica 360 <span>→</span>
+            </Link>
           </div>
         </div>
       </section>
