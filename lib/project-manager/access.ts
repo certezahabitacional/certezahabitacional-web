@@ -49,8 +49,11 @@ export async function requireProjectAccess(codigo: string) {
 
   if (!proyecto || !proyecto.activo) notFound();
 
-  const accesoGlobal = access.role === "DIRECTOR" || access.role === "ADMINISTRADOR";
-  if (!accesoGlobal && proyecto.participantes.length === 0) notFound();
+  const accesoAutorizado =
+    proyecto.participantes.length > 0 ||
+    proyecto.creadoPorId === access.userId;
+
+  if (!accesoAutorizado) notFound();
 
   return {
     ...access,
