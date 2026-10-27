@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { RolUsuario } from "@prisma/client";
-import { redirect } from "next/navigation";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { crearProyectoGeneradores } from "./actions";
 
 export default async function NuevoProyectoGeneradoresPage({
@@ -10,12 +8,7 @@ export default async function NuevoProyectoGeneradoresPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const usuarioActual = await obtenerUsuarioConAlcanceZona("/panel/certeza-tecnica/generadores/nuevo");
-  const puedeEntrar =
-    usuarioActual.rol === RolUsuario.DIRECTOR ||
-    usuarioActual.rol === RolUsuario.ADMINISTRADOR;
-
-  if (!puedeEntrar) redirect("/acceso");
+  await requireCertezaCostAccess("/panel/certeza-tecnica/generadores/nuevo");
   const params = await searchParams;
 
   return (
