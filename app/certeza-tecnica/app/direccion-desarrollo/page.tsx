@@ -6,10 +6,7 @@ export default async function DireccionDesarrolloPage(){
   const access=await requireProjectManagerAccess();
   const where={
     activo:true,
-    OR:[
-      {participantes:{some:{usuarioId:access.userId}}},
-      {creadoPorId:access.userId},
-    ],
+    participantes:{some:{usuarioId:access.userId}},
   };
 
   const proyectos=await prisma.proyectoPM.findMany({
