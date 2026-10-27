@@ -1,14 +1,10 @@
 import Link from "next/link";
-import { RolUsuario } from "@prisma/client";
-import { redirect } from "next/navigation";
 
-import { obtenerUsuarioConAlcanceZona } from "@/lib/alcance-zona";
+import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 export default async function ExplosionInsumosPage() {
-  const usuarioActual = await obtenerUsuarioConAlcanceZona("/panel/certeza-tecnica/explosion-insumos");
-  const puedeEntrar = usuarioActual.rol === RolUsuario.DIRECTOR || usuarioActual.rol === RolUsuario.ADMINISTRADOR;
-  if (!puedeEntrar) redirect("/acceso");
+  await requireCertezaCostAccess("/panel/certeza-tecnica/explosion-insumos");
 
   const explosiones = await prisma.explosionInsumosProyecto.findMany({
     include: {
