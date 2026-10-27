@@ -4,7 +4,7 @@ import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 export default async function ExplosionInsumosPage() {
-  await requireCertezaCostAccess("/panel/certeza-tecnica/explosion-insumos");
+  await requireCertezaCostAccess("/certeza-tecnica/app/costos/explosion-insumos");
 
   const explosiones = await prisma.explosionInsumosProyecto.findMany({
     include: {
