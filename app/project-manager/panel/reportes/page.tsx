@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
 import { money } from "@/lib/project-manager/pr0002";
 import { performanceSnapshot as p } from "@/lib/project-manager/performance-data";
 import { healthSnapshot as h } from "@/lib/project-manager/health-data";
 import { PmHeader, card } from "@/app/project-manager/panel/_components";
+import { requireProjectAccess } from "@/lib/project-manager/access";
 
 const ink="#082f64";
 const body="#294f73";
