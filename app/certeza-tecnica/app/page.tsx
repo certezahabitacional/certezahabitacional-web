@@ -17,9 +17,13 @@ export default async function CertezaTecnica360Page(){
   if(!session?.user) redirect("/certeza-tecnica/login?callbackUrl=%2Fcerteza-tecnica%2Fapp");
   const access=await requireProjectManagerAccess();
   const user=session.user.name ?? session.user.email ?? "Usuario autorizado";
-  const where=access.role==="DIRECTOR" || access.role==="ADMINISTRADOR"
-    ? {activo:true}
-    : {activo:true,participantes:{some:{usuarioId:access.userId}}};
+  const where={
+    activo:true,
+    OR:[
+      {participantes:{some:{usuarioId:access.userId}}},
+      {creadoPorId:access.userId},
+    ],
+  };
   const proyectos=await prisma.proyectoPM.findMany({
     where,
     orderBy:{actualizadoEn:"desc"},
