@@ -4,9 +4,13 @@ import { requireProjectManagerAccess } from "@/lib/project-manager/access";
 
 export default async function DireccionDesarrolloPage(){
   const access=await requireProjectManagerAccess();
-  const where=access.role==="DIRECTOR" || access.role==="ADMINISTRADOR"
-    ? {activo:true}
-    : {activo:true,participantes:{some:{usuarioId:access.userId}}};
+  const where={
+    activo:true,
+    OR:[
+      {participantes:{some:{usuarioId:access.userId}}},
+      {creadoPorId:access.userId},
+    ],
+  };
 
   const proyectos=await prisma.proyectoPM.findMany({
     where,
