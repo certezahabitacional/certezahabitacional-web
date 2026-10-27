@@ -163,20 +163,43 @@ export async function establecerPresupuestoComoLineaBase(codigo:string){
     });
 
     if(actual){
-      await tx.lineaBasePM.update({
-        where:{proyectoId:p.id},
-        data:{
-          presupuesto:toJson(snapshot),
-          indicadoresBase:indicadores,
-          hashReferencia:hashPayload({
-            alcance:actual.alcance,
-            presupuesto:snapshot,
-            programa:actual.programa,
-            estructuraFisica:actual.estructuraFisica,
-            contratos:actual.contratos,
-          }),
-        },
-      });
+      const presupuestoActual=(actual.presupuesto && typeof actual.presupuesto==="object" && !Array.isArray(actual.presupuesto))
+        ? actual.presupuesto as Record<string,unknown>
+        : {};
+      const mismoPresupuesto=String(presupuestoActual.presupuestoId??"")===budget.id;
+      if(!mismoPresupuesto){
+        const cambiosPrevios=Array.isArray(actual.cambiosBase)?actual.cambiosBase:[];
+        const historial={
+          tipo:"NUEVA_LINEA_BASE_COSTOS",
+          versionAnterior:actual.version,
+          estadoAnterior:actual.estado,
+          fecha:new Date().toISOString(),
+          presupuestoAnterior:actual.presupuesto,
+          hashAnterior:actual.hashReferencia,
+          motivo:"Nueva versión de presupuesto aprobada desde Certeza Cost",
+        };
+        const nuevaVersion=actual.estado==="APROBADA"?actual.version+1:actual.version;
+        await tx.lineaBasePM.update({
+          where:{proyectoId:p.id},
+          data:{
+            version:nuevaVersion,
+            estado:actual.estado==="APROBADA"?"BORRADOR":actual.estado,
+            aprobadoPorId:actual.estado==="APROBADA"?null:actual.aprobadoPorId,
+            aprobadoEn:actual.estado==="APROBADA"?null:actual.aprobadoEn,
+            motivoAprobacion:actual.estado==="APROBADA"?null:actual.motivoAprobacion,
+            presupuesto:toJson(snapshot),
+            indicadoresBase:indicadores,
+            cambiosBase:toJson([...cambiosPrevios,historial]),
+            hashReferencia:hashPayload({
+              alcance:actual.alcance,
+              presupuesto:snapshot,
+              programa:actual.programa,
+              estructuraFisica:actual.estructuraFisica,
+              contratos:actual.contratos,
+            }),
+          },
+        });
+      }
     }else{
       await tx.lineaBasePM.create({
         data:{
