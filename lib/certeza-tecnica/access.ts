@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getAuthorizedProjectCodes } from "@/lib/project-manager/access";
 
 const COST_ROLES=["DIRECTOR","ADMINISTRADOR"] as const;
 
@@ -25,4 +26,39 @@ export async function requireCertezaCostAccess(callbackUrl:string){
   }
 
   return usuario;
+}
+
+
+export async function getAuthorizedCostProjectCodes(callbackUrl: string) {
+  const usuario = await requireCertezaCostAccess(callbackUrl);
+  return {
+    usuario,
+    codigos: await getAuthorizedProjectCodes(usuario.id),
+  };
+}
+
+export async function requireCertezaCostProjectAccess(projectCostId: string, callbackUrl: string) {
+  const usuario = await requireCertezaCostAccess(callbackUrl);
+  const proyectoCost = await prisma.proyectoGeneradores.findUnique({
+    where: { id: projectCostId },
+    select: { id: true, codigo: true },
+  });
+
+  if (!proyectoCost) notFound();
+
+  const autorizado = await prisma.proyectoPM.findFirst({
+    where: {
+      codigo: proyectoCost.codigo,
+      activo: true,
+      OR: [
+        { participantes: { some: { usuarioId: usuario.id } } },
+        { creadoPorId: usuario.id },
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (!autorizado) notFound();
+
+  return { usuario, proyectoCost };
 }
