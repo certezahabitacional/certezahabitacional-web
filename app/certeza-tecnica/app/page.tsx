@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireProjectManagerAccess } from "@/lib/project-manager/access";
 import { CERTEZA_TECNICA_AREAS } from "@/lib/certeza-tecnica/portafolio";
+import { RUTA_34_SERVICIOS } from "@/lib/certeza-tecnica/ruta-servicios";
 
 const navy="#071d38";
 const gold="#edcb71";
@@ -111,10 +112,46 @@ export default async function CertezaTecnica360Page(){
       </section>
 
       <section style={{marginTop:16,background:"#fff",border:"1px solid #d7e3ec",borderRadius:18,padding:20}}>
-        <h2 style={{margin:"0 0 12px"}}>Flujo integral del proyecto</h2>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:8}}>
-          {["Alta y evaluación","Expediente maestro","Presupuesto y línea base","Planeación y ejecución","Supervisión y auditoría","Cierre y reporte final"].map((x,i)=><div key={x} style={{background:i%2? "#f4f8fb":"#edf5fb",border:"1px solid #dce8f1",padding:"14px 10px",borderRadius:12,textAlign:"center",fontSize:12,fontWeight:850}}><div style={{color:"#d56a17",fontSize:18,fontWeight:950}}>{i+1}</div>{x}</div>)}
+        <div style={{display:"flex",justifyContent:"space-between",gap:14,alignItems:"end",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:950,color:"#6d8297",letterSpacing:".08em"}}>RUTA MAESTRA · 34 SERVICIOS</div>
+            <h2 style={{margin:"5px 0 6px",fontSize:28}}>Recorre Certeza Técnica en el orden lógico de una obra</h2>
+            <p style={{margin:0,color:"#587087",maxWidth:1000,lineHeight:1.6}}>
+              Cada servicio cuenta con su Manual de Procedimiento visual. El cliente puede contratar uno, varios o el proceso integral,
+              pero toda la información generada alimenta Certeza Project Manager.
+            </p>
+          </div>
+          <Link href="/certeza-tecnica/app/servicios/1" style={{background:gold,color:navy,textDecoration:"none",padding:"11px 16px",borderRadius:10,fontWeight:950}}>
+            Iniciar recorrido 1 → 34
+          </Link>
         </div>
+
+        {[...new Set(RUTA_34_SERVICIOS.map(s=>s.fase))].map((fase,idx)=>{
+          const items=RUTA_34_SERVICIOS.filter(s=>s.fase===fase);
+          return <div key={fase} style={{marginTop:22}}>
+            <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:12,alignItems:"center",marginBottom:10}}>
+              <div style={{width:42,height:42,borderRadius:12,background:navy,color:"#fff",display:"grid",placeItems:"center",fontWeight:950,fontSize:20}}>{idx+1}</div>
+              <div>
+                <div style={{fontSize:11,fontWeight:950,color:"#d56a17",letterSpacing:".08em"}}>FASE {idx+1}</div>
+                <h3 style={{margin:"2px 0 0",fontSize:20}}>{fase}</h3>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:10}}>
+              {items.map(s=><Link key={s.numero} href={`/certeza-tecnica/app/servicios/${s.numero}`} style={{textDecoration:"none",color:"#153d5b",border:"1px solid #dbe6ee",borderTop:`5px solid ${s.color}`,borderRadius:14,padding:13,background:"#fbfdff",boxShadow:"0 4px 12px rgba(5,45,80,.04)"}}>
+                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                  <div style={{minWidth:38,height:38,borderRadius:10,background:s.color,color:"#fff",display:"grid",placeItems:"center",fontWeight:950,fontSize:18}}>{s.numero}</div>
+                  <div style={{fontSize:13,fontWeight:950,lineHeight:1.3}}>{s.nombre}</div>
+                </div>
+                <div style={{fontSize:11,color:"#718697",marginTop:8}}>{s.area}</div>
+                <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginTop:10,paddingTop:9,borderTop:"1px solid #e8eef3"}}>
+                  <span style={{fontSize:11,fontWeight:850,color:"#587087"}}>Procedimiento + PM</span>
+                  <span style={{fontSize:12,fontWeight:950,color:s.color}}>Ver manual →</span>
+                </div>
+              </Link>)}
+            </div>
+          </div>
+        })}
       </section>
     </div>
 
