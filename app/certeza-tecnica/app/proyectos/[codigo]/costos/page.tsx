@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireProjectAccess } from "@/lib/project-manager/access";
-import { inicializarCertezaCost, recalcularCertezaCostVinculado } from "./actions";
+import { establecerPresupuestoComoLineaBase, inicializarCertezaCost, recalcularCertezaCostVinculado } from "./actions";
 
 const money=(v:unknown)=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(Number(v||0));
 
@@ -21,6 +21,12 @@ export default async function CostosProyecto360({params}:{params:Promise<{codigo
 
   const latestBudget=cost?.presupuestos[0] ?? null;
   const latestExplosion=cost?.explosionesInsumos[0] ?? null;
+  const lineaBase=await prisma.lineaBasePM.findUnique({where:{proyectoId:p.id}});
+  const baselineBudget=lineaBase?.presupuesto && typeof lineaBase.presupuesto==="object" && !Array.isArray(lineaBase.presupuesto)
+    ? lineaBase.presupuesto as Record<string,unknown>
+    : {};
+  const baselineBudgetId=String(baselineBudget.presupuestoId ?? "");
+  const latestIsBaseline=Boolean(latestBudget && baselineBudgetId===latestBudget.id);
 
   return <main style={{minHeight:"100vh",background:"#f3f7f1",color:"#224228"}}>
     <header style={{background:"linear-gradient(105deg,#174c1c,#268c10)",color:"#fff"}}>
@@ -82,15 +88,25 @@ export default async function CostosProyecto360({params}:{params:Promise<{codigo
                 ["Explosión de insumos",latestExplosion?money(latestExplosion.totalGeneral):"Sin generar"],
               ].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",gap:12,borderBottom:"1px solid #e6eee4",padding:"9px 0"}}><span style={{color:"#6b7f6c"}}>{k}</span><b style={{textAlign:"right"}}>{v}</b></div>)}
             </div>
-            {!access.projectReadOnly&&<form action={recalcularCertezaCostVinculado.bind(null,p.codigo)} style={{marginTop:16}}>
-              <button style={primary}>Recalcular costos y actualizar tablero</button>
-            </form>}
+            {!access.projectReadOnly&&<div style={{display:"grid",gap:10,marginTop:16}}>
+              <form action={recalcularCertezaCostVinculado.bind(null,p.codigo)}>
+                <button style={{...primary,width:"100%"}}>Recalcular costos y actualizar tablero</button>
+              </form>
+              {latestBudget&&<form action={establecerPresupuestoComoLineaBase.bind(null,p.codigo)}>
+                <button style={{...primary,width:"100%",background:latestIsBaseline?"#1f9d55":"#174c1c"}}>
+                  {latestIsBaseline?"Presupuesto vigente ya es Línea Base":"Establecer presupuesto vigente como Línea Base"}
+                </button>
+              </form>}
+            </div>}
           </article>
         </section>
       </>}
 
       <section style={{...box,marginTop:16,background:"#f8fff6"}}>
         <b>Regla de integración:</b> Certeza Cost y Project Manager comparten el código del proyecto. El presupuesto y la explosión de insumos se leen desde Certeza Cost como fuente única de información económica.
+        <div style={{marginTop:8,color:"#58705b",fontSize:13}}>
+          La Línea Base conserva una fotografía inalterable del presupuesto aprobado: partidas, conceptos, cantidades, precios unitarios e importes. Los recálculos posteriores de Certeza Cost no cambian esa referencia hasta que se autorice una nueva Línea Base.
+        </div>
       </section>
     </div>
 
