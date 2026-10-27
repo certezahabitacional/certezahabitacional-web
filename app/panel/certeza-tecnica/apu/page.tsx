@@ -1,13 +1,14 @@
 import Link from "next/link";
 
-import { requireCertezaCostAccess } from "@/lib/certeza-tecnica/access";
+import { getAuthorizedCostProjectCodes } from "@/lib/certeza-tecnica/access";
 import { prisma } from "@/lib/prisma";
 
 export default async function APUPage() {
-  await requireCertezaCostAccess("/certeza-tecnica/app/costos/apu");
+  const { codigos } = await getAuthorizedCostProjectCodes("/certeza-tecnica/app/costos/apu");
 
   const [tarjetas, insumos] = await Promise.all([
     prisma.tarjetaPrecioUnitario.findMany({
+      where: { proyecto: { codigo: { in: codigos } } },
       include: {
         proyecto: { select: { codigo: true, nombre: true } },
         concepto: { select: { clave: true, descripcion: true, unidad: true } },
