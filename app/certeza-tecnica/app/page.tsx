@@ -19,10 +19,7 @@ export default async function CertezaTecnica360Page(){
   const user=session.user.name ?? session.user.email ?? "Usuario autorizado";
   const where={
     activo:true,
-    OR:[
-      {participantes:{some:{usuarioId:access.userId}}},
-      {creadoPorId:access.userId},
-    ],
+    participantes:{some:{usuarioId:access.userId}},
   };
   const proyectos=await prisma.proyectoPM.findMany({
     where,
