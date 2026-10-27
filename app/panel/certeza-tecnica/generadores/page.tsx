@@ -20,7 +20,7 @@ const etiquetasEstado: Record<EstadoProyectoGeneradores, string> = {
 };
 
 export default async function GeneradoresCertezaTecnicaPage() {
-  await requireCertezaCostAccess("/panel/certeza-tecnica/generadores");
+  await requireCertezaCostAccess("/certeza-tecnica/app/costos/generadores");
 
   const proyectos = await prisma.proyectoGeneradores.findMany({
     select: {
