@@ -24,7 +24,7 @@ export default async function NuevoProyectoGeneradoresPage({
               Registra los datos base del expediente. Después incorporaremos documentos, catálogo y cuantificación.
             </p>
           </div>
-          <Link href="/panel/certeza-tecnica/generadores" className="text-sm font-black text-cyan-200 hover:text-cyan-100">
+          <Link href="/certeza-tecnica/app/costos/generadores" className="text-sm font-black text-cyan-200 hover:text-cyan-100">
             Volver al módulo
           </Link>
         </div>
@@ -92,7 +92,7 @@ export default async function NuevoProyectoGeneradoresPage({
           </section>
 
           <div className="flex flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-end">
-            <Link href="/panel/certeza-tecnica/generadores" className="rounded-2xl border border-white/10 px-6 py-3 text-center text-sm font-black">
+            <Link href="/certeza-tecnica/app/costos/generadores" className="rounded-2xl border border-white/10 px-6 py-3 text-center text-sm font-black">
               Cancelar
             </Link>
             <button type="submit" className="rounded-2xl bg-amber-300 px-6 py-3 text-sm font-black text-slate-950 hover:bg-amber-200">
