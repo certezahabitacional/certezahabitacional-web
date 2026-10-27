@@ -52,8 +52,8 @@ export default async function ProyectoCostosPage({ params }: { params: Promise<{
             <p className="mt-2 text-sm text-slate-400">{proyecto.clienteNombre} · {proyecto.ubicacion ?? "Sin ubicación"}</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/panel/certeza-tecnica/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">← Proyectos</Link>
-            <Link href="/panel/certeza-tecnica/presupuestos" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Presupuestos</Link>
+            <Link href="/certeza-tecnica/app/costos/generadores" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">← Proyectos</Link>
+            <Link href="/certeza-tecnica/app/costos/presupuestos" className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black text-cyan-200">Presupuestos</Link>
             <form action={async () => { "use server"; await recalcularProyectoDesdeFicha(proyecto.id); }}>
               <button className="rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950">Recalcular costos</button>
             </form>
