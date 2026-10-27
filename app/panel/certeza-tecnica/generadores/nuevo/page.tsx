@@ -8,7 +8,7 @@ export default async function NuevoProyectoGeneradoresPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireCertezaCostAccess("/panel/certeza-tecnica/generadores/nuevo");
+  await requireCertezaCostAccess("/certeza-tecnica/app/costos/generadores/nuevo");
   const params = await searchParams;
 
   return (
