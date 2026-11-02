@@ -307,6 +307,20 @@ La razon del minimo es permitir que, durante la edicion del reporte, se seleccio
 
 No debe eliminarse evidencia original de manera destructiva solo por no ser elegida para el reporte final, salvo que exista una funcion explicita, autorizada y auditada para ello.
 
+## 6.3 Revisión de conceptos en V2 y visitas posteriores
+
+En V2 y visitas posteriores debe mantenerse visible el universo de conceptos de la visita anterior para permitir una nueva revisión cuando cambien las condiciones de acceso o aparezca una condición nueva.
+
+Reglas:
+
+- Los hallazgos pendientes de la visita anterior se atienden en su flujo de seguimiento y no deben duplicarse como conceptos nuevos.
+- Los conceptos que en la visita anterior quedaron REVISADOS/SIN HALLAZGO deben poder volver a consultarse y revisarse si durante V2 se detecta una condición nueva.
+- Los conceptos que quedaron NO APLICA, sin acceso, no inspeccionados o dentro de una partida deshabilitada deben mostrarse en V2 como susceptibles de primera revisión efectiva.
+- Si un concepto previamente no inspeccionado ahora puede revisarse y no presenta problema, debe registrarse como revisión actual sin hallazgo, conservando el motivo histórico de V1.
+- Si ahora presenta problema, debe permitirse crear un hallazgo nuevo vinculado a la revisión actual.
+- Ninguna acción de V2 debe sobrescribir ni reinterpretar retroactivamente el resultado histórico de V1.
+- El sistema debe conservar trazabilidad explícita entre el concepto antecedente y la revisión realizada en V2 o visita posterior.
+
 ---
 
 # 7. Principio de implementacion
