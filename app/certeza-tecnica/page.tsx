@@ -12,10 +12,24 @@ export default function CertezaTecnicaPage() {
     <main style={{ backgroundColor: "#071d38", color: "white" }}>
       <header style={{ maxWidth: 1400, margin: "0 auto", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <Link href="/" style={{ color: "#fff", textDecoration: "none", fontWeight: 600 }}>← Volver a Grupo Certeza</Link>
-        <span style={{ color: "#edcb71", fontWeight: 700 }}>CERTEZA TÉCNICA</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Link
+            href="/certeza-tecnica/abaco"
+            style={{
+              color: "#071d38",
+              backgroundColor: "#edcb71",
+              padding: "10px 16px",
+              borderRadius: 10,
+              textDecoration: "none",
+              fontWeight: 800,
+            }}
+          >
+            Abrir ÁBACO
+          </Link>
+          <span style={{ color: "#edcb71", fontWeight: 700 }}>CERTEZA TÉCNICA</span>
+        </div>
       </header>
       <section aria-label="Portafolio de servicios de Certeza Técnica" style={{ padding: "0 12px", margin: "0 auto", maxWidth: 1400, height: "auto", overflow: "visible" }}>
-        {/* Servir el PNG autorizado completo sin modificar sus pixeles. */}
         <Image
           src="/branding/portafolio-servicios-certeza-tecnica.png?v=0d7528594def"
           alt="Infografía del portafolio de Certeza Técnica: Presupuestos y Costos; Planeación y Administración; Supervisión y Auditoría; Dirección y Desarrollo. Sitio www.certezahabitacional.com."
