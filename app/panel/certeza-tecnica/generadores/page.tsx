@@ -61,12 +61,20 @@ export default async function GeneradoresCertezaTecnicaPage() {
             </p>
           </div>
 
-          <Link
-            href="/certeza-tecnica/app/costos/generadores/nuevo"
-            className="inline-flex items-center justify-center rounded-2xl bg-amber-300 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-200"
-          >
-            Nuevo proyecto
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/panel/certeza-tecnica/abaco"
+              className="inline-flex items-center justify-center rounded-2xl border border-cyan-300/40 bg-cyan-300/10 px-6 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/20"
+            >
+              Abrir ÁBACO
+            </Link>
+            <Link
+              href="/certeza-tecnica/app/costos/generadores/nuevo"
+              className="inline-flex items-center justify-center rounded-2xl bg-amber-300 px-6 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-200"
+            >
+              Nuevo proyecto
+            </Link>
+          </div>
         </div>
 
         <section className="mt-8 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
