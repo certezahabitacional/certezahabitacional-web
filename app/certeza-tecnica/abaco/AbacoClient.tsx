@@ -407,27 +407,167 @@ function SeqTable({rows,onChange}:{rows:SeqRow[];onChange:(sec:number,patch:Part
   </section>;
 }
 
-function ProgramTable({rows}:{rows:ProgramRow[]}) {
-  return <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
-    <h2 className="text-xl font-bold text-[#edcb71]">Ábaco de programación</h2>
-    <p className="mt-1 text-sm text-slate-300">
-      RENDIMIENTO = cobertura completa. MIXTO = parte por rendimientos y parte por respaldo. PARAMÉTRICO = aún no existe rendimiento aplicable.
-    </p>
-
-    <div className="mt-4 overflow-x-auto">
-      <table className="min-w-[1500px] w-full text-sm">
-        <thead className="bg-[#0b2747]">
-          <tr>
-            <H>#</H><H>SEC</H><H>EVENTO</H><H>INCIDENCIA</H><H>JORNADAS BASE</H><H>SIN REND.</H><H>CUADRILLAS</H><H>DÍAS</H><H>PREDECESORA</H><H>TRASLAPE</H><H>INICIO</H><H>TÉRMINO</H><H>% ACUM.</H><H>MÉTODO</H>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r=><tr key={r.sec} className="border-t border-white/10">
-            <D>{r.orden}</D><D>{r.revisar?"REVISAR":r.sec}</D><D>{r.etapa}</D><D>{pct(r.equivalencia)}</D><D>{r.jornadasBase>0?r.jornadasBase.toFixed(2):"—"}</D><D>{r.conceptosSinRendimiento}</D><D>{r.cuadrillas}</D><D>{r.dias}</D><D>{r.predecesora??"Inicio"}</D><D>{pct(r.traslape)}</D><D>{r.inicio}</D><D>{r.termino}</D><D>{pct(r.avance)}</D>
-            <D><span className={r.metodoDuracion==="RENDIMIENTO"?"font-bold text-emerald-300":r.metodoDuracion==="MIXTO"?"font-bold text-cyan-300":"font-bold text-amber-300"}>{r.metodoDuracion}</span></D>
-          </tr>)}
-        </tbody>
-      </table>
-    </div>
-  </section>;
+function parseProgramDate(value:string){
+  const [day,month,year]=value.split("/").map(Number);
+  return new Date(year,month-1,day,12,0,0);
 }
+
+function dayKey(date:Date){
+  return [
+    date.getFullYear(),
+    String(date.getMonth()+1).padStart(2,"0"),
+    String(date.getDate()).padStart(2,"0"),
+  ].join("-");
+}
+
+function buildCalendar(rows:ProgramRow[]){
+  if(!rows.length) return [] as Date[];
+  const starts=rows.map(r=>parseProgramDate(r.inicio).getTime());
+  const ends=rows.map(r=>parseProgramDate(r.termino).getTime());
+  const start=new Date(Math.min(...starts));
+  const end=new Date(Math.max(...ends));
+  const days:Date[]=[];
+  const cursor=new Date(start);
+  while(cursor.getTime()<=end.getTime()){
+    days.push(new Date(cursor));
+    cursor.setDate(cursor.getDate()+1);
+  }
+  return days;
+}
+
+function isActiveOn(row:ProgramRow,date:Date){
+  const t=date.getTime();
+  return (
+    t>=parseProgramDate(row.inicio).getTime() &&
+    t<=parseProgramDate(row.termino).getTime() &&
+    date.getDay()!==0
+  );
+}
+
+function ProgramTable({rows}:{rows:ProgramRow[]}) {
+  const calendar=buildCalendar(rows);
+  let cumulativeFlow=0;
+  let cumulativeProgress=0;
+
+  const daily=calendar.map(date=>{
+    const active=rows.filter(row=>isActiveOn(row,date));
+    const flow=active.reduce((sum,row)=>sum+(row.importe/Math.max(1,row.dias)),0);
+    const progress=active.reduce((sum,row)=>sum+(row.equivalencia/Math.max(1,row.dias)),0);
+    cumulativeFlow+=flow;
+    cumulativeProgress+=progress;
+    const milestones=rows
+      .filter(row=>dayKey(parseProgramDate(row.termino))===dayKey(date))
+      .map(row=>`SEC ${row.sec}`);
+    return {
+      date,
+      flow,
+      progress,
+      cumulativeFlow,
+      cumulativeProgress:Math.min(1,cumulativeProgress),
+      milestones,
+    };
+  });
+
+  return <div className="space-y-5">
+    <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-[#edcb71]">Ábaco gráfico de programación</h2>
+          <p className="mt-1 max-w-4xl text-sm text-slate-300">
+            Calendario horizontal del proyecto. Cada celda activa representa un día programado del SEC; arriba se calculan flujo, avance y acumulados.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <Metric label="Días calendario" value={String(calendar.length)} />
+          <Metric label="Eventos" value={String(rows.length)} />
+          <Metric label="Flujo total" value={money(rows.reduce((s,r)=>s+r.importe,0))} />
+          <Metric label="Avance final" value={pct(rows.reduce((s,r)=>s+r.equivalencia,0))} />
+        </div>
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+        <table className="border-collapse text-[11px]">
+          <thead>
+            <tr className="bg-[#06162a]">
+              <th className="sticky left-0 z-30 min-w-[210px] border border-white/10 bg-[#06162a] px-3 py-2 text-left text-[#edcb71]">INDICADOR</th>
+              {daily.map(d=><th key={dayKey(d.date)} className="min-w-[62px] border border-white/10 px-1 py-2 text-center text-slate-100">{money(d.flow)}</th>)}
+            </tr>
+            <tr className="bg-[#06162a]">
+              <th className="sticky left-0 z-30 border border-white/10 bg-[#06162a] px-3 py-2 text-left text-[#edcb71]">FLUJO ACUMULADO</th>
+              {daily.map(d=><th key={dayKey(d.date)} className="min-w-[62px] border border-white/10 px-1 py-2 text-center text-slate-200">{money(d.cumulativeFlow)}</th>)}
+            </tr>
+            <tr className="bg-[#0b2747]">
+              <th className="sticky left-0 z-30 border border-white/10 bg-[#0b2747] px-3 py-2 text-left text-[#edcb71]">% DIARIO</th>
+              {daily.map(d=><th key={dayKey(d.date)} className="min-w-[62px] border border-white/10 px-1 py-2 text-center text-cyan-100">{pct(d.progress)}</th>)}
+            </tr>
+            <tr className="bg-[#0b2747]">
+              <th className="sticky left-0 z-30 border border-white/10 bg-[#0b2747] px-3 py-2 text-left text-[#edcb71]">% ACUMULADO</th>
+              {daily.map(d=><th key={dayKey(d.date)} className="min-w-[62px] border border-white/10 px-1 py-2 text-center text-cyan-100">{pct(d.cumulativeProgress)}</th>)}
+            </tr>
+            <tr className="bg-[#102f52]">
+              <th className="sticky left-0 z-30 border border-white/10 bg-[#102f52] px-3 py-2 text-left text-[#edcb71]">HITOS / CHECKPOINTS</th>
+              {daily.map(d=><th key={dayKey(d.date)} className="min-w-[62px] border border-white/10 px-1 py-2 text-center text-amber-200">{d.milestones.join(", ")||"—"}</th>)}
+            </tr>
+            <tr className="bg-[#102f52]">
+              <th className="sticky left-0 z-30 border border-white/10 bg-[#102f52] px-3 py-2 text-left text-[#edcb71]">DÍA</th>
+              {daily.map((d,index)=><th key={dayKey(d.date)} className="min-w-[62px] border border-white/10 px-1 py-2 text-center text-slate-100">{index+1}</th>)}
+            </tr>
+            <tr className="bg-[#102f52]">
+              <th className="sticky left-0 z-30 border border-white/10 bg-[#102f52] px-3 py-2 text-left text-[#edcb71]">FECHA</th>
+              {daily.map(d=><th key={dayKey(d.date)} className="min-w-[62px] border border-white/10 px-1 py-2 text-center text-white">
+                <span className="block font-bold">{String(d.date.getDate()).padStart(2,"0")}/{String(d.date.getMonth()+1).padStart(2,"0")}</span>
+                <span className={d.date.getDay()===0?"text-rose-300":"text-slate-400"}>{["DOM","LUN","MAR","MIÉ","JUE","VIE","SÁB"][d.date.getDay()]}</span>
+              </th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row=><tr key={row.sec}>
+              <td className="sticky left-0 z-20 border border-white/10 bg-[#071d38] px-3 py-2">
+                <span className="block font-black text-[#edcb71]">SEC {row.sec}</span>
+                <span className="block min-w-[190px] text-slate-200">{row.etapa}</span>
+                <span className="mt-1 block text-[10px] text-slate-400">{row.cuadrilla} · {row.dias} día(s)</span>
+              </td>
+              {calendar.map(date=>{
+                const active=isActiveOn(row,date);
+                const finish=dayKey(parseProgramDate(row.termino))===dayKey(date);
+                return <td key={dayKey(date)} className={
+                  "h-12 min-w-[62px] border border-white/10 text-center " +
+                  (active
+                    ? "bg-[#edcb71] font-black text-[#071d38]"
+                    : date.getDay()===0
+                      ? "bg-rose-950/20 text-rose-200"
+                      : "bg-white/[0.02] text-slate-600")
+                }>
+                  {active ? (finish ? `SEC ${row.sec} ✓` : `SEC ${row.sec}`) : ""}
+                </td>;
+              })}
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
+      <h2 className="text-xl font-bold text-[#edcb71]">Detalle de programación</h2>
+      <p className="mt-1 text-sm text-slate-300">
+        RENDIMIENTO = cobertura completa. MIXTO = parte por rendimientos y parte por respaldo. PARAMÉTRICO = aún no existe rendimiento aplicable.
+      </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-[1500px] w-full text-sm">
+          <thead className="bg-[#0b2747]">
+            <tr>
+              <H>#</H><H>SEC</H><H>EVENTO</H><H>INCIDENCIA</H><H>JORNADAS BASE</H><H>SIN REND.</H><H>CUADRILLAS</H><H>DÍAS</H><H>PREDECESORA</H><H>TRASLAPE</H><H>INICIO</H><H>TÉRMINO</H><H>% ACUM.</H><H>MÉTODO</H>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r=><tr key={r.sec} className="border-t border-white/10">
+              <D>{r.orden}</D><D>{r.revisar?"REVISAR":r.sec}</D><D>{r.etapa}</D><D>{pct(r.equivalencia)}</D><D>{r.jornadasBase>0?r.jornadasBase.toFixed(2):"—"}</D><D>{r.conceptosSinRendimiento}</D><D>{r.cuadrillas}</D><D>{r.dias}</D><D>{r.predecesora??"Inicio"}</D><D>{pct(r.traslape)}</D><D>{r.inicio}</D><D>{r.termino}</D><D>{pct(r.avance)}</D>
+              <D><span className={r.metodoDuracion==="RENDIMIENTO"?"font-bold text-emerald-300":r.metodoDuracion==="MIXTO"?"font-bold text-cyan-300":"font-bold text-amber-300"}>{r.metodoDuracion}</span></D>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>;
+}
+
