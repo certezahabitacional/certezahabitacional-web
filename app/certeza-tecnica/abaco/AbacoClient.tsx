@@ -104,6 +104,8 @@ export default function AbacoClient() {
   const [resourceCaps, setResourceCaps] = useState<Record<string,number>>({});
   const [resourcePreferredFront, setResourcePreferredFront] = useState<Record<string,number>>({});
   const [strategy, setStrategy] = useState<ProductionStrategy>("FLUJO_CONTINUO");
+  const [cutoffDate, setCutoffDate] = useState(new Date().toISOString().slice(0,10));
+  const [actualProgress, setActualProgress] = useState<Record<string,number>>({});
 
   const total = useMemo(() => budget.reduce((s,r)=>s+r.importe,0), [budget]);
   const productivityCoverage = useMemo(() => {
@@ -497,7 +499,19 @@ export default function AbacoClient() {
         />
       ) : null}
       {view==="seq" ? <SeqTable rows={seq} onChange={updateSeqRow}/> : null}
-      {view==="program" ? <ProgramTable rows={program} fronts={fronts} resourceCaps={resourceCaps} resourcePreferredFront={resourcePreferredFront} strategy={strategy}/> : null}
+      {view==="program" ? (
+        <ProgramTable
+          rows={program}
+          fronts={fronts}
+          resourceCaps={resourceCaps}
+          resourcePreferredFront={resourcePreferredFront}
+          strategy={strategy}
+          cutoffDate={cutoffDate}
+          onCutoffDateChange={setCutoffDate}
+          actualProgress={actualProgress}
+          onActualProgressChange={(key,value)=>setActualProgress(current=>({...current,[key]:Math.max(0,Math.min(100,value))}))}
+        />
+      ) : null}
     </div>
   );
 }
@@ -694,18 +708,34 @@ function workingDates(start:Date,duration:number){
   return dates;
 }
 
+function plannedProgressAt(row:FrontProgramRow,cutoff:Date){
+  if(cutoff.getTime()<row.inicioDate.getTime()) return 0;
+  if(cutoff.getTime()>=row.terminoDate.getTime()) return 1;
+  const dates=workingDates(row.inicioDate,row.dias);
+  const elapsed=dates.filter(date=>date.getTime()<=cutoff.getTime()).length;
+  return Math.max(0,Math.min(1,elapsed/Math.max(1,row.dias)));
+}
+
 function ProgramTable({
   rows,
   fronts,
   resourceCaps,
   resourcePreferredFront,
   strategy,
+  cutoffDate,
+  onCutoffDateChange,
+  actualProgress,
+  onActualProgressChange,
 }:{
   rows:ProgramRow[];
   fronts:Front[];
   resourceCaps:Record<string,number>;
   resourcePreferredFront:Record<string,number>;
   strategy:ProductionStrategy;
+  cutoffDate:string;
+  onCutoffDateChange:(value:string)=>void;
+  actualProgress:Record<string,number>;
+  onActualProgressChange:(key:string,value:number)=>void;
 }) {
   const requested=fronts.flatMap(front=>
     rows.map(row=>({
@@ -857,7 +887,95 @@ function ProgramTable({
     };
   });
 
+  const cutoff=new Date(cutoffDate+"T12:00:00");
+  const totalWeight=expanded.reduce((sum,row)=>sum+row.equivalencia,0) || 1;
+  const plannedAtCutoff=expanded.reduce((sum,row)=>sum+(plannedProgressAt(row,cutoff)*row.equivalencia),0)/totalWeight;
+  const actualAtCutoff=expanded.reduce((sum,row)=>{
+    const key=`${row.frontId}-${row.sec}`;
+    return sum+((actualProgress[key]??0)/100)*row.equivalencia;
+  },0)/totalWeight;
+  const variance=actualAtCutoff-plannedAtCutoff;
+  const delayedCount=expanded.filter(row=>{
+    const key=`${row.frontId}-${row.sec}`;
+    return ((actualProgress[key]??0)/100)+0.0001<plannedProgressAt(row,cutoff);
+  }).length;
+
   return <div className="space-y-5">
+    <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-200">Seguimiento de ejecución</p>
+          <h2 className="mt-2 text-xl font-bold text-[#edcb71]">Programa vs. Real</h2>
+          <p className="mt-1 text-sm text-slate-300">Captura el avance real por frente y SEC. El sistema compara automáticamente contra lo que debería llevarse a la fecha de corte.</p>
+        </div>
+        <Field label="Fecha de corte">
+          <input
+            type="date"
+            value={cutoffDate}
+            onChange={e=>onCutoffDateChange(e.target.value)}
+            className="rounded-lg border border-white/20 bg-[#0b2747] px-3 py-3 text-white"
+          />
+        </Field>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Metric label="Programado a corte" value={pct(plannedAtCutoff)} />
+        <Metric label="Real a corte" value={pct(actualAtCutoff)} />
+        <Metric label="Variación" value={pct(variance)} />
+        <Metric label="Eventos atrasados" value={String(delayedCount)} />
+        <Metric label="Estado" value={variance>=-0.01?"EN META":"ATRASADO"} />
+      </div>
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-[1400px] w-full text-sm">
+          <thead className="bg-[#0b2747]">
+            <tr>
+              <H>FRENTE</H><H>SEC</H><H>EVENTO</H><H>INICIO</H><H>TÉRMINO</H><H>PROGRAMADO</H><H>REAL</H><H>VARIACIÓN</H><H>ESTADO</H>
+            </tr>
+          </thead>
+          <tbody>
+            {expanded.map(row=>{
+              const key=`${row.frontId}-${row.sec}`;
+              const planned=plannedProgressAt(row,cutoff);
+              const actual=(actualProgress[key]??0)/100;
+              const diff=actual-planned;
+              const status=diff>=-0.01?"EN META":diff>=-0.1?"ATENCIÓN":"ATRASADO";
+              return <tr key={`pv-${key}`} className="border-t border-white/10">
+                <D>{row.frontName}</D>
+                <D>{row.sec}</D>
+                <D>{row.etapa}</D>
+                <D>{new Intl.DateTimeFormat("es-MX").format(row.inicioDate)}</D>
+                <D>{new Intl.DateTimeFormat("es-MX").format(row.terminoDate)}</D>
+                <D>{pct(planned)}</D>
+                <D>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={actualProgress[key]??0}
+                    onChange={e=>onActualProgressChange(key,Number(e.target.value)||0)}
+                    className="w-24 rounded border border-white/20 bg-[#0b2747] px-2 py-2 text-white"
+                  />
+                  <span className="ml-1 text-slate-400">%</span>
+                </D>
+                <D>{pct(diff)}</D>
+                <D>
+                  <span className={
+                    status==="EN META"
+                      ? "font-bold text-emerald-300"
+                      : status==="ATENCIÓN"
+                        ? "font-bold text-amber-300"
+                        : "font-bold text-rose-300"
+                  }>{status}</span>
+                </D>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
