@@ -204,6 +204,7 @@ model Usuario {
   bloqueosLiberacion Inspeccion[] @relation("InspeccionBloqueadaPor")
   reasignacionesSolicitadas ReasignacionInspector[] @relation("ReasignacionSolicitadaPor")
   reasignacionesResueltas ReasignacionInspector[] @relation("ReasignacionResueltaPor")
+  rendimientosAbacoCreados RendimientoAbaco[] @relation("RendimientoAbacoCreadoPor")
   @@index([bloqueadoHasta])
   @@index([zonaId])
   @@index([gerenteId])
