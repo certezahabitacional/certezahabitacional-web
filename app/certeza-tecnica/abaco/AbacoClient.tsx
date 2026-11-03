@@ -32,8 +32,28 @@ function loadLearnedRules():LearnedRule[]{
   }
 }
 
-function applyLearnedRules(rows:BudgetRow[]){
-  const learned=loadLearnedRules();
+async function loadCentralRules():Promise<LearnedRule[]>{
+  try {
+    const response=await fetch("/api/certeza-tecnica/abaco/rendimientos",{cache:"no-store"});
+    if(!response.ok) return [];
+    const data=await response.json() as {
+      rendimientos?:Array<{
+        clave:string;
+        cuadrilla:string;
+        rendimiento:number;
+      }>;
+    };
+    return (data.rendimientos??[]).map(r=>({
+      key:r.clave,
+      cuadrilla:r.cuadrilla,
+      rendimiento:Number(r.rendimiento),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function applyRuleSet(rows:BudgetRow[], learned:LearnedRule[], source:string){
   const map=new Map(learned.map(r=>[r.key,r]));
   return rows.map(row=>{
     if(row.rendimiento>0) return row;
@@ -43,9 +63,15 @@ function applyLearnedRules(rows:BudgetRow[]){
       ...row,
       cuadrilla:saved.cuadrilla,
       rendimiento:saved.rendimiento,
-      reglaRendimiento:"APRENDIDO",
+      reglaRendimiento:source,
     };
   });
+}
+
+async function applyLearnedRules(rows:BudgetRow[]){
+  const central=await loadCentralRules();
+  const withCentral=applyRuleSet(rows,central,"BIBLIOTECA CENTRAL");
+  return applyRuleSet(withCentral,loadLearnedRules(),"APRENDIDO LOCAL");
 }
 
 export default function AbacoClient() {
@@ -74,7 +100,7 @@ export default function AbacoClient() {
   async function loadFile(file: File) {
     try {
       setMessage("Leyendo presupuesto...");
-      const parsed = applyLearnedRules(await readBudgetFile(file));
+      const parsed = await applyLearnedRules(await readBudgetFile(file));
       setBudget(parsed);
       setSeq([]);
       setProgram([]);
@@ -114,7 +140,7 @@ export default function AbacoClient() {
     setProgram([]);
   }
 
-  function saveLearnedRules() {
+  async function saveLearnedRules() {
     const existing=loadLearnedRules();
     const map=new Map(existing.map(r=>[r.key,r]));
     budget.forEach(row=>{
@@ -127,11 +153,39 @@ export default function AbacoClient() {
       }
     });
     window.localStorage.setItem(STORAGE_KEY,JSON.stringify([...map.values()]));
+
+    const centralPayload=budget
+      .filter(row=>row.rendimiento>0 && row.cuadrilla.trim())
+      .map(row=>({
+        clave:ruleKey(row),
+        descripcionNormalizada:norm(row.descripcion),
+        descripcionEjemplo:row.descripcion,
+        unidad:norm(row.unidad)||"SIN UNIDAD",
+        cuadrilla:row.cuadrilla.trim(),
+        rendimiento:row.rendimiento,
+      }));
+
+    let centralSaved=false;
+    try {
+      const response=await fetch("/api/certeza-tecnica/abaco/rendimientos",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({rendimientos:centralPayload}),
+      });
+      centralSaved=response.ok;
+    } catch {
+      centralSaved=false;
+    }
+
     const result=makeSequential(budget);
     setSeq(result);
     setProgram([]);
     setView("seq");
-    setMessage("Rendimientos guardados en este navegador y Secuencial recalculado.");
+    setMessage(
+      centralSaved
+        ? "Rendimientos guardados en la biblioteca central y Secuencial recalculado."
+        : "Secuencial recalculado. La biblioteca central no respondió; las reglas quedaron respaldadas en este navegador."
+    );
   }
 
   function generateProgram() {
@@ -188,7 +242,7 @@ export default function AbacoClient() {
             </Field>
           </div>
           <p className="mt-4 text-xs leading-5 text-slate-400">
-            El motor calcula jornadas por concepto usando cantidad ÷ rendimiento. Los rendimientos que tú corrijas se guardan en este navegador y se reutilizan en futuros presupuestos con la misma descripción y unidad.
+            El motor calcula jornadas por concepto usando cantidad ÷ rendimiento. Los rendimientos corregidos se guardan primero en la biblioteca central de Certeza Técnica. Si la base DEV no está disponible, quedan respaldados localmente en este navegador.
           </p>
         </section>
       </div>
@@ -263,7 +317,7 @@ function UnmatchedTable({
       <div>
         <h2 className="text-xl font-bold text-amber-200">Conceptos sin rendimiento</h2>
         <p className="mt-1 max-w-4xl text-sm text-slate-300">
-          Define cuadrilla y rendimiento diario. Al guardar, la regla queda aprendida en este navegador para futuras cargas con la misma descripción y unidad.
+          Define cuadrilla y rendimiento diario. Al guardar, la regla se envía a la biblioteca central y también queda respaldada localmente.
         </p>
       </div>
       <button
