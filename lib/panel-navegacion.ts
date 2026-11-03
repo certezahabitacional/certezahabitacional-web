@@ -14,7 +14,8 @@ export type ModuloPanel =
   | "USUARIOS"
   | "CONFIGURACION"
   | "NUEVA_INSPECCION"
-  | "CERTEZA_TECNICA";
+  | "CERTEZA_TECNICA"
+  | "ABACO";
 
 export type OpcionNavegacionPanel = {
   modulo: ModuloPanel;
@@ -37,6 +38,7 @@ export const OPCIONES_PANEL: readonly OpcionNavegacionPanel[] = [
   { modulo: "CONFIGURACION", etiqueta: "Configuración", href: "/panel/configuracion" },
   { modulo: "NUEVA_INSPECCION", etiqueta: "Nueva inspección", href: "/panel/inspecciones/nueva" },
   { modulo: "CERTEZA_TECNICA", etiqueta: "Certeza Técnica", href: "/panel/certeza-tecnica/generadores" },
+  { modulo: "ABACO", etiqueta: "ÁBACO", href: "/panel/certeza-tecnica/abaco" },
 ] as const;
 
 const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
@@ -54,6 +56,7 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
     "CONFIGURACION",
     "NUEVA_INSPECCION",
     "CERTEZA_TECNICA",
+    "ABACO",
   ]),
   [RolUsuario.ADMINISTRADOR]: new Set<ModuloPanel>([
     "INSPECCIONES",
@@ -68,6 +71,7 @@ const MODULOS_POR_ROL: Record<RolUsuario, ReadonlySet<ModuloPanel>> = {
     "USUARIOS",
     "NUEVA_INSPECCION",
     "CERTEZA_TECNICA",
+    "ABACO",
   ]),
   [RolUsuario.VENDEDOR]: new Set<ModuloPanel>([
     "INSPECCIONES",
