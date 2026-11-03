@@ -634,3 +634,25 @@ model CotizacionVersion {
   @@index([cotizacionId])
   @@index([creadaEn])
 }
+
+
+model RendimientoAbaco {
+  id String @id @default(cuid())
+  clave String @unique
+  descripcionNormalizada String
+  descripcionEjemplo String
+  unidad String
+  cuadrilla String
+  rendimiento Decimal @db.Decimal(14, 4)
+  activo Boolean @default(true)
+  origen String @default("MANUAL")
+  creadoPorId String?
+  creadoPor Usuario? @relation("RendimientoAbacoCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([unidad])
+  @@index([cuadrilla])
+  @@index([activo])
+  @@index([creadoPorId])
+}
