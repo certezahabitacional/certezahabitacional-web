@@ -92,6 +92,7 @@ export default function AbacoClient() {
   const [fronts, setFronts] = useState<Front[]>([
     {id:1,nombre:"Frente 1",desfase:0,factorEconomico:1},
   ]);
+  const [resourceCaps, setResourceCaps] = useState<Record<string,number>>({});
 
   const total = useMemo(() => budget.reduce((s,r)=>s+r.importe,0), [budget]);
   const productivityCoverage = useMemo(() => {
@@ -142,6 +143,13 @@ export default function AbacoClient() {
     setSeq(rows=>rows.map(r=>r.sec===sec?{...r,...patch}:r));
     setProgram([]);
     setView("seq");
+  }
+
+  function updateResourceCap(cuadrilla:string,capacidad:number) {
+    setResourceCaps(current=>({
+      ...current,
+      [cuadrilla]:Math.max(1,Math.round(capacidad)||1),
+    }));
   }
 
   function updateBudgetRow(index:number, patch:Partial<BudgetRow>) {
@@ -341,6 +349,36 @@ export default function AbacoClient() {
         </section>
       ) : null}
 
+      {seq.length ? (
+        <section className="rounded-2xl border border-white/15 bg-white/5 p-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.18em] text-[#edcb71]">Capacidad de recursos compartidos</p>
+            <h2 className="mt-2 text-xl font-bold">Cuadrillas disponibles para todos los frentes</h2>
+            <p className="mt-1 text-sm text-slate-300">
+              Define cuántas cuadrillas de cada oficio existen realmente. ÁBACO evitará sobreasignarlas entre frentes.
+            </p>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[...new Set(seq.map(r=>r.cuadrilla).filter(Boolean))].map(cuadrilla=>(
+              <div key={cuadrilla} className="rounded-xl border border-white/10 bg-[#06162a] p-4">
+                <p className="min-h-[40px] text-sm font-bold text-slate-100">{cuadrilla}</p>
+                <label className="mt-2 block text-xs font-semibold text-slate-400">
+                  Cuadrillas disponibles
+                  <input
+                    type="number"
+                    min={1}
+                    step="1"
+                    value={resourceCaps[cuadrilla]??1}
+                    onChange={e=>updateResourceCap(cuadrilla,Number(e.target.value))}
+                    className="mt-1 w-full rounded border border-white/20 bg-[#0b2747] px-3 py-2 text-white"
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-3">
         <button
           type="button"
@@ -382,7 +420,7 @@ export default function AbacoClient() {
         />
       ) : null}
       {view==="seq" ? <SeqTable rows={seq} onChange={updateSeqRow}/> : null}
-      {view==="program" ? <ProgramTable rows={program} fronts={fronts}/> : null}
+      {view==="program" ? <ProgramTable rows={program} fronts={fronts} resourceCaps={resourceCaps}/> : null}
     </div>
   );
 }
@@ -554,10 +592,31 @@ type FrontProgramRow = ProgramRow & {
   factorEconomico:number;
   inicioDate:Date;
   terminoDate:Date;
+  recursoNivelado:boolean;
 };
 
-function ProgramTable({rows,fronts}:{rows:ProgramRow[];fronts:Front[]}) {
-  const expanded:FrontProgramRow[]=fronts.flatMap(front=>
+function addWorkDaysDate(start:Date,days:number){
+  const date=new Date(start);
+  let pending=Math.max(0,Math.round(days));
+  while(pending>0){
+    date.setDate(date.getDate()+1);
+    if(date.getDay()!==0) pending-=1;
+  }
+  return date;
+}
+
+function workingDates(start:Date,duration:number){
+  const dates:Date[]=[];
+  const cursor=new Date(start);
+  while(dates.length<Math.max(1,duration)){
+    if(cursor.getDay()!==0) dates.push(new Date(cursor));
+    cursor.setDate(cursor.getDate()+1);
+  }
+  return dates;
+}
+
+function ProgramTable({rows,fronts,resourceCaps}:{rows:ProgramRow[];fronts:Front[];resourceCaps:Record<string,number>}) {
+  const requested=fronts.flatMap(front=>
     rows.map(row=>({
       ...row,
       frontId:front.id,
@@ -567,8 +626,67 @@ function ProgramTable({rows,fronts}:{rows:ProgramRow[];fronts:Front[]}) {
       equivalencia:row.equivalencia*front.factorEconomico,
       inicioDate:shiftProgramDate(row.inicio,front.desfase),
       terminoDate:shiftProgramDate(row.termino,front.desfase),
+      recursoNivelado:false,
     }))
   );
+
+  const bookings=new Map<string,Map<string,number>>();
+  const leveled=new Map<string,FrontProgramRow>();
+  const expanded:FrontProgramRow[]=[];
+
+  const ordered=[...requested].sort((a,b)=>
+    a.inicioDate.getTime()-b.inicioDate.getTime() ||
+    a.frontId-b.frontId ||
+    a.orden-b.orden
+  );
+
+  for(const task of ordered){
+    let earliest=new Date(task.inicioDate);
+
+    if(task.predecesora!==null){
+      const pred=leveled.get(`${task.frontId}-${task.predecesora}`);
+      if(pred){
+        const offset=Math.max(1,Math.round(pred.dias*(1-Math.max(0,Math.min(.95,task.traslape)))));
+        const predAllowed=addWorkDaysDate(pred.inicioDate,offset);
+        if(predAllowed.getTime()>earliest.getTime()) earliest=predAllowed;
+      }
+    }
+
+    const capacity=Math.max(1,resourceCaps[task.cuadrilla]??1);
+    const demand=Math.max(1,Math.min(task.cuadrillas,capacity));
+    let candidate=new Date(earliest);
+    let safety=0;
+
+    while(safety<2000){
+      safety+=1;
+      if(candidate.getDay()===0){
+        candidate.setDate(candidate.getDate()+1);
+        continue;
+      }
+
+      const dates=workingDates(candidate,task.dias);
+      const crewBookings=bookings.get(task.cuadrilla)??new Map<string,number>();
+      const fits=dates.every(date=>(crewBookings.get(dayKey(date))??0)+demand<=capacity);
+
+      if(fits){
+        dates.forEach(date=>crewBookings.set(dayKey(date),(crewBookings.get(dayKey(date))??0)+demand));
+        bookings.set(task.cuadrilla,crewBookings);
+        const leveledTask:FrontProgramRow={
+          ...task,
+          inicioDate:dates[0],
+          terminoDate:dates[dates.length-1],
+          recursoNivelado:dayKey(dates[0])!==dayKey(task.inicioDate),
+        };
+        leveled.set(`${task.frontId}-${task.sec}`,leveledTask);
+        expanded.push(leveledTask);
+        break;
+      }
+
+      candidate=addWorkDaysDate(candidate,1);
+    }
+  }
+
+  expanded.sort((a,b)=>a.frontId-b.frontId || a.orden-b.orden);
 
   const normalizedTotal=expanded.reduce((s,r)=>s+r.equivalencia,0);
 
@@ -620,11 +738,12 @@ function ProgramTable({rows,fronts}:{rows:ProgramRow[];fronts:Front[]}) {
             Calendario horizontal del proyecto. Cada celda activa representa un día programado del SEC; arriba se calculan flujo, avance y acumulados.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
           <Metric label="Días calendario" value={String(calendar.length)} />
           <Metric label="Frentes" value={String(fronts.length)} />
           <Metric label="Eventos" value={String(expanded.length)} />
           <Metric label="Flujo total" value={money(expanded.reduce((s,r)=>s+r.importe,0))} />
+          <Metric label="Ajustes por recursos" value={String(expanded.filter(r=>r.recursoNivelado).length)} />
         </div>
       </div>
 
@@ -670,6 +789,7 @@ function ProgramTable({rows,fronts}:{rows:ProgramRow[];fronts:Front[]}) {
                 <span className="block font-black text-[#edcb71]">SEC {row.sec}</span>
                 <span className="block min-w-[190px] text-slate-200">{row.etapa}</span>
                 <span className="mt-1 block text-[10px] text-slate-400">{row.cuadrilla} · {row.dias} día(s)</span>
+                {row.recursoNivelado ? <span className="mt-1 block text-[10px] font-bold text-amber-300">AJUSTADO POR RECURSO</span> : null}
               </td>
               {calendar.map(date=>{
                 const active=date.getTime()>=row.inicioDate.getTime() && date.getTime()<=row.terminoDate.getTime() && date.getDay()!==0;
@@ -700,12 +820,12 @@ function ProgramTable({rows,fronts}:{rows:ProgramRow[];fronts:Front[]}) {
         <table className="min-w-[1500px] w-full text-sm">
           <thead className="bg-[#0b2747]">
             <tr>
-              <H>FRENTE</H><H>SEC</H><H>EVENTO</H><H>INCIDENCIA</H><H>JORNADAS BASE</H><H>SIN REND.</H><H>CUADRILLAS</H><H>DÍAS</H><H>PREDECESORA</H><H>TRASLAPE</H><H>INICIO</H><H>TÉRMINO</H><H>% ACUM.</H><H>MÉTODO</H>
+              <H>FRENTE</H><H>SEC</H><H>EVENTO</H><H>INCIDENCIA</H><H>JORNADAS BASE</H><H>SIN REND.</H><H>CUADRILLAS</H><H>DÍAS</H><H>PREDECESORA</H><H>TRASLAPE</H><H>INICIO</H><H>TÉRMINO</H><H>NIVELACIÓN</H><H>% ACUM.</H><H>MÉTODO</H>
             </tr>
           </thead>
           <tbody>
             {expanded.map(r=><tr key={`${r.frontId}-${r.sec}`} className="border-t border-white/10">
-              <D>{r.frontName}</D><D>{r.revisar?"REVISAR":r.sec}</D><D>{r.etapa}</D><D>{pct(r.equivalencia)}</D><D>{r.jornadasBase>0?r.jornadasBase.toFixed(2):"—"}</D><D>{r.conceptosSinRendimiento}</D><D>{r.cuadrillas}</D><D>{r.dias}</D><D>{r.predecesora??"Inicio"}</D><D>{pct(r.traslape)}</D><D>{new Intl.DateTimeFormat("es-MX").format(r.inicioDate)}</D><D>{new Intl.DateTimeFormat("es-MX").format(r.terminoDate)}</D><D>{pct(r.avance)}</D>
+              <D>{r.frontName}</D><D>{r.revisar?"REVISAR":r.sec}</D><D>{r.etapa}</D><D>{pct(r.equivalencia)}</D><D>{r.jornadasBase>0?r.jornadasBase.toFixed(2):"—"}</D><D>{r.conceptosSinRendimiento}</D><D>{r.cuadrillas}</D><D>{r.dias}</D><D>{r.predecesora??"Inicio"}</D><D>{pct(r.traslape)}</D><D>{new Intl.DateTimeFormat("es-MX").format(r.inicioDate)}</D><D>{new Intl.DateTimeFormat("es-MX").format(r.terminoDate)}</D><D>{r.recursoNivelado?"AJUSTADO":"SIN AJUSTE"}</D><D>{pct(r.avance)}</D>
               <D><span className={r.metodoDuracion==="RENDIMIENTO"?"font-bold text-emerald-300":r.metodoDuracion==="MIXTO"?"font-bold text-cyan-300":"font-bold text-amber-300"}>{r.metodoDuracion}</span></D>
             </tr>)}
           </tbody>
