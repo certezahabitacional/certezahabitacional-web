@@ -963,6 +963,42 @@ function ProgramTable({
     return ((actualProgress[key]??0)/100)+0.0001<plannedProgressAt(row,cutoff);
   }).length;
 
+  const curveCuts=[...history]
+    .sort((a,b)=>a.fechaCorte.localeCompare(b.fechaCorte))
+    .map(cut=>{
+      const cutDate=new Date(cut.fechaCorte+"T12:00:00");
+      const planned=expanded.reduce(
+        (sum,row)=>sum+(plannedProgressAt(row,cutDate)*row.equivalencia),
+        0
+      )/totalWeight;
+      const actual=expanded.reduce((sum,row)=>{
+        const key=`${row.frontId}-${row.sec}`;
+        return sum+(((cut.avanceReal?.[key]??0)/100)*row.equivalencia);
+      },0)/totalWeight;
+      return {
+        fechaCorte:cut.fechaCorte,
+        planned:Math.max(0,Math.min(1,planned)),
+        actual:Math.max(0,Math.min(1,actual)),
+        variance:actual-planned,
+      };
+    });
+
+  const lastCurvePoint=curveCuts[curveCuts.length-1];
+  const previousCurvePoint=curveCuts[curveCuts.length-2];
+  const trend=
+    !lastCurvePoint || !previousCurvePoint
+      ? "SIN HISTORIAL SUFICIENTE"
+      : lastCurvePoint.variance-previousCurvePoint.variance>0.01
+        ? "RECUPERANDO"
+        : lastCurvePoint.variance-previousCurvePoint.variance<-0.01
+          ? "AUMENTANDO ATRASO"
+          : "ESTABLE";
+
+  const trendDelta=
+    lastCurvePoint && previousCurvePoint
+      ? lastCurvePoint.variance-previousCurvePoint.variance
+      : 0;
+
   async function saveHistoricalCut(){
     const cut:HistoricalCut={
       fechaCorte:cutoffDate,
@@ -1007,6 +1043,119 @@ function ProgramTable({
   }
 
   return <div className="space-y-5">
+    {curveCuts.length ? (
+      <section className="rounded-2xl border border-cyan-300/20 bg-white/5 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-200">Control ejecutivo</p>
+            <h2 className="mt-2 text-xl font-bold text-[#edcb71]">Curva S · Programado vs. Real</h2>
+            <p className="mt-1 text-sm text-slate-300">
+              Evolución acumulada del proyecto a partir de los cortes históricos guardados.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <Metric label="Cortes" value={String(curveCuts.length)} />
+            <Metric label="Último programado" value={lastCurvePoint?pct(lastCurvePoint.planned):"—"} />
+            <Metric label="Último real" value={lastCurvePoint?pct(lastCurvePoint.actual):"—"} />
+            <Metric label="Tendencia" value={trend} />
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-white/10 bg-[#06162a] p-4">
+          <svg viewBox="0 0 1000 360" className="h-auto w-full" role="img" aria-label="Curva S Programado contra Real">
+            {[0,0.25,0.5,0.75,1].map(level=>{
+              const y=320-level*280;
+              return <g key={level}>
+                <line x1="70" y1={y} x2="970" y2={y} stroke="currentColor" strokeOpacity="0.12" />
+                <text x="12" y={y+5} fill="currentColor" opacity="0.7" fontSize="18">{Math.round(level*100)}%</text>
+              </g>;
+            })}
+            <line x1="70" y1="320" x2="970" y2="320" stroke="currentColor" strokeOpacity="0.3" />
+            <line x1="70" y1="40" x2="70" y2="320" stroke="currentColor" strokeOpacity="0.3" />
+
+            {curveCuts.length>1 ? (
+              <>
+                <polyline
+                  fill="none"
+                  stroke="#edcb71"
+                  strokeWidth="7"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  points={curveCuts.map((point,index)=>{
+                    const x=70+(index/(curveCuts.length-1))*900;
+                    const y=320-point.planned*280;
+                    return `${x},${y}`;
+                  }).join(" ")}
+                />
+                <polyline
+                  fill="none"
+                  stroke="#67e8f9"
+                  strokeWidth="7"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  points={curveCuts.map((point,index)=>{
+                    const x=70+(index/(curveCuts.length-1))*900;
+                    const y=320-point.actual*280;
+                    return `${x},${y}`;
+                  }).join(" ")}
+                />
+              </>
+            ) : null}
+
+            {curveCuts.map((point,index)=>{
+              const x=curveCuts.length===1?520:70+(index/(curveCuts.length-1))*900;
+              const py=320-point.planned*280;
+              const ay=320-point.actual*280;
+              return <g key={point.fechaCorte}>
+                <circle cx={x} cy={py} r="7" fill="#edcb71" />
+                <circle cx={x} cy={ay} r="7" fill="#67e8f9" />
+                <text x={x} y="345" textAnchor="middle" fill="currentColor" opacity="0.7" fontSize="14">
+                  {point.fechaCorte.slice(5)}
+                </text>
+              </g>;
+            })}
+          </svg>
+
+          <div className="mt-3 flex flex-wrap gap-5 text-xs">
+            <span className="font-bold text-[#edcb71]">● PROGRAMADO</span>
+            <span className="font-bold text-cyan-300">● REAL</span>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          <div className="rounded-xl bg-[#0b2747] p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Tendencia</p>
+            <p className={
+              "mt-2 text-xl font-black " +
+              (trend==="RECUPERANDO"
+                ? "text-emerald-300"
+                : trend==="AUMENTANDO ATRASO"
+                  ? "text-rose-300"
+                  : trend==="ESTABLE"
+                    ? "text-amber-300"
+                    : "text-slate-300")
+            }>{trend}</p>
+          </div>
+          <div className="rounded-xl bg-[#0b2747] p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Cambio entre últimos cortes</p>
+            <p className="mt-2 text-xl font-black text-white">{curveCuts.length>1?pct(trendDelta):"—"}</p>
+          </div>
+          <div className="rounded-xl bg-[#0b2747] p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Lectura ejecutiva</p>
+            <p className="mt-2 text-sm leading-6 text-slate-200">
+              {trend==="RECUPERANDO"
+                ? "La brecha entre avance real y programado está mejorando respecto al corte anterior."
+                : trend==="AUMENTANDO ATRASO"
+                  ? "La brecha negativa se está ampliando. Conviene revisar frentes, cuadrillas y SEC con mayor atraso."
+                  : trend==="ESTABLE"
+                    ? "La brecha se mantiene prácticamente igual. El proyecto no está recuperando ni deteriorándose de forma significativa."
+                    : "Guarda por lo menos dos cortes para calcular la tendencia del proyecto."}
+            </p>
+          </div>
+        </div>
+      </section>
+    ) : null}
+
     <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
