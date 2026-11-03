@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   type BudgetRow,
   type ProgramRow,
@@ -34,6 +34,18 @@ type ProductionStrategy =
   | "FECHA_ENTREGA"
   | "RUTA_FISICA"
   | "MIN_DURACION";
+
+type HistoricalCut = {
+  fechaCorte:string;
+  avanceReal:Record<string,number>;
+  resumen?:{
+    programado:number;
+    real:number;
+    variacion:number;
+    eventosAtrasados:number;
+  };
+  actualizadoEn?:string;
+};
 
 const STORAGE_KEY="certeza-abaco-rendimientos-aprendidos-v1";
 const ruleKey=(r:Pick<BudgetRow,"descripcion"|"unidad">)=>`${norm(r.unidad)}|${norm(r.descripcion)}`;
@@ -106,6 +118,7 @@ export default function AbacoClient() {
   const [strategy, setStrategy] = useState<ProductionStrategy>("FLUJO_CONTINUO");
   const [cutoffDate, setCutoffDate] = useState(new Date().toISOString().slice(0,10));
   const [actualProgress, setActualProgress] = useState<Record<string,number>>({});
+  const [projectName, setProjectName] = useState("Proyecto ÁBACO 1");
 
   const total = useMemo(() => budget.reduce((s,r)=>s+r.importe,0), [budget]);
   const productivityCoverage = useMemo(() => {
@@ -510,6 +523,12 @@ export default function AbacoClient() {
           onCutoffDateChange={setCutoffDate}
           actualProgress={actualProgress}
           onActualProgressChange={(key,value)=>setActualProgress(current=>({...current,[key]:Math.max(0,Math.min(100,value))}))}
+          projectName={projectName}
+          onProjectNameChange={setProjectName}
+          onLoadHistoricalCut={(cut)=>{
+            setCutoffDate(cut.fechaCorte);
+            setActualProgress(cut.avanceReal);
+          }}
         />
       ) : null}
     </div>
@@ -726,6 +745,9 @@ function ProgramTable({
   onCutoffDateChange,
   actualProgress,
   onActualProgressChange,
+  projectName,
+  onProjectNameChange,
+  onLoadHistoricalCut,
 }:{
   rows:ProgramRow[];
   fronts:Front[];
@@ -736,7 +758,48 @@ function ProgramTable({
   onCutoffDateChange:(value:string)=>void;
   actualProgress:Record<string,number>;
   onActualProgressChange:(key:string,value:number)=>void;
+  projectName:string;
+  onProjectNameChange:(value:string)=>void;
+  onLoadHistoricalCut:(cut:HistoricalCut)=>void;
 }) {
+  const [history, setHistory] = useState<HistoricalCut[]>([]);
+  const [historyMessage, setHistoryMessage] = useState("Sin cortes guardados.");
+  const historyKey=`certeza-abaco-historico-v1|${norm(projectName)||"PROYECTO"}`;
+
+  useEffect(()=>{
+    let cancelled=false;
+    const local=(()=>{
+      try {
+        const raw=window.localStorage.getItem(historyKey);
+        return raw ? JSON.parse(raw) as HistoricalCut[] : [];
+      } catch {
+        return [] as HistoricalCut[];
+      }
+    })();
+    setHistory(local);
+    setHistoryMessage(local.length?`${local.length} corte(s) disponible(s) en respaldo local.`:"Sin cortes guardados.");
+
+    async function loadCentralHistory(){
+      try {
+        const response=await fetch(`/api/certeza-tecnica/abaco/historico?proyecto=${encodeURIComponent(projectName)}`,{cache:"no-store"});
+        if(!response.ok) return;
+        const data=await response.json() as {cortes?:HistoricalCut[]};
+        if(cancelled || !data.cortes?.length) return;
+        const merged=new Map<string,HistoricalCut>();
+        [...local,...data.cortes].forEach(cut=>merged.set(cut.fechaCorte,cut));
+        const cuts=[...merged.values()].sort((a,b)=>b.fechaCorte.localeCompare(a.fechaCorte));
+        setHistory(cuts);
+        window.localStorage.setItem(historyKey,JSON.stringify(cuts));
+        setHistoryMessage(`${cuts.length} corte(s) recuperado(s).`);
+      } catch {
+        // El respaldo local mantiene operativo el histórico.
+      }
+    }
+    void loadCentralHistory();
+    return ()=>{cancelled=true;};
+  },[historyKey,projectName]);
+
+
   const requested=fronts.flatMap(front=>
     rows.map(row=>({
       ...row,
@@ -900,6 +963,49 @@ function ProgramTable({
     return ((actualProgress[key]??0)/100)+0.0001<plannedProgressAt(row,cutoff);
   }).length;
 
+  async function saveHistoricalCut(){
+    const cut:HistoricalCut={
+      fechaCorte:cutoffDate,
+      avanceReal:{...actualProgress},
+      resumen:{
+        programado:plannedAtCutoff,
+        real:actualAtCutoff,
+        variacion:variance,
+        eventosAtrasados:delayedCount,
+      },
+      actualizadoEn:new Date().toISOString(),
+    };
+
+    const map=new Map(history.map(item=>[item.fechaCorte,item]));
+    map.set(cut.fechaCorte,cut);
+    const next=[...map.values()].sort((a,b)=>b.fechaCorte.localeCompare(a.fechaCorte));
+    window.localStorage.setItem(historyKey,JSON.stringify(next));
+    setHistory(next);
+
+    let centralSaved=false;
+    try {
+      const response=await fetch("/api/certeza-tecnica/abaco/historico",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          proyecto:projectName.trim()||"Proyecto ÁBACO",
+          fechaCorte:cutoffDate,
+          avanceReal:actualProgress,
+          resumen:cut.resumen,
+        }),
+      });
+      centralSaved=response.ok;
+    } catch {
+      centralSaved=false;
+    }
+
+    setHistoryMessage(
+      centralSaved
+        ? `Corte ${cutoffDate} guardado en histórico central y respaldo local.`
+        : `Corte ${cutoffDate} guardado localmente. La base central no está disponible o requiere sesión autorizada.`
+    );
+  }
+
   return <div className="space-y-5">
     <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -908,14 +1014,34 @@ function ProgramTable({
           <h2 className="mt-2 text-xl font-bold text-[#edcb71]">Programa vs. Real</h2>
           <p className="mt-1 text-sm text-slate-300">Captura el avance real por frente y SEC. El sistema compara automáticamente contra lo que debería llevarse a la fecha de corte.</p>
         </div>
-        <Field label="Fecha de corte">
-          <input
-            type="date"
-            value={cutoffDate}
-            onChange={e=>onCutoffDateChange(e.target.value)}
-            className="rounded-lg border border-white/20 bg-[#0b2747] px-3 py-3 text-white"
-          />
-        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Proyecto">
+            <input
+              value={projectName}
+              onChange={e=>onProjectNameChange(e.target.value)}
+              className="rounded-lg border border-white/20 bg-[#0b2747] px-3 py-3 text-white"
+            />
+          </Field>
+          <Field label="Fecha de corte">
+            <input
+              type="date"
+              value={cutoffDate}
+              onChange={e=>onCutoffDateChange(e.target.value)}
+              className="rounded-lg border border-white/20 bg-[#0b2747] px-3 py-3 text-white"
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={()=>void saveHistoricalCut()}
+          className="rounded-lg bg-[#edcb71] px-4 py-3 text-sm font-black text-[#071d38]"
+        >
+          GUARDAR CORTE
+        </button>
+        <span className="text-sm text-slate-300">{historyMessage}</span>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -925,6 +1051,27 @@ function ProgramTable({
         <Metric label="Eventos atrasados" value={String(delayedCount)} />
         <Metric label="Estado" value={variance>=-0.01?"EN META":"ATRASADO"} />
       </div>
+
+      {history.length ? (
+        <div className="mt-4 rounded-xl border border-white/10 bg-[#06162a] p-4">
+          <p className="text-xs font-black uppercase tracking-[.16em] text-[#edcb71]">Histórico de cortes</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {history.map(cut=>(
+              <button
+                key={cut.fechaCorte}
+                type="button"
+                onClick={()=>onLoadHistoricalCut(cut)}
+                className="rounded-lg border border-white/15 bg-[#0b2747] px-3 py-2 text-left text-xs text-white hover:border-[#edcb71]"
+              >
+                <span className="block font-bold">{cut.fechaCorte}</span>
+                <span className="text-slate-400">
+                  Real {cut.resumen?pct(cut.resumen.real):"—"} · Var. {cut.resumen?pct(cut.resumen.variacion):"—"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-4 overflow-x-auto">
         <table className="min-w-[1400px] w-full text-sm">
