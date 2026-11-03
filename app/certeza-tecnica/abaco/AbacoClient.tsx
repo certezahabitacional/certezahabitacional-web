@@ -764,6 +764,10 @@ function ProgramTable({
 }) {
   const [history, setHistory] = useState<HistoricalCut[]>([]);
   const [historyMessage, setHistoryMessage] = useState("Sin cortes guardados.");
+  const [simCrew, setSimCrew] = useState("");
+  const [simExtraCrews, setSimExtraCrews] = useState(0);
+  const [simBoost, setSimBoost] = useState(0);
+  const [simFrontId, setSimFrontId] = useState(0);
   const historyKey=`certeza-abaco-historico-v1|${norm(projectName)||"PROYECTO"}`;
 
   useEffect(()=>{
@@ -1084,6 +1088,46 @@ function ProgramTable({
       : null,
   ].filter((item):item is {prioridad:number;accion:string;motivo:string}=>Boolean(item));
 
+  const simulationCrew=simCrew || principalCrew?.name || expanded.find(row=>row.cuadrilla)?.cuadrilla || "";
+  const baseCrewCapacity=Math.max(1,resourceCaps[simulationCrew]??1);
+  const capacityFactor=(baseCrewCapacity+Math.max(0,simExtraCrews))/baseCrewCapacity;
+  const productivityFactor=1+Math.max(0,simBoost)/100;
+
+  const remainingByFront=fronts.map(front=>{
+    const frontRows=expanded.filter(row=>row.frontId===front.id);
+    const baselineDays=frontRows.reduce((sum,row)=>{
+      const key=`${row.frontId}-${row.sec}`;
+      const real=(actualProgress[key]??0)/100;
+      const remaining=Math.max(0,1-real);
+      return sum+Math.ceil(row.dias*remaining);
+    },0);
+
+    const scenarioDays=frontRows.reduce((sum,row)=>{
+      const key=`${row.frontId}-${row.sec}`;
+      const real=(actualProgress[key]??0)/100;
+      const remaining=Math.max(0,1-real);
+      let days=Math.ceil(row.dias*remaining);
+      if(row.cuadrilla===simulationCrew && days>0){
+        days=Math.max(1,Math.ceil(days/(capacityFactor*productivityFactor)));
+      }
+      if(simFrontId===front.id && days>0){
+        days=Math.max(1,Math.ceil(days*0.95));
+      }
+      return sum+days;
+    },0);
+
+    return {frontId:front.id,frontName:front.nombre,baselineDays,scenarioDays};
+  });
+
+  const baselineRemainingDays=Math.max(0,...remainingByFront.map(item=>item.baselineDays));
+  const scenarioRemainingDays=Math.max(0,...remainingByFront.map(item=>item.scenarioDays));
+  const recoveredDays=Math.max(0,baselineRemainingDays-scenarioRemainingDays);
+  const baselineProjectedFinish=addWorkDaysDate(cutoff,baselineRemainingDays);
+  const scenarioProjectedFinish=addWorkDaysDate(cutoff,scenarioRemainingDays);
+  const simulationEffect=baselineRemainingDays>0?recoveredDays/baselineRemainingDays:0;
+  const affectedScenarioRows=expanded.filter(row=>row.cuadrilla===simulationCrew).length;
+
+
   async function saveHistoricalCut(){
     const cut:HistoricalCut={
       fechaCorte:cutoffDate,
@@ -1341,6 +1385,109 @@ function ProgramTable({
         <p className="mt-1 text-sm text-slate-300">El avance real capturado no presenta brechas negativas contra el programa vigente.</p>
       </section>
     )}
+
+    <section className="rounded-2xl border border-violet-300/20 bg-violet-950/10 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[.18em] text-violet-200">Simulador de recuperación</p>
+          <h2 className="mt-2 text-xl font-bold text-[#edcb71]">Comparar escenarios antes de modificar el programa</h2>
+          <p className="mt-1 max-w-4xl text-sm text-slate-300">
+            Modifica capacidad, rendimiento y prioridad de recuperación. El escenario es independiente del programa oficial.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <Metric label="Días base restantes" value={String(baselineRemainingDays)} />
+          <Metric label="Días escenario" value={String(scenarioRemainingDays)} />
+          <Metric label="Días recuperados" value={String(recoveredDays)} />
+          <Metric label="Mejora estimada" value={pct(simulationEffect)} />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Field label="Cuadrilla a reforzar">
+          <select
+            value={simulationCrew}
+            onChange={e=>setSimCrew(e.target.value)}
+            className={inputClass}
+          >
+            {[...new Set(expanded.map(row=>row.cuadrilla).filter(Boolean))].map(crew=>(
+              <option key={crew} value={crew}>{crew}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Cuadrillas adicionales">
+          <input
+            type="number"
+            min={0}
+            max={10}
+            step={1}
+            value={simExtraCrews}
+            onChange={e=>setSimExtraCrews(Math.max(0,Math.round(Number(e.target.value)||0)))}
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Mejora de rendimiento">
+          <select value={simBoost} onChange={e=>setSimBoost(Number(e.target.value))} className={inputClass}>
+            <option value={0}>Sin cambio</option>
+            <option value={10}>+10%</option>
+            <option value={20}>+20%</option>
+            <option value={30}>+30%</option>
+            <option value={50}>+50%</option>
+            <option value={75}>+75%</option>
+            <option value={100}>+100%</option>
+          </select>
+        </Field>
+        <Field label="Frente prioritario">
+          <select value={simFrontId} onChange={e=>setSimFrontId(Number(e.target.value)||0)} className={inputClass}>
+            <option value={0}>Sin prioridad adicional</option>
+            {[...fronts].sort((a,b)=>a.prioridad-b.prioridad).map(front=>(
+              <option key={front.id} value={front.id}>{front.nombre}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <div className="rounded-xl bg-[#06162a] p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Fecha proyectada actual</p>
+          <p className="mt-2 text-lg font-black text-white">{new Intl.DateTimeFormat("es-MX").format(baselineProjectedFinish)}</p>
+        </div>
+        <div className="rounded-xl bg-[#06162a] p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Fecha proyectada con escenario</p>
+          <p className="mt-2 text-lg font-black text-emerald-300">{new Intl.DateTimeFormat("es-MX").format(scenarioProjectedFinish)}</p>
+        </div>
+        <div className="rounded-xl bg-[#06162a] p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Alcance del cambio</p>
+          <p className="mt-2 text-sm leading-6 text-slate-200">
+            {simulationCrew
+              ? `${affectedScenarioRows} evento(s) usan la cuadrilla “${simulationCrew}”. Capacidad simulada: ${baseCrewCapacity + simExtraCrews}; rendimiento: +${simBoost}%.`
+              : "Selecciona una cuadrilla para evaluar el escenario."}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+        <table className="min-w-[760px] w-full text-sm">
+          <thead className="bg-[#0b2747]">
+            <tr><H>FRENTE</H><H>DÍAS BASE RESTANTES</H><H>DÍAS ESCENARIO</H><H>RECUPERACIÓN</H></tr>
+          </thead>
+          <tbody>
+            {remainingByFront.map(item=>(
+              <tr key={item.frontId} className="border-t border-white/10">
+                <D>{item.frontName}</D>
+                <D>{item.baselineDays}</D>
+                <D>{item.scenarioDays}</D>
+                <D><span className="font-bold text-emerald-300">{Math.max(0,item.baselineDays-item.scenarioDays)} día(s)</span></D>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="mt-3 text-xs leading-5 text-slate-400">
+        La simulación calcula la carga restante desde la fecha de corte y estima el efecto de capacidad y rendimiento sobre los eventos pendientes. No modifica el programa oficial ni los cortes históricos.
+      </p>
+    </section>
 
     <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
