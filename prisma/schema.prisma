@@ -205,6 +205,8 @@ model Usuario {
   reasignacionesSolicitadas ReasignacionInspector[] @relation("ReasignacionSolicitadaPor")
   reasignacionesResueltas ReasignacionInspector[] @relation("ReasignacionResueltaPor")
   rendimientosAbacoCreados RendimientoAbaco[] @relation("RendimientoAbacoCreadoPor")
+  proyectosAbacoCreados AbacoProyecto[] @relation("AbacoProyectoCreadoPor")
+  cortesAbacoRegistrados AbacoCorte[] @relation("AbacoCorteRegistradoPor")
   @@index([bloqueadoHasta])
   @@index([zonaId])
   @@index([gerenteId])
@@ -656,4 +658,39 @@ model RendimientoAbaco {
   @@index([cuadrilla])
   @@index([activo])
   @@index([creadoPorId])
+}
+
+
+model AbacoProyecto {
+  id String @id @default(cuid())
+  nombre String
+  creadoPorId String
+  creadoPor Usuario @relation("AbacoProyectoCreadoPor", fields: [creadoPorId], references: [id], onDelete: Restrict)
+  activo Boolean @default(true)
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  cortes AbacoCorte[]
+
+  @@unique([creadoPorId, nombre])
+  @@index([creadoPorId])
+  @@index([activo])
+  @@index([actualizadoEn])
+}
+
+model AbacoCorte {
+  id String @id @default(cuid())
+  proyectoId String
+  proyecto AbacoProyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  fechaCorte DateTime
+  avanceReal Json
+  resumen Json?
+  registradoPorId String
+  registradoPor Usuario @relation("AbacoCorteRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  creadoEn DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([proyectoId, fechaCorte])
+  @@index([proyectoId])
+  @@index([fechaCorte])
+  @@index([registradoPorId])
 }
