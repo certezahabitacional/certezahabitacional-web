@@ -96,7 +96,12 @@ export default async function CertezaTecnica360Page(){
         </Link>)}
       </section>
 
-      <section style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:14,marginTop:16}}>
+      <section style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:14,marginTop:16}}>
+        <Link href="/certeza-tecnica/app/abaco" style={{...toolCard,border:"2px solid #edcb71",background:"#fffaf0"}}>
+          <b>▦ CERTEZA ÁBACO</b>
+          <span>Genera Secuencial, equivalencias, programa, Curva S, seguimiento Programa vs. Real y escenarios de recuperación.</span>
+          <strong style={{color:"#d56a17",marginTop:4}}>Abrir ÁBACO →</strong>
+        </Link>
         <Link href="/project-manager/panel/proyectos" style={toolCard}>
           <b>📁 Expediente Maestro</b>
           <span>Accede al proyecto, documentos maestros, constructibilidad y estructura de información.</span>
