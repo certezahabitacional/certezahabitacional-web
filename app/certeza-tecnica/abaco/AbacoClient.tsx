@@ -25,7 +25,15 @@ type Front = {
   desfase:number;
   factorEconomico:number;
   prioridad:number;
+  fechaEntrega:string;
 };
+
+type ProductionStrategy =
+  | "FLUJO_CONTINUO"
+  | "TERMINAR_FRENTE"
+  | "FECHA_ENTREGA"
+  | "RUTA_FISICA"
+  | "MIN_DURACION";
 
 const STORAGE_KEY="certeza-abaco-rendimientos-aprendidos-v1";
 const ruleKey=(r:Pick<BudgetRow,"descripcion"|"unidad">)=>`${norm(r.unidad)}|${norm(r.descripcion)}`;
@@ -91,10 +99,11 @@ export default function AbacoClient() {
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0,10));
   const [targetDays, setTargetDays] = useState(90);
   const [fronts, setFronts] = useState<Front[]>([
-    {id:1,nombre:"Frente 1",desfase:0,factorEconomico:1,prioridad:1},
+    {id:1,nombre:"Frente 1",desfase:0,factorEconomico:1,prioridad:1,fechaEntrega:""},
   ]);
   const [resourceCaps, setResourceCaps] = useState<Record<string,number>>({});
   const [resourcePreferredFront, setResourcePreferredFront] = useState<Record<string,number>>({});
+  const [strategy, setStrategy] = useState<ProductionStrategy>("FLUJO_CONTINUO");
 
   const total = useMemo(() => budget.reduce((s,r)=>s+r.importe,0), [budget]);
   const productivityCoverage = useMemo(() => {
@@ -227,6 +236,7 @@ export default function AbacoClient() {
           desfase:(previous?.desfase??0)+5,
           factorEconomico:1,
           prioridad:nextId,
+          fechaEntrega:"",
         },
       ];
     });
@@ -332,7 +342,7 @@ export default function AbacoClient() {
                     Quitar
                   </button>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-3">
+                <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
                   <Field label="Desfase (días)">
                     <input
                       type="number"
@@ -352,7 +362,7 @@ export default function AbacoClient() {
                       className={inputClass}
                     />
                   </Field>
-                  <Field label="Prioridad">
+                  <Field label="Prioridad / ruta">
                     <input
                       type="number"
                       min={1}
@@ -362,9 +372,43 @@ export default function AbacoClient() {
                       className={inputClass}
                     />
                   </Field>
+                  <Field label="Fecha objetivo">
+                    <input
+                      type="date"
+                      value={front.fechaEntrega}
+                      onChange={e=>updateFront(front.id,{fechaEntrega:e.target.value})}
+                      className={inputClass}
+                    />
+                  </Field>
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {budget.length ? (
+        <section className="rounded-2xl border border-cyan-300/20 bg-cyan-950/20 p-5">
+          <p className="text-xs font-black uppercase tracking-[.18em] text-cyan-200">Estrategia de producción</p>
+          <div className="mt-3 grid gap-3 lg:grid-cols-[360px_1fr]">
+            <select
+              value={strategy}
+              onChange={e=>setStrategy(e.target.value as ProductionStrategy)}
+              className="w-full rounded-lg border border-cyan-300/30 bg-[#0b2747] px-3 py-3 font-bold text-white"
+            >
+              <option value="FLUJO_CONTINUO">Flujo continuo de cuadrillas</option>
+              <option value="TERMINAR_FRENTE">Terminar un frente antes de pasar al siguiente</option>
+              <option value="FECHA_ENTREGA">Prioridad por fecha de entrega</option>
+              <option value="RUTA_FISICA">Prioridad por ruta física</option>
+              <option value="MIN_DURACION">Optimizar duración total</option>
+            </select>
+            <div className="rounded-xl bg-[#06162a] p-4 text-sm text-slate-300">
+              {strategy==="FLUJO_CONTINUO" ? "Mantiene a las cuadrillas trabajando de forma continua, respetando capacidad y frentes preferentes." : null}
+              {strategy==="TERMINAR_FRENTE" ? "Da prioridad a completar el frente de mayor prioridad antes de mover recursos al siguiente." : null}
+              {strategy==="FECHA_ENTREGA" ? "Atiende primero los frentes con fecha objetivo más próxima." : null}
+              {strategy==="RUTA_FISICA" ? "Usa el número de prioridad como orden físico de recorrido de los frentes." : null}
+              {strategy==="MIN_DURACION" ? "Favorece actividades disponibles de menor duración para reducir tiempos muertos y buscar un cierre global más corto." : null}
+            </div>
           </div>
         </section>
       ) : null}
@@ -453,7 +497,7 @@ export default function AbacoClient() {
         />
       ) : null}
       {view==="seq" ? <SeqTable rows={seq} onChange={updateSeqRow}/> : null}
-      {view==="program" ? <ProgramTable rows={program} fronts={fronts} resourceCaps={resourceCaps} resourcePreferredFront={resourcePreferredFront}/> : null}
+      {view==="program" ? <ProgramTable rows={program} fronts={fronts} resourceCaps={resourceCaps} resourcePreferredFront={resourcePreferredFront} strategy={strategy}/> : null}
     </div>
   );
 }
@@ -627,6 +671,7 @@ type FrontProgramRow = ProgramRow & {
   terminoDate:Date;
   recursoNivelado:boolean;
   prioridadFrente:number;
+  fechaEntrega:string;
 };
 
 function addWorkDaysDate(start:Date,days:number){
@@ -654,11 +699,13 @@ function ProgramTable({
   fronts,
   resourceCaps,
   resourcePreferredFront,
+  strategy,
 }:{
   rows:ProgramRow[];
   fronts:Front[];
   resourceCaps:Record<string,number>;
   resourcePreferredFront:Record<string,number>;
+  strategy:ProductionStrategy;
 }) {
   const requested=fronts.flatMap(front=>
     rows.map(row=>({
@@ -672,6 +719,7 @@ function ProgramTable({
       terminoDate:shiftProgramDate(row.termino,front.desfase),
       recursoNivelado:false,
       prioridadFrente:front.prioridad,
+      fechaEntrega:front.fechaEntrega,
     }))
   );
 
@@ -680,13 +728,37 @@ function ProgramTable({
   const expanded:FrontProgramRow[]=[];
 
   const ordered=[...requested].sort((a,b)=>{
-    const prefA=resourcePreferredFront[a.cuadrilla];
-    const prefB=resourcePreferredFront[b.cuadrilla];
-    if(a.cuadrilla===b.cuadrilla && prefA){
-      const aPreferred=a.frontId===prefA?0:1;
-      const bPreferred=b.frontId===prefA?0:1;
+    if(strategy==="TERMINAR_FRENTE"){
+      if(a.prioridadFrente!==b.prioridadFrente) return a.prioridadFrente-b.prioridadFrente;
+      if(a.frontId!==b.frontId) return a.frontId-b.frontId;
+      return a.orden-b.orden;
+    }
+
+    if(strategy==="FECHA_ENTREGA"){
+      const da=a.fechaEntrega ? new Date(a.fechaEntrega+"T12:00:00").getTime() : Number.MAX_SAFE_INTEGER;
+      const db=b.fechaEntrega ? new Date(b.fechaEntrega+"T12:00:00").getTime() : Number.MAX_SAFE_INTEGER;
+      if(da!==db) return da-db;
+      if(a.prioridadFrente!==b.prioridadFrente) return a.prioridadFrente-b.prioridadFrente;
+    }
+
+    if(strategy==="RUTA_FISICA"){
+      if(a.prioridadFrente!==b.prioridadFrente) return a.prioridadFrente-b.prioridadFrente;
+      if(a.orden!==b.orden) return a.orden-b.orden;
+    }
+
+    if(strategy==="MIN_DURACION"){
+      if(a.inicioDate.getTime()!==b.inicioDate.getTime()) return a.inicioDate.getTime()-b.inicioDate.getTime();
+      if(a.dias!==b.dias) return a.dias-b.dias;
+      if(a.prioridadFrente!==b.prioridadFrente) return a.prioridadFrente-b.prioridadFrente;
+    }
+
+    const pref=resourcePreferredFront[a.cuadrilla];
+    if(strategy==="FLUJO_CONTINUO" && a.cuadrilla===b.cuadrilla && pref){
+      const aPreferred=a.frontId===pref?0:1;
+      const bPreferred=b.frontId===pref?0:1;
       if(aPreferred!==bPreferred) return aPreferred-bPreferred;
     }
+
     if(a.inicioDate.getTime()!==b.inicioDate.getTime()){
       return a.inicioDate.getTime()-b.inicioDate.getTime();
     }
@@ -800,7 +872,13 @@ function ProgramTable({
           <Metric label="Eventos" value={String(expanded.length)} />
           <Metric label="Flujo total" value={money(expanded.reduce((s,r)=>s+r.importe,0))} />
           <Metric label="Ajustes por recursos" value={String(expanded.filter(r=>r.recursoNivelado).length)} />
-          <Metric label="Prioridad activa" value="Sí" />
+          <Metric label="Estrategia" value={
+            strategy==="FLUJO_CONTINUO"?"Flujo continuo":
+            strategy==="TERMINAR_FRENTE"?"Terminar frente":
+            strategy==="FECHA_ENTREGA"?"Fecha entrega":
+            strategy==="RUTA_FISICA"?"Ruta física":
+            "Menor duración"
+          } />
         </div>
       </div>
 
