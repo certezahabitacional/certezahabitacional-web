@@ -999,6 +999,91 @@ function ProgramTable({
       ? lastCurvePoint.variance-previousCurvePoint.variance
       : 0;
 
+  const delayDrivers=expanded
+    .map(row=>{
+      const key=`${row.frontId}-${row.sec}`;
+      const planned=plannedProgressAt(row,cutoff);
+      const actual=(actualProgress[key]??0)/100;
+      const gap=Math.max(0,planned-actual);
+      const impact=(gap*row.equivalencia)/totalWeight;
+      return {
+        key,
+        frontId:row.frontId,
+        frontName:row.frontName,
+        sec:row.sec,
+        etapa:row.etapa,
+        cuadrilla:row.cuadrilla,
+        planned,
+        actual,
+        gap,
+        impact,
+        dias:row.dias,
+        recursoNivelado:row.recursoNivelado,
+      };
+    })
+    .filter(item=>item.gap>0.0001)
+    .sort((a,b)=>b.impact-a.impact);
+
+  const topDrivers=delayDrivers.slice(0,8);
+
+  const frontImpact=[...delayDrivers.reduce((map,item)=>{
+    const current=map.get(item.frontName)??0;
+    map.set(item.frontName,current+item.impact);
+    return map;
+  },new Map<string,number>())]
+    .map(([name,impact])=>({name,impact}))
+    .sort((a,b)=>b.impact-a.impact);
+
+  const crewImpact=[...delayDrivers.reduce((map,item)=>{
+    const current=map.get(item.cuadrilla)??0;
+    map.set(item.cuadrilla,current+item.impact);
+    return map;
+  },new Map<string,number>())]
+    .map(([name,impact])=>({name,impact}))
+    .sort((a,b)=>b.impact-a.impact);
+
+  const principalFront=frontImpact[0];
+  const principalCrew=crewImpact[0];
+  const principalDriver=topDrivers[0];
+
+  const recoveryPlan=[
+    principalDriver
+      ? {
+          prioridad:1,
+          accion:`Atacar SEC ${principalDriver.sec} · ${principalDriver.etapa} en ${principalDriver.frontName}.`,
+          motivo:`Es el mayor contribuyente individual al atraso: ${pct(principalDriver.impact)} del proyecto.`,
+        }
+      : null,
+    principalCrew
+      ? {
+          prioridad:2,
+          accion:`Revisar capacidad, rendimiento y continuidad de la cuadrilla “${principalCrew.name}”.`,
+          motivo:`Concentra ${pct(principalCrew.impact)} del atraso ponderado detectado.`,
+        }
+      : null,
+    principalFront
+      ? {
+          prioridad:3,
+          accion:`Concentrar recuperación en ${principalFront.name} antes de dispersar recursos.`,
+          motivo:`Es el frente con mayor desviación acumulada: ${pct(principalFront.impact)} del proyecto.`,
+        }
+      : null,
+    delayDrivers.some(item=>item.recursoNivelado)
+      ? {
+          prioridad:4,
+          accion:"Revisar conflictos de recursos compartidos y aumentar capacidad solo en los oficios que estén desplazando actividades críticas.",
+          motivo:"Existen actividades atrasadas que además fueron movidas por nivelación de recursos.",
+        }
+      : null,
+    variance<0
+      ? {
+          prioridad:5,
+          accion:"Fijar una meta de recuperación para el siguiente corte y verificar que la variación global mejore.",
+          motivo:`La desviación global actual es de ${pct(variance)}.`,
+        }
+      : null,
+  ].filter((item):item is {prioridad:number;accion:string;motivo:string}=>Boolean(item));
+
   async function saveHistoricalCut(){
     const cut:HistoricalCut={
       fechaCorte:cutoffDate,
@@ -1155,6 +1240,107 @@ function ProgramTable({
         </div>
       </section>
     ) : null}
+
+    {delayDrivers.length ? (
+      <section className="rounded-2xl border border-rose-300/20 bg-rose-950/10 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.18em] text-rose-200">Diagnóstico automático</p>
+            <h2 className="mt-2 text-xl font-bold text-[#edcb71]">Origen del atraso y plan de recuperación</h2>
+            <p className="mt-1 max-w-4xl text-sm text-slate-300">
+              El impacto se pondera por la incidencia económica del SEC y por la brecha entre avance programado y real a la fecha de corte.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <Metric label="SEC con atraso" value={String(delayDrivers.length)} />
+            <Metric label="Frente crítico" value={principalFront?.name??"—"} />
+            <Metric label="Cuadrilla crítica" value={principalCrew?.name??"—"} />
+            <Metric label="Mayor impacto" value={principalDriver?pct(principalDriver.impact):"—"} />
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
+          <div className="overflow-x-auto rounded-xl border border-white/10">
+            <table className="min-w-[980px] w-full text-sm">
+              <thead className="bg-[#0b2747]">
+                <tr>
+                  <H>RANK</H><H>FRENTE</H><H>SEC</H><H>EVENTO</H><H>CUADRILLA</H><H>PROGRAMADO</H><H>REAL</H><H>BRECHA</H><H>IMPACTO</H>
+                </tr>
+              </thead>
+              <tbody>
+                {topDrivers.map((item,index)=>(
+                  <tr key={item.key} className="border-t border-white/10">
+                    <D>{index+1}</D>
+                    <D>{item.frontName}</D>
+                    <D>{item.sec}</D>
+                    <D>{item.etapa}</D>
+                    <D>{item.cuadrilla}</D>
+                    <D>{pct(item.planned)}</D>
+                    <D>{pct(item.actual)}</D>
+                    <D><span className="font-bold text-rose-300">{pct(-item.gap)}</span></D>
+                    <D><span className="font-black text-[#edcb71]">{pct(item.impact)}</span></D>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-xl border border-white/10 bg-[#06162a] p-4">
+              <p className="text-xs font-black uppercase tracking-[.15em] text-[#edcb71]">Concentración del atraso</p>
+              <div className="mt-3 space-y-3">
+                {frontImpact.slice(0,4).map(item=>(
+                  <div key={item.name}>
+                    <div className="flex justify-between gap-3 text-xs">
+                      <span className="font-bold text-slate-200">{item.name}</span>
+                      <span className="text-rose-200">{pct(item.impact)}</span>
+                    </div>
+                    <div className="mt-1 h-2 overflow-hidden rounded bg-white/10">
+                      <div className="h-full bg-rose-300" style={{width:`${Math.min(100,item.impact*100*5)}%`}} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-[#06162a] p-4">
+              <p className="text-xs font-black uppercase tracking-[.15em] text-cyan-200">Cuadrillas con mayor incidencia</p>
+              <div className="mt-3 space-y-2 text-sm">
+                {crewImpact.slice(0,5).map((item,index)=>(
+                  <div key={item.name} className="flex justify-between gap-3 rounded bg-white/[0.03] px-3 py-2">
+                    <span>{index+1}. {item.name}</span>
+                    <span className="font-bold text-cyan-200">{pct(item.impact)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-[#edcb71]/20 bg-[#071d38] p-4">
+          <p className="text-xs font-black uppercase tracking-[.16em] text-[#edcb71]">Plan de recuperación priorizado</p>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {recoveryPlan.map(item=>(
+              <div key={item.prioridad} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#edcb71] font-black text-[#071d38]">{item.prioridad}</span>
+                  <div>
+                    <p className="font-bold text-white">{item.accion}</p>
+                    <p className="mt-1 text-sm leading-5 text-slate-400">{item.motivo}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    ) : (
+      <section className="rounded-2xl border border-emerald-300/20 bg-emerald-950/10 p-4">
+        <p className="text-xs font-black uppercase tracking-[.18em] text-emerald-200">Diagnóstico automático</p>
+        <h2 className="mt-2 text-xl font-bold text-emerald-200">Sin causas de atraso detectadas al corte</h2>
+        <p className="mt-1 text-sm text-slate-300">El avance real capturado no presenta brechas negativas contra el programa vigente.</p>
+      </section>
+    )}
 
     <section className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
