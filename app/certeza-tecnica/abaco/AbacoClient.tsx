@@ -19,6 +19,13 @@ type LearnedRule = {
   rendimiento:number;
 };
 
+type Front = {
+  id:number;
+  nombre:string;
+  desfase:number;
+  factorEconomico:number;
+};
+
 const STORAGE_KEY="certeza-abaco-rendimientos-aprendidos-v1";
 const ruleKey=(r:Pick<BudgetRow,"descripcion"|"unidad">)=>`${norm(r.unidad)}|${norm(r.descripcion)}`;
 
@@ -82,6 +89,9 @@ export default function AbacoClient() {
   const [message, setMessage] = useState("Carga un presupuesto para comenzar.");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0,10));
   const [targetDays, setTargetDays] = useState(90);
+  const [fronts, setFronts] = useState<Front[]>([
+    {id:1,nombre:"Frente 1",desfase:0,factorEconomico:1},
+  ]);
 
   const total = useMemo(() => budget.reduce((s,r)=>s+r.importe,0), [budget]);
   const productivityCoverage = useMemo(() => {
@@ -188,12 +198,36 @@ export default function AbacoClient() {
     );
   }
 
+  function addFront() {
+    setFronts(current=>{
+      const nextId=Math.max(0,...current.map(f=>f.id))+1;
+      const previous=current[current.length-1];
+      return [
+        ...current,
+        {
+          id:nextId,
+          nombre:`Frente ${nextId}`,
+          desfase:(previous?.desfase??0)+5,
+          factorEconomico:1,
+        },
+      ];
+    });
+  }
+
+  function updateFront(id:number,patch:Partial<Front>) {
+    setFronts(current=>current.map(f=>f.id===id?{...f,...patch}:f));
+  }
+
+  function removeFront(id:number) {
+    setFronts(current=>current.length<=1?current:current.filter(f=>f.id!==id));
+  }
+
   function generateProgram() {
     const base = seq.length ? seq : makeSequential(budget);
     setSeq(base);
     setProgram(makeProgram(base,startDate,targetDays));
     setView("program");
-    setMessage("Ábaco generado. El método de duración indica si la etapa quedó por RENDIMIENTO, MIXTO o PARAMÉTRICO.");
+    setMessage(`Ábaco generado para ${fronts.length} frente(s). Cada frente replica el Secuencial con su propio desfase y factor económico.`);
   }
 
   return (
@@ -247,6 +281,66 @@ export default function AbacoClient() {
         </section>
       </div>
 
+      {budget.length ? (
+        <section className="rounded-2xl border border-white/15 bg-white/5 p-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[.18em] text-[#edcb71]">Frentes de producción</p>
+              <h2 className="mt-2 text-xl font-bold">Edificios, viviendas, manzanas o lotes</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                El desfase mueve el arranque del frente en días de trabajo. El factor económico multiplica el valor del presupuesto para ese frente.
+              </p>
+            </div>
+            <button type="button" onClick={addFront} className="rounded-lg bg-[#edcb71] px-4 py-3 text-sm font-black text-[#071d38]">
+              + AGREGAR FRENTE
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            {fronts.map(front=>(
+              <div key={front.id} className="rounded-xl border border-white/10 bg-[#06162a] p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    value={front.nombre}
+                    onChange={e=>updateFront(front.id,{nombre:e.target.value})}
+                    className="w-full rounded border border-white/20 bg-[#0b2747] px-3 py-2 font-bold text-white"
+                  />
+                  <button
+                    type="button"
+                    disabled={fronts.length<=1}
+                    onClick={()=>removeFront(front.id)}
+                    className="rounded border border-rose-300/30 px-3 py-2 text-xs font-bold text-rose-200 disabled:opacity-30"
+                  >
+                    Quitar
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <Field label="Desfase (días)">
+                    <input
+                      type="number"
+                      min={0}
+                      value={front.desfase}
+                      onChange={e=>updateFront(front.id,{desfase:Math.max(0,Number(e.target.value)||0)})}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Factor económico">
+                    <input
+                      type="number"
+                      min={0.01}
+                      step="0.01"
+                      value={front.factorEconomico}
+                      onChange={e=>updateFront(front.id,{factorEconomico:Math.max(0.01,Number(e.target.value)||1)})}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-3">
         <button
           type="button"
@@ -288,7 +382,7 @@ export default function AbacoClient() {
         />
       ) : null}
       {view==="seq" ? <SeqTable rows={seq} onChange={updateSeqRow}/> : null}
-      {view==="program" ? <ProgramTable rows={program}/> : null}
+      {view==="program" ? <ProgramTable rows={program} fronts={fronts}/> : null}
     </div>
   );
 }
@@ -444,20 +538,69 @@ function isActiveOn(row:ProgramRow,date:Date){
   );
 }
 
-function ProgramTable({rows}:{rows:ProgramRow[]}) {
-  const calendar=buildCalendar(rows);
+function shiftProgramDate(value:string,workDays:number){
+  const date=parseProgramDate(value);
+  let pending=Math.max(0,Math.round(workDays));
+  while(pending>0){
+    date.setDate(date.getDate()+1);
+    if(date.getDay()!==0) pending-=1;
+  }
+  return date;
+}
+
+type FrontProgramRow = ProgramRow & {
+  frontId:number;
+  frontName:string;
+  factorEconomico:number;
+  inicioDate:Date;
+  terminoDate:Date;
+};
+
+function ProgramTable({rows,fronts}:{rows:ProgramRow[];fronts:Front[]}) {
+  const expanded:FrontProgramRow[]=fronts.flatMap(front=>
+    rows.map(row=>({
+      ...row,
+      frontId:front.id,
+      frontName:front.nombre,
+      factorEconomico:front.factorEconomico,
+      importe:row.importe*front.factorEconomico,
+      equivalencia:row.equivalencia*front.factorEconomico,
+      inicioDate:shiftProgramDate(row.inicio,front.desfase),
+      terminoDate:shiftProgramDate(row.termino,front.desfase),
+    }))
+  );
+
+  const normalizedTotal=expanded.reduce((s,r)=>s+r.equivalencia,0);
+
+  const calendar=expanded.length ? (()=>{
+    const start=new Date(Math.min(...expanded.map(r=>r.inicioDate.getTime())));
+    const end=new Date(Math.max(...expanded.map(r=>r.terminoDate.getTime())));
+    const days:Date[]=[];
+    const cursor=new Date(start);
+    while(cursor.getTime()<=end.getTime()){
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate()+1);
+    }
+    return days;
+  })() : [];
+
   let cumulativeFlow=0;
   let cumulativeProgress=0;
 
   const daily=calendar.map(date=>{
-    const active=rows.filter(row=>isActiveOn(row,date));
+    const active=expanded.filter(row=>
+      date.getTime()>=row.inicioDate.getTime() &&
+      date.getTime()<=row.terminoDate.getTime() &&
+      date.getDay()!==0
+    );
     const flow=active.reduce((sum,row)=>sum+(row.importe/Math.max(1,row.dias)),0);
-    const progress=active.reduce((sum,row)=>sum+(row.equivalencia/Math.max(1,row.dias)),0);
+    const progressRaw=active.reduce((sum,row)=>sum+(row.equivalencia/Math.max(1,row.dias)),0);
+    const progress=normalizedTotal>0?progressRaw/normalizedTotal:0;
     cumulativeFlow+=flow;
     cumulativeProgress+=progress;
-    const milestones=rows
-      .filter(row=>dayKey(parseProgramDate(row.termino))===dayKey(date))
-      .map(row=>`SEC ${row.sec}`);
+    const milestones=expanded
+      .filter(row=>dayKey(row.terminoDate)===dayKey(date))
+      .map(row=>`${row.frontName}: SEC ${row.sec}`);
     return {
       date,
       flow,
@@ -479,9 +622,9 @@ function ProgramTable({rows}:{rows:ProgramRow[]}) {
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
           <Metric label="Días calendario" value={String(calendar.length)} />
-          <Metric label="Eventos" value={String(rows.length)} />
-          <Metric label="Flujo total" value={money(rows.reduce((s,r)=>s+r.importe,0))} />
-          <Metric label="Avance final" value={pct(rows.reduce((s,r)=>s+r.equivalencia,0))} />
+          <Metric label="Frentes" value={String(fronts.length)} />
+          <Metric label="Eventos" value={String(expanded.length)} />
+          <Metric label="Flujo total" value={money(expanded.reduce((s,r)=>s+r.importe,0))} />
         </div>
       </div>
 
@@ -521,15 +664,16 @@ function ProgramTable({rows}:{rows:ProgramRow[]}) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(row=><tr key={row.sec}>
+            {expanded.map(row=><tr key={`${row.frontId}-${row.sec}`}>
               <td className="sticky left-0 z-20 border border-white/10 bg-[#071d38] px-3 py-2">
+                <span className="block text-[10px] font-black uppercase tracking-wide text-cyan-200">{row.frontName}</span>
                 <span className="block font-black text-[#edcb71]">SEC {row.sec}</span>
                 <span className="block min-w-[190px] text-slate-200">{row.etapa}</span>
                 <span className="mt-1 block text-[10px] text-slate-400">{row.cuadrilla} · {row.dias} día(s)</span>
               </td>
               {calendar.map(date=>{
-                const active=isActiveOn(row,date);
-                const finish=dayKey(parseProgramDate(row.termino))===dayKey(date);
+                const active=date.getTime()>=row.inicioDate.getTime() && date.getTime()<=row.terminoDate.getTime() && date.getDay()!==0;
+                const finish=dayKey(row.terminoDate)===dayKey(date);
                 return <td key={dayKey(date)} className={
                   "h-12 min-w-[62px] border border-white/10 text-center " +
                   (active
@@ -538,7 +682,7 @@ function ProgramTable({rows}:{rows:ProgramRow[]}) {
                       ? "bg-rose-950/20 text-rose-200"
                       : "bg-white/[0.02] text-slate-600")
                 }>
-                  {active ? (finish ? `SEC ${row.sec} ✓` : `SEC ${row.sec}`) : ""}
+                  {active ? (finish ? `${row.frontName} · S${row.sec} ✓` : `S${row.sec}`) : ""}
                 </td>;
               })}
             </tr>)}
@@ -556,12 +700,12 @@ function ProgramTable({rows}:{rows:ProgramRow[]}) {
         <table className="min-w-[1500px] w-full text-sm">
           <thead className="bg-[#0b2747]">
             <tr>
-              <H>#</H><H>SEC</H><H>EVENTO</H><H>INCIDENCIA</H><H>JORNADAS BASE</H><H>SIN REND.</H><H>CUADRILLAS</H><H>DÍAS</H><H>PREDECESORA</H><H>TRASLAPE</H><H>INICIO</H><H>TÉRMINO</H><H>% ACUM.</H><H>MÉTODO</H>
+              <H>FRENTE</H><H>SEC</H><H>EVENTO</H><H>INCIDENCIA</H><H>JORNADAS BASE</H><H>SIN REND.</H><H>CUADRILLAS</H><H>DÍAS</H><H>PREDECESORA</H><H>TRASLAPE</H><H>INICIO</H><H>TÉRMINO</H><H>% ACUM.</H><H>MÉTODO</H>
             </tr>
           </thead>
           <tbody>
-            {rows.map(r=><tr key={r.sec} className="border-t border-white/10">
-              <D>{r.orden}</D><D>{r.revisar?"REVISAR":r.sec}</D><D>{r.etapa}</D><D>{pct(r.equivalencia)}</D><D>{r.jornadasBase>0?r.jornadasBase.toFixed(2):"—"}</D><D>{r.conceptosSinRendimiento}</D><D>{r.cuadrillas}</D><D>{r.dias}</D><D>{r.predecesora??"Inicio"}</D><D>{pct(r.traslape)}</D><D>{r.inicio}</D><D>{r.termino}</D><D>{pct(r.avance)}</D>
+            {expanded.map(r=><tr key={`${r.frontId}-${r.sec}`} className="border-t border-white/10">
+              <D>{r.frontName}</D><D>{r.revisar?"REVISAR":r.sec}</D><D>{r.etapa}</D><D>{pct(r.equivalencia)}</D><D>{r.jornadasBase>0?r.jornadasBase.toFixed(2):"—"}</D><D>{r.conceptosSinRendimiento}</D><D>{r.cuadrillas}</D><D>{r.dias}</D><D>{r.predecesora??"Inicio"}</D><D>{pct(r.traslape)}</D><D>{new Intl.DateTimeFormat("es-MX").format(r.inicioDate)}</D><D>{new Intl.DateTimeFormat("es-MX").format(r.terminoDate)}</D><D>{pct(r.avance)}</D>
               <D><span className={r.metodoDuracion==="RENDIMIENTO"?"font-bold text-emerald-300":r.metodoDuracion==="MIXTO"?"font-bold text-cyan-300":"font-bold text-amber-300"}>{r.metodoDuracion}</span></D>
             </tr>)}
           </tbody>
